@@ -1,22 +1,10 @@
 {
-  "name": "v203 手機桌面交易系統",
-  "short_name": "v203交易系統",
-  "start_url": "./v203_mobile_app.html",
+  "name": "v205 固定網址交易系統",
+  "short_name": "v205交易系統",
+  "start_url": "./v205_fixed_url_app.html",
   "display": "standalone",
   "background_color": "#0b0f14",
   "theme_color": "#0b0f14",
   "lang": "zh-Hant",
-  "description": "可加到手機主畫面的自用交易系統儀表板。",
-  "icons": [
-    {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ]
+  "description": "自動抓固定網址最新 CSV 的手機桌面交易系統。"
 }
