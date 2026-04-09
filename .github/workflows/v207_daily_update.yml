@@ -28,7 +28,7 @@ jobs:
 
       - name: Run v207 updater
         run: |
-          python v207_模擬_更新.py
+          python v207_update.py
 
       - name: Commit changed files
         run: |
