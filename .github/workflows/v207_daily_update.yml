@@ -24,8 +24,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pandas numpy
-
+          python -m pip install pandas numpy
       - name: Run v207 updater
         run: |
           python v207_update.py
