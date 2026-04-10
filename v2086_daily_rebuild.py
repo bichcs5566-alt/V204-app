@@ -63,8 +63,32 @@ def rebuild_nav(pos):
     print("補齊完成")
 
 def main():
-    pos = fetch_positions()
-    rebuild_nav(pos)
+    nav = pd.read_csv(NAV_PATH)
+nav["date"] = pd.to_datetime(nav["date"])
+
+last_date = nav["date"].max()
+last_nav = nav.iloc[-1]["nav"]
+
+today = pd.Timestamp.today().normalize()
+
+missing_dates = pd.date_range(last_date + pd.Timedelta(days=1), today)
+
+rows = []
+
+for d in missing_dates:
+    daily_ret = 0.0  # 先用0，之後我們再接真實報酬
+    last_nav = last_nav * (1 + daily_ret)
+
+    rows.append({
+        "date": d,
+        "nav": last_nav,
+        "ret": daily_ret
+    })
+
+if rows:
+    nav = pd.concat([nav, pd.DataFrame(rows)], ignore_index=True)
+
+nav.to_csv(NAV_PATH, index=False)
 
 if __name__ == "__main__":
     main()
