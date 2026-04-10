@@ -39,7 +39,7 @@ def rebuild_nav(pos):
         }])
 
     last_date = nav["date"].iloc[-1]
-    last_nav = float(nav["nav"].iloc[-1])
+    last_nav = nav.iloc[-1]["nav"]
 
     # 🔥 核心：補齊所有缺的日期
     missing = pd.date_range(last_date + pd.Timedelta(days=1), today)
