@@ -63,20 +63,33 @@ def rebuild_nav(pos):
     print("補齊完成")
 
 def main():
-    nav = pd.read_csv(NAV_PATH)
+    # === 讀 NAV ===
+nav = pd.read_csv(NAV_PATH)
+
+# 防呆（第一次跑）
+if nav.empty:
+    raise ValueError("NAV file is empty")
+
+# 轉日期
 nav["date"] = pd.to_datetime(nav["date"])
 
+# === 取得最後狀態 ===
 last_date = nav["date"].max()
 last_nav = nav.iloc[-1]["nav"]
 
+# === 今天 ===
 today = pd.Timestamp.today().normalize()
 
-missing_dates = pd.date_range(last_date + pd.Timedelta(days=1), today)
+# === 缺失日期 ===
+missing_dates = pd.date_range(
+    last_date + pd.Timedelta(days=1),
+    today
+)
 
 rows = []
 
 for d in missing_dates:
-    daily_ret = 0.0  # 先用0，之後我們再接真實報酬
+    daily_ret = 0.0  # 先用0，之後再接真實報酬
     last_nav = last_nav * (1 + daily_ret)
 
     rows.append({
@@ -84,6 +97,13 @@ for d in missing_dates:
         "nav": last_nav,
         "ret": daily_ret
     })
+
+# === 合併 ===
+if rows:
+    nav = pd.concat([nav, pd.DataFrame(rows)], ignore_index=True)
+
+# === 存檔 ===
+nav.to_csv(NAV_PATH, index=False)
 
 if rows:
     nav = pd.concat([nav, pd.DataFrame(rows)], ignore_index=True)
