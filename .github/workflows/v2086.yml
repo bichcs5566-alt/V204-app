@@ -30,7 +30,7 @@ jobs:
       - name: Run v2086 rebuild
         shell: bash
         run: |
-          python v2086_daily_rebuild.py
+          python V204-app/v2086_daily_rebuild.py
 
       - name: Commit changes
         shell: bash
