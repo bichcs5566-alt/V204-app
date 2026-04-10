@@ -139,7 +139,7 @@ def load_and_repair_positions():
     # 3) 每日權重過大時正規化
     repair_logs = []
 
-    def normalize_group(g):
+ def normalize_group(g):
     g = g.copy()
 
     trade_date_val = g.name if hasattr(g, "name") else None
@@ -169,7 +169,7 @@ def load_and_repair_positions():
         "normalized": repaired
     })
 
-    return gs
+    return g
 
 
 def build_daily_return_from_positions(pos):
