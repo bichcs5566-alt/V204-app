@@ -1,2 +1,3 @@
-updated_at_utc,latest_nav_date,latest_trade_date,latest_signal_date,final_nav,sharpe,total_return,positions_rows
-2026-04-10 00:44:43 UTC,2026-03-23,2026-03-30,2026-03-23,701215.515520029,1.3068840782385835,6.01215515520029,13261
+updated_at_utc,latest_nav_date,latest_trade_date,latest_signal_date,final_nav,sharpe,total_return,positions_rows,time
+2026-04-10 00:44:43 UTC,2026-03-23,2026-03-30,2026-03-23,701215.515520029,1.3068840782385835,6.01215515520029,13261.0,
+,2026-04-09,,,,,,,2026-04-10 02:26:11
