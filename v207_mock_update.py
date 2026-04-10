@@ -4,7 +4,7 @@ import numpy as np
 from pathlib import Path
 from datetime import datetime
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parent
 NAV_PATH = ROOT / "v202_nav.csv"
 POS_PATH = ROOT / "v202_positions.csv"
 SUM_PATH = ROOT / "v202_summary.csv"
