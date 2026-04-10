@@ -140,42 +140,36 @@ def load_and_repair_positions():
     repair_logs = []
 
     def normalize_group(g):
-        total_abs_weight = g["weight"].abs().sum()
-        total_weight = g["weight"].sum()
+    g = g.copy()
 
-        repaired = False
-        old_total_weight = float(total_weight)
-        old_total_abs_weight = float(total_abs_weight)
+    trade_date_val = g.name if hasattr(g, "name") else None
+    if pd.isna(trade_date_val):
+        trade_date_str = ""
+    else:
+        trade_date_str = str(pd.to_datetime(trade_date_val).date())
 
-        if total_abs_weight > 1.5 and total_abs_weight > 0:
-            g = g.copy()
-            g["weight"] = g["weight"] / total_abs_weight
-            repaired = True
+    total_abs_weight = g["weight"].abs().sum()
+    total_weight = g["weight"].sum()
 
-        repair_logs.append({
-            "trade_date": str(g["trade_date"].iloc[0].date()),
-            "rows": int(len(g)),
-            "old_total_weight": old_total_weight,
-            "old_total_abs_weight": old_total_abs_weight,
-            "new_total_weight": float(g["weight"].sum()),
-            "new_total_abs_weight": float(g["weight"].abs().sum()),
-            "normalized": repaired
-        })
+    repaired = False
+    old_total_weight = float(total_weight)
+    old_total_abs_weight = float(total_abs_weight)
 
-        return g
+    if total_abs_weight > 1.5 and total_abs_weight > 0:
+        g["weight"] = g["weight"] / total_abs_weight
+        repaired = True
 
-    pos = (
-        pos.groupby("trade_date", group_keys=False)
-           .apply(normalize_group)
-           .reset_index(drop=True)
-    )
+    repair_logs.append({
+        "trade_date": trade_date_str,
+        "rows": int(len(g)),
+        "old_total_weight": old_total_weight,
+        "old_total_abs_weight": old_total_abs_weight,
+        "new_total_weight": float(g["weight"].sum()),
+        "new_total_abs_weight": float(g["weight"].abs().sum()),
+        "normalized": repaired
+    })
 
-    # 4) 過濾非常可疑日期（若同日持股數極大）
-    # 這裡不直接刪資料，只做聚合層防呆
-    repair_log_df = pd.DataFrame(repair_logs)
-    repair_log_df.to_csv(REPAIR_LOG_PATH, index=False)
-
-    return pos, raw_rows
+    return gs
 
 
 def build_daily_return_from_positions(pos):
