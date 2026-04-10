@@ -1,0 +1,7 @@
+price_tier,rows,symbol_count,avg_weight,avg_day_ret,avg_cum_ret,latest_trade_date,latest_signal_date
+lt10,0,0,,,,,
+10_30,0,0,,,,,
+30_50,0,0,,,,,
+50_100,0,0,,,,,
+100p,0,0,,,,,
+unknown,13261,973,0.20243697056531687,0.0007356398241199219,0.0037884168410460797,2026-03-30,2026-03-23
