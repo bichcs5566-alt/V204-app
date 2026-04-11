@@ -391,7 +391,9 @@ def main():
 
     pos_save = snapshot.copy()
     if "trade_date" in pos_save.columns:
-        pos_save["trade_date"] = pd.to_datetime(pos_save["trade_date"], errors="coerce").dt.strftime("%Y-%m-%d")
+        pos_save["trade_date"] = pd.to_datetime(
+            pos_save["trade_date"], errors="coerce"
+        ).dt.strftime("%Y-%m-%d")
     pos_save.to_csv(POS_PATH, index=False)
 
     summary.to_csv(SUM_PATH, index=False)
@@ -402,11 +404,13 @@ def main():
         sample2["date"] = pd.to_datetime(sample2["date"]).dt.strftime("%Y-%m-%d")
     sample2.head(500).to_csv(SAMPLE_PATH, index=False)
 
+    nonzero_days = int((daily["ret"].abs() > 0).sum()) if not daily.empty else 0
+
     print("v212 DONE")
     print("snapshot rows:", len(snapshot))
     print("price rows:", len(px))
     print("daily rows:", len(daily))
-    print("nonzero ret days:", int((daily["ret"].abs() > 0).sum()) if not daily.empty else 0))
+    print("nonzero ret days:", nonzero_days)
 
 
 if __name__ == "__main__":
