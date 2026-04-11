@@ -1,0 +1,2 @@
+start_date,end_date,initial_capital,final_nav,total_return,trading_days,nonzero_ret_days,avg_a_count,avg_b_count,avg_total_count,avg_exposure,cash_days,sharpe,mdd
+2026-01-19,nan,100000.0,79056.50072844731,-0.2094349927155269,55,49,10.0,3.7454545454545456,13.745454545454546,0.8345454545454544,6,-4.155517284218013,-0.24058381384545924
