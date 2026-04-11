@@ -26,7 +26,7 @@ jobs:
 
       - name: Run v212
         run: |
-          python v212_twse_tpex_price_panel_v2.py
+          python v212_twse_tpex_price_panel.py
 
       - name: Commit changes
         run: |
