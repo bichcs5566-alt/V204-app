@@ -1,7 +1,3 @@
-# v213.0 動態持倉引擎（TXT 版）
-# 存檔名稱：v2130_dynamic_portfolio_engine.py
-# 工作流檔名：.github/workflows/v2130.yml
-
 import pandas as pd
 import numpy as np
 from pathlib import Path
