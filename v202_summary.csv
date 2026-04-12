@@ -1,2 +1,2 @@
-start_date,end_date,final_nav
-2015-03-27,2026-04-11,97102.21350271636
+start_date,end_date,initial_capital,final_nav,total_return,sharpe,mdd,trading_days,avg_holdings,avg_exposure
+2015-03-27,2026-04-11,97000.0,97102.21350271636,0.001053747450684206,0.2630154098372037,0.0,4034,973.0,0.9889734519898745
