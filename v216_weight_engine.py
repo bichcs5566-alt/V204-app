@@ -48,7 +48,7 @@ import pandas as pd
 # 路徑設定
 # =========================
 BASE_DIR = Path(".")
-PRICE_PANEL_PATH = BASE_DIR / "price_panel.csv"
+PRICE_PANEL_PATH = BASE_DIR / "price_panel_daily.csv"
 
 POSITIONS_OUT = BASE_DIR / "v216_positions.csv"
 DAILY_NAV_OUT = BASE_DIR / "v216_daily_nav.csv"
