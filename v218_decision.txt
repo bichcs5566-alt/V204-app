@@ -1,0 +1,9 @@
+=== v218 Alpha Decision ===
+WINNER: B_only
+DECISION: DROP_A_USE_B
+
+=== Detail ===
+          return    sharpe       mdd     score
+A_only  0.087777  1.790305 -0.062337  3.606049
+B_only  0.031999  2.908621 -0.011190  5.838050
+AB      0.120030  2.049734 -0.068871  4.150628
