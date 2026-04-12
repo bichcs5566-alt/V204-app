@@ -1,0 +1,43 @@
+name: v216
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy
+
+      - name: Run v216
+        run: |
+          python v216_weight_engine.py
+
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add v216_weight_engine.py \
+                  v216_positions.csv \
+                  v216_signal_log.csv \
+                  v216_daily_nav.csv \
+                  v216_summary.csv || true
+
+          git diff --cached --quiet || git commit -m "run v216 weight engine"
+          git push
