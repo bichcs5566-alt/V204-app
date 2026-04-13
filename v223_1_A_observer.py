@@ -1,50 +1,45 @@
 # v223_1_A_observer.py
-# ==========================================
-# A 引擎觀察版（不進資金）
-# ==========================================
 
 import pandas as pd
+import numpy as np
 
-df = pd.read_csv("price_panel.csv")
-df["date"] = pd.to_datetime(df["date"])
-df = df.sort_values(["symbol", "date"])
+PRICE_FILE = "price_panel_daily.csv"
 
-g = df.groupby("symbol")
+df = pd.read_csv(PRICE_FILE)
 
-df["mom5"] = g["close"].pct_change(5)
-df["std5"] = g["close"].pct_change().rolling(5).std().reset_index(level=0, drop=True)
+df["trade_date"] = pd.to_datetime(df["trade_date"])
+df = df.sort_values(["trade_date", "symbol"])
 
-dates = sorted(df["date"].unique())
+dates = sorted(df["trade_date"].unique())
 
-rows = []
+records = []
 
-for i in range(len(dates) - 3):
-    signal = dates[i]
-    trade = dates[i + 1]
-    exit_d = dates[i + 3]
+for d in dates:
+    g = df[df["trade_date"] == d]
 
-    snap = df[df["date"] == signal]
+    if len(g) == 0:
+        continue
 
-    cond = (
-        (snap["mom5"] < -0.08) &
-        (snap["std5"] < 0.1)
-    )
+    # 🧪 A策略（不同邏輯：反轉）
+    g = g.copy()
+    g["score"] = g["open"] / g["close"]  # 反向
 
-    pick = snap[cond].head(5)
+    selected = g.sort_values("score", ascending=False).head(10)
 
-    for _, r in pick.iterrows():
-        try:
-            buy = df[(df["symbol"] == r["symbol"]) & (df["date"] == trade)]["close"].values[0]
-            sell = df[(df["symbol"] == r["symbol"]) & (df["date"] == exit_d)]["close"].values[0]
-        except:
-            continue
+    selected["ret"] = selected["close"] / selected["open"] - 1
 
-        rows.append({
-            "symbol": r["symbol"],
-            "ret": sell / buy - 1
-        })
+    if len(selected) > 0:
+        avg_ret = selected["ret"].mean()
+    else:
+        avg_ret = 0
 
-out = pd.DataFrame(rows)
-out.to_csv("v223_1_A_observer.csv", index=False)
+    records.append({
+        "trade_date": d,
+        "avg_ret": avg_ret,
+        "count": len(selected)
+    })
 
-print("A觀察完成")
+obs_df = pd.DataFrame(records)
+obs_df.to_csv("v223_1_A_observer.csv", index=False)
+
+print("DONE A OBSERVER")
