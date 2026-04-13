@@ -1,0 +1,58 @@
+# .github/workflows/v223_1_workflow.yml
+
+name: v223_1_B_only_main
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "20 10 * * 1-5"
+
+permissions:
+  contents: write
+
+jobs:
+  run-v223-1:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy
+
+      # 🔥 主系統（B only）
+      - name: Run main system (B only)
+        run: |
+          python v223_1_main.py
+
+      # 🧪 A 觀察（不影響資金）
+      - name: Run A observer
+        run: |
+          python v223_1_A_observer.py
+
+      # 📤 上傳結果
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: v223_1_outputs
+          path: |
+            v223_1_nav.csv
+            v223_1_A_observer.csv
+          if-no-files-found: error
+
+      # 💾 存回 repo
+      - name: Commit outputs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add v223_1_*.csv
+          git diff --cached --quiet || git commit -m "update v223.1 outputs"
+          git push
