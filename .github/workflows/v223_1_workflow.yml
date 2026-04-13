@@ -1,6 +1,4 @@
-# .github/workflows/v223_1_workflow.yml
-
-name: v223_1_B_only_main
+name: v223_1_dual_engine
 
 on:
   workflow_dispatch:
@@ -11,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  run-v223-1:
+  run:
     runs-on: ubuntu-latest
 
     steps:
@@ -23,36 +21,27 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install
         run: |
-          python -m pip install --upgrade pip
           pip install pandas numpy
 
-      # 🔥 主系統（B only）
-      - name: Run main system (B only)
-        run: |
-          python v223_1_main.py
+      - name: Run B main
+        run: python v223_1_main.py
 
-      # 🧪 A 觀察（不影響資金）
       - name: Run A observer
-        run: |
-          python v223_1_A_observer.py
+        run: python v223_1_A_observer.py
 
-      # 📤 上傳結果
-      - name: Upload artifacts
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: v223_1_outputs
+          name: v223_1_output
           path: |
-            v223_1_nav.csv
-            v223_1_A_observer.csv
-          if-no-files-found: error
+            v223_1_*.csv
 
-      # 💾 存回 repo
-      - name: Commit outputs
+      - name: Commit
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
           git add v223_1_*.csv
-          git diff --cached --quiet || git commit -m "update v223.1 outputs"
+          git diff --cached --quiet || git commit -m "update v223.1"
           git push
