@@ -1,0 +1,2 @@
+start_date,end_date,initial_capital,final_nav,total_return,trading_days,nonzero_ret_days,avg_holdings,avg_exposure,ann_return,sharpe,mdd,trade_rows,engines
+2026-01-09,2026-04-09,100000.0,105341.56649482553,0.05341566494825534,53,46,10.39622641509434,0.7075471698113207,0.28072392068337093,0.6958645786209473,-0.2631286031411485,551,"A,B"
