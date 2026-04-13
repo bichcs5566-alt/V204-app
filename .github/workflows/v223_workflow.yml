@@ -1,0 +1,54 @@
+# .github/workflows/v223_workflow.yml
+
+name: v223_dual_engine
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 10 * * 1-5"
+
+permissions:
+  contents: write
+
+jobs:
+  run-v223:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy pyarrow
+
+      - name: Run v223 dual engine
+        run: |
+          python v223_dual_engine.py
+
+      - name: Upload CSV artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: v223_outputs
+          path: |
+            v223_signal_log.csv
+            v223_positions.csv
+            v223_daily_nav.csv
+            v223_summary.csv
+            v223_engine_stats.csv
+            v223_window_summary.csv
+          if-no-files-found: error
+
+      - name: Commit CSV outputs back to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add v223_*.csv
+          git diff --cached --quiet || git commit -m "update v223 outputs"
+          git push
