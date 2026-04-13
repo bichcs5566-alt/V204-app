@@ -1,11 +1,21 @@
-# v224_main.py
+# v224_main_fixed.py
 import pandas as pd
 import numpy as np
 
 df = pd.read_csv("price_panel_daily.csv")
 df.columns = [c.strip().lower() for c in df.columns]
 
-required_cols = ["trade_date", "symbol", "close", "mom_5", "mom_10", "ret_1d"]
+# 自動修復欄位名稱
+if "date" in df.columns and "trade_date" not in df.columns:
+    df["trade_date"] = df["date"]
+
+if "datetime" in df.columns and "trade_date" not in df.columns:
+    df["trade_date"] = df["datetime"]
+
+if "trade_date" not in df.columns:
+    raise Exception(f"❌ 沒有找到 trade_date / date / datetime 欄位，目前欄位: {df.columns.tolist()}")
+
+required_cols = ["symbol", "close", "mom_5", "mom_10", "ret_1d"]
 for col in required_cols:
     if col not in df.columns:
         raise Exception(f"缺少欄位: {col}")
@@ -57,11 +67,5 @@ for d in dates:
 result = pd.DataFrame(records, columns=["date", "nav", "ret", "drawdown", "cash_mode"])
 result.to_csv("v224_nav.csv", index=False)
 
-summary = {
-    "final_nav": nav,
-    "total_return": (nav / 100000) - 1,
-    "max_drawdown": result["drawdown"].min(),
-    "avg_ret": result["ret"].mean()
-}
+print("✅ DONE")
 
-print(summary)
