@@ -1,0 +1,40 @@
+name: run-v225
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run-strategy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy
+
+      - name: Run v225
+        run: |
+          python v225_main.py
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: v225-result
+          path: |
+            v225_nav.csv
+            v225_summary.csv
+            v225_B_trades.csv
+            v225_trade_stats.csv
+          if-no-files-found: error
