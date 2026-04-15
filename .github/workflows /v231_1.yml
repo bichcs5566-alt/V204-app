@@ -1,0 +1,34 @@
+name: run-v231-1
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install pandas numpy
+
+      # 🔥 先更新 macro
+      - name: Update Macro
+        run: python v231_1_macro_updater.py
+
+      # 🔥 再跑策略
+      - name: Run Strategy
+        run: python v231_main.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v231_1_result
+          path: |
+            macro_signal.csv
+            v231_nav.csv
+            v231_summary.csv
+            v231_diagnostics.csv
