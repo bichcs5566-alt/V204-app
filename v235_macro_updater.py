@@ -3,12 +3,24 @@ import yfinance as yf
 
 
 def safe_download(ticker):
-    data = yf.download(ticker, period="1y", progress=False)
+    data = yf.download(
+        ticker,
+        period="1y",
+        progress=False,
+        auto_adjust=True,
+        multi_level_index=False,
+        threads=False,
+    )
 
     if data is None or len(data) == 0:
         raise Exception(f"{ticker} download failed")
 
-    return data["Close"]
+    if "Close" not in data.columns:
+        raise Exception(f"{ticker} 缺少 Close 欄位")
+
+    s = data["Close"].copy()
+    s.name = ticker
+    return s
 
 
 def fetch_data():
@@ -16,12 +28,15 @@ def fetch_data():
     vix = safe_download("^VIX")
     us10y = safe_download("^TNX")
 
-    # 🔥 對齊 index（非常重要）
-    df = pd.concat([spy, vix, us10y], axis=1)
-    df.columns = ["spy", "vix", "us10y"]
+    df = pd.concat([spy, vix, us10y], axis=1).dropna().reset_index()
 
-    df = df.dropna().reset_index()
-    df.rename(columns={"Date": "trade_date"}, inplace=True)
+    if "Date" in df.columns:
+        df = df.rename(columns={"Date": "trade_date"})
+    else:
+        df = df.rename(columns={"index": "trade_date"})
+
+    df["trade_date"] = pd.to_datetime(df["trade_date"])
+    df.columns = ["trade_date", "spy", "vix", "us10y"]
 
     return df
 
@@ -48,15 +63,16 @@ def build_macro(df):
         df["rate_score"] * 0.2
     )
 
-    return df[["trade_date", "macro_score"]]
+    df["macro_score"] = df["macro_score"].clip(-1, 1)
+
+    return df[["trade_date", "macro_score"]].dropna()
 
 
 def main():
     df = fetch_data()
     macro = build_macro(df)
-
     macro.to_csv("macro_signal.csv", index=False)
-    print("macro_signal.csv updated")
+    print("macro updated")
 
 
 if __name__ == "__main__":
