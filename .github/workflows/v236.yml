@@ -1,0 +1,53 @@
+name: run-v236
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 10 * * 1-5"   # 台灣時間 18:00（UTC+8）
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ 下載 repo
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2️⃣ Python 環境
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # 3️⃣ 安裝套件
+      - name: Install dependencies
+        run: pip install pandas numpy yfinance
+
+      # 4️⃣ 更新 macro（真市場數據）
+      - name: Run macro updater
+        run: python v235_macro_updater.py
+
+      # 5️⃣ 執行 v236 主策略
+      - name: Run v236 strategy
+        run: python v236_main.py
+
+      # 6️⃣ 確認檔案存在（🔥避免你之前的問題）
+      - name: Check output files
+        run: |
+          echo "=== FILE LIST ==="
+          ls -lah
+          echo "=== CHECK FILES ==="
+          test -f macro_signal.csv
+          test -f v236_nav.csv
+          test -f v236_summary.csv
+
+      # 7️⃣ 上傳結果（🔥關鍵）
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: v236_result
+          path: |
+            macro_signal.csv
+            v236_nav.csv
+            v236_summary.csv
