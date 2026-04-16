@@ -18,3 +18,12 @@ jobs:
 
       - run: python v235_macro_updater.py
       - run: python v235_main.py
+
+      # 🔥 這段就是你缺的
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v235_result
+          path: |
+            v235_nav.csv
+            v235_summary.csv
+            macro_signal.csv
