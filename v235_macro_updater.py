@@ -1,42 +1,47 @@
 import pandas as pd
 import yfinance as yf
 
+
+def safe_download(ticker):
+    data = yf.download(ticker, period="1y", progress=False)
+
+    if data is None or len(data) == 0:
+        raise Exception(f"{ticker} download failed")
+
+    return data["Close"]
+
+
 def fetch_data():
-    spy = yf.download("SPY", period="1y")["Close"]
-    vix = yf.download("^VIX", period="1y")["Close"]
-    us10y = yf.download("^TNX", period="1y")["Close"]
+    spy = safe_download("SPY")
+    vix = safe_download("^VIX")
+    us10y = safe_download("^TNX")
 
-    df = pd.DataFrame({
-        "spy": spy,
-        "vix": vix,
-        "us10y": us10y
-    }).dropna()
+    # 🔥 對齊 index（非常重要）
+    df = pd.concat([spy, vix, us10y], axis=1)
+    df.columns = ["spy", "vix", "us10y"]
 
-    df = df.reset_index()
+    df = df.dropna().reset_index()
     df.rename(columns={"Date": "trade_date"}, inplace=True)
 
     return df
 
 
 def build_macro(df):
-    # === SPY 趨勢 ===
     df["spy_ma5"] = df["spy"].rolling(5).mean()
     df["spy_ma20"] = df["spy"].rolling(20).mean()
 
     df["spy_score"] = (df["spy_ma5"] > df["spy_ma20"]).astype(int)
 
-    # === VIX（風險）===
     df["vix_score"] = 0
     df.loc[df["vix"] < 18, "vix_score"] = 1
     df.loc[df["vix"] > 25, "vix_score"] = -1
 
-    # === 利率變化 ===
     df["rate_change"] = df["us10y"].diff()
+
     df["rate_score"] = 0
     df.loc[df["rate_change"] < -0.05, "rate_score"] = 1
     df.loc[df["rate_change"] > 0.05, "rate_score"] = -1
 
-    # === 總分 ===
     df["macro_score"] = (
         df["spy_score"] * 0.5 +
         df["vix_score"] * 0.3 +
