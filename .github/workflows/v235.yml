@@ -2,6 +2,8 @@ name: run-v235
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 10 * * 1-5"
 
 jobs:
   run:
@@ -16,14 +18,25 @@ jobs:
 
       - run: pip install pandas numpy yfinance
 
-      - run: python v235_macro_updater.py
-      - run: python v235_main.py
+      - name: Run macro updater
+        run: python v235_macro_updater.py
 
-      # 🔥 這段就是你缺的
-      - uses: actions/upload-artifact@v4
+      - name: Run main
+        run: python v235_main.py
+
+      - name: Check output files
+        run: |
+          ls -lah
+          test -f macro_signal.csv
+          test -f v235_nav.csv
+          test -f v235_summary.csv
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
         with:
           name: v235_result
           path: |
+            macro_signal.csv
             v235_nav.csv
             v235_summary.csv
-            macro_signal.csv
+
