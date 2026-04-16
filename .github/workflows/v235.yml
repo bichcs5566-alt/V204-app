@@ -1,0 +1,32 @@
+name: run-v235
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 10 * * 1-5"   # 台灣 18:00 自動跑
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install pandas numpy yfinance
+
+      # 🔥 真 macro
+      - run: python v235_macro_updater.py
+
+      # 🔥 主策略（v234.3）
+      - run: python v235_main.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v235_result
+          path: |
+            v235_nav.csv
+            v235_summary.csv
