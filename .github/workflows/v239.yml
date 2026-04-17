@@ -1,0 +1,39 @@
+name: run-v239
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install pandas numpy yfinance
+
+      - run: python v235_macro_updater.py
+      - run: python v239_main.py
+
+      - name: Check output files
+        run: |
+          ls -lah
+          test -f macro_signal.csv
+          test -f v239_nav.csv
+          test -f v239_trades.csv
+          test -f v239_holdings.csv
+          test -f v239_summary.csv
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v239_result
+          path: |
+            macro_signal.csv
+            v239_nav.csv
+            v239_trades.csv
+            v239_holdings.csv
+            v239_summary.csv
