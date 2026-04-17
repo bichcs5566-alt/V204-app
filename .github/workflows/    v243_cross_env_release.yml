@@ -1,0 +1,86 @@
+name: run-v243-cross-env-release-tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - "v243_official_release_main.py"
+      - ".github/workflows/v243_cross_env_release.yml"
+
+jobs:
+  cross_env_backtest:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        py: ["3.11"]
+        period:
+          - { name: "2022", start: "2022-01-01", end: "2022-12-31" }
+          - { name: "2023", start: "2023-01-01", end: "2023-12-31" }
+          - { name: "2024", start: "2024-01-01", end: "2024-12-31" }
+          - { name: "2025", start: "2025-01-01", end: "2025-12-31" }
+          - { name: "full_2022_2025", start: "2022-01-01", end: "2025-12-31" }
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.py }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy yfinance
+
+      - name: Check required files
+        shell: bash
+        run: |
+          test -f v243_official_release_main.py || (echo "Missing v243_official_release_main.py" && exit 1)
+          test -f v235_macro_updater.py || (echo "Missing v235_macro_updater.py" && exit 1)
+          test -f price_panel_daily.csv || (echo "Missing price_panel_daily.csv" && exit 1)
+
+      - name: Run macro updater
+        run: python v235_macro_updater.py
+
+      - name: Check macro output
+        shell: bash
+        run: |
+          test -f macro_signal.csv || (echo "macro_signal.csv not generated" && exit 1)
+
+      - name: Run backtest
+        run: >
+          python v243_official_release_main.py
+          --price price_panel_daily.csv
+          --macro macro_signal.csv
+          --start ${{ matrix.period.start }}
+          --end ${{ matrix.period.end }}
+          --output-prefix v243_${{ matrix.os }}_${{ matrix.period.name }}
+
+      - name: Check outputs
+        shell: bash
+        run: |
+          test -f v243_${{ matrix.os }}_${{ matrix.period.name }}_nav.csv || (echo "Missing nav" && exit 1)
+          test -f v243_${{ matrix.os }}_${{ matrix.period.name }}_trades.csv || (echo "Missing trades" && exit 1)
+          test -f v243_${{ matrix.os }}_${{ matrix.period.name }}_signals.csv || (echo "Missing signals" && exit 1)
+          test -f v243_${{ matrix.os }}_${{ matrix.period.name }}_daily_positions.csv || (echo "Missing daily_positions" && exit 1)
+          test -f v243_${{ matrix.os }}_${{ matrix.period.name }}_summary.csv || (echo "Missing summary" && exit 1)
+          test -f v243_${{ matrix.os }}_${{ matrix.period.name }}_meta.json || (echo "Missing meta" && exit 1)
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: v243_${{ matrix.os }}_${{ matrix.period.name }}
+          path: |
+            v243_${{ matrix.os }}_${{ matrix.period.name }}_nav.csv
+            v243_${{ matrix.os }}_${{ matrix.period.name }}_trades.csv
+            v243_${{ matrix.os }}_${{ matrix.period.name }}_signals.csv
+            v243_${{ matrix.os }}_${{ matrix.period.name }}_daily_positions.csv
+            v243_${{ matrix.os }}_${{ matrix.period.name }}_summary.csv
+            v243_${{ matrix.os }}_${{ matrix.period.name }}_meta.json
