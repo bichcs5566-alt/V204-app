@@ -1,0 +1,45 @@
+name: run-v243
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install pandas numpy yfinance
+
+      - name: Run macro updater
+        run: python v235_macro_updater.py
+
+      - name: Run v243
+        run: python v243_main.py
+
+      - name: Check outputs
+        run: |
+          ls -lah
+          test -f macro_signal.csv
+          test -f v243_nav.csv
+          test -f v243_trades.csv
+          test -f v243_holdings.csv
+          test -f v243_summary.csv
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: v243_result
+          path: |
+            macro_signal.csv
+            v243_nav.csv
+            v243_trades.csv
+            v243_holdings.csv
+            v243_summary.csv
