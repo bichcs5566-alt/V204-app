@@ -1,4 +1,4 @@
-# v241 持倉進化版（重點：抱住贏家 + 分級停損）
+# v241_main.py（完整可覆蓋版｜已修復 ZeroDivisionError）
 
 import pandas as pd
 import numpy as np
@@ -6,9 +6,9 @@ import numpy as np
 INITIAL_CAPITAL = 100000.0
 TOP_N = 5
 
-STOP_LOSS_1 = -0.07   # 減碼
-STOP_LOSS_2 = -0.12   # 全出
-ADD_WINNER = 0.05     # 漲超過5%加碼
+STOP_LOSS_1 = -0.07
+STOP_LOSS_2 = -0.12
+ADD_WINNER = 0.05
 
 
 def load_data():
@@ -78,7 +78,7 @@ def simulate(df):
         ret = 0
         to_remove = []
 
-        for sym, pos in holdings.items():
+        for sym, pos in list(holdings.items()):
             if sym in day["symbol"].values:
                 row = day[day["symbol"]==sym].iloc[-1]
                 cur = row["close"]
@@ -86,7 +86,6 @@ def simulate(df):
 
                 pnl = cur/pos["entry"] -1
 
-                # 分級停損
                 if pnl <= STOP_LOSS_2:
                     trade_rows.append([date,"STOP_FULL",sym,cur])
                     to_remove.append(sym)
@@ -95,7 +94,6 @@ def simulate(df):
                     holdings[sym]["weight"] *= 0.5
                     trade_rows.append([date,"STOP_PART",sym,cur])
 
-                # 贏家加碼
                 elif pnl >= ADD_WINNER:
                     holdings[sym]["weight"] *= 1.2
                     trade_rows.append([date,"ADD",sym,cur])
@@ -106,7 +104,6 @@ def simulate(df):
         for sym in to_remove:
             holdings.pop(sym)
 
-        # 補股（維持持倉）
         if exposure > 0:
             for _, r in ranked.iterrows():
                 if len(holdings) >= TOP_N:
@@ -119,10 +116,17 @@ def simulate(df):
                     }
                     trade_rows.append([date,"BUY",r["symbol"],r["close"]])
 
-        # normalize
-        total_w = sum([holdings[s]["weight"] for s in holdings]) if holdings else 1
-        for s in holdings:
-            holdings[s]["weight"] = (holdings[s]["weight"]/total_w)*exposure
+        # ⭐ 修正重點：避免 total_w = 0
+        if len(holdings) > 0:
+            total_w = sum(float(holdings[s]["weight"]) for s in holdings)
+
+            if total_w <= 0:
+                equal_w = exposure / len(holdings)
+                for s in holdings:
+                    holdings[s]["weight"] = equal_w
+            else:
+                for s in holdings:
+                    holdings[s]["weight"] = (float(holdings[s]["weight"]) / total_w) * exposure
 
         ret = max(min(ret,0.12),-0.08)
 
@@ -145,7 +149,8 @@ def main():
         "return": nav["nav"].iloc[-1]/INITIAL_CAPITAL -1,
         "mdd": nav["dd"].min(),
         "avg_exposure": nav["exposure"].mean(),
-        "avg_count": nav["count"].mean()
+        "avg_count": nav["count"].mean(),
+        "trade_count": len(trades)
     }])
 
     nav.to_csv("v241_nav.csv",index=False)
