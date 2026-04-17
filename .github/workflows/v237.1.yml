@@ -1,0 +1,28 @@
+name: run-v237-1
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install pandas numpy yfinance
+
+      - run: python v235_macro_updater.py
+      - run: python v237_1_main.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v237_1_result
+          path: |
+            v237_1_nav.csv
+            v237_1_trades.csv
+            v237_1_summary.csv
