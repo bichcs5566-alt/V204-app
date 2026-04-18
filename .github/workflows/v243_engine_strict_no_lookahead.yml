@@ -6,40 +6,65 @@ on:
 jobs:
   backtest:
     runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    strategy:
+      fail-fast: false
+      matrix:
+        test_case:
+          - label: y2022
+            start: "2022-01-01"
+            end: "2022-12-31"
+          - label: y2023
+            start: "2023-01-01"
+            end: "2023-12-31"
+          - label: y2024
+            start: "2024-01-01"
+            end: "2024-12-31"
+          - label: y2025
+            start: "2025-01-01"
+            end: "2025-12-31"
+          - label: full
+            start: "2022-01-01"
+            end: "2025-12-31"
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Install Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install deps
-        run: pip install pandas numpy
-
-      - name: Merge chunked
-        run: python merge_chunked_price_panel.py
-
-      - name: Run backtests
         run: |
-          python v243_engine_strict_no_lookahead.py --start 2022-01-01 --end 2022-12-31
-          mkdir y2022 && mv summary.csv daily_nav.csv y2022/
+          python -m pip install --upgrade pip
+          pip install pandas numpy
 
-          python v243_engine_strict_no_lookahead.py --start 2023-01-01 --end 2023-12-31
-          mkdir y2023 && mv summary.csv daily_nav.csv y2023/
+      - name: Merge price panel
+        run: |
+          python merge_chunked_price_panel.py
 
-          python v243_engine_strict_no_lookahead.py --start 2024-01-01 --end 2024-12-31
-          mkdir y2024 && mv summary.csv daily_nav.csv y2024/
+      - name: Build macro if missing
+        run: |
+          if [ ! -f macro_signal.csv ]; then
+            python v235_macro_updater.py
+          fi
 
-          python v243_engine_strict_no_lookahead.py --start 2025-01-01 --end 2025-12-31
-          mkdir y2025 && mv summary.csv daily_nav.csv y2025/
+      - name: Run backtest
+        run: |
+          python v243_engine_strict_no_lookahead.py \
+            --start "${{ matrix.test_case.start }}" \
+            --end "${{ matrix.test_case.end }}" \
+            --label "${{ matrix.test_case.label }}"
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload
+        uses: actions/upload-artifact@v4
         with:
-          name: results
+          name: strict_${{ matrix.test_case.label }}
           path: |
-            y2022
-            y2023
-            y2024
-            y2025
+            ${{ matrix.test_case.label }}_summary.csv
+            ${{ matrix.test_case.label }}_nav.csv
+            ${{ matrix.test_case.label }}_trades.csv
+            ${{ matrix.test_case.label }}_signals.csv
