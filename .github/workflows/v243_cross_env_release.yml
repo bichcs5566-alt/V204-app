@@ -4,28 +4,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  cross_env_backtest:
+  backtest:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: ["3.11"]
-        period:
-          - name: y2022
-            start: 2022-01-01
-            end: 2022-12-31
-          - name: y2023
-            start: 2023-01-01
-            end: 2023-12-31
-          - name: y2024
-            start: 2024-01-01
-            end: 2024-12-31
-          - name: y2025
-            start: 2025-01-01
-            end: 2025-12-31
-          - name: full_2022_2025
-            start: 2022-01-01
-            end: 2025-12-31
+        period: [y2022, y2023, y2024, y2025, full]
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
@@ -37,77 +21,86 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pandas numpy yfinance requests
 
-      - name: Verify required files
+      - name: Check required files
         shell: bash
         run: |
-          test -f v243_official_release_main.py || (echo "Missing v243_official_release_main.py" && exit 1)
-          test -f price_panel_daily.csv || (echo "Missing price_panel_daily.csv" && exit 1)
-          if [ ! -f macro_signal.csv ] && [ ! -f v235_macro_updater.py ]; then
-            echo "Need macro_signal.csv or v235_macro_updater.py"
-            exit 1
-          fi
+          test -f v243_official_release_main.py || (echo 'Missing v243_official_release_main.py' && exit 1)
+          test -f price_panel_daily.csv || (echo 'Missing price_panel_daily.csv' && exit 1)
 
-      - name: Build macro file if needed
+      - name: Build macro file if missing
         shell: bash
         run: |
-          if [ -f macro_signal.csv ]; then
-            echo "Using existing macro_signal.csv"
+          if [ ! -f macro_signal.csv ]; then
+            if [ -f v235_macro_updater.py ]; then
+              echo 'macro_signal.csv missing, running v235_macro_updater.py'
+              python v235_macro_updater.py
+            else
+              echo 'macro_signal.csv and v235_macro_updater.py both missing'
+              exit 1
+            fi
+          fi
+          test -f macro_signal.csv || (echo 'macro_signal.csv still missing after build step' && exit 1)
+
+      - name: Set period arguments
+        id: period_args
+        shell: bash
+        run: |
+          if [ "${{ matrix.period }}" = "y2022" ]; then
+            echo "start=2022-01-01" >> "$GITHUB_OUTPUT"
+            echo "end=2022-12-31" >> "$GITHUB_OUTPUT"
+            echo "label=2022" >> "$GITHUB_OUTPUT"
+          elif [ "${{ matrix.period }}" = "y2023" ]; then
+            echo "start=2023-01-01" >> "$GITHUB_OUTPUT"
+            echo "end=2023-12-31" >> "$GITHUB_OUTPUT"
+            echo "label=2023" >> "$GITHUB_OUTPUT"
+          elif [ "${{ matrix.period }}" = "y2024" ]; then
+            echo "start=2024-01-01" >> "$GITHUB_OUTPUT"
+            echo "end=2024-12-31" >> "$GITHUB_OUTPUT"
+            echo "label=2024" >> "$GITHUB_OUTPUT"
+          elif [ "${{ matrix.period }}" = "y2025" ]; then
+            echo "start=2025-01-01" >> "$GITHUB_OUTPUT"
+            echo "end=2025-12-31" >> "$GITHUB_OUTPUT"
+            echo "label=2025" >> "$GITHUB_OUTPUT"
           else
-            python v235_macro_updater.py
+            echo "start=2022-01-01" >> "$GITHUB_OUTPUT"
+            echo "end=2025-12-31" >> "$GITHUB_OUTPUT"
+            echo "label=2022_2025_full" >> "$GITHUB_OUTPUT"
           fi
-          test -f macro_signal.csv || (echo "macro_signal.csv not generated" && exit 1)
-
-      - name: Show data coverage
-        run: |
-          python - <<'PY'
-          import pandas as pd
-          df = pd.read_csv('price_panel_daily.csv')
-          df.columns = [str(c).lower().strip() for c in df.columns]
-          date_col = next((c for c in ['trade_date','date','datetime','signal_date'] if c in df.columns), None)
-          if date_col is None:
-              raise SystemExit('price_panel_daily.csv ç¼ºå°æ¥ææ¬ä½')
-          dt = pd.to_datetime(df[date_col], errors='coerce').dropna()
-          print('price min_date =', dt.min().date())
-          print('price max_date =', dt.max().date())
-          print('price rows     =', len(df))
-          print('price symbols  =', df['symbol'].astype(str).nunique() if 'symbol' in df.columns else 'NA')
-          PY
 
       - name: Run v243 backtest
-        run: >
+        run: >-
           python v243_official_release_main.py
-          --price price_panel_daily.csv
-          --macro macro_signal.csv
-          --start ${{ matrix.period.start }}
-          --end ${{ matrix.period.end }}
-          --output-prefix v243_${{ matrix.os }}_${{ matrix.period.name }}
+          --start ${{ steps.period_args.outputs.start }}
+          --end ${{ steps.period_args.outputs.end }}
+          --prefix v243_${{ steps.period_args.outputs.label }}_${{ matrix.os }}
 
-      - name: Verify outputs
+      - name: Check outputs
         shell: bash
         run: |
-          base="v243_${{ matrix.os }}_${{ matrix.period.name }}"
-          test -f "${base}_nav.csv" || (echo "Missing nav" && exit 1)
-          test -f "${base}_trades.csv" || (echo "Missing trades" && exit 1)
-          test -f "${base}_signals.csv" || (echo "Missing signals" && exit 1)
-          test -f "${base}_daily_positions.csv" || (echo "Missing daily_positions" && exit 1)
-          test -f "${base}_summary.csv" || (echo "Missing summary" && exit 1)
-          test -f "${base}_meta.json" || (echo "Missing meta" && exit 1)
+          ls -lah
+          test -f v243_${{ steps.period_args.outputs.label }}_${{ matrix.os }}_nav.csv || (echo 'Missing nav output' && exit 1)
+          test -f v243_${{ steps.period_args.outputs.label }}_${{ matrix.os }}_trades.csv || (echo 'Missing trades output' && exit 1)
+          test -f v243_${{ steps.period_args.outputs.label }}_${{ matrix.os }}_signals.csv || (echo 'Missing signals output' && exit 1)
+          test -f v243_${{ steps.period_args.outputs.label }}_${{ matrix.os }}_daily_positions.csv || (echo 'Missing daily_positions output' && exit 1)
+          test -f v243_${{ steps.period_args.outputs.label }}_${{ matrix.os }}_summary.csv || (echo 'Missing summary output' && exit 1)
+          test -f v243_${{ steps.period_args.outputs.label }}_${{ matrix.os }}_meta.csv || (echo 'Missing meta output' && exit 1)
 
       - name: Upload results
         uses: actions/upload-artifact@v4
         with:
-          name: v243_${{ matrix.os }}_${{ matrix.period.name }}
+          name: v243_${{ steps.period_args.outputs.label }}_${{ matrix.os }}
           path: |
-            v243_${{ matrix.os }}_${{ matrix.period.name }}_nav.csv
-            v243_${{ matrix.os }}_${{ matrix.period.name }}_trades.csv
-            v243_${{ matrix.os }}_${{ matrix.period.name }}_signals.csv
-            v243_${{ matrix.os }}_${{ matrix.period.name }}_daily_positions.csv
-            v243_${{ matrix.os }}_${{ matrix.period.name }}_summary.csv
-            v243_${{ matrix.os }}_${{ matrix.period.name }}_meta.json
+            v243_${{ steps.period_args.outputs.label }}_${{ matrix.os }}_nav.csv
+            v243_${{ steps.period_args.outputs.label }}_${{ matrix.os }}_trades.csv
+            v243_${{ steps.period_args.outputs.label }}_${{ matrix.os }}_signals.csv
+            v243_${{ steps.period_args.outputs.label }}_${{ matrix.os }}_daily_positions.csv
+            v243_${{ steps.period_args.outputs.label }}_${{ matrix.os }}_summary.csv
+            v243_${{ steps.period_args.outputs.label }}_${{ matrix.os }}_meta.csv
+            macro_signal.csv
