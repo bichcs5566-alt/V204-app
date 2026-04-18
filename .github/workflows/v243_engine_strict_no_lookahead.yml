@@ -40,7 +40,7 @@ jobs:
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
-          pip install pandas numpy
+          pip install pandas numpy yfinance requests
 
       - name: Merge price panel
         run: |
@@ -68,3 +68,4 @@ jobs:
             ${{ matrix.test_case.label }}_nav.csv
             ${{ matrix.test_case.label }}_trades.csv
             ${{ matrix.test_case.label }}_signals.csv
+            ${{ matrix.test_case.label }}_meta.json
