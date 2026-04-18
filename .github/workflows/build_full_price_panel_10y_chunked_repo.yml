@@ -1,0 +1,90 @@
+name: build-full-price-panel-10y-chunked-repo
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy yfinance requests
+
+      - name: Check scripts exist
+        run: |
+          test -f build_full_price_panel_10y_chunked_repo.py || (echo "Missing build_full_price_panel_10y_chunked_repo.py" && exit 1)
+          test -f merge_chunked_price_panel.py || (echo "Missing merge_chunked_price_panel.py" && exit 1)
+
+      - name: Build full 10y price panel into chunked repo parts
+        env:
+          PANEL_START: "2015-01-01"
+          PANEL_END: "2026-12-31"
+          MAX_PART_MB: "85"
+        run: |
+          python build_full_price_panel_10y_chunked_repo.py
+
+      - name: Check generated files
+        run: |
+          ls -lah
+          test -d data/price_panel_parts || (echo "Missing data/price_panel_parts" && exit 1)
+          test -f data/price_panel_parts/manifest.json || (echo "Missing manifest.json" && exit 1)
+          test -f build_price_panel_summary.csv || (echo "Missing build_price_panel_summary.csv" && exit 1)
+          test -f build_price_panel_log.txt || (echo "Missing build_price_panel_log.txt" && exit 1)
+          test -f symbol_universe.csv || (echo "Missing symbol_universe.csv" && exit 1)
+
+      - name: Commit chunked files to repo branch and open PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: auto update chunked full price panel 10y
+          title: Auto update chunked full price panel 10y
+          body: |
+            This PR was created automatically by GitHub Actions.
+
+            Updated files:
+            - data/price_panel_parts/*
+            - data/price_panel_parts/manifest.json
+            - build_price_panel_summary.csv
+            - build_price_panel_log.txt
+            - symbol_universe.csv
+            - merge_chunked_price_panel.py
+          branch: auto/update-chunked-full-price-panel-10y
+          delete-branch: true
+          base: main
+          add-paths: |
+            data/price_panel_parts/*
+            build_price_panel_summary.csv
+            build_price_panel_log.txt
+            symbol_universe.csv
+            merge_chunked_price_panel.py
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: price_panel_10y_chunked_repo_result
+          path: |
+            data/price_panel_parts/**
+            build_price_panel_summary.csv
+            build_price_panel_log.txt
+            symbol_universe.csv
+            merge_chunked_price_panel.py
