@@ -1,0 +1,58 @@
+{
+  "created_at": "2026-04-18T11:01:42.962628",
+  "start": "2015-01-01",
+  "end": "2026-12-31",
+  "part_count": 6,
+  "total_rows": 4777799,
+  "total_symbols": 1957,
+  "parts": [
+    {
+      "file": "data/price_panel_parts/price_panel_daily_part_001.csv",
+      "rows": 808018,
+      "bytes": 88467964,
+      "min_date": "2015-01-02",
+      "max_date": "2017-02-09",
+      "symbols": 1626
+    },
+    {
+      "file": "data/price_panel_parts/price_panel_daily_part_002.csv",
+      "rows": 808018,
+      "bytes": 87515468,
+      "min_date": "2017-02-09",
+      "max_date": "2019-01-30",
+      "symbols": 1696
+    },
+    {
+      "file": "data/price_panel_parts/price_panel_daily_part_003.csv",
+      "rows": 808018,
+      "bytes": 86377648,
+      "min_date": "2019-01-30",
+      "max_date": "2021-01-08",
+      "symbols": 1749
+    },
+    {
+      "file": "data/price_panel_parts/price_panel_daily_part_004.csv",
+      "rows": 808018,
+      "bytes": 84042861,
+      "min_date": "2021-01-08",
+      "max_date": "2022-11-18",
+      "symbols": 1810
+    },
+    {
+      "file": "data/price_panel_parts/price_panel_daily_part_005.csv",
+      "rows": 808018,
+      "bytes": 81078655,
+      "min_date": "2022-11-18",
+      "max_date": "2024-09-11",
+      "symbols": 1898
+    },
+    {
+      "file": "data/price_panel_parts/price_panel_daily_part_006.csv",
+      "rows": 737709,
+      "bytes": 70106327,
+      "min_date": "2024-09-11",
+      "max_date": "2026-04-17",
+      "symbols": 1953
+    }
+  ]
+}
