@@ -1,0 +1,40 @@
+name: v243-execution-ready
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install pandas numpy
+
+      # 🔥 核心升級 1：自動合併分片
+      - name: Merge chunked price panel
+        run: |
+          python merge_chunked_price_panel.py
+
+      # 🔥 核心升級 2：執行 v243
+      - name: Run v243 execution
+        run: |
+          python v243_execution_ready_main.py
+
+      # 📦 輸出結果（之後回測會用）
+      - name: Upload outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: v243_execution_ready_outputs
+          path: |
+            price_panel_daily.csv
