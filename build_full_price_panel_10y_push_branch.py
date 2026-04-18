@@ -1,11 +1,10 @@
-# build_full_price_panel_10y_autocommit.py
-# 建立 10 年台股資料後，自動 commit 回 repo（預設直接推目前 branch）
-# 若 push 失敗，會輸出較清楚訊息，方便改成 PR 流程
+# build_full_price_panel_10y_push_branch.py
+# 建立 10 年資料後，不直接 push main
+# 改為 push 到新 branch：auto-price-panel-YYYYMMDD-HHMMSS
 
 import os
 import re
 import time
-import json
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -94,8 +93,7 @@ def load_twse_symbols() -> set:
                 for row in data:
                     if not isinstance(row, dict):
                         continue
-                    vals = list(row.values())
-                    for v in vals[:3]:
+                    for v in list(row.values())[:3]:
                         code = clean_code(v)
                         if len(code) == 4:
                             out.add(code)
@@ -115,8 +113,7 @@ def load_tpex_symbols() -> set:
                 for row in data:
                     if not isinstance(row, dict):
                         continue
-                    vals = list(row.values())
-                    for v in vals[:3]:
+                    for v in list(row.values())[:3]:
                         code = clean_code(v)
                         if len(code) == 4:
                             out.add(code)
@@ -136,8 +133,10 @@ def build_universe() -> pd.DataFrame:
 
     universe = sorted(existing | twse | tpex)
     df = pd.DataFrame({"symbol": universe})
-    df["market_guess"] = np.where(df["symbol"].isin(sorted(twse)), "TWSE",
-                          np.where(df["symbol"].isin(sorted(tpex)), "TPEX", "UNKNOWN"))
+    df["market_guess"] = np.where(
+        df["symbol"].isin(sorted(twse)), "TWSE",
+        np.where(df["symbol"].isin(sorted(tpex)), "TPEX", "UNKNOWN")
+    )
 
     if LIMIT_SYMBOLS:
         df = df.head(LIMIT_SYMBOLS).copy()
@@ -147,9 +146,7 @@ def build_universe() -> pd.DataFrame:
     return df
 
 def to_yf_ticker(symbol: str, market_guess: str) -> str:
-    if market_guess == "TPEX":
-        return f"{symbol}.TWO"
-    return f"{symbol}.TW"
+    return f"{symbol}.TWO" if market_guess == "TPEX" else f"{symbol}.TW"
 
 def download_chunk(tickers: list[str]) -> pd.DataFrame:
     data = yf.download(
@@ -240,14 +237,13 @@ def build_panel(universe_df: pd.DataFrame) -> pd.DataFrame:
     log(f"Panel saved: {OUT_PANEL.name} | rows={len(panel)} | symbols={panel['symbol'].nunique()}")
     return panel
 
-def build_summary(panel: pd.DataFrame, universe_df: pd.DataFrame) -> pd.DataFrame:
+def build_summary(panel: pd.DataFrame, universe_df: pd.DataFrame) -> None:
     twse_n = int((universe_df["market_guess"] == "TWSE").sum())
     tpex_n = int((universe_df["market_guess"] == "TPEX").sum())
     covers_target = (
         pd.Timestamp("2022-01-03") >= panel["trade_date"].min()
         and pd.Timestamp("2025-12-31") <= panel["trade_date"].max()
     )
-
     summary = pd.DataFrame([{
         "start": START,
         "end": END,
@@ -263,16 +259,16 @@ def build_summary(panel: pd.DataFrame, universe_df: pd.DataFrame) -> pd.DataFram
     summary.to_csv(OUT_SUMMARY, index=False)
     log(f"Summary saved: {OUT_SUMMARY.name}")
     log(summary.to_string(index=False))
-    return summary
 
-def commit_back_to_repo():
+def commit_to_new_branch():
     actor = os.getenv("GITHUB_ACTOR", "github-actions[bot]")
     email = f"{actor}@users.noreply.github.com"
-    branch = os.getenv("GITHUB_REF_NAME", "main")
+    ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    branch = f"auto-price-panel-{ts}"
 
     run(f'git config user.name "{actor}"')
     run(f'git config user.email "{email}"')
-    run("git status --short", check=False)
+    run(f"git checkout -b {branch}")
     run(f"git add {OUT_PANEL.name} {OUT_SUMMARY.name} {OUT_LOG.name} {OUT_UNIVERSE.name}")
 
     diff = subprocess.run("git diff --cached --quiet", shell=True)
@@ -281,29 +277,23 @@ def commit_back_to_repo():
         return
 
     run('git commit -m "auto update full price panel 10y"')
-    try:
-        run(f"git push origin HEAD:{branch}")
-        log(f"已成功 push 回 repo branch: {branch}")
-    except subprocess.CalledProcessError as e:
-        log("git push 失敗。常見原因：")
-        log("1) main branch protection")
-        log("2) Actions 權限不是 Read and write")
-        log("3) repo 不允許 workflow 直接 push")
-        raise e
+    run(f"git push origin {branch}")
+    log(f"已推到新 branch: {branch}")
+    log("接下來到 GitHub 開 Pull Request，把這個 branch merge 回 main。")
 
 def main():
     if OUT_LOG.exists():
         OUT_LOG.unlink()
 
-    log("=== build_full_price_panel_10y_autocommit start ===")
+    log("=== build_full_price_panel_10y_push_branch start ===")
     log(f"start={START} end={END} limit_symbols={LIMIT_SYMBOLS}")
 
     universe_df = build_universe()
     panel = build_panel(universe_df)
     build_summary(panel, universe_df)
-    commit_back_to_repo()
+    commit_to_new_branch()
 
-    log("=== build_full_price_panel_10y_autocommit done ===")
+    log("=== build_full_price_panel_10y_push_branch done ===")
 
 if __name__ == "__main__":
     main()
