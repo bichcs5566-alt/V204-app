@@ -1,0 +1,2 @@
+start,end,rows,symbols,min_date,max_date,twse_symbols,tpex_symbols,covers_target,universe_symbols,part_count
+2015-01-01,2026-12-31,4777799,1957,2015-01-02,2026-04-17,1075,1017,True,2437,6
