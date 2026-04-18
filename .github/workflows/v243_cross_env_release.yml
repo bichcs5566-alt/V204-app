@@ -1,12 +1,12 @@
-name: v243-minimal-run
+name: v243-full-pipeline
 
 on:
   workflow_dispatch:
 
 jobs:
-  backtest:
+  run:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 180
 
     steps:
       - name: Checkout repo
@@ -17,41 +17,42 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install deps
         run: |
-          python -m pip install --upgrade pip
           pip install pandas numpy yfinance requests
 
-      - name: Check files
+      # 🟢 Step 1：先建資料（關鍵）
+      - name: Build 10y data
         run: |
-          ls -lah
-          test -f v243_official_release_main.py
-          test -f price_panel_daily.csv
+          python build_full_price_panel_10y.py
 
+      # 🟢 Step 2：建 macro（如果沒有）
       - name: Build macro if needed
         run: |
           if [ ! -f macro_signal.csv ]; then
             python v235_macro_updater.py
           fi
 
+      # 🟢 Step 3：直接跑 v243
       - name: Run v243 full
         run: |
-          python v243_official_release_main.py --start 2022-01-01 --end 2025-12-31
+          python v243_official_release_main.py \
+          --start 2022-01-01 \
+          --end 2025-12-31
 
+      # 🟢 Step 4：確認輸出
       - name: Check outputs
         run: |
           ls -lah
           test -f v243_summary.csv
-          test -f v243_nav.csv
 
-      - name: Upload results
+      # 🟢 Step 5：只上傳結果（小檔）
+      - name: Upload result
         uses: actions/upload-artifact@v4
         with:
-          name: v243_full_result
+          name: v243_result
           path: |
             v243_summary.csv
             v243_nav.csv
             v243_trades.csv
-            v243_signals.csv
-            v243_daily_positions.csv
             v243_meta.json
