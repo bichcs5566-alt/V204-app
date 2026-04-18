@@ -1,0 +1,45 @@
+name: v243-engine-strict-no-lookahead
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install pandas numpy
+
+      - name: Merge chunked
+        run: python merge_chunked_price_panel.py
+
+      - name: Run backtests
+        run: |
+          python v243_engine_strict_no_lookahead.py --start 2022-01-01 --end 2022-12-31
+          mkdir y2022 && mv summary.csv daily_nav.csv y2022/
+
+          python v243_engine_strict_no_lookahead.py --start 2023-01-01 --end 2023-12-31
+          mkdir y2023 && mv summary.csv daily_nav.csv y2023/
+
+          python v243_engine_strict_no_lookahead.py --start 2024-01-01 --end 2024-12-31
+          mkdir y2024 && mv summary.csv daily_nav.csv y2024/
+
+          python v243_engine_strict_no_lookahead.py --start 2025-01-01 --end 2025-12-31
+          mkdir y2025 && mv summary.csv daily_nav.csv y2025/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: results
+          path: |
+            y2022
+            y2023
+            y2024
+            y2025
