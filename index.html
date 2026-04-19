@@ -1,154 +1,16 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>v208 分層交易系統</title>
-
-<style>
-body{
-    margin:0;
-    background:#0b0f14;
-    color:#e6edf3;
-    font-family:-apple-system,BlinkMacSystemFont;
-}
-.container{
-    padding:16px;
-}
-.title{
-    font-size:20px;
-    margin-bottom:10px;
-}
-.card{
-    background:#121821;
-    padding:12px;
-    border-radius:12px;
-    margin-bottom:12px;
-}
-select{
-    width:100%;
-    padding:10px;
-    border-radius:8px;
-    background:#1b2430;
-    color:#fff;
-    border:none;
-}
-table{
-    width:100%;
-    border-collapse:collapse;
-}
-th,td{
-    padding:8px;
-    text-align:left;
-    border-bottom:1px solid #222;
-    font-size:13px;
-}
-.good{color:#3fb950;}
-.bad{color:#f85149;}
-</style>
+  <meta charset="UTF-8">
+  <meta http-equiv="refresh" content="0; url=./mobile_dashboard_v1/index.html">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>跳轉中...</title>
+  <script>
+    window.location.replace("./mobile_dashboard_v1/index.html");
+  </script>
 </head>
-
 <body>
-
-<div class="container">
-
-<div class="title">v208 分層交易系統</div>
-
-<div class="card">
-<select id="tierSelect">
-<option value="all">全部</option>
-<option value="lt10">&lt;10</option>
-<option value="10_30">10–30</option>
-<option value="30_50">30–50</option>
-<option value="50_100">50–100</option>
-<option value="100p">100+</option>
-</select>
-</div>
-
-<div class="card">
-<div id="summary">載入中...</div>
-</div>
-
-<div class="card">
-<table id="table">
-<thead>
-<tr>
-<th>股票</th>
-<th>成本</th>
-<th>現價</th>
-<th>損益%</th>
-<th>權重</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
-</div>
-
-</div>
-
-<script>
-
-const tierMap = {
-    all: "tier_all_positions.csv",
-    lt10: "tier_lt10_positions.csv",
-    "10_30": "tier_10_30_positions.csv",
-    "30_50": "tier_30_50_positions.csv",
-    "50_100": "tier_50_100_positions.csv",
-    "100p": "tier_100p_positions.csv"
-};
-
-async function loadSummary(){
-    try{
-        const res = await fetch("tier_overview_summary.csv");
-        const text = await res.text();
-        document.getElementById("summary").innerText = text;
-    }catch(e){
-        document.getElementById("summary").innerText = "summary讀取失敗";
-    }
-}
-
-async function loadTable(tier){
-    const file = tierMap[tier];
-    try{
-        const res = await fetch(file);
-        const text = await res.text();
-
-        const rows = text.split("\n").slice(1);
-        const tbody = document.querySelector("#table tbody");
-        tbody.innerHTML = "";
-
-        rows.forEach(r=>{
-            if(!r) return;
-            const cols = r.split(",");
-
-            const tr = document.createElement("tr");
-
-            const pnl = parseFloat(cols[3] || 0);
-
-            tr.innerHTML = `
-            <td>${cols[0]}</td>
-            <td>${cols[1]}</td>
-            <td>${cols[2]}</td>
-            <td class="${pnl>=0?'good':'bad'}">${pnl}</td>
-            <td>${cols[4]}</td>
-            `;
-
-            tbody.appendChild(tr);
-        });
-
-    }catch(e){
-        console.log(e);
-    }
-}
-
-document.getElementById("tierSelect").addEventListener("change", (e)=>{
-    loadTable(e.target.value);
-});
-
-loadSummary();
-loadTable("all");
-
-</script>
-
+  <p>正在跳轉到操作介面...</p>
+  <p><a href="./mobile_dashboard_v1/index.html">如果沒有自動跳轉，請點這裡</a></p>
 </body>
 </html>
