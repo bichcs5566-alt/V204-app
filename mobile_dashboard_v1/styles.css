@@ -6,7 +6,7 @@ body {
   padding: 20px;
 }
 .container {
-  max-width: 1100px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 .top {
@@ -70,11 +70,6 @@ button {
   padding: 0;
   font-size: 14px;
 }
-.sync-btn {
-  background: #065f46;
-  font-size: 14px;
-  padding: 8px 10px;
-}
 table {
   width: 100%;
   border-collapse: collapse;
@@ -88,7 +83,7 @@ th, td {
 th {
   background: #f9fafb;
 }
-.buy { color: #15803d; font-weight: 700; }
+.buy, .add { color: #15803d; font-weight: 700; }
 .sell, .stop_loss { color: #dc2626; font-weight: 700; }
 .reduce { color: #b45309; font-weight: 700; }
 .hold { color: #1d4ed8; font-weight: 700; }

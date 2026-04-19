@@ -2,8 +2,8 @@ const DATA_BASE = "./data";
 
 let tradeRows = [];
 let watchlist = [];
-let currentPositions = [];
 let watchlistMonitor = [];
+let positionMonitor = [];
 
 async function fetchText(path) {
   const res = await fetch(path + "?t=" + Date.now(), { cache: "no-store" });
@@ -68,20 +68,14 @@ async function loadCSV(file, optional = false) {
 
 function getLocalWatchlist() {
   try {
-    return JSON.parse(localStorage.getItem("watchlist_v2663") || "[]");
+    return JSON.parse(localStorage.getItem("watchlist_v2664") || "[]");
   } catch {
     return [];
   }
 }
 
 function saveLocalWatchlist(list) {
-  localStorage.setItem("watchlist_v2663", JSON.stringify(list));
-}
-
-function formatTW(n) {
-  const x = Number(n);
-  if (!Number.isFinite(x)) return n ?? "";
-  return x.toLocaleString("zh-TW", { maximumFractionDigits: 2 });
+  localStorage.setItem("watchlist_v2664", JSON.stringify(list));
 }
 
 function addWatch() {
@@ -94,7 +88,7 @@ function addWatch() {
   }
   input.value = "";
   renderWatchlist();
-  renderTradeTable();
+  renderWatchlistMonitor();
 }
 
 function renderWatchlist() {
@@ -119,38 +113,15 @@ function renderWatchlist() {
       watchlist = watchlist.filter(x => x !== btn.dataset.code);
       saveLocalWatchlist(watchlist);
       renderWatchlist();
-      renderTradeTable();
       renderWatchlistMonitor();
     });
   });
 }
 
-function syncToPosition(stockId, refPrice) {
-  const sharesInput = prompt(`請輸入 ${stockId} 的持有股數`, "100");
-  if (sharesInput === null) return;
-  const avgCostInput = prompt(`請輸入 ${stockId} 的平均成本`, refPrice || "");
-  if (avgCostInput === null) return;
-
-  const shares = String(sharesInput).trim();
-  const avg_cost = String(avgCostInput).trim();
-
-  const idx = currentPositions.findIndex(x => String(x.stock_id) === String(stockId));
-  if (idx >= 0) {
-    currentPositions[idx].shares = shares;
-    currentPositions[idx].avg_cost = avg_cost;
-  } else {
-    currentPositions.push({
-      stock_id: stockId,
-      shares,
-      avg_cost,
-      last_action_date: new Date().toISOString().slice(0,10),
-      note: "UI同步加入持倉"
-    });
-  }
-
-  localStorage.setItem("current_positions_ui_sync", JSON.stringify(currentPositions));
-  renderPositionTable(currentPositions);
-  alert(`已同步到前端持倉：${stockId}\n股數：${shares}\n成本：${avg_cost}\n\n提醒：若要讓後端正式使用，之後仍需把這筆回填到 current_positions.csv。`);
+function formatTW(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return v ?? "";
+  return n.toLocaleString("zh-TW", { maximumFractionDigits: 2 });
 }
 
 function renderTradeTable() {
@@ -160,7 +131,6 @@ function renderTradeTable() {
 
   const selectedTier = tierSelect.value || "全部";
   let rows = [...tradeRows];
-
   if (selectedTier !== "全部") {
     rows = rows.filter(r => String(r.price_tier || "") === selectedTier);
   }
@@ -169,7 +139,7 @@ function renderTradeTable() {
 
   if (!rows.length) {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="8" class="muted">目前沒有符合條件的資料</td>`;
+    tr.innerHTML = `<td colspan="7" class="muted">目前沒有符合條件的資料</td>`;
     tbody.appendChild(tr);
     return;
   }
@@ -189,24 +159,55 @@ function renderTradeTable() {
       <td>${r.target_weight || ""}</td>
       <td>${formatTW(r.suggested_amount)}</td>
       <td>${r.note || ""}</td>
-      <td><button class="sync-btn" data-stock="${stockId}" data-price="${r.ref_price || ''}" type="button">加入持倉</button></td>
     `;
     tbody.appendChild(tr);
   });
-
-  tbody.querySelectorAll(".sync-btn").forEach(btn => {
-    btn.addEventListener("click", () => syncToPosition(btn.dataset.stock, btn.dataset.price));
-  });
 }
 
-function renderPositionTable(rows) {
-  const tbody = document.querySelector("#position-table tbody");
+function renderPositionMonitor() {
+  const tbody = document.querySelector("#position-monitor-table tbody");
   if (!tbody) return;
   tbody.innerHTML = "";
 
+  if (!positionMonitor.length) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="10" class="muted">目前沒有持倉動作資料</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
+
+  positionMonitor.forEach(r => {
+    const tr = document.createElement("tr");
+    const action = String(r.action || "").toUpperCase();
+    tr.innerHTML = `
+      <td>${r.stock_id || ""}</td>
+      <td>${r.price_tier || ""}</td>
+      <td>${formatTW(r.ref_price)}</td>
+      <td>${formatTW(r.shares)}</td>
+      <td>${formatTW(r.avg_cost)}</td>
+      <td>${r.pnl_pct || ""}</td>
+      <td>${r.target_weight || ""}</td>
+      <td>${r.current_weight_est || ""}</td>
+      <td class="${action.toLowerCase()}">${action}</td>
+      <td>${r.note || ""}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderWatchlistMonitor() {
+  const tbody = document.querySelector("#watchlist-monitor-table tbody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  let rows = [...watchlistMonitor];
+  if (watchlist.length) {
+    rows = rows.filter(r => watchlist.includes(String(r.stock_id || "")));
+  }
+
   if (!rows.length) {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="3" class="muted">目前沒有持倉資料</td>`;
+    tr.innerHTML = `<td colspan="7" class="muted">目前沒有自選股監控資料</td>`;
     tbody.appendChild(tr);
     return;
   }
@@ -215,8 +216,12 @@ function renderPositionTable(rows) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${r.stock_id || ""}</td>
-      <td>${formatTW(r.shares)}</td>
-      <td>${formatTW(r.avg_cost)}</td>
+      <td>${r.price_tier || ""}</td>
+      <td>${formatTW(r.ref_price)}</td>
+      <td>${r.holding_status || ""}</td>
+      <td>${r.strategy_bucket || ""}</td>
+      <td>${r.action || ""}</td>
+      <td>${r.pnl_pct || ""}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -271,38 +276,6 @@ function renderDebugTable(rows) {
   });
 }
 
-function renderWatchlistMonitor() {
-  const tbody = document.querySelector("#watchlist-monitor-table tbody");
-  if (!tbody) return;
-  tbody.innerHTML = "";
-
-  let rows = [...watchlistMonitor];
-  if (watchlist.length) {
-    rows = rows.filter(r => watchlist.includes(String(r.stock_id || "")));
-  }
-
-  if (!rows.length) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td colspan="7" class="muted">目前沒有自選股監控資料</td>`;
-    tbody.appendChild(tr);
-    return;
-  }
-
-  rows.forEach(r => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${r.stock_id || ""}</td>
-      <td>${r.price_tier || ""}</td>
-      <td>${formatTW(r.ref_price)}</td>
-      <td>${r.holding_status || ""}</td>
-      <td>${r.strategy_bucket || ""}</td>
-      <td>${r.action || ""}</td>
-      <td>${r.pnl_pct || ""}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-
 async function init() {
   const updateEl = document.getElementById("update-time");
   if (updateEl) updateEl.textContent = "資料載入中...";
@@ -311,24 +284,23 @@ async function init() {
     watchlist = getLocalWatchlist();
     renderWatchlist();
 
-    const [trade, positionsCsv, summary, debug, watchMon] = await Promise.all([
+    const [trade, summary, debug, watchMon, posMon] = await Promise.all([
       loadCSV("trade_plan.csv"),
-      loadCSV("current_positions.csv", true),
       loadCSV("full_summary.csv", true),
       loadCSV("selection_debug.csv", true),
       loadCSV("watchlist_monitor.csv", true),
+      loadCSV("position_monitor.csv", true),
     ]);
 
-    const uiSynced = JSON.parse(localStorage.getItem("current_positions_ui_sync") || "[]");
-    currentPositions = uiSynced.length ? uiSynced : positionsCsv;
     tradeRows = trade;
     watchlistMonitor = watchMon;
+    positionMonitor = posMon;
 
     renderTradeTable();
-    renderPositionTable(currentPositions);
+    renderPositionMonitor();
+    renderWatchlistMonitor();
     renderSummaryTable(summary);
     renderDebugTable(debug);
-    renderWatchlistMonitor();
 
     if (updateEl) updateEl.textContent = "最後更新：" + new Date().toLocaleString("zh-TW");
   } catch (err) {
