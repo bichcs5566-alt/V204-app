@@ -1,0 +1,33 @@
+name: v250-engine
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          pip install pandas numpy
+
+      - name: Run backtest
+        run: |
+          python v250_engine.py
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: v250-results
+          path: |
+            summary.csv
+            nav.csv
