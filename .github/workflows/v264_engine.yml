@@ -1,0 +1,29 @@
+# v264_engine.yml.txt
+name: v264-live-ready-engine
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install pandas numpy
+
+      - run: python merge_chunked_price_panel.py
+
+      - run: python v264_engine.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v264-results
+          path: |
+            daily_nav.csv
+            full_summary.csv
