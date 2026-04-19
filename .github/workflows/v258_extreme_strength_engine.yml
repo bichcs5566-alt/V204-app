@@ -1,0 +1,28 @@
+name: v258-extreme-strength-engine
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          pip install pandas numpy
+
+      - name: Run backtest
+        run: |
+          python v258_extreme_strength_engine.py
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: results
+          path: |
+            daily_nav.csv
+            full_summary.csv
