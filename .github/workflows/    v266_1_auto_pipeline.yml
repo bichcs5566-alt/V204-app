@@ -5,6 +5,9 @@ on:
   schedule:
     - cron: "0 10 * * 1-5"
 
+permissions:
+  contents: write
+
 jobs:
   run_pipeline:
     runs-on: ubuntu-latest
@@ -12,6 +15,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -43,6 +48,26 @@ jobs:
       - name: Run v266.1 auto pipeline
         run: |
           python v266_1_auto_pipeline.py
+
+      - name: Commit updated dashboard data to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            daily_nav.csv \
+            full_summary.csv \
+            trade_plan.csv \
+            core_candidates.csv \
+            alpha_candidates.csv \
+            current_positions.csv \
+            mobile_dashboard_v1/data/daily_nav.csv \
+            mobile_dashboard_v1/data/full_summary.csv \
+            mobile_dashboard_v1/data/trade_plan.csv \
+            mobile_dashboard_v1/data/core_candidates.csv \
+            mobile_dashboard_v1/data/alpha_candidates.csv \
+            mobile_dashboard_v1/data/current_positions.csv
+          git diff --cached --quiet || git commit -m "auto update dashboard data"
+          git push
 
       - name: Upload outputs
         uses: actions/upload-artifact@v4
