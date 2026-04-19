@@ -1,0 +1,36 @@
+name: v262-integrated-engine
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          pip install pandas numpy
+
+      - name: Merge price panel
+        run: |
+          python merge_chunked_price_panel.py
+
+      - name: Run backtest
+        run: |
+          python v262_integrated_engine.py
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: v262-results
+          path: |
+            daily_nav.csv
+            full_summary.csv
