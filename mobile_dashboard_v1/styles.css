@@ -26,17 +26,15 @@ h1, h2 {
   margin-bottom: 18px;
   box-shadow: 0 6px 20px rgba(0,0,0,0.06);
 }
-.toolbar-row {
+.row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
   margin-bottom: 12px;
 }
-label {
-  display: block;
-  font-weight: 700;
-  margin-bottom: 6px;
-}
-select, input {
+input, select {
   width: 100%;
-  max-width: 320px;
+  max-width: 380px;
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid #d1d5db;
@@ -50,15 +48,11 @@ button {
   border-radius: 10px;
   font-size: 16px;
 }
-.watch-input-row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
 .watch-tags {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  margin-bottom: 12px;
 }
 .watch-tag {
   background: #eef2ff;
@@ -75,6 +69,11 @@ button {
   color: #3730a3;
   padding: 0;
   font-size: 14px;
+}
+.sync-btn {
+  background: #065f46;
+  font-size: 14px;
+  padding: 8px 10px;
 }
 table {
   width: 100%;
@@ -94,8 +93,8 @@ th {
 .reduce { color: #b45309; font-weight: 700; }
 .hold { color: #1d4ed8; font-weight: 700; }
 .watch { color: #6d28d9; font-weight: 700; }
-.muted { color: #6b7280; }
 .star { color: #d97706; font-weight: 700; }
+.muted { color: #6b7280; }
 @media (max-width: 768px) {
   body { padding: 12px; }
   table { font-size: 13px; }
