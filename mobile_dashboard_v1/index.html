@@ -1,49 +1,140 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>交易操作介面 v266.5</title>
-<link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>每日操作介面</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-<div class="container">
+  <div class="container">
+    <div class="top">
+      <h1>📊 每日操作介面</h1>
+      <div class="top-actions">
+        <div id="update-time" class="muted">資料載入中...</div>
+        <button id="refreshBtn" type="button">🔄 重新整理</button>
+      </div>
+    </div>
 
-<h2>📌 今日操作</h2>
-<table id="trade">
-<thead><tr>
-<th>動作</th><th>股票</th><th>價格分層</th><th>價格</th><th>權重</th><th>金額</th><th>加入持倉</th>
-</tr></thead>
-<tbody></tbody>
-</table>
+    <div class="card">
+      <h2>價格分層</h2>
+      <select id="tierFilter">
+        <option value="全部">全部</option>
+        <option value="lt_50">50以下</option>
+        <option value="p50_100">50-100</option>
+        <option value="p100_300">100-300</option>
+        <option value="p300_500">300-500</option>
+        <option value="p500_1000">500-1000</option>
+        <option value="gt_1000">1000以上</option>
+      </select>
+    </div>
 
-<h2>📦 持倉監控</h2>
-<div class="row">
-<input id="pos_code" placeholder="股票代號">
-<input id="pos_shares" placeholder="股數">
-<input id="pos_cost" placeholder="成本">
-<button onclick="addPosition()">新增</button>
-</div>
-<table id="pos">
-<thead><tr>
-<th>股票</th><th>動作</th><th>移除</th>
-</tr></thead>
-<tbody></tbody>
-</table>
+    <div class="card">
+      <h2>📌 今日操作</h2>
+      <table id="trade-table">
+        <thead>
+          <tr>
+            <th>動作</th>
+            <th>股票</th>
+            <th>價格分層</th>
+            <th>參考價格</th>
+            <th>目標權重</th>
+            <th>建議金額</th>
+            <th>備註</th>
+            <th>加入持倉</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
 
-<h2>🛰 自選股監控</h2>
-<div class="row">
-<input id="watch_code" placeholder="股票代號">
-<button onclick="addWatch()">新增</button>
-</div>
-<table id="watch">
-<thead><tr>
-<th>股票</th><th>狀態</th><th>移除</th>
-</tr></thead>
-<tbody></tbody>
-</table>
+    <div class="card">
+      <div class="section-header">
+        <h2>📦 持倉監控</h2>
+      </div>
+      <div class="row">
+        <input id="pos_code" type="text" placeholder="股票代號" />
+        <input id="pos_shares" type="text" placeholder="股數" />
+        <input id="pos_cost" type="text" placeholder="成本" />
+        <button id="addPositionBtn" type="button">加入持倉</button>
+      </div>
+      <table id="position-monitor-table">
+        <thead>
+          <tr>
+            <th>股票</th>
+            <th>價格分層</th>
+            <th>參考價格</th>
+            <th>股數</th>
+            <th>成本</th>
+            <th>損益%</th>
+            <th>目標權重</th>
+            <th>目前權重</th>
+            <th>動作</th>
+            <th>備註</th>
+            <th>移除</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
 
-</div>
-<script src="app.js"></script>
+    <div class="card">
+      <div class="section-header">
+        <h2>🛰️ 自選股監控</h2>
+        <div class="inline-input">
+          <input id="watch_code" type="text" placeholder="輸入股票代號加入監控" />
+          <button id="addWatchBtn" type="button">加入監控</button>
+        </div>
+      </div>
+      <table id="watchlist-monitor-table">
+        <thead>
+          <tr>
+            <th>股票</th>
+            <th>價格分層</th>
+            <th>參考價格</th>
+            <th>持有狀態</th>
+            <th>策略池</th>
+            <th>動作</th>
+            <th>損益%</th>
+            <th>移除</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>📈 績效摘要</h2>
+      <table id="summary-table">
+        <thead>
+          <tr>
+            <th>報酬</th>
+            <th>最大回撤</th>
+            <th>Sharpe</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>🧪 篩選除錯</h2>
+      <table id="debug-table">
+        <thead>
+          <tr>
+            <th>輸入檔數</th>
+            <th>有效檔數</th>
+            <th>Core原始</th>
+            <th>Alpha原始</th>
+            <th>Core最終</th>
+            <th>Alpha最終</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>

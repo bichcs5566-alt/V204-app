@@ -1,8 +1,13 @@
-mobile_dashboard_v1（v266.4）
+mobile_dashboard_v1（v266.5 沿用上一版畫面版）
 
 這版重點：
-1. 新增 position_monitor.csv
-2. 持倉顯示改成「持倉動作監控」
-3. 自選股監控正式讀取 watchlist_monitor.csv
-4. UI 自選股仍為前端 localStorage 顯示；正式進後端仍需 watchlist.csv 配合
-5. 讀取資料位置固定為 ./data/
+1. 沿用上一版整體畫面結構
+2. 補回頂部「重新整理」按鍵
+3. 今日操作補回「加入持倉」按鍵
+4. 持倉監控新增輸入欄與移除鍵
+5. 自選股監控在同區塊右側輸入與移除
+6. 價格分層使用英文 key，前端轉中文，避免亂碼
+
+提醒：
+- 這版仍為前端同步版，新增/移除先存於 localStorage
+- 正式要讓後端每日判斷，仍需把 current_positions.csv / watchlist.csv 回寫到 repo
