@@ -8,16 +8,49 @@
 </head>
 <body>
   <div class="container">
-    <h1>📊 每日操作介面</h1>
-    <p id="update-time">資料載入中...</p>
+    <div class="top">
+      <h1>📊 每日操作介面</h1>
+      <div id="update-time" class="muted">資料載入中...</div>
+    </div>
 
-    <div class="section">
+    <div class="toolbar card">
+      <div class="toolbar-row">
+        <label>價格分層</label>
+        <select id="tierFilter">
+          <option value="全部">全部</option>
+          <option value="50以下">50以下</option>
+          <option value="50-100">50-100</option>
+          <option value="100-300">100-300</option>
+          <option value="300-500">300-500</option>
+          <option value="500-1000">500-1000</option>
+          <option value="1000以上">1000以上</option>
+        </select>
+      </div>
+      <div class="toolbar-row">
+        <label>自選股新增</label>
+        <div class="watch-input-row">
+          <input id="watchInput" type="text" placeholder="輸入股票代號，例如 2330" />
+          <button id="addWatchBtn">新增</button>
+        </div>
+      </div>
+      <div class="toolbar-row">
+        <label>自選股名單</label>
+        <div id="watchList" class="watch-tags"></div>
+      </div>
+      <div class="toolbar-row">
+        <button id="refreshBtn">🔄 重新整理</button>
+      </div>
+    </div>
+
+    <div class="card">
       <h2>📌 今日操作</h2>
       <table id="trade-table">
         <thead>
           <tr>
             <th>動作</th>
             <th>股票</th>
+            <th>價格分層</th>
+            <th>參考價格</th>
             <th>目標權重</th>
             <th>建議金額</th>
             <th>備註</th>
@@ -27,7 +60,7 @@
       </table>
     </div>
 
-    <div class="section">
+    <div class="card">
       <h2>📦 持倉</h2>
       <table id="position-table">
         <thead>
@@ -41,7 +74,7 @@
       </table>
     </div>
 
-    <div class="section">
+    <div class="card">
       <h2>📈 績效摘要</h2>
       <table id="summary-table">
         <thead>
@@ -55,8 +88,21 @@
       </table>
     </div>
 
-    <div class="footer">
-      <button onclick="location.reload()">🔄 重新整理</button>
+    <div class="card">
+      <h2>🧪 篩選除錯</h2>
+      <table id="debug-table">
+        <thead>
+          <tr>
+            <th>輸入檔數</th>
+            <th>有效檔數</th>
+            <th>Core原始</th>
+            <th>Alpha原始</th>
+            <th>Core最終</th>
+            <th>Alpha最終</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
     </div>
   </div>
 

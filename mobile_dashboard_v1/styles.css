@@ -1,39 +1,103 @@
 body {
-  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", sans-serif;
+  background: #f3f4f6;
+  color: #111827;
   margin: 0;
-  padding: 10px;
-  background: #f5f5f5;
+  padding: 20px;
 }
 .container {
-  max-width: 800px;
-  margin: auto;
+  max-width: 1100px;
+  margin: 0 auto;
 }
-h1 {
-  text-align: center;
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
 }
-.section {
+h1, h2 {
+  margin: 0 0 12px 0;
+}
+.card {
   background: white;
-  margin-top: 10px;
-  padding: 10px;
-  border-radius: 8px;
+  border-radius: 16px;
+  padding: 18px;
+  margin-bottom: 18px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+}
+.toolbar-row {
+  margin-bottom: 12px;
+}
+label {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+select, input {
+  width: 100%;
+  max-width: 320px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  font-size: 16px;
+}
+button {
+  border: 0;
+  background: #111827;
+  color: white;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 16px;
+}
+.watch-input-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.watch-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.watch-tag {
+  background: #eef2ff;
+  color: #3730a3;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.watch-tag button {
+  background: transparent;
+  color: #3730a3;
+  padding: 0;
+  font-size: 14px;
 }
 table {
   width: 100%;
   border-collapse: collapse;
+  font-size: 15px;
 }
 th, td {
-  padding: 6px;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 10px 8px;
   text-align: center;
 }
-.buy { color: green; }
-.sell { color: red; }
-.stop { color: red; font-weight: bold; }
-.footer {
-  text-align: center;
-  margin-top: 20px;
+th {
+  background: #f9fafb;
 }
-button {
-  padding: 10px 20px;
-  font-size: 16px;
+.buy { color: #15803d; font-weight: 700; }
+.sell, .stop_loss { color: #dc2626; font-weight: 700; }
+.reduce { color: #b45309; font-weight: 700; }
+.hold { color: #1d4ed8; font-weight: 700; }
+.watch { color: #6d28d9; font-weight: 700; }
+.muted { color: #6b7280; }
+.star { color: #d97706; font-weight: 700; }
+@media (max-width: 768px) {
+  body { padding: 12px; }
+  table { font-size: 13px; }
+  th, td { padding: 8px 4px; }
 }
