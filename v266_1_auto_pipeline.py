@@ -17,7 +17,6 @@ FEE = 0.0015
 SLIPPAGE = 0.001
 
 INITIAL_CAPITAL = 1000000
-STOP_LOSS_1 = -0.06
 STOP_LOSS_2 = -0.10
 
 POSITIONS_FILE = "current_positions.csv"
@@ -36,9 +35,7 @@ def ensure_price_panel():
         print("[INFO] price_panel_daily.csv missing, running merge_chunked_price_panel.py ...")
         subprocess.run([sys.executable, "merge_chunked_price_panel.py"], check=True)
     else:
-        raise FileNotFoundError(
-            "price_panel_daily.csv missing and merge_chunked_price_panel.py not found"
-        )
+        raise FileNotFoundError("price_panel_daily.csv missing and merge_chunked_price_panel.py not found")
 
     if not os.path.exists(PRICE_PANEL_FILE):
         raise FileNotFoundError("Failed to create price_panel_daily.csv")
@@ -48,15 +45,12 @@ def ensure_dashboard_dir():
     DASHBOARD_DATA_DIR.mkdir(parents=True, exist_ok=True)
     positions_template = DASHBOARD_DATA_DIR / "current_positions.csv"
     if not positions_template.exists():
-        pd.DataFrame(columns=["stock_id", "shares", "avg_cost", "last_action_date", "note"]).to_csv(
-            positions_template, index=False
-        )
+        pd.DataFrame(
+            columns=["stock_id", "shares", "avg_cost", "last_action_date", "note"]
+        ).to_csv(positions_template, index=False)
 
 
 def load_price():
-    if not os.path.exists(PRICE_PANEL_FILE):
-        raise FileNotFoundError(f"{PRICE_PANEL_FILE} not found")
-
     df = pd.read_csv(PRICE_PANEL_FILE)
     df.columns = [str(c).lower().strip() for c in df.columns]
 
@@ -131,12 +125,10 @@ def build_target_weights(core, alpha):
 
 
 def load_current_positions():
-    if os.path.exists(POSITIONS_FILE):
-        pos_path = POSITIONS_FILE
-    else:
-        pos_path = DASHBOARD_DATA_DIR / "current_positions.csv"
+    preferred = DASHBOARD_DATA_DIR / "current_positions.csv"
+    pos_path = preferred if preferred.exists() else Path(POSITIONS_FILE)
 
-    if not os.path.exists(pos_path):
+    if not pos_path.exists():
         cols = ["stock_id", "shares", "avg_cost", "last_action_date", "note"]
         pd.DataFrame(columns=cols).to_csv(pos_path, index=False)
         return pd.DataFrame(columns=cols)
@@ -147,14 +139,12 @@ def load_current_positions():
     if "stock_id" not in pos.columns:
         raise ValueError("current_positions.csv must contain stock_id")
 
-    if "shares" not in pos.columns:
-        pos["shares"] = np.nan
-    if "avg_cost" not in pos.columns:
-        pos["avg_cost"] = np.nan
-    if "last_action_date" not in pos.columns:
-        pos["last_action_date"] = ""
-    if "note" not in pos.columns:
-        pos["note"] = ""
+    for col in ["shares", "avg_cost"]:
+        if col not in pos.columns:
+            pos[col] = np.nan
+    for col in ["last_action_date", "note"]:
+        if col not in pos.columns:
+            pos[col] = ""
 
     pos["stock_id"] = pos["stock_id"].astype(str).str.strip()
     pos["shares"] = pd.to_numeric(pos["shares"], errors="coerce")
@@ -203,7 +193,11 @@ def build_trade_plan(df, latest_capital=INITIAL_CAPITAL):
         source_text = "+".join(source)
 
         suggested_amount = latest_capital * target_weight if target_weight > 0 else 0.0
-        suggested_shares = suggested_amount / ref_price if (pd.notna(ref_price) and ref_price > 0 and target_weight > 0) else np.nan
+        suggested_shares = (
+            suggested_amount / ref_price
+            if (pd.notna(ref_price) and ref_price > 0 and target_weight > 0)
+            else np.nan
+        )
         estimated_total_cost = suggested_amount * (1 + FEE) if target_weight > 0 else 0.0
 
         action = None
@@ -222,8 +216,16 @@ def build_trade_plan(df, latest_capital=INITIAL_CAPITAL):
                 action = "SELL"
                 note.append("not_in_target")
             else:
-                current_value = (current_shares * px_raw) if (pd.notna(current_shares) and pd.notna(px_raw)) else np.nan
-                current_weight_est = current_value / latest_capital if (pd.notna(current_value) and latest_capital > 0) else np.nan
+                current_value = (
+                    current_shares * px_raw
+                    if (pd.notna(current_shares) and pd.notna(px_raw))
+                    else np.nan
+                )
+                current_weight_est = (
+                    current_value / latest_capital
+                    if (pd.notna(current_value) and latest_capital > 0)
+                    else np.nan
+                )
 
                 if pd.notna(current_weight_est):
                     diff = target_weight - current_weight_est
@@ -247,21 +249,23 @@ def build_trade_plan(df, latest_capital=INITIAL_CAPITAL):
         if action is None:
             continue
 
-        rows.append({
-            "signal_date": signal_date,
-            "trade_date": trade_date,
-            "action": action,
-            "stock_id": stock_id,
-            "target_weight": round(target_weight, 4),
-            "ref_price": round(ref_price, 4) if pd.notna(ref_price) else np.nan,
-            "current_shares": round(current_shares, 2) if pd.notna(current_shares) else np.nan,
-            "avg_cost": round(avg_cost, 4) if pd.notna(avg_cost) else np.nan,
-            "suggested_amount": round(suggested_amount, 2),
-            "suggested_shares": round(suggested_shares, 2) if pd.notna(suggested_shares) else np.nan,
-            "estimated_total_cost": round(estimated_total_cost, 2),
-            "source": source_text,
-            "note": ";".join(note),
-        })
+        rows.append(
+            {
+                "signal_date": signal_date,
+                "trade_date": trade_date,
+                "action": action,
+                "stock_id": stock_id,
+                "target_weight": round(target_weight, 4),
+                "ref_price": round(ref_price, 4) if pd.notna(ref_price) else np.nan,
+                "current_shares": round(current_shares, 2) if pd.notna(current_shares) else np.nan,
+                "avg_cost": round(avg_cost, 4) if pd.notna(avg_cost) else np.nan,
+                "suggested_amount": round(suggested_amount, 2),
+                "suggested_shares": round(suggested_shares, 2) if pd.notna(suggested_shares) else np.nan,
+                "estimated_total_cost": round(estimated_total_cost, 2),
+                "source": source_text,
+                "note": ";".join(note),
+            }
+        )
 
     plan = pd.DataFrame(rows)
     action_order = {"STOP_LOSS": 0, "SELL": 1, "REDUCE": 2, "BUY": 3, "HOLD": 4}
@@ -334,12 +338,7 @@ def evaluate(nav_df):
     total_return = nav_df["nav"].iloc[-1] / nav_df["nav"].iloc[0] - 1.0
     mdd = (nav_df["nav"] / nav_df["nav"].cummax() - 1.0).min()
     sharpe = nav_df["ret"].mean() / (nav_df["ret"].std() + 1e-6)
-
-    return pd.DataFrame([{
-        "return": total_return,
-        "mdd": mdd,
-        "sharpe_daily": sharpe
-    }])
+    return pd.DataFrame([{"return": total_return, "mdd": mdd, "sharpe_daily": sharpe}])
 
 
 def save_output_both(df, filename):
@@ -366,12 +365,11 @@ if __name__ == "__main__":
 
     current_positions = load_current_positions()
     current_positions.to_csv(DASHBOARD_DATA_DIR / "current_positions.csv", index=False)
-    if os.path.exists(POSITIONS_FILE):
-        current_positions.to_csv(POSITIONS_FILE, index=False)
+    current_positions.to_csv(POSITIONS_FILE, index=False)
 
     print("Signal date:", signal_date)
     print("Trade date:", trade_date)
     print("Dashboard data dir:", str(DASHBOARD_DATA_DIR))
     print(summary_df.to_string(index=False))
-    print("\nTop trade plan:")
+    print("\\nTop trade plan:")
     print(trade_plan_df.head(15).to_string(index=False))
