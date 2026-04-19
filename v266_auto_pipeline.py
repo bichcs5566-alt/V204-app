@@ -1,20 +1,7 @@
-# v266_auto_pipeline.txt
-# 覆蓋後改名：v266_auto_pipeline.py
-# v266（整合自動化版）
-# 功能：
-# 1) 檢查 price_panel_daily.csv 是否存在，若無則先 merge
-# 2) 執行 v265.1 決策邏輯
-# 3) 產出 daily_nav / full_summary / trade_plan / core_candidates / alpha_candidates / current_positions
-# 備註：
-# - 此版不重寫舊資料抓取器，只負責把資料層重新接回主線流程
-# - 建議 repo 內已存在：
-#   merge_chunked_price_panel.py
-#   price_panel_daily.csv 或 price_panel parts
-#   current_positions.csv（沒有會自動建空白模板）
-
 import os
 import subprocess
 import sys
+from pathlib import Path
 import pandas as pd
 import numpy as np
 
@@ -36,6 +23,9 @@ STOP_LOSS_2 = -0.10
 POSITIONS_FILE = "current_positions.csv"
 PRICE_PANEL_FILE = "price_panel_daily.csv"
 
+DASHBOARD_DIR = Path("mobile_dashboard_v1")
+DASHBOARD_DATA_DIR = DASHBOARD_DIR / "data"
+
 
 def ensure_price_panel():
     if os.path.exists(PRICE_PANEL_FILE):
@@ -52,6 +42,15 @@ def ensure_price_panel():
 
     if not os.path.exists(PRICE_PANEL_FILE):
         raise FileNotFoundError("Failed to create price_panel_daily.csv")
+
+
+def ensure_dashboard_dir():
+    DASHBOARD_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    positions_template = DASHBOARD_DATA_DIR / "current_positions.csv"
+    if not positions_template.exists():
+        pd.DataFrame(columns=["stock_id", "shares", "avg_cost", "last_action_date", "note"]).to_csv(
+            positions_template, index=False
+        )
 
 
 def load_price():
@@ -96,7 +95,6 @@ def load_price():
 
 def build_features(df):
     g = df.groupby("stock_id")
-
     df["ret1"] = g["close"].pct_change()
     df["mom5"] = g["close"].pct_change(5)
     df["mom20"] = g["close"].pct_change(20)
@@ -133,12 +131,17 @@ def build_target_weights(core, alpha):
 
 
 def load_current_positions():
-    if not os.path.exists(POSITIONS_FILE):
+    if os.path.exists(POSITIONS_FILE):
+        pos_path = POSITIONS_FILE
+    else:
+        pos_path = DASHBOARD_DATA_DIR / "current_positions.csv"
+
+    if not os.path.exists(pos_path):
         cols = ["stock_id", "shares", "avg_cost", "last_action_date", "note"]
-        pd.DataFrame(columns=cols).to_csv(POSITIONS_FILE, index=False)
+        pd.DataFrame(columns=cols).to_csv(pos_path, index=False)
         return pd.DataFrame(columns=cols)
 
-    pos = pd.read_csv(POSITIONS_FILE)
+    pos = pd.read_csv(pos_path)
     pos.columns = [str(c).lower().strip() for c in pos.columns]
 
     if "stock_id" not in pos.columns:
@@ -339,7 +342,13 @@ def evaluate(nav_df):
     }])
 
 
+def save_output_both(df, filename):
+    df.to_csv(filename, index=False)
+    df.to_csv(DASHBOARD_DATA_DIR / filename, index=False)
+
+
 if __name__ == "__main__":
+    ensure_dashboard_dir()
     ensure_price_panel()
 
     df = load_price()
@@ -347,17 +356,22 @@ if __name__ == "__main__":
 
     nav_df = run_backtest(df)
     summary_df = evaluate(nav_df)
-
     trade_plan_df, core_df, alpha_df, signal_date, trade_date = build_trade_plan(df)
 
-    nav_df.to_csv("daily_nav.csv", index=False)
-    summary_df.to_csv("full_summary.csv", index=False)
-    trade_plan_df.to_csv("trade_plan.csv", index=False)
-    core_df.to_csv("core_candidates.csv", index=False)
-    alpha_df.to_csv("alpha_candidates.csv", index=False)
+    save_output_both(nav_df, "daily_nav.csv")
+    save_output_both(summary_df, "full_summary.csv")
+    save_output_both(trade_plan_df, "trade_plan.csv")
+    save_output_both(core_df, "core_candidates.csv")
+    save_output_both(alpha_df, "alpha_candidates.csv")
+
+    current_positions = load_current_positions()
+    current_positions.to_csv(DASHBOARD_DATA_DIR / "current_positions.csv", index=False)
+    if os.path.exists(POSITIONS_FILE):
+        current_positions.to_csv(POSITIONS_FILE, index=False)
 
     print("Signal date:", signal_date)
     print("Trade date:", trade_date)
+    print("Dashboard data dir:", str(DASHBOARD_DATA_DIR))
     print(summary_df.to_string(index=False))
     print("\nTop trade plan:")
     print(trade_plan_df.head(15).to_string(index=False))
