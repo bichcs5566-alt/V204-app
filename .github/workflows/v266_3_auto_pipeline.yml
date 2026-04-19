@@ -1,0 +1,98 @@
+name: v266-3-auto-pipeline
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 10 * * 1-5"
+
+permissions:
+  contents: write
+
+jobs:
+  run_pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy requests yfinance
+
+      - name: Update data if updater exists
+        run: |
+          if [ -f update_data.py ]; then
+            python update_data.py
+          elif [ -f v235_macro_updater.py ]; then
+            echo "Found v235_macro_updater.py (macro only); skipping panel update"
+          else
+            echo "No dedicated data updater found; will use existing panel / merge fallback"
+          fi
+
+      - name: Merge price panel if needed
+        run: |
+          if [ ! -f price_panel_daily.csv ]; then
+            python merge_chunked_price_panel.py
+          else
+            echo "price_panel_daily.csv already exists"
+          fi
+
+      - name: Run v266.3 auto pipeline
+        run: |
+          python v266_3_auto_pipeline.py
+
+      - name: Commit updated dashboard data to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            daily_nav.csv \
+            full_summary.csv \
+            trade_plan.csv \
+            core_candidates.csv \
+            alpha_candidates.csv \
+            current_positions.csv \
+            selection_debug.csv \
+            watchlist_monitor.csv \
+            mobile_dashboard_v1/data/daily_nav.csv \
+            mobile_dashboard_v1/data/full_summary.csv \
+            mobile_dashboard_v1/data/trade_plan.csv \
+            mobile_dashboard_v1/data/core_candidates.csv \
+            mobile_dashboard_v1/data/alpha_candidates.csv \
+            mobile_dashboard_v1/data/current_positions.csv \
+            mobile_dashboard_v1/data/selection_debug.csv \
+            mobile_dashboard_v1/data/watchlist.csv \
+            mobile_dashboard_v1/data/watchlist_monitor.csv
+          git diff --cached --quiet || git commit -m "auto update dashboard data v266.3"
+          git push
+
+      - name: Upload outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: v266_3-results
+          path: |
+            daily_nav.csv
+            full_summary.csv
+            trade_plan.csv
+            core_candidates.csv
+            alpha_candidates.csv
+            current_positions.csv
+            selection_debug.csv
+            watchlist_monitor.csv
+            mobile_dashboard_v1/data/daily_nav.csv
+            mobile_dashboard_v1/data/full_summary.csv
+            mobile_dashboard_v1/data/trade_plan.csv
+            mobile_dashboard_v1/data/core_candidates.csv
+            mobile_dashboard_v1/data/alpha_candidates.csv
+            mobile_dashboard_v1/data/current_positions.csv
+            mobile_dashboard_v1/data/selection_debug.csv
+            mobile_dashboard_v1/data/watchlist.csv
+            mobile_dashboard_v1/data/watchlist_monitor.csv
