@@ -1,5 +1,4 @@
-# v266_auto_pipeline.yml.txt
-name: v266-auto-pipeline
+name: v266-1-auto-pipeline
 
 on:
   workflow_dispatch:
@@ -41,14 +40,14 @@ jobs:
             echo "price_panel_daily.csv already exists"
           fi
 
-      - name: Run v266 auto pipeline
+      - name: Run v266.1 auto pipeline
         run: |
-          python v266_auto_pipeline.py
+          python v266_1_auto_pipeline.py
 
       - name: Upload outputs
         uses: actions/upload-artifact@v4
         with:
-          name: v266-results
+          name: v266_1-results
           path: |
             daily_nav.csv
             full_summary.csv
@@ -56,3 +55,9 @@ jobs:
             core_candidates.csv
             alpha_candidates.csv
             current_positions.csv
+            mobile_dashboard_v1/data/daily_nav.csv
+            mobile_dashboard_v1/data/full_summary.csv
+            mobile_dashboard_v1/data/trade_plan.csv
+            mobile_dashboard_v1/data/core_candidates.csv
+            mobile_dashboard_v1/data/alpha_candidates.csv
+            mobile_dashboard_v1/data/current_positions.csv
