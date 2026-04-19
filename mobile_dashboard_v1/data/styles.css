@@ -1,0 +1,39 @@
+body {
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  margin: 0;
+  padding: 10px;
+  background: #f5f5f5;
+}
+.container {
+  max-width: 800px;
+  margin: auto;
+}
+h1 {
+  text-align: center;
+}
+.section {
+  background: white;
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 8px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th, td {
+  padding: 6px;
+  border-bottom: 1px solid #ddd;
+  text-align: center;
+}
+.buy { color: green; }
+.sell { color: red; }
+.stop { color: red; font-weight: bold; }
+.footer {
+  text-align: center;
+  margin-top: 20px;
+}
+button {
+  padding: 10px 20px;
+  font-size: 16px;
+}

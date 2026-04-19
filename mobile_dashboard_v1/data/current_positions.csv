@@ -1,1 +1,2 @@
-stock_id,shares,avg_cost,last_action_date,note
+stock_id,shares,avg_cost
+2330,100,580
