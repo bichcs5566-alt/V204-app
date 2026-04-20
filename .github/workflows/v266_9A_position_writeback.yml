@@ -27,6 +27,9 @@ permissions:
 jobs:
   run_writeback:
     runs-on: ubuntu-latest
+    concurrency:
+      group: v266-10-2-position
+      cancel-in-progress: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
