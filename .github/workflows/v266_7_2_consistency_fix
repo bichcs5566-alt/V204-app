@@ -1,0 +1,55 @@
+name: v266-7-2-consistency-fix
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 10 * * 1-5"  # 台灣時間 18:00
+
+permissions:
+  contents: write
+
+jobs:
+  run_pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy requests yfinance
+
+      - name: Update raw data if updater exists
+        run: |
+          if [ -f update_data.py ]; then
+            python update_data.py
+          else
+            echo "找不到 update_data.py，改用現有資料"
+          fi
+
+      - name: Merge price panel if needed
+        run: |
+          if [ ! -f price_panel_daily.csv ]; then
+            python merge_chunked_price_panel.py
+          else
+            echo "price_panel_daily.csv already exists"
+          fi
+
+      - name: Run pipeline
+        run: |
+          python v266_7_2_consistency_fix.py
+
+      - name: Commit outputs back to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add             trade_plan.csv             position_monitor.csv             watchlist_monitor.csv             full_summary.csv             selection_debug.csv             current_positions.csv             meta.json             mobile_dashboard_v1/data/trade_plan.csv             mobile_dashboard_v1/data/position_monitor.csv             mobile_dashboard_v1/data/watchlist_monitor.csv             mobile_dashboard_v1/data/full_summary.csv             mobile_dashboard_v1/data/selection_debug.csv             mobile_dashboard_v1/data/current_positions.csv             mobile_dashboard_v1/data/watchlist.csv             mobile_dashboard_v1/data/meta.json
+          git diff --cached --quiet || git commit -m "auto update dashboard data v266.7.2"
+          git push
