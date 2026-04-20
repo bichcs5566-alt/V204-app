@@ -1,0 +1,52 @@
+name: v266-8-1-trade-date-fix
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run_pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy
+
+      - name: Run v266.8.1 trade-date fix
+        run: |
+          python v266_8_1_trade_date_fix.py
+
+      - name: Commit outputs back to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            trade_plan.csv \
+            position_monitor.csv \
+            watchlist_monitor.csv \
+            full_summary.csv \
+            selection_debug.csv \
+            current_positions.csv \
+            meta.json \
+            mobile_dashboard_v1/data/trade_plan.csv \
+            mobile_dashboard_v1/data/position_monitor.csv \
+            mobile_dashboard_v1/data/watchlist_monitor.csv \
+            mobile_dashboard_v1/data/full_summary.csv \
+            mobile_dashboard_v1/data/selection_debug.csv \
+            mobile_dashboard_v1/data/current_positions.csv \
+            mobile_dashboard_v1/data/meta.json
+          git diff --cached --quiet || git commit -m "fix signal/trade date logic v266.8.1"
+          git push
