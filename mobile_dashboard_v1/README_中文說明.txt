@@ -1,13 +1,17 @@
-v266.7 資料一致性修正版
+v266.7.1（資料一致性＋完整操作整合版）
 
-這版只處理三件事：
-1. 舊資料問題：workflow 強制把最新輸出寫回 mobile_dashboard_v1/data/
-2. 價格分層亂碼：後端統一輸出英文 key，前端轉中文
-3. 資料狀態問題：新增 meta.json，UI 顯示真正的最後更新、訊號日、交易日、資料新舊
+這版整合：
+1. v266.7 的資料一致性修正
+2. v266.5.2 的完整操作 UI
 
-安裝方式：
-1. v266_7_consistency_fix.txt 改名為 v266_7_consistency_fix.py
-2. v266_7_consistency_fix.yml.txt 放到 .github/workflows/ 並改名為 v266_7_consistency_fix.yml
-3. 覆蓋 mobile_dashboard_v1/index.html、app.js、styles.css、README_中文說明.txt
-4. 不要覆蓋現有 data 內真實資料
-5. 手動 Run workflow 一次
+包含：
+- meta.json 狀態顯示
+- 價格分層英文 key → 前端中文
+- 今日操作加入持倉按鈕可用
+- 持倉監控輸入欄、移除鍵恢復
+- 自選股監控輸入欄、移除鍵恢復
+
+提醒：
+- 這版仍是前端操作版，新增/刪除先存在 localStorage
+- v266.7 workflow 與 v266_7_consistency_fix.py 仍然照前一版放置即可
+- 不要覆蓋現有 data 真實 CSV
