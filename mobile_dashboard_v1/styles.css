@@ -7,12 +7,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",s
 .container{max-width:1240px;margin:0 auto}
 .card{background:var(--card);border-radius:18px;padding:18px;margin-bottom:18px;box-shadow:0 6px 20px rgba(0,0,0,.06)}
 .top-row,.section-header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.button-group{display:flex;gap:10px;flex-wrap:wrap}
 h1,h2{margin:0 0 12px 0}
 .status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px 16px;margin-top:8px}
 .status-label{font-weight:700}
 select,input{width:100%;max-width:420px;padding:10px 12px;border-radius:12px;border:1px solid #d1d5db;font-size:16px;background:#fff}
 button{border:0;background:var(--primary);color:#fff;padding:10px 16px;border-radius:12px;font-size:16px;cursor:pointer}
 button:hover{opacity:.92}
+button:disabled{opacity:.65;cursor:not-allowed}
 .inline-input,.input-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
 .table-wrap{overflow-x:auto}
 table{width:100%;min-width:860px;border-collapse:collapse;font-size:15px}
@@ -26,8 +28,13 @@ th{background:var(--head);font-weight:700}
 .none,.ignore{color:var(--muted);font-weight:700}
 .sync-btn{background:#065f46}
 .remove-btn{background:#991b1b}
+#updateBtn{background:#0f766e}
 .muted{color:var(--muted)}
 .state-fresh{color:var(--green);font-weight:700}
 .state-old{color:var(--orange);font-weight:700}
 .state-fail{color:var(--red);font-weight:700}
+.backend-idle{color:var(--muted);font-weight:700}
+.backend-running{color:var(--blue);font-weight:700}
+.backend-ok{color:var(--green);font-weight:700}
+.backend-err{color:var(--red);font-weight:700}
 @media (max-width:768px){body{padding:12px}table{font-size:13px}th,td{padding:8px 4px}h1{font-size:28px}h2{font-size:24px}}

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>每日操作介面 v266.7.2</title>
+  <title>每日操作介面 v266.8</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -11,13 +11,18 @@
     <div class="card top-card">
       <div class="top-row">
         <h1>📊 每日操作介面</h1>
-        <button id="refreshBtn" type="button">🔄 重新整理</button>
+        <div class="button-group">
+          <button id="refreshBtn" type="button">🔄 重新整理頁面</button>
+          <button id="updateBtn" type="button">🚀 更新資料與策略</button>
+        </div>
       </div>
       <div class="status-grid">
+        <div><span class="status-label">現在時間：</span><span id="liveClock">--</span></div>
         <div><span class="status-label">最後更新：</span><span id="lastUpdate">--</span></div>
         <div><span class="status-label">訊號日：</span><span id="signalDate">--</span></div>
         <div><span class="status-label">交易日：</span><span id="tradeDate">--</span></div>
         <div><span class="status-label">資料狀態：</span><span id="dataState">讀取中...</span></div>
+        <div><span class="status-label">後端狀態：</span><span id="backendState">待命</span></div>
       </div>
     </div>
 
@@ -133,6 +138,7 @@
       </div>
     </div>
   </div>
+  <script src="github_config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
