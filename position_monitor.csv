@@ -1,1 +1,2 @@
-﻿
+﻿signal_date,trade_date,stock_id,price_tier,ref_price,shares,avg_cost,pnl_pct,target_weight,current_weight_est,action,note
+2026-04-16,2026-04-17,2409,lt_50,19.8699,1000,19.5,0.0179,0.0,0.0199,SELL,ä¸å¨ç®æ¨æ± 
