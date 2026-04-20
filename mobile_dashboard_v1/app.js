@@ -1,8 +1,15 @@
 const DATA_BASE = "./data";
 const TIER_LABELS = {lt_50:"50以下",p50_100:"50-100",p100_300:"100-300",p300_500:"300-500",p500_1000:"500-1000",gt_1000:"1000以上",unknown:"未知"};
 const ACTION_LABELS = {BUY:"買進",SELL:"賣出",HOLD:"續抱",REDUCE:"減碼",ADD:"加碼",STOP_LOSS:"停損",WATCH:"觀察",CANDIDATE:"候選",BUY_READY:"可買",HOLD_MONITOR:"持有監控",NONE:"未進策略",IGNORE:"忽略"};
-let tradeRows=[], positionRows=[], watchRows=[], summaryRows=[], debugRows=[];
-let localPositions=[], localWatchlist=[]; 
+
+const FIXED_OWNER = "bichcs5566-alt";
+const FIXED_REPO = "V204-app";
+const FIXED_MAIN_WORKFLOW = "v266_8_pipeline.yml";
+const FIXED_WRITEBACK_WORKFLOW = "v266_9A_position_writeback.yml";
+const FIXED_REF = "main";
+
+let tradeRows=[], positionRows=[], watchRows=[], summaryRows=[], debugRows=[], currentPositionsRows=[];
+let localWatchlist=[]; 
 let lastMetaGeneratedAt = "";
 
 function mapActionLabel(v){const key=String(v||"").trim().toUpperCase(); return ACTION_LABELS[key]||v||"";}
@@ -17,56 +24,33 @@ function nonEmpty(v, fallback="目前沒有資料"){const s=String(v??"").trim()
 
 function getConfig(){
   const cfg = window.GITHUB_CONFIG || {};
-  const local = loadLocal("github_dispatch_config_v2668", {});
+  const local = loadLocal("github_dispatch_config_v2669c", {});
   return {
-    owner: cfg.owner || local.owner || "",
-    repo: cfg.repo || local.repo || "",
-    workflow: cfg.workflow || local.workflow || "v266_8_pipeline.yml",
-    ref: cfg.ref || local.ref || "main",
     token: cfg.token || local.token || ""
   };
 }
-function saveConfig(cfg){ saveLocal("github_dispatch_config_v2668", cfg); }
+function saveConfig(cfg){ saveLocal("github_dispatch_config_v2669c", cfg); }
 
 function resetGithubConfig() {
-  localStorage.removeItem("github_dispatch_config_v2668");
-  setBackendState("請重新輸入 GitHub 設定", "backend-idle");
-  const owner = prompt("請輸入 GitHub owner（帳號）", "");
-  if (!owner) return;
-  const repo = prompt("請輸入 repo 名稱", "");
-  if (!repo) return;
-  const workflow = prompt("請輸入 workflow 檔名", "v266_8_pipeline.yml");
-  if (!workflow) return;
-  const ref = prompt("請輸入 branch", "main");
-  if (!ref) return;
+  localStorage.removeItem("github_dispatch_config_v2669c");
   const token = prompt("請輸入 GitHub Token（只存這台裝置）", "");
   if (!token) return;
-  const newCfg = { owner: owner.trim(), repo: repo.trim(), workflow: workflow.trim(), ref: ref.trim(), token: token.trim() };
-  saveConfig(newCfg);
+  saveConfig({ token: token.trim() });
   setBackendState("GitHub 設定已更新", "backend-ok");
   alert("✅ GitHub 設定完成");
 }
 function promptConfigIfNeeded(){
   const cfg = getConfig();
-  if (cfg.owner && cfg.repo && cfg.workflow && cfg.ref && cfg.token) return cfg;
-  const owner = prompt("請輸入 GitHub owner（帳號）", cfg.owner || "");
-  if (owner === null || !owner.trim()) return null;
-  const repo = prompt("請輸入 repo 名稱", cfg.repo || "");
-  if (repo === null || !repo.trim()) return null;
-  const workflow = prompt("請輸入 workflow 檔名", cfg.workflow || "v266_8_pipeline.yml");
-  if (workflow === null || !workflow.trim()) return null;
-  const ref = prompt("請輸入 branch", cfg.ref || "main");
-  if (ref === null || !ref.trim()) return null;
+  if (cfg.token) return cfg;
   const token = prompt("請輸入 GitHub Token（只存這台裝置）", cfg.token || "");
   if (token === null || !token.trim()) return null;
-  const newCfg = { owner: owner.trim(), repo: repo.trim(), workflow: workflow.trim(), ref: ref.trim(), token: token.trim() };
+  const newCfg = { token: token.trim() };
   saveConfig(newCfg);
   return newCfg;
 }
-
 async function githubPost(url, bodyObj){
   const cfg = promptConfigIfNeeded();
-  if (!cfg) throw new Error("GitHub 設定未完成");
+  if (!cfg) throw new Error("GitHub Token 未完成設定");
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -188,18 +172,14 @@ async function pollForMetaChange(before, maxLoops=36, waitMs=10000){
 }
 
 async function dispatchMainPipeline(){
-  const cfg = promptConfigIfNeeded();
-  if (!cfg) throw new Error("GitHub 設定未完成");
-  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/actions/workflows/${cfg.workflow}/dispatches`;
-  await githubPost(url, { ref: cfg.ref });
+  const url = `https://api.github.com/repos/${FIXED_OWNER}/${FIXED_REPO}/actions/workflows/${FIXED_MAIN_WORKFLOW}/dispatches`;
+  await githubPost(url, { ref: FIXED_REF });
 }
 
 async function dispatchWriteback(actionType, stockId, shares="", avgCost=""){
-  const cfg = promptConfigIfNeeded();
-  if (!cfg) throw new Error("GitHub 設定未完成");
-  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/actions/workflows/v266_9A_position_writeback.yml/dispatches`;
+  const url = `https://api.github.com/repos/${FIXED_OWNER}/${FIXED_REPO}/actions/workflows/${FIXED_WRITEBACK_WORKFLOW}/dispatches`;
   await githubPost(url, {
-    ref: cfg.ref,
+    ref: FIXED_REF,
     inputs: {
       action_type: String(actionType),
       stock_id: String(stockId),
@@ -291,11 +271,50 @@ function renderTradeTable(){
   });
   tbody.querySelectorAll(".sync-btn").forEach(btn=>btn.addEventListener("click",()=>addTradeToPosition(btn.dataset.stock, btn.dataset.price)));
 }
+
+function mergePositionRows() {
+  const pipelineMap = new Map(positionRows.map(r => [String(r.stock_id), r]));
+  const merged = [];
+
+  currentPositionsRows.forEach(cp => {
+    const stockId = String(cp.stock_id || "").trim();
+    if (!stockId) return;
+    const pr = pipelineMap.get(stockId);
+    if (pr) {
+      merged.push({
+        ...pr,
+        stock_id: stockId,
+        shares: cp.shares || pr.shares || "",
+        avg_cost: cp.avg_cost || pr.avg_cost || "",
+        last_action_date: cp.last_action_date || pr.last_action_date || "",
+        note: safeText(pr.note, cp.note || "目前沒有備註")
+      });
+      pipelineMap.delete(stockId);
+    } else {
+      merged.push({
+        stock_id: stockId,
+        price_tier: "unknown",
+        ref_price: "",
+        shares: cp.shares || "",
+        avg_cost: cp.avg_cost || "",
+        pnl_pct: "",
+        target_weight: "",
+        current_weight_est: "",
+        action: "HOLD",
+        note: cp.note || "已真寫回，等待策略覆蓋"
+      });
+    }
+  });
+
+  pipelineMap.forEach(v => merged.push(v));
+  return merged;
+}
+
 function renderPositionTable(){
   const tbody=document.querySelector("#position-table tbody"); 
   if (!tbody) return;
   tbody.innerHTML="";
-  const merged=[...positionRows];
+  const merged = mergePositionRows();
   if(!merged.length){tbody.innerHTML='<tr><td colspan="11" class="muted">目前沒有持倉監控資料</td></tr>'; return;}
   merged.forEach(r=>{
     const stockId = nonEmpty(r.stock_id, "-");
@@ -311,6 +330,7 @@ function renderPositionTable(){
   });
   tbody.querySelectorAll(".remove-btn").forEach(btn=>btn.addEventListener("click",()=>removePosition(btn.dataset.stock)));
 }
+
 function renderWatchTable(){
   const tbody=document.querySelector("#watch-table tbody"); 
   if (!tbody) return;
@@ -347,15 +367,21 @@ function renderDebugTable(){
 }
 
 async function init(){
-  const [meta, trade, posMon, watchMon, summary, debug] = await Promise.all([
+  const [meta, trade, posMon, watchMon, summary, debug, currentPos] = await Promise.all([
     fetchJSON(`${DATA_BASE}/meta.json`),
     loadCSV("trade_plan.csv"),
     loadCSV("position_monitor.csv", true),
     loadCSV("watchlist_monitor.csv", true),
     loadCSV("full_summary.csv", true),
-    loadCSV("selection_debug.csv", true)
+    loadCSV("selection_debug.csv", true),
+    loadCSV("current_positions.csv", true)
   ]);
-  tradeRows = trade; positionRows = posMon; watchRows = watchMon; summaryRows = summary; debugRows = debug;
+  tradeRows = trade;
+  positionRows = posMon;
+  watchRows = watchMon;
+  summaryRows = summary;
+  debugRows = debug;
+  currentPositionsRows = currentPos;
   updateStatus(meta); renderTradeTable(); renderPositionTable(); renderWatchTable(); renderSummaryTable(); renderDebugTable();
 }
 async function refreshAll(){
@@ -374,18 +400,18 @@ async function dispatchBackendUpdate(){
   try{
     btn.disabled = true;
     btn.textContent = "🚀 送出中...";
-    setBackendState("送出後端更新中", "backend-running");
+    setBackendState(`送出後端更新中（${FIXED_REPO}/${FIXED_MAIN_WORKFLOW}）`, "backend-running");
     const before = lastMetaGeneratedAt;
     await dispatchMainPipeline();
     btn.textContent = "⏳ 後端執行中...";
-    setBackendState("已送出，等待資料更新", "backend-running");
+    setBackendState(`已送出，等待資料更新（${FIXED_REPO}/${FIXED_MAIN_WORKFLOW}）`, "backend-running");
     const ok = await pollForMetaChange(before, 42, 10000);
     if (ok) { btn.textContent = "✅ 後端已更新"; setBackendState("資料與策略已更新", "backend-ok"); }
     else { btn.textContent = "⚠️ 尚未完成"; setBackendState("已送出，但尚未看到新資料", "backend-running"); }
   } catch (err) {
     console.error(err);
     btn.textContent = "❌ 送出失敗";
-    setBackendState("後端送出失敗", "backend-err");
+    setBackendState(`後端送出失敗（${FIXED_REPO}/${FIXED_MAIN_WORKFLOW}）`, "backend-err");
     alert(`GitHub 送出失敗：\n${err.message}`);
   } finally {
     setTimeout(()=>{ btn.textContent = original; btn.disabled = false; }, 1800);
