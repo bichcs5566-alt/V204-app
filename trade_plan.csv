@@ -1,5 +1,4 @@
 signal_date,trade_date,action,stock_id,price_tier,target_weight,ref_price,current_shares,avg_cost,suggested_amount,suggested_shares,estimated_total_cost,source,note
-2026-04-16,2026-04-17,SELL,2330,1000ä»¥ä¸,0.0,2032.03,100.0,580.0,0.0,,0.0,,not_in_target
 2026-04-16,2026-04-17,BUY,5475,300-500,0.0717,368.8685,,,71666.67,194.29,71774.17,CORE+ALPHA,new_entry
 2026-04-16,2026-04-17,BUY,7610,500-1000,0.0717,638.638,,,71666.67,112.22,71774.17,CORE+ALPHA,new_entry
 2026-04-16,2026-04-17,BUY,6830,500-1000,0.0717,885.885,,,71666.67,80.9,71774.17,CORE+ALPHA,new_entry

@@ -1,2 +1,1 @@
 signal_date,trade_date,stock_id,price_tier,ref_price,shares,avg_cost,pnl_pct,target_weight,current_weight_est,action,note
-2026-04-16,2026-04-17,2330,1000ä»¥ä¸,2032.03,100,580,2.5,0.0,0.203,SELL,not_in_target
