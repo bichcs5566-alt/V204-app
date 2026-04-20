@@ -24,13 +24,13 @@ function nonEmpty(v, fallback="目前沒有資料"){const s=String(v??"").trim()
 
 function getConfig(){
   const cfg = window.GITHUB_CONFIG || {};
-  const local = loadLocal("github_dispatch_config_v2669d", {});
+  const local = loadLocal("github_dispatch_config_v2669e", {});
   return { token: cfg.token || local.token || "" };
 }
-function saveConfig(cfg){ saveLocal("github_dispatch_config_v2669d", cfg); }
+function saveConfig(cfg){ saveLocal("github_dispatch_config_v2669e", cfg); }
 
 function resetGithubConfig() {
-  localStorage.removeItem("github_dispatch_config_v2669d");
+  localStorage.removeItem("github_dispatch_config_v2669e");
   const token = prompt("請輸入 GitHub Token（只存這台裝置）", "");
   if (!token) return;
   saveConfig({ token: token.trim() });
@@ -238,7 +238,7 @@ async function removePosition(stockId){
     await dispatchWriteback("delete", stockId, "", "");
     currentPositionsRows = currentPositionsRows.filter(r => String(r.stock_id) !== String(stockId));
     renderPositionTable();
-    setWritebackState("已刪除，等待策略重算", "backend-running");
+    setWritebackState("已寫回，等待策略重算", "backend-running");
     const ok = await pollForMetaChange(before, 42, 10000);
     if (ok) setWritebackState("持倉已真移除", "backend-ok");
     else setWritebackState("刪除已送出，尚未看到新資料", "backend-running");
@@ -275,7 +275,6 @@ function renderTradeTable(){
 function mergePositionRows() {
   const pipelineMap = new Map(positionRows.map(r => [String(r.stock_id), r]));
   const merged = [];
-
   currentPositionsRows.forEach(cp => {
     const stockId = String(cp.stock_id || "").trim();
     if (!stockId) return;
@@ -304,12 +303,11 @@ function mergePositionRows() {
       });
     }
   });
-
   return merged.sort((a,b)=>String(a.stock_id).localeCompare(String(b.stock_id)));
 }
 
 function renderPositionTable(){
-  const tbody=document.querySelector("#position-table tbody"); 
+  const tbody=document.querySelector("#position-table tbody");
   if (!tbody) return;
   tbody.innerHTML="";
   const merged = mergePositionRows();
@@ -330,7 +328,7 @@ function renderPositionTable(){
 }
 
 function renderWatchTable(){
-  const tbody=document.querySelector("#watch-table tbody"); 
+  const tbody=document.querySelector("#watch-table tbody");
   if (!tbody) return;
   tbody.innerHTML="";
   const merged=[...watchRows];
@@ -349,15 +347,16 @@ function renderWatchTable(){
   });
   tbody.querySelectorAll(".remove-btn").forEach(btn=>btn.addEventListener("click",()=>removeWatch(btn.dataset.stock)));
 }
+
 function renderSummaryTable(){
-  const tbody=document.querySelector("#summary-table tbody"); 
+  const tbody=document.querySelector("#summary-table tbody");
   if (!tbody) return;
   tbody.innerHTML="";
   if(!summaryRows.length){tbody.innerHTML='<tr><td colspan="3" class="muted">目前沒有績效摘要資料</td></tr>'; return;}
   summaryRows.forEach(r=>{tbody.innerHTML += `<tr><td>${r.return||"0"}</td><td>${r.mdd||"0"}</td><td>${r.sharpe_daily||"0"}</td></tr>`;});
 }
 function renderDebugTable(){
-  const tbody=document.querySelector("#debug-table tbody"); 
+  const tbody=document.querySelector("#debug-table tbody");
   if (!tbody) return;
   tbody.innerHTML="";
   if(!debugRows.length){tbody.innerHTML='<tr><td colspan="6" class="muted">目前沒有篩選除錯資料</td></tr>'; return;}
@@ -383,7 +382,7 @@ async function init(){
   updateStatus(meta); renderTradeTable(); renderPositionTable(); renderWatchTable(); renderSummaryTable(); renderDebugTable();
 }
 async function refreshAll(){
-  const btn = document.getElementById("refreshBtn"); 
+  const btn = document.getElementById("refreshBtn");
   if (!btn) return;
   const original = btn.textContent;
   btn.disabled = true; btn.textContent = "⏳ 更新中...";
