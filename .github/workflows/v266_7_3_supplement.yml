@@ -1,0 +1,29 @@
+name: v266-7-3-supplement
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update_meta:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Update meta timezone
+        run: |
+          python v266_7_3_supplement.py
+
+      - name: Commit meta back to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mobile_dashboard_v1/data/meta.json
+          git diff --cached --quiet || git commit -m "update meta timezone v266.7.3"
+          git push
