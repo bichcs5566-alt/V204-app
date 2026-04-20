@@ -1,14 +1,12 @@
 import os
 import csv
 import subprocess
-import sys
 import time
 from pathlib import Path
 
 ROOT_POS = Path("current_positions.csv")
 DASH_POS = Path("mobile_dashboard_v1/data/current_positions.csv")
 MAIN_PIPELINE = "v266_8_2_complete_fix.yml"
-
 
 def read_positions(path: Path):
     if not path.exists():
@@ -26,7 +24,6 @@ def read_positions(path: Path):
         })
     return out
 
-
 def write_positions(rows, path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8-sig", newline="") as f:
@@ -37,16 +34,13 @@ def write_positions(rows, path: Path):
         writer.writeheader()
         writer.writerows(rows)
 
-
 def run_cmd(cmd, check=True):
     print("RUN:", " ".join(cmd))
     return subprocess.run(cmd, check=check)
 
-
 def git_sync_and_push(max_retry=3, sleep_sec=2):
     for attempt in range(1, max_retry + 1):
         print(f"git push attempt {attempt}/{max_retry}")
-        # åæææ°ï¼é¿å non-fast-forward
         pull_res = subprocess.run(["git", "pull", "--rebase", "origin", "main"])
         if pull_res.returncode != 0:
             print("git pull --rebase å¤±æ")
@@ -67,7 +61,6 @@ def git_sync_and_push(max_retry=3, sleep_sec=2):
 
     raise RuntimeError("git push failed after retries")
 
-
 def dispatch_main_pipeline(token: str, repo: str):
     import urllib.request
     import json
@@ -85,7 +78,6 @@ def dispatch_main_pipeline(token: str, repo: str):
     )
     with urllib.request.urlopen(req) as resp:
         print("dispatch main pipeline status", resp.status)
-
 
 def main():
     action_type = os.environ.get("ACTION_TYPE", "").strip().lower()
@@ -143,7 +135,6 @@ def main():
         dispatch_main_pipeline(token, repo)
     else:
         print("ç¼ºå° GH_TOKEN æ GH_REPOï¼ç¥éä¸» pipeline dispatch")
-
 
 if __name__ == "__main__":
     main()
