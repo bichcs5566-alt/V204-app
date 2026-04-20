@@ -4,18 +4,20 @@ const ACTION_LABELS = {BUY:"買進",SELL:"賣出",HOLD:"續抱",REDUCE:"減碼",
 
 const FIXED_OWNER = "bichcs5566-alt";
 const FIXED_REPO = "V204-app";
-const FIXED_MAIN_WORKFLOW = "v266_8_2_complete_fix.yml";
-const FIXED_WRITEBACK_WORKFLOW = "v266_9A_position_writeback.yml";
+const FIXED_MAIN_WORKFLOW = "v266_10_EF_pipeline.yml";
+const FIXED_POSITION_WORKFLOW = "v266_9A_position_writeback.yml";
+const FIXED_WATCHLIST_WORKFLOW = "v266_10_watchlist_writeback.yml";
 const FIXED_REF = "main";
 
-let tradeRows=[], positionRows=[], watchRows=[], summaryRows=[], debugRows=[], currentPositionsRows=[];
-let localWatchlist=[];
+let tradeRows=[], positionMergedRows=[], watchMergedRows=[], summaryRows=[], debugRows=[];
+let currentPositionsRows=[], watchSourceRows=[];
 let lastMetaGeneratedAt = "";
+let currentMeta = {};
 
 function mapActionLabel(v){const key=String(v||"").trim().toUpperCase(); return ACTION_LABELS[key]||v||"";}
 function actionClass(v){return String(v||"").trim().toLowerCase();}
 function tierLabel(v){return TIER_LABELS[String(v||"").trim()]||v||"未知";}
-function formatNumber(v){const n=Number(v); if(!Number.isFinite(n)) return v??""; return n.toLocaleString("zh-TW",{maximumFractionDigits:2});}
+function formatNumber(v){const n=Number(v); if(!Number.isFinite(n)) return v??""; return n.toLocaleString("zh-TW",{maximumFractionDigits:3});}
 function saveLocal(name,val){localStorage.setItem(name, JSON.stringify(val));}
 function loadLocal(name, fallback=[]){try{return JSON.parse(localStorage.getItem(name)||JSON.stringify(fallback));}catch{return fallback;}}
 function hasBadEncoding(s){return /Ã|æ|ä|å|ç|é|è|ê|î|ï|ð|þ|œ|�/.test(String(s||""));}
@@ -24,13 +26,13 @@ function nonEmpty(v, fallback="目前沒有資料"){const s=String(v??"").trim()
 
 function getConfig(){
   const cfg = window.GITHUB_CONFIG || {};
-  const local = loadLocal("github_dispatch_config_v2669e", {});
+  const local = loadLocal("github_dispatch_config_v26610ef", {});
   return { token: cfg.token || local.token || "" };
 }
-function saveConfig(cfg){ saveLocal("github_dispatch_config_v2669e", cfg); }
+function saveConfig(cfg){ saveLocal("github_dispatch_config_v26610ef", cfg); }
 
 function resetGithubConfig() {
-  localStorage.removeItem("github_dispatch_config_v2669e");
+  localStorage.removeItem("github_dispatch_config_v26610ef");
   const token = prompt("請輸入 GitHub Token（只存這台裝置）", "");
   if (!token) return;
   saveConfig({ token: token.trim() });
@@ -117,6 +119,7 @@ function isWeekend(dateObj){
   return day === 0 || day === 6;
 }
 function updateStatus(meta){
+  currentMeta = meta || {};
   const generated = String(meta.generated_at||"").trim();
   const signal = String(meta.signal_date||"").trim();
   const trade = String(meta.trade_date||"").trim();
@@ -153,8 +156,14 @@ function updateStatus(meta){
   el.className = stateClass;
   lastMetaGeneratedAt = generated || lastMetaGeneratedAt;
 }
-
-async function pollForMetaChange(before, maxLoops=36, waitMs=10000){
+function todayTradeRows(rows){
+  const today = toTaipeiNow().toLocaleDateString("sv-SE");
+  const tradeDate = String(currentMeta.trade_date || "").trim();
+  if (!tradeDate) return rows || [];
+  if (tradeDate === today) return rows || [];
+  return rows || [];
+}
+async function pollForMetaChange(before, maxLoops=48, waitMs=10000){
   for (let i=0; i<maxLoops; i++) {
     await new Promise(r=>setTimeout(r, waitMs));
     try{
@@ -168,25 +177,29 @@ async function pollForMetaChange(before, maxLoops=36, waitMs=10000){
   }
   return false;
 }
-
-async function dispatchMainPipeline(){
-  const url = `https://api.github.com/repos/${FIXED_OWNER}/${FIXED_REPO}/actions/workflows/${FIXED_MAIN_WORKFLOW}/dispatches`;
-  await githubPost(url, { ref: FIXED_REF });
+async function dispatchWorkflowByFile(workflowFile, inputs=null){
+  const url = `https://api.github.com/repos/${FIXED_OWNER}/${FIXED_REPO}/actions/workflows/${workflowFile}/dispatches`;
+  const body = { ref: FIXED_REF };
+  if (inputs) body.inputs = inputs;
+  await githubPost(url, body);
 }
-
-async function dispatchWriteback(actionType, stockId, shares="", avgCost=""){
-  const url = `https://api.github.com/repos/${FIXED_OWNER}/${FIXED_REPO}/actions/workflows/${FIXED_WRITEBACK_WORKFLOW}/dispatches`;
-  await githubPost(url, {
-    ref: FIXED_REF,
-    inputs: {
-      action_type: String(actionType),
-      stock_id: String(stockId),
-      shares: String(shares),
-      avg_cost: String(avgCost)
-    }
+async function dispatchMainPipeline(){
+  await dispatchWorkflowByFile(FIXED_MAIN_WORKFLOW);
+}
+async function dispatchPositionWriteback(actionType, stockId, shares="", avgCost=""){
+  await dispatchWorkflowByFile(FIXED_POSITION_WORKFLOW, {
+    action_type: String(actionType),
+    stock_id: String(stockId),
+    shares: String(shares),
+    avg_cost: String(avgCost)
   });
 }
-
+async function dispatchWatchlistWriteback(actionType, stockId){
+  await dispatchWorkflowByFile(FIXED_WATCHLIST_WORKFLOW, {
+    action_type: String(actionType),
+    stock_id: String(stockId)
+  });
+}
 async function addTradeToPosition(stockId, refPrice){
   const shares = prompt(`請輸入 ${stockId} 的持有股數`, "1000");
   if (shares === null || !String(shares).trim()) return;
@@ -196,9 +209,9 @@ async function addTradeToPosition(stockId, refPrice){
   setWritebackState("送出持倉寫回中", "backend-running");
   try {
     const before = lastMetaGeneratedAt;
-    await dispatchWriteback("upsert", stockId, shares, cost);
+    await dispatchPositionWriteback("upsert", stockId, shares, cost);
     setWritebackState("已寫回，等待策略重算", "backend-running");
-    const ok = await pollForMetaChange(before, 42, 10000);
+    const ok = await pollForMetaChange(before);
     if (ok) setWritebackState("持倉已真寫回", "backend-ok");
     else setWritebackState("寫回已送出，尚未看到新資料", "backend-running");
   } catch(err) {
@@ -207,7 +220,6 @@ async function addTradeToPosition(stockId, refPrice){
     alert(`持倉真回寫失敗：\n${err.message}`);
   }
 }
-
 async function addPositionManual(){
   const stockId = document.getElementById("posCode")?.value.trim();
   const shares = document.getElementById("posShares")?.value.trim();
@@ -217,10 +229,10 @@ async function addPositionManual(){
   setWritebackState("送出持倉寫回中", "backend-running");
   try {
     const before = lastMetaGeneratedAt;
-    await dispatchWriteback("upsert", stockId, shares, avgCost);
+    await dispatchPositionWriteback("upsert", stockId, shares, avgCost);
     document.getElementById("posCode").value=""; document.getElementById("posShares").value=""; document.getElementById("posCost").value="";
     setWritebackState("已寫回，等待策略重算", "backend-running");
-    const ok = await pollForMetaChange(before, 42, 10000);
+    const ok = await pollForMetaChange(before);
     if (ok) setWritebackState("持倉已真寫回", "backend-ok");
     else setWritebackState("寫回已送出，尚未看到新資料", "backend-running");
   } catch(err) {
@@ -229,17 +241,16 @@ async function addPositionManual(){
     alert(`持倉真回寫失敗：\n${err.message}`);
   }
 }
-
 async function removePosition(stockId){
   if (!confirm(`確定要移除持倉 ${stockId} 嗎？`)) return;
   setWritebackState("送出持倉刪除中", "backend-running");
   try {
     const before = lastMetaGeneratedAt;
-    await dispatchWriteback("delete", stockId, "", "");
     currentPositionsRows = currentPositionsRows.filter(r => String(r.stock_id) !== String(stockId));
     renderPositionTable();
+    await dispatchPositionWriteback("delete", stockId, "", "");
     setWritebackState("已寫回，等待策略重算", "backend-running");
-    const ok = await pollForMetaChange(before, 42, 10000);
+    const ok = await pollForMetaChange(before);
     if (ok) setWritebackState("持倉已真移除", "backend-ok");
     else setWritebackState("刪除已送出，尚未看到新資料", "backend-running");
   } catch(err) {
@@ -248,18 +259,52 @@ async function removePosition(stockId){
     alert(`持倉刪除失敗：\n${err.message}`);
   }
 }
-
-function addWatchManual(){ const code = document.getElementById("watchCode")?.value.trim(); if (!code) return; if (!localWatchlist.includes(code)) localWatchlist.push(code); saveLocal("watchlist_v2668", localWatchlist); document.getElementById("watchCode").value=""; renderWatchTable(); }
-function removeWatch(stockId){ localWatchlist = localWatchlist.filter(x => String(x) !== String(stockId)); saveLocal("watchlist_v2668", localWatchlist); renderWatchTable(); }
-
+async function addWatchManual(){
+  const code = document.getElementById("watchCode")?.value.trim();
+  if (!code) return;
+  if (!watchSourceRows.find(r => String(r.stock_id) === String(code))) {
+    watchSourceRows.push({stock_id: code, note: ""});
+  }
+  renderWatchTable();
+  document.getElementById("watchCode").value="";
+  try{
+    const before = lastMetaGeneratedAt;
+    setWritebackState("送出自選股寫回中", "backend-running");
+    await dispatchWatchlistWriteback("upsert", code);
+    const ok = await pollForMetaChange(before);
+    if (ok) setWritebackState("自選股已真寫回", "backend-ok");
+    else setWritebackState("自選股已送出，尚未看到新資料", "backend-running");
+  }catch(err){
+    console.error(err);
+    setWritebackState("自選股寫回失敗", "backend-err");
+    alert(`自選股寫回失敗：\n${err.message}`);
+  }
+}
+async function removeWatch(stockId){
+  if (!confirm(`確定要移除自選股 ${stockId} 嗎？`)) return;
+  watchSourceRows = watchSourceRows.filter(x => String(x.stock_id) !== String(stockId));
+  renderWatchTable();
+  try{
+    const before = lastMetaGeneratedAt;
+    setWritebackState("送出自選股刪除中", "backend-running");
+    await dispatchWatchlistWriteback("delete", stockId);
+    const ok = await pollForMetaChange(before);
+    if (ok) setWritebackState("自選股已真移除", "backend-ok");
+    else setWritebackState("自選股刪除已送出，尚未看到新資料", "backend-running");
+  }catch(err){
+    console.error(err);
+    setWritebackState("自選股刪除失敗", "backend-err");
+    alert(`自選股刪除失敗：\n${err.message}`);
+  }
+}
 function renderTradeTable(){
   const tbody=document.querySelector("#trade-table tbody");
   if (!tbody) return;
   const selectedTier=document.getElementById("tierFilter")?.value || "全部";
-  let rows=[...tradeRows];
+  let rows=[...todayTradeRows(tradeRows)];
   if(selectedTier!=="全部") rows=rows.filter(r=>String(r.price_tier||"")===selectedTier);
   tbody.innerHTML="";
-  if(!rows.length){tbody.innerHTML='<tr><td colspan="8" class="muted">目前沒有符合條件的資料</td></tr>'; return;}
+  if(!rows.length){tbody.innerHTML='<tr><td colspan="8" class="muted">目前沒有可執行名單</td></tr>'; return;}
   rows.forEach(r=>{
     const stockId = nonEmpty(r.stock_id, "-");
     tbody.innerHTML += `<tr>
@@ -271,47 +316,27 @@ function renderTradeTable(){
   });
   tbody.querySelectorAll(".sync-btn").forEach(btn=>btn.addEventListener("click",()=>addTradeToPosition(btn.dataset.stock, btn.dataset.price)));
 }
-
-function mergePositionRows() {
-  const pipelineMap = new Map(positionRows.map(r => [String(r.stock_id), r]));
-  const merged = [];
-  currentPositionsRows.forEach(cp => {
-    const stockId = String(cp.stock_id || "").trim();
-    if (!stockId) return;
-    const pr = pipelineMap.get(stockId);
-    if (pr) {
-      merged.push({
-        ...pr,
-        stock_id: stockId,
-        shares: cp.shares || pr.shares || "",
-        avg_cost: cp.avg_cost || pr.avg_cost || "",
-        last_action_date: cp.last_action_date || pr.last_action_date || "",
-        note: safeText(pr.note, cp.note || "目前沒有備註")
-      });
-    } else {
-      merged.push({
-        stock_id: stockId,
-        price_tier: "unknown",
-        ref_price: "",
-        shares: cp.shares || "",
-        avg_cost: cp.avg_cost || "",
-        pnl_pct: "",
-        target_weight: "",
-        current_weight_est: "",
-        action: "HOLD",
-        note: cp.note || "已真寫回，等待策略覆蓋"
-      });
-    }
-  });
-  return merged.sort((a,b)=>String(a.stock_id).localeCompare(String(b.stock_id)));
-}
-
 function renderPositionTable(){
   const tbody=document.querySelector("#position-table tbody");
   if (!tbody) return;
   tbody.innerHTML="";
-  const merged = mergePositionRows();
-  if(!merged.length){tbody.innerHTML='<tr><td colspan="11" class="muted">目前沒有持倉監控資料</td></tr>'; return;}
+  if(!currentPositionsRows.length){tbody.innerHTML='<tr><td colspan="11" class="muted">目前沒有持倉監控資料</td></tr>'; return;}
+  const enrichMap = new Map(positionMergedRows.map(r => [String(r.stock_id), r]));
+  const merged = currentPositionsRows.map(cp=>{
+    const pr = enrichMap.get(String(cp.stock_id)) || {};
+    return {
+      stock_id: cp.stock_id,
+      price_tier: pr.price_tier || "unknown",
+      ref_price: pr.ref_price || "",
+      shares: cp.shares || "",
+      avg_cost: cp.avg_cost || "",
+      pnl_pct: pr.pnl_pct || "",
+      target_weight: pr.target_weight || "",
+      current_weight_est: pr.current_weight_est || "",
+      action: pr.action || "HOLD",
+      note: safeText(pr.note, cp.note || "目前沒有備註")
+    };
+  });
   merged.forEach(r=>{
     const stockId = nonEmpty(r.stock_id, "-");
     const waiting = String(r.ref_price??"").trim() === "" || Number(r.ref_price) === 0;
@@ -326,14 +351,24 @@ function renderPositionTable(){
   });
   tbody.querySelectorAll(".remove-btn").forEach(btn=>btn.addEventListener("click",()=>removePosition(btn.dataset.stock)));
 }
-
 function renderWatchTable(){
   const tbody=document.querySelector("#watch-table tbody");
   if (!tbody) return;
   tbody.innerHTML="";
-  const merged=[...watchRows];
-  localWatchlist.forEach(code=>{ if(!merged.find(x=>String(x.stock_id)===String(code))){ merged.push({ stock_id:code, price_tier:"unknown", ref_price:"", holding_status:"未持有", strategy_bucket:"NONE", action:"WATCH", pnl_pct:"" }); }});
-  if(!merged.length){tbody.innerHTML='<tr><td colspan="8" class="muted">目前沒有自選股監控資料</td></tr>'; return;}
+  if(!watchSourceRows.length){tbody.innerHTML='<tr><td colspan="8" class="muted">目前沒有自選股監控資料</td></tr>'; return;}
+  const enrichMap = new Map(watchMergedRows.map(r => [String(r.stock_id), r]));
+  const merged = watchSourceRows.map(ws=>{
+    const mr = enrichMap.get(String(ws.stock_id)) || {};
+    return {
+      stock_id: ws.stock_id,
+      price_tier: mr.price_tier || "unknown",
+      ref_price: mr.ref_price || "",
+      holding_status: mr.holding_status || "未持有",
+      strategy_bucket: mr.strategy_bucket || "NONE",
+      action: mr.action || "WATCH",
+      pnl_pct: mr.pnl_pct || ""
+    };
+  });
   merged.forEach(r=>{
     const stockId = nonEmpty(r.stock_id, "-");
     const waiting = String(r.ref_price??"").trim() === "" || Number(r.ref_price) === 0;
@@ -347,7 +382,6 @@ function renderWatchTable(){
   });
   tbody.querySelectorAll(".remove-btn").forEach(btn=>btn.addEventListener("click",()=>removeWatch(btn.dataset.stock)));
 }
-
 function renderSummaryTable(){
   const tbody=document.querySelector("#summary-table tbody");
   if (!tbody) return;
@@ -362,23 +396,25 @@ function renderDebugTable(){
   if(!debugRows.length){tbody.innerHTML='<tr><td colspan="6" class="muted">目前沒有篩選除錯資料</td></tr>'; return;}
   debugRows.forEach(r=>{tbody.innerHTML += `<tr><td>${r.total_input||"0"}</td><td>${r.valid_after_na||"0"}</td><td>${r.core_primary_count||"0"}</td><td>${r.alpha_primary_count||"0"}</td><td>${r.core_final_count||"0"}</td><td>${r.alpha_final_count||"0"}</td></tr>`;});
 }
-
 async function init(){
-  const [meta, trade, posMon, watchMon, summary, debug, currentPos] = await Promise.all([
+  const [meta, trade, posMerged, watchMerged, summary, debug, currentPos, watchSource] = await Promise.all([
     fetchJSON(`${DATA_BASE}/meta.json`),
-    loadCSV("trade_plan.csv"),
-    loadCSV("position_monitor.csv", true),
-    loadCSV("watchlist_monitor.csv", true),
+    loadCSV("trade_plan.csv", true),
+    loadCSV("position_monitor_merged.csv", true),
+    loadCSV("watchlist_monitor_merged.csv", true),
     loadCSV("full_summary.csv", true),
     loadCSV("selection_debug.csv", true),
-    loadCSV("current_positions.csv", true)
+    loadCSV("current_positions.csv", true),
+    loadCSV("watchlist.csv", true)
   ]);
+  currentMeta = meta || {};
   tradeRows = trade;
-  positionRows = posMon;
-  watchRows = watchMon;
+  positionMergedRows = posMerged;
+  watchMergedRows = watchMerged;
   summaryRows = summary;
   debugRows = debug;
   currentPositionsRows = currentPos;
+  watchSourceRows = watchSource;
   updateStatus(meta); renderTradeTable(); renderPositionTable(); renderWatchTable(); renderSummaryTable(); renderDebugTable();
 }
 async function refreshAll(){
@@ -402,7 +438,7 @@ async function dispatchBackendUpdate(){
     await dispatchMainPipeline();
     btn.textContent = "⏳ 後端執行中...";
     setBackendState(`已送出，等待資料更新（${FIXED_REPO}/${FIXED_MAIN_WORKFLOW}）`, "backend-running");
-    const ok = await pollForMetaChange(before, 42, 10000);
+    const ok = await pollForMetaChange(before);
     if (ok) { btn.textContent = "✅ 後端已更新"; setBackendState("資料與策略已更新", "backend-ok"); }
     else { btn.textContent = "⚠️ 尚未完成"; setBackendState("已送出，但尚未看到新資料", "backend-running"); }
   } catch (err) {
@@ -414,7 +450,6 @@ async function dispatchBackendUpdate(){
     setTimeout(()=>{ btn.textContent = original; btn.disabled = false; }, 1800);
   }
 }
-
 document.addEventListener("DOMContentLoaded", ()=>{
   startLiveClock();
   const refreshBtn = document.getElementById("refreshBtn"); if (refreshBtn) refreshBtn.addEventListener("click", refreshAll);
