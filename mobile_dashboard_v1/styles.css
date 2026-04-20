@@ -1,6 +1,104 @@
-body{font-family:sans-serif;background:#f5f5f5;margin:0;padding:10px;}
-.header{background:#fff;padding:15px;border-radius:10px;margin-bottom:10px;}
-.card{background:#fff;padding:15px;border-radius:10px;margin-top:10px;}
-button{padding:8px 12px;margin-top:5px;}
-table{width:100%;margin-top:10px;border-collapse:collapse;}
-td,th{border-bottom:1px solid #ddd;padding:6px;}
+
+:root{
+  --bg:#f3f4f6;
+  --card:#ffffff;
+  --text:#111827;
+  --muted:#6b7280;
+  --border:#e5e7eb;
+  --head:#f9fafb;
+  --primary:#111827;
+  --green:#15803d;
+  --red:#dc2626;
+  --orange:#b45309;
+  --blue:#1d4ed8;
+  --purple:#6d28d9;
+}
+*{box-sizing:border-box}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC",sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  margin:0;
+  padding:16px;
+}
+.container{max-width:1240px;margin:0 auto}
+.card{
+  background:var(--card);
+  border-radius:18px;
+  padding:18px;
+  margin-bottom:18px;
+  box-shadow:0 6px 20px rgba(0,0,0,.06);
+}
+.top-row,.section-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+}
+h1,h2{margin:0 0 12px 0}
+.status-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+  gap:10px 16px;
+  margin-top:8px;
+}
+.status-label{font-weight:700}
+select,input{
+  width:100%;
+  max-width:420px;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid #d1d5db;
+  font-size:16px;
+  background:#fff;
+}
+button{
+  border:0;
+  background:var(--primary);
+  color:#fff;
+  padding:10px 16px;
+  border-radius:12px;
+  font-size:16px;
+  cursor:pointer;
+}
+button:hover{opacity:.92}
+.inline-input,.input-row{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-bottom:12px;
+}
+.table-wrap{overflow-x:auto}
+table{
+  width:100%;
+  min-width:860px;
+  border-collapse:collapse;
+  font-size:15px;
+}
+th,td{
+  border-bottom:1px solid var(--border);
+  padding:10px 8px;
+  text-align:center;
+  vertical-align:middle;
+}
+th{background:var(--head);font-weight:700}
+.buy,.add,.buy_ready{color:var(--green);font-weight:700}
+.sell,.stop_loss{color:var(--red);font-weight:700}
+.reduce{color:var(--orange);font-weight:700}
+.hold{color:var(--blue);font-weight:700}
+.watch,.candidate,.hold_monitor{color:var(--purple);font-weight:700}
+.none,.ignore{color:var(--muted);font-weight:700}
+.sync-btn{background:#065f46}
+.remove-btn{background:#991b1b}
+.muted{color:var(--muted)}
+.state-fresh{color:var(--green);font-weight:700}
+.state-old{color:var(--orange);font-weight:700}
+.state-fail{color:var(--red);font-weight:700}
+@media (max-width:768px){
+  body{padding:12px}
+  table{font-size:13px}
+  th,td{padding:8px 4px}
+  h1{font-size:28px}
+  h2{font-size:24px}
+}
