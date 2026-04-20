@@ -25,22 +25,18 @@ permissions:
   actions: write
 
 jobs:
-  run_pipeline:
+  run_writeback:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Install deps
-        run: |
-          python -m pip install --upgrade pip
 
       - name: Run position writeback
         env:
@@ -49,6 +45,6 @@ jobs:
           SHARES: ${{ github.event.inputs.shares }}
           AVG_COST: ${{ github.event.inputs.avg_cost }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
+          GH_REPO: bichcs5566-alt/V204-app
         run: |
           python v266_9A_position_writeback.py
