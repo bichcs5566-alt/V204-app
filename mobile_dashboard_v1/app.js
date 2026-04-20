@@ -4,12 +4,12 @@ const ACTION_LABELS = {BUY:"買進",SELL:"賣出",HOLD:"續抱",REDUCE:"減碼",
 
 const FIXED_OWNER = "bichcs5566-alt";
 const FIXED_REPO = "V204-app";
-const FIXED_MAIN_WORKFLOW = "v266_8_pipeline.yml";
+const FIXED_MAIN_WORKFLOW = "v266_8_2_complete_fix.yml";
 const FIXED_WRITEBACK_WORKFLOW = "v266_9A_position_writeback.yml";
 const FIXED_REF = "main";
 
 let tradeRows=[], positionRows=[], watchRows=[], summaryRows=[], debugRows=[], currentPositionsRows=[];
-let localWatchlist=[]; 
+let localWatchlist=[];
 let lastMetaGeneratedAt = "";
 
 function mapActionLabel(v){const key=String(v||"").trim().toUpperCase(); return ACTION_LABELS[key]||v||"";}
@@ -24,15 +24,13 @@ function nonEmpty(v, fallback="目前沒有資料"){const s=String(v??"").trim()
 
 function getConfig(){
   const cfg = window.GITHUB_CONFIG || {};
-  const local = loadLocal("github_dispatch_config_v2669c", {});
-  return {
-    token: cfg.token || local.token || ""
-  };
+  const local = loadLocal("github_dispatch_config_v2669d", {});
+  return { token: cfg.token || local.token || "" };
 }
-function saveConfig(cfg){ saveLocal("github_dispatch_config_v2669c", cfg); }
+function saveConfig(cfg){ saveLocal("github_dispatch_config_v2669d", cfg); }
 
 function resetGithubConfig() {
-  localStorage.removeItem("github_dispatch_config_v2669c");
+  localStorage.removeItem("github_dispatch_config_v2669d");
   const token = prompt("請輸入 GitHub Token（只存這台裝置）", "");
   if (!token) return;
   saveConfig({ token: token.trim() });
@@ -238,6 +236,8 @@ async function removePosition(stockId){
   try {
     const before = lastMetaGeneratedAt;
     await dispatchWriteback("delete", stockId, "", "");
+    currentPositionsRows = currentPositionsRows.filter(r => String(r.stock_id) !== String(stockId));
+    renderPositionTable();
     setWritebackState("已刪除，等待策略重算", "backend-running");
     const ok = await pollForMetaChange(before, 42, 10000);
     if (ok) setWritebackState("持倉已真移除", "backend-ok");
@@ -289,7 +289,6 @@ function mergePositionRows() {
         last_action_date: cp.last_action_date || pr.last_action_date || "",
         note: safeText(pr.note, cp.note || "目前沒有備註")
       });
-      pipelineMap.delete(stockId);
     } else {
       merged.push({
         stock_id: stockId,
@@ -306,8 +305,7 @@ function mergePositionRows() {
     }
   });
 
-  pipelineMap.forEach(v => merged.push(v));
-  return merged;
+  return merged.sort((a,b)=>String(a.stock_id).localeCompare(String(b.stock_id)));
 }
 
 function renderPositionTable(){
