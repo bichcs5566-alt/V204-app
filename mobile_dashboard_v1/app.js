@@ -2,7 +2,8 @@ const DATA_BASE = "./data";
 const TIER_LABELS = {lt_50:"50以下",p50_100:"50-100",p100_300:"100-300",p300_500:"300-500",p500_1000:"500-1000",gt_1000:"1000以上",unknown:"未知"};
 const ACTION_LABELS = {BUY:"買進",SELL:"賣出",HOLD:"續抱",REDUCE:"減碼",ADD:"加碼",STOP_LOSS:"停損",WATCH:"觀察",CANDIDATE:"候選",BUY_READY:"可買",HOLD_MONITOR:"持有監控",NONE:"未進策略",IGNORE:"忽略"};
 let tradeRows=[], positionRows=[], watchRows=[], summaryRows=[], debugRows=[];
-let localPositions=[], localWatchlist=[]; let lastMetaGeneratedAt = "";
+let localPositions=[], localWatchlist=[]; 
+let lastMetaGeneratedAt = "";
 
 function mapActionLabel(v){const key=String(v||"").trim().toUpperCase(); return ACTION_LABELS[key]||v||"";}
 function actionClass(v){return String(v||"").trim().toLowerCase();}
@@ -26,31 +27,88 @@ function getConfig(){
   };
 }
 function saveConfig(cfg){ saveLocal("github_dispatch_config_v2668", cfg); }
-function resetConfig(){
+
+/* ===== 這段是重點：按「重設 GitHub 設定」會立刻重新輸入 ===== */
+function resetGithubConfig() {
   localStorage.removeItem("github_dispatch_config_v2668");
-  setBackendState("已清除 GitHub 設定", "backend-idle");
-  alert("已清除目前裝置的 GitHub 設定。下次按「更新資料與策略」會重新要求輸入。");
+  setBackendState("請重新輸入 GitHub 設定", "backend-idle");
+
+  const owner = prompt("請輸入 GitHub owner（帳號）", "");
+  if (!owner) {
+    alert("已取消，尚未重新設定。");
+    return;
+  }
+
+  const repo = prompt("請輸入 repo 名稱", "");
+  if (!repo) {
+    alert("已取消，尚未重新設定。");
+    return;
+  }
+
+  const workflow = prompt("請輸入 workflow 檔名", "v266_8_pipeline.yml");
+  if (!workflow) {
+    alert("已取消，尚未重新設定。");
+    return;
+  }
+
+  const ref = prompt("請輸入 branch", "main");
+  if (!ref) {
+    alert("已取消，尚未重新設定。");
+    return;
+  }
+
+  const token = prompt("請輸入 GitHub Token（只存這台裝置）", "");
+  if (!token) {
+    alert("已取消，尚未重新設定。");
+    return;
+  }
+
+  const newCfg = {
+    owner: owner.trim(),
+    repo: repo.trim(),
+    workflow: workflow.trim(),
+    ref: ref.trim(),
+    token: token.trim()
+  };
+
+  saveConfig(newCfg);
+  setBackendState("GitHub 設定已更新", "backend-ok");
+  alert("✅ GitHub 設定完成，現在可以直接按「更新資料與策略」。");
 }
+
 function promptConfigIfNeeded(){
   const cfg = getConfig();
   if (cfg.owner && cfg.repo && cfg.workflow && cfg.ref && cfg.token) return cfg;
-  const owner = prompt("請輸入 GitHub owner", cfg.owner || "");
-  if (owner === null) return null;
+
+  const owner = prompt("請輸入 GitHub owner（帳號）", cfg.owner || "");
+  if (owner === null || !owner.trim()) return null;
+
   const repo = prompt("請輸入 repo 名稱", cfg.repo || "");
-  if (repo === null) return null;
+  if (repo === null || !repo.trim()) return null;
+
   const workflow = prompt("請輸入 workflow 檔名", cfg.workflow || "v266_8_pipeline.yml");
-  if (workflow === null) return null;
+  if (workflow === null || !workflow.trim()) return null;
+
   const ref = prompt("請輸入 branch", cfg.ref || "main");
-  if (ref === null) return null;
+  if (ref === null || !ref.trim()) return null;
+
   const token = prompt("請輸入 GitHub Token（只存這台裝置）", cfg.token || "");
-  if (token === null) return null;
-  const newCfg = {owner: owner.trim(), repo: repo.trim(), workflow: workflow.trim(), ref: ref.trim(), token: token.trim()};
+  if (token === null || !token.trim()) return null;
+
+  const newCfg = {
+    owner: owner.trim(),
+    repo: repo.trim(),
+    workflow: workflow.trim(),
+    ref: ref.trim(),
+    token: token.trim()
+  };
   saveConfig(newCfg);
   return newCfg;
 }
 
 async function fetchJSON(path){ const res=await fetch(path+"?t="+Date.now(),{cache:"no-store"}); if(!res.ok) throw new Error(path+" 讀取失敗"); return await res.json(); }
 async function fetchText(path){ const res=await fetch(path+"?t="+Date.now(),{cache:"no-store"}); if(!res.ok) throw new Error(path+" 讀取失敗"); return await res.text(); }
+
 function parseCSV(text){
   const rows=[]; let row=[]; let cell=""; let inQuotes=false;
   for(let i=0;i<text.length;i++){
@@ -69,11 +127,13 @@ async function loadCSV(file, optional=false){ try{return parseCSV(await fetchTex
 
 function startLiveClock(){
   const el = document.getElementById("liveClock");
-  const tick = ()=>{ el.textContent = new Date().toLocaleString("zh-TW", {hour12:false}); };
-  tick(); setInterval(tick, 1000);
+  const tick = ()=>{ if (el) el.textContent = new Date().toLocaleString("zh-TW", {hour12:false}); };
+  tick();
+  setInterval(tick, 1000);
 }
 function setBackendState(text, cls){
   const el = document.getElementById("backendState");
+  if (!el) return;
   el.textContent = text;
   el.className = cls || "backend-idle";
 }
@@ -81,16 +141,34 @@ function updateStatus(meta){
   const generated = String(meta.generated_at||"").trim();
   const signal = String(meta.signal_date||"").trim();
   const trade = String(meta.trade_date||"").trim();
-  document.getElementById("lastUpdate").textContent = generated || "--";
-  document.getElementById("signalDate").textContent = signal || "--";
-  document.getElementById("tradeDate").textContent = trade || "--";
+
+  const lastEl = document.getElementById("lastUpdate");
+  const sigEl = document.getElementById("signalDate");
+  const tradeEl = document.getElementById("tradeDate");
+  if (lastEl) lastEl.textContent = generated || "--";
+  if (sigEl) sigEl.textContent = signal || "--";
+  if (tradeEl) tradeEl.textContent = trade || "--";
+
   const el = document.getElementById("dataState");
+  if (!el) return;
+
   const today = new Date().toLocaleDateString("sv-SE");
-  let stateText = "✅ 最新資料"; let stateClass = "state-fresh";
-  if (!generated || !signal || !trade) { stateText = "⚠️ 缺少資料狀態"; stateClass = "state-old"; }
-  else if (trade < today) { stateText = "⚠️ 舊資料"; stateClass = "state-old"; }
-  if (meta.data_state === "fail") { stateText = "❌ 讀取失敗"; stateClass = "state-fail"; }
-  el.textContent = stateText; el.className = stateClass;
+  let stateText = "✅ 最新資料";
+  let stateClass = "state-fresh";
+
+  if (!generated || !signal || !trade) {
+    stateText = "⚠️ 缺少資料狀態";
+    stateClass = "state-old";
+  } else if (trade < today) {
+    stateText = "⚠️ 舊資料";
+    stateClass = "state-old";
+  }
+  if (meta.data_state === "fail") {
+    stateText = "❌ 讀取失敗";
+    stateClass = "state-fail";
+  }
+  el.textContent = stateText;
+  el.className = stateClass;
   lastMetaGeneratedAt = generated || lastMetaGeneratedAt;
 }
 
@@ -106,9 +184,9 @@ function addTradeToPosition(stockId, refPrice){
   renderPositionTable();
 }
 function addPositionManual(){
-  const stockId = document.getElementById("posCode").value.trim();
-  const shares = document.getElementById("posShares").value.trim();
-  const avgCost = document.getElementById("posCost").value.trim();
+  const stockId = document.getElementById("posCode")?.value.trim();
+  const shares = document.getElementById("posShares")?.value.trim();
+  const avgCost = document.getElementById("posCost")?.value.trim();
   if (!stockId || !shares || !avgCost) return;
   const row = {stock_id:stockId, shares, avg_cost:avgCost, last_action_date:new Date().toISOString().slice(0,10), note:"由持倉監控新增"};
   const idx = localPositions.findIndex(x => String(x.stock_id) === stockId);
@@ -118,12 +196,13 @@ function addPositionManual(){
   renderPositionTable();
 }
 function removePosition(stockId){ localPositions = localPositions.filter(x => String(x.stock_id) !== String(stockId)); saveLocal("current_positions_v2668", localPositions); renderPositionTable(); }
-function addWatchManual(){ const code = document.getElementById("watchCode").value.trim(); if (!code) return; if (!localWatchlist.includes(code)) localWatchlist.push(code); saveLocal("watchlist_v2668", localWatchlist); document.getElementById("watchCode").value=""; renderWatchTable(); }
+function addWatchManual(){ const code = document.getElementById("watchCode")?.value.trim(); if (!code) return; if (!localWatchlist.includes(code)) localWatchlist.push(code); saveLocal("watchlist_v2668", localWatchlist); document.getElementById("watchCode").value=""; renderWatchTable(); }
 function removeWatch(stockId){ localWatchlist = localWatchlist.filter(x => String(x) !== String(stockId)); saveLocal("watchlist_v2668", localWatchlist); renderWatchTable(); }
 
 function renderTradeTable(){
   const tbody=document.querySelector("#trade-table tbody");
-  const selectedTier=document.getElementById("tierFilter").value;
+  if (!tbody) return;
+  const selectedTier=document.getElementById("tierFilter")?.value || "全部";
   let rows=[...tradeRows];
   if(selectedTier!=="全部") rows=rows.filter(r=>String(r.price_tier||"")===selectedTier);
   tbody.innerHTML="";
@@ -140,7 +219,9 @@ function renderTradeTable(){
   tbody.querySelectorAll(".sync-btn").forEach(btn=>btn.addEventListener("click",()=>addTradeToPosition(btn.dataset.stock, btn.dataset.price)));
 }
 function renderPositionTable(){
-  const tbody=document.querySelector("#position-table tbody"); tbody.innerHTML="";
+  const tbody=document.querySelector("#position-table tbody"); 
+  if (!tbody) return;
+  tbody.innerHTML="";
   const merged=[...positionRows];
   localPositions.forEach(p=>{ if(!merged.find(x=>String(x.stock_id)===String(p.stock_id))){ merged.push({ stock_id:p.stock_id, price_tier:"unknown", ref_price:"", shares:p.shares, avg_cost:p.avg_cost, pnl_pct:"", target_weight:"", current_weight_est:"", action:"HOLD", note:"前端新增，待後端同步" }); }});
   if(!merged.length){tbody.innerHTML='<tr><td colspan="11" class="muted">目前沒有持倉監控資料</td></tr>'; return;}
@@ -159,7 +240,9 @@ function renderPositionTable(){
   tbody.querySelectorAll(".remove-btn").forEach(btn=>btn.addEventListener("click",()=>removePosition(btn.dataset.stock)));
 }
 function renderWatchTable(){
-  const tbody=document.querySelector("#watch-table tbody"); tbody.innerHTML="";
+  const tbody=document.querySelector("#watch-table tbody"); 
+  if (!tbody) return;
+  tbody.innerHTML="";
   const merged=[...watchRows];
   localWatchlist.forEach(code=>{ if(!merged.find(x=>String(x.stock_id)===String(code))){ merged.push({ stock_id:code, price_tier:"unknown", ref_price:"", holding_status:"未持有", strategy_bucket:"NONE", action:"WATCH", pnl_pct:"" }); }});
   if(!merged.length){tbody.innerHTML='<tr><td colspan="8" class="muted">目前沒有自選股監控資料</td></tr>'; return;}
@@ -177,12 +260,16 @@ function renderWatchTable(){
   tbody.querySelectorAll(".remove-btn").forEach(btn=>btn.addEventListener("click",()=>removeWatch(btn.dataset.stock)));
 }
 function renderSummaryTable(){
-  const tbody=document.querySelector("#summary-table tbody"); tbody.innerHTML="";
+  const tbody=document.querySelector("#summary-table tbody"); 
+  if (!tbody) return;
+  tbody.innerHTML="";
   if(!summaryRows.length){tbody.innerHTML='<tr><td colspan="3" class="muted">目前沒有績效摘要資料</td></tr>'; return;}
   summaryRows.forEach(r=>{tbody.innerHTML += `<tr><td>${r.return||"0"}</td><td>${r.mdd||"0"}</td><td>${r.sharpe_daily||"0"}</td></tr>`;});
 }
 function renderDebugTable(){
-  const tbody=document.querySelector("#debug-table tbody"); tbody.innerHTML="";
+  const tbody=document.querySelector("#debug-table tbody"); 
+  if (!tbody) return;
+  tbody.innerHTML="";
   if(!debugRows.length){tbody.innerHTML='<tr><td colspan="6" class="muted">目前沒有篩選除錯資料</td></tr>'; return;}
   debugRows.forEach(r=>{tbody.innerHTML += `<tr><td>${r.total_input||"0"}</td><td>${r.valid_after_na||"0"}</td><td>${r.core_primary_count||"0"}</td><td>${r.alpha_primary_count||"0"}</td><td>${r.core_final_count||"0"}</td><td>${r.alpha_final_count||"0"}</td></tr>`;});
 }
@@ -204,7 +291,9 @@ async function init(){
   updateStatus(meta); renderTradeTable(); renderPositionTable(); renderWatchTable(); renderSummaryTable(); renderDebugTable();
 }
 async function refreshAll(){
-  const btn = document.getElementById("refreshBtn"); const original = btn.textContent;
+  const btn = document.getElementById("refreshBtn"); 
+  if (!btn) return;
+  const original = btn.textContent;
   btn.disabled = true; btn.textContent = "⏳ 更新中...";
   try{ await init(); btn.textContent = "✅ 已更新"; }
   catch(err){ console.error(err); btn.textContent = "❌ 失敗"; setBackendState("頁面刷新失敗", "backend-err"); }
@@ -213,6 +302,7 @@ async function refreshAll(){
 
 async function dispatchBackendUpdate(){
   const btn = document.getElementById("updateBtn");
+  if (!btn) return;
   const original = btn.textContent;
   const cfg = promptConfigIfNeeded();
   if (!cfg) return;
@@ -272,7 +362,7 @@ document.addEventListener("DOMContentLoaded", ()=>{
   startLiveClock();
   const refreshBtn = document.getElementById("refreshBtn"); if (refreshBtn) refreshBtn.addEventListener("click", refreshAll);
   const updateBtn = document.getElementById("updateBtn"); if (updateBtn) updateBtn.addEventListener("click", dispatchBackendUpdate);
-  const resetBtn = document.getElementById("resetConfigBtn"); if (resetBtn) resetBtn.addEventListener("click", resetConfig);
+  const resetBtn = document.getElementById("resetConfigBtn"); if (resetBtn) resetBtn.addEventListener("click", resetGithubConfig);
   const tierFilter = document.getElementById("tierFilter"); if (tierFilter) tierFilter.addEventListener("change", renderTradeTable);
   const addPosBtn = document.getElementById("addPositionBtn"); if (addPosBtn) addPosBtn.addEventListener("click", addPositionManual);
   const addWatchBtn = document.getElementById("addWatchBtn"); if (addWatchBtn) addWatchBtn.addEventListener("click", addWatchManual);
