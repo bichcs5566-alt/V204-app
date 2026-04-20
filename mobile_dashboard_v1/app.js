@@ -28,40 +28,24 @@ function getConfig(){
 }
 function saveConfig(cfg){ saveLocal("github_dispatch_config_v2668", cfg); }
 
-/* ===== 這段是重點：按「重設 GitHub 設定」會立刻重新輸入 ===== */
 function resetGithubConfig() {
   localStorage.removeItem("github_dispatch_config_v2668");
   setBackendState("請重新輸入 GitHub 設定", "backend-idle");
 
   const owner = prompt("請輸入 GitHub owner（帳號）", "");
-  if (!owner) {
-    alert("已取消，尚未重新設定。");
-    return;
-  }
+  if (!owner) { alert("已取消，尚未重新設定。"); return; }
 
   const repo = prompt("請輸入 repo 名稱", "");
-  if (!repo) {
-    alert("已取消，尚未重新設定。");
-    return;
-  }
+  if (!repo) { alert("已取消，尚未重新設定。"); return; }
 
   const workflow = prompt("請輸入 workflow 檔名", "v266_8_pipeline.yml");
-  if (!workflow) {
-    alert("已取消，尚未重新設定。");
-    return;
-  }
+  if (!workflow) { alert("已取消，尚未重新設定。"); return; }
 
   const ref = prompt("請輸入 branch", "main");
-  if (!ref) {
-    alert("已取消，尚未重新設定。");
-    return;
-  }
+  if (!ref) { alert("已取消，尚未重新設定。"); return; }
 
   const token = prompt("請輸入 GitHub Token（只存這台裝置）", "");
-  if (!token) {
-    alert("已取消，尚未重新設定。");
-    return;
-  }
+  if (!token) { alert("已取消，尚未重新設定。"); return; }
 
   const newCfg = {
     owner: owner.trim(),
@@ -137,6 +121,19 @@ function setBackendState(text, cls){
   el.textContent = text;
   el.className = cls || "backend-idle";
 }
+function parseDateOnly(s){
+  if (!s) return null;
+  const d = new Date(`${s}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+function toTaipeiNow(){
+  const now = new Date();
+  return new Date(now.toLocaleString("en-US", { timeZone: "Asia/Taipei" }));
+}
+function isWeekend(dateObj){
+  const day = dateObj.getDay();
+  return day === 0 || day === 6;
+}
 function updateStatus(meta){
   const generated = String(meta.generated_at||"").trim();
   const signal = String(meta.signal_date||"").trim();
@@ -152,21 +149,43 @@ function updateStatus(meta){
   const el = document.getElementById("dataState");
   if (!el) return;
 
-  const today = new Date().toLocaleDateString("sv-SE");
-  let stateText = "✅ 最新資料";
-  let stateClass = "state-fresh";
+  let stateText = "⚠️ 缺少資料狀態";
+  let stateClass = "state-old";
 
-  if (!generated || !signal || !trade) {
-    stateText = "⚠️ 缺少資料狀態";
-    stateClass = "state-old";
-  } else if (trade < today) {
-    stateText = "⚠️ 舊資料";
-    stateClass = "state-old";
-  }
   if (meta.data_state === "fail") {
     stateText = "❌ 讀取失敗";
     stateClass = "state-fail";
+  } else if (generated && trade) {
+    const nowTp = toTaipeiNow();
+    const todayStr = nowTp.toLocaleDateString("sv-SE");
+    const hour = nowTp.getHours();
+    const tradeDate = parseDateOnly(trade);
+    const todayDate = parseDateOnly(todayStr);
+    let isFresh = false;
+
+    if (trade === todayStr) {
+      isFresh = true;
+    } else if (tradeDate && todayDate) {
+      const diffDays = Math.round((todayDate - tradeDate) / 86400000);
+
+      if (isWeekend(todayDate)) {
+        isFresh = diffDays >= 1 && diffDays <= 3;
+      } else if (hour < 18) {
+        isFresh = diffDays >= 0 && diffDays <= 3;
+      } else {
+        isFresh = diffDays === 0;
+      }
+    }
+
+    if (isFresh) {
+      stateText = "✅ 最新資料";
+      stateClass = "state-fresh";
+    } else {
+      stateText = "⚠️ 舊資料";
+      stateClass = "state-old";
+    }
   }
+
   el.textContent = stateText;
   el.className = stateClass;
   lastMetaGeneratedAt = generated || lastMetaGeneratedAt;
