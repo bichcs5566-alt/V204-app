@@ -1,14 +1,13 @@
-v266.5.2（完整畫面整合版）
+v266.7 資料一致性修正版
 
-這版重點：
-1. 保留完整畫面，不再簡化
-2. 頂部保留：最後更新、訊號日、交易日、資料狀態、重新整理
-3. 今日操作保留完整欄位與「加入持倉」
-4. 持倉監控保留完整欄位，新增輸入與移除
-5. 自選股監控保留完整欄位，並在同區塊輸入與移除
-6. 價格分層用英文 key，前端轉中文，避免亂碼
+這版只處理三件事：
+1. 舊資料問題：workflow 強制把最新輸出寫回 mobile_dashboard_v1/data/
+2. 價格分層亂碼：後端統一輸出英文 key，前端轉中文
+3. 資料狀態問題：新增 meta.json，UI 顯示真正的最後更新、訊號日、交易日、資料新舊
 
-提醒：
-- 目前仍為前端同步版
-- 新增/移除先存在 localStorage
-- 真正寫回 repo 版會在下一版處理
+安裝方式：
+1. v266_7_consistency_fix.txt 改名為 v266_7_consistency_fix.py
+2. v266_7_consistency_fix.yml.txt 放到 .github/workflows/ 並改名為 v266_7_consistency_fix.yml
+3. 覆蓋 mobile_dashboard_v1/index.html、app.js、styles.css、README_中文說明.txt
+4. 不要覆蓋現有 data 內真實資料
+5. 手動 Run workflow 一次

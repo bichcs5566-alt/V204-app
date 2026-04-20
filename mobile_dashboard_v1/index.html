@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>每日操作介面 v266.5.2</title>
+  <title>每日操作介面 v266.7</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -13,7 +13,6 @@
         <h1>📊 每日操作介面</h1>
         <button id="refreshBtn" type="button">🔄 重新整理</button>
       </div>
-
       <div class="status-grid">
         <div><span class="status-label">最後更新：</span><span id="lastUpdate">--</span></div>
         <div><span class="status-label">訊號日：</span><span id="signalDate">--</span></div>
@@ -21,11 +20,8 @@
         <div><span class="status-label">資料狀態：</span><span id="dataState">讀取中...</span></div>
       </div>
     </div>
-
     <div class="card">
-      <div class="section-header">
-        <h2>💰 價格分層</h2>
-      </div>
+      <div class="section-header"><h2>💰 價格分層</h2></div>
       <select id="tierFilter">
         <option value="全部">全部</option>
         <option value="lt_50">50以下</option>
@@ -37,125 +33,34 @@
         <option value="unknown">未知</option>
       </select>
     </div>
-
     <div class="card">
-      <div class="section-header">
-        <h2>📌 今日操作</h2>
-      </div>
+      <div class="section-header"><h2>📌 今日操作</h2></div>
       <div class="table-wrap">
-        <table id="trade-table">
-          <thead>
-            <tr>
-              <th>動作</th>
-              <th>股票</th>
-              <th>價格分層</th>
-              <th>參考價格</th>
-              <th>目標權重</th>
-              <th>建議金額</th>
-              <th>備註</th>
-              <th>加入持倉</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+        <table id="trade-table"><thead><tr><th>動作</th><th>股票</th><th>價格分層</th><th>參考價格</th><th>目標權重</th><th>建議金額</th><th>備註</th><th>加入持倉</th></tr></thead><tbody></tbody></table>
       </div>
     </div>
-
     <div class="card">
-      <div class="section-header">
-        <h2>📦 持倉監控</h2>
-      </div>
-      <div class="input-row">
-        <input id="posCode" type="text" placeholder="股票代號" />
-        <input id="posShares" type="text" placeholder="股數" />
-        <input id="posCost" type="text" placeholder="成本" />
-        <button id="addPositionBtn" type="button">加入持倉</button>
-      </div>
+      <div class="section-header"><h2>📦 持倉監控</h2></div>
       <div class="table-wrap">
-        <table id="position-table">
-          <thead>
-            <tr>
-              <th>股票</th>
-              <th>價格分層</th>
-              <th>參考價格</th>
-              <th>股數</th>
-              <th>成本</th>
-              <th>損益%</th>
-              <th>目標權重</th>
-              <th>目前權重</th>
-              <th>動作</th>
-              <th>備註</th>
-              <th>移除</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+        <table id="position-table"><thead><tr><th>股票</th><th>價格分層</th><th>參考價格</th><th>股數</th><th>成本</th><th>損益%</th><th>目標權重</th><th>目前權重</th><th>動作</th><th>備註</th></tr></thead><tbody></tbody></table>
       </div>
     </div>
-
     <div class="card">
-      <div class="section-header">
-        <h2>🛰️ 自選股監控</h2>
-        <div class="inline-input">
-          <input id="watchCode" type="text" placeholder="輸入股票代號加入監控" />
-          <button id="addWatchBtn" type="button">加入監控</button>
-        </div>
-      </div>
+      <div class="section-header"><h2>🛰️ 自選股監控</h2></div>
       <div class="table-wrap">
-        <table id="watch-table">
-          <thead>
-            <tr>
-              <th>股票</th>
-              <th>價格分層</th>
-              <th>參考價格</th>
-              <th>持有狀態</th>
-              <th>策略池</th>
-              <th>動作</th>
-              <th>損益%</th>
-              <th>移除</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+        <table id="watch-table"><thead><tr><th>股票</th><th>價格分層</th><th>參考價格</th><th>持有狀態</th><th>策略池</th><th>動作</th><th>損益%</th></tr></thead><tbody></tbody></table>
       </div>
     </div>
-
     <div class="card">
-      <div class="section-header">
-        <h2>📈 績效摘要</h2>
-      </div>
+      <div class="section-header"><h2>📈 績效摘要</h2></div>
       <div class="table-wrap">
-        <table id="summary-table">
-          <thead>
-            <tr>
-              <th>報酬</th>
-              <th>最大回撤</th>
-              <th>Sharpe</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+        <table id="summary-table"><thead><tr><th>報酬</th><th>最大回撤</th><th>Sharpe</th></tr></thead><tbody></tbody></table>
       </div>
     </div>
-
     <div class="card">
-      <div class="section-header">
-        <h2>🧪 篩選除錯</h2>
-      </div>
+      <div class="section-header"><h2>🧪 篩選除錯</h2></div>
       <div class="table-wrap">
-        <table id="debug-table">
-          <thead>
-            <tr>
-              <th>輸入檔數</th>
-              <th>有效檔數</th>
-              <th>Core原始</th>
-              <th>Alpha原始</th>
-              <th>Core最終</th>
-              <th>Alpha最終</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+        <table id="debug-table"><thead><tr><th>輸入檔數</th><th>有效檔數</th><th>Core原始</th><th>Alpha原始</th><th>Core最終</th><th>Alpha最終</th></tr></thead><tbody></tbody></table>
       </div>
     </div>
   </div>
