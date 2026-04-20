@@ -6,18 +6,29 @@ let localPositions=[], localWatchlist=[];
 
 function mapActionLabel(v){const key=String(v||"").trim().toUpperCase(); return ACTION_LABELS[key]||v||"";}
 function actionClass(v){return String(v||"").trim().toLowerCase();}
-function tierLabel(v){return TIER_LABELS[String(v||"").trim()]||v||"";}
+function tierLabel(v){return TIER_LABELS[String(v||"").trim()]||v||"未知";}
 function formatNumber(v){const n=Number(v); if(!Number.isFinite(n)) return v??""; return n.toLocaleString("zh-TW",{maximumFractionDigits:2});}
-function safeText(v){
-  const s = String(v ?? "");
-  if (/Ã|æ|ä|å|ç|é|è|ê|î|ï|ð|þ|œ/.test(s)) return "資料已舊版錯碼，等待新資料覆蓋";
-  return s;
-}
 function saveLocal(name,val){localStorage.setItem(name, JSON.stringify(val));}
 function loadLocal(name, fallback=[]){try{return JSON.parse(localStorage.getItem(name)||JSON.stringify(fallback));}catch{return fallback;}}
+function hasBadEncoding(s){return /Ã|æ|ä|å|ç|é|è|ê|î|ï|ð|þ|œ|�/.test(String(s||""));}
+function safeText(v, fallback=""){
+  const s = String(v ?? "").trim();
+  if (!s) return fallback;
+  if (hasBadEncoding(s)) return "資料已舊版錯碼，等待新資料覆蓋";
+  return s;
+}
+function nonEmpty(v, fallback="目前沒有資料"){const s=String(v??"").trim(); return s ? s : fallback;}
 
-async function fetchJSON(path){const res=await fetch(path+"?t="+Date.now(),{cache:"no-store"}); if(!res.ok) throw new Error(path+" 讀取失敗"); return await res.json();}
-async function fetchText(path){const res=await fetch(path+"?t="+Date.now(),{cache:"no-store"}); if(!res.ok) throw new Error(path+" 讀取失敗"); return await res.text();}
+async function fetchJSON(path){
+  const res=await fetch(path+"?t="+Date.now(),{cache:"no-store"});
+  if(!res.ok) throw new Error(path+" 讀取失敗");
+  return await res.json();
+}
+async function fetchText(path){
+  const res=await fetch(path+"?t="+Date.now(),{cache:"no-store"});
+  if(!res.ok) throw new Error(path+" 讀取失敗");
+  return await res.text();
+}
 function parseCSV(text){
   const rows=[]; let row=[]; let cell=""; let inQuotes=false;
   for(let i=0;i<text.length;i++){
@@ -32,25 +43,42 @@ function parseCSV(text){
   const headers=rows[0].map(h=>String(h).trim());
   return rows.slice(1).map(r=>{const obj={}; headers.forEach((h,idx)=>obj[h]=(r[idx]??'').trim()); return obj;});
 }
-async function loadCSV(file, optional=false){ try{return parseCSV(await fetchText(`${DATA_BASE}/${file}`));} catch(err){ if(optional) return []; throw err; } }
+async function loadCSV(file, optional=false){
+  try{return parseCSV(await fetchText(`${DATA_BASE}/${file}`));}
+  catch(err){ if(optional) return []; throw err; }
+}
 
 function updateStatus(meta){
-  document.getElementById("lastUpdate").textContent = meta.generated_at || "--";
-  document.getElementById("signalDate").textContent = meta.signal_date || "--";
-  document.getElementById("tradeDate").textContent = meta.trade_date || "--";
+  const generated = String(meta.generated_at||"").trim();
+  const signal = String(meta.signal_date||"").trim();
+  const trade = String(meta.trade_date||"").trim();
+
+  document.getElementById("lastUpdate").textContent = generated || "--";
+  document.getElementById("signalDate").textContent = signal || "--";
+  document.getElementById("tradeDate").textContent = trade || "--";
+
   const el = document.getElementById("dataState");
-  const tradeDate = meta.trade_date || "";
   const today = new Date().toLocaleDateString("sv-SE");
   let stateText = "✅ 最新資料";
   let stateClass = "state-fresh";
-  if (tradeDate && tradeDate < today) { stateText = "⚠️ 舊資料"; stateClass = "state-old"; }
-  if (meta.data_state === "fail") { stateText = "❌ 讀取失敗"; stateClass = "state-fail"; }
+
+  if (!generated || !signal || !trade) {
+    stateText = "⚠️ 缺少資料狀態";
+    stateClass = "state-old";
+  } else if (trade < today) {
+    stateText = "⚠️ 舊資料";
+    stateClass = "state-old";
+  }
+  if (meta.data_state === "fail") {
+    stateText = "❌ 讀取失敗";
+    stateClass = "state-fail";
+  }
   el.textContent = stateText;
   el.className = stateClass;
 }
 
 function addTradeToPosition(stockId, refPrice){
-  const shares = prompt(`請輸入 ${stockId} 的持有股數`, "100");
+  const shares = prompt(`請輸入 ${stockId} 的持有股數`, "1000");
   if (shares === null) return;
   const cost = prompt(`請輸入 ${stockId} 的平均成本`, refPrice || "");
   if (cost === null) return;
@@ -63,7 +91,7 @@ function addTradeToPosition(stockId, refPrice){
   };
   const idx = localPositions.findIndex(x => String(x.stock_id) === String(stockId));
   if (idx >= 0) localPositions[idx] = row; else localPositions.push(row);
-  saveLocal("current_positions_v26671", localPositions);
+  saveLocal("current_positions_v26672", localPositions);
   renderPositionTable();
 }
 
@@ -75,31 +103,28 @@ function addPositionManual(){
   const row = {stock_id:stockId, shares, avg_cost:avgCost, last_action_date:new Date().toISOString().slice(0,10), note:"由持倉監控新增"};
   const idx = localPositions.findIndex(x => String(x.stock_id) === stockId);
   if (idx >= 0) localPositions[idx] = row; else localPositions.push(row);
-  saveLocal("current_positions_v26671", localPositions);
+  saveLocal("current_positions_v26672", localPositions);
   document.getElementById("posCode").value="";
   document.getElementById("posShares").value="";
   document.getElementById("posCost").value="";
   renderPositionTable();
 }
-
 function removePosition(stockId){
   localPositions = localPositions.filter(x => String(x.stock_id) !== String(stockId));
-  saveLocal("current_positions_v26671", localPositions);
+  saveLocal("current_positions_v26672", localPositions);
   renderPositionTable();
 }
-
 function addWatchManual(){
   const code = document.getElementById("watchCode").value.trim();
   if (!code) return;
   if (!localWatchlist.includes(code)) localWatchlist.push(code);
-  saveLocal("watchlist_v26671", localWatchlist);
+  saveLocal("watchlist_v26672", localWatchlist);
   document.getElementById("watchCode").value="";
   renderWatchTable();
 }
-
 function removeWatch(stockId){
   localWatchlist = localWatchlist.filter(x => String(x) !== String(stockId));
-  saveLocal("watchlist_v26671", localWatchlist);
+  saveLocal("watchlist_v26672", localWatchlist);
   renderWatchTable();
 }
 
@@ -111,7 +136,8 @@ function renderTradeTable(){
   tbody.innerHTML="";
   if(!rows.length){tbody.innerHTML='<tr><td colspan="8" class="muted">目前沒有符合條件的資料</td></tr>'; return;}
   rows.forEach(r=>{
-    const stockId = r.stock_id || "";
+    const stockId = nonEmpty(r.stock_id, "-");
+    const noteText = safeText(r.note, "目前沒有備註");
     tbody.innerHTML += `<tr>
       <td class="${actionClass(r.action)}">${mapActionLabel(r.action)}</td>
       <td>${stockId}</td>
@@ -119,7 +145,7 @@ function renderTradeTable(){
       <td>${formatNumber(r.ref_price)}</td>
       <td>${r.target_weight||""}</td>
       <td>${formatNumber(r.suggested_amount)}</td>
-      <td>${safeText(r.note)}</td>
+      <td>${noteText}</td>
       <td><button class="sync-btn" data-stock="${stockId}" data-price="${r.ref_price || ''}" type="button">加入持倉</button></td>
     </tr>`;
   });
@@ -144,18 +170,21 @@ function renderPositionTable(){
   });
   if(!merged.length){tbody.innerHTML='<tr><td colspan="11" class="muted">目前沒有持倉監控資料</td></tr>'; return;}
   merged.forEach(r=>{
-    const stockId = r.stock_id || "";
+    const stockId = nonEmpty(r.stock_id, "-");
+    const tier = tierLabel(r.price_tier);
+    const ref = String(r.ref_price??"").trim() === "" || Number(r.ref_price) === 0 ? "等待新資料" : formatNumber(r.ref_price);
+    const noteText = safeText(r.note, "目前沒有備註");
     tbody.innerHTML += `<tr>
       <td>${stockId}</td>
-      <td>${tierLabel(r.price_tier)}</td>
-      <td>${formatNumber(r.ref_price)}</td>
+      <td>${tier}</td>
+      <td>${ref}</td>
       <td>${formatNumber(r.shares)}</td>
       <td>${formatNumber(r.avg_cost)}</td>
-      <td>${r.pnl_pct||""}</td>
-      <td>${r.target_weight||""}</td>
-      <td>${r.current_weight_est||""}</td>
+      <td>${r.pnl_pct || "目前沒有資料"}</td>
+      <td>${r.target_weight || "目前沒有資料"}</td>
+      <td>${r.current_weight_est || "目前沒有資料"}</td>
       <td class="${actionClass(r.action)}">${mapActionLabel(r.action)}</td>
-      <td>${safeText(r.note)}</td>
+      <td>${noteText}</td>
       <td><button class="remove-btn" data-stock="${stockId}" type="button">移除</button></td>
     </tr>`;
   });
@@ -179,15 +208,16 @@ function renderWatchTable(){
   });
   if(!merged.length){tbody.innerHTML='<tr><td colspan="8" class="muted">目前沒有自選股監控資料</td></tr>'; return;}
   merged.forEach(r=>{
-    const stockId = r.stock_id || "";
+    const stockId = nonEmpty(r.stock_id, "-");
+    const ref = String(r.ref_price??"").trim() === "" || Number(r.ref_price) === 0 ? "等待新資料" : formatNumber(r.ref_price);
     tbody.innerHTML += `<tr>
       <td>${stockId}</td>
       <td>${tierLabel(r.price_tier)}</td>
-      <td>${formatNumber(r.ref_price)}</td>
-      <td>${safeText(r.holding_status||"")}</td>
+      <td>${ref}</td>
+      <td>${safeText(r.holding_status, "目前沒有資料")}</td>
       <td>${mapActionLabel(r.strategy_bucket)}</td>
       <td class="${actionClass(r.action)}">${mapActionLabel(r.action)}</td>
-      <td>${r.pnl_pct||""}</td>
+      <td>${r.pnl_pct || "目前沒有資料"}</td>
       <td><button class="remove-btn" data-stock="${stockId}" type="button">移除</button></td>
     </tr>`;
   });
@@ -200,21 +230,22 @@ function renderSummaryTable(){
   const tbody=document.querySelector("#summary-table tbody");
   tbody.innerHTML="";
   if(!summaryRows.length){tbody.innerHTML='<tr><td colspan="3" class="muted">目前沒有績效摘要資料</td></tr>'; return;}
-  summaryRows.forEach(r=>{tbody.innerHTML += `<tr><td>${r.return||""}</td><td>${r.mdd||""}</td><td>${r.sharpe_daily||""}</td></tr>`;});
+  summaryRows.forEach(r=>{
+    tbody.innerHTML += `<tr><td>${r.return||"0"}</td><td>${r.mdd||"0"}</td><td>${r.sharpe_daily||"0"}</td></tr>`;
+  });
 }
-
 function renderDebugTable(){
   const tbody=document.querySelector("#debug-table tbody");
   tbody.innerHTML="";
   if(!debugRows.length){tbody.innerHTML='<tr><td colspan="6" class="muted">目前沒有篩選除錯資料</td></tr>'; return;}
   debugRows.forEach(r=>{
     tbody.innerHTML += `<tr>
-      <td>${r.total_input||""}</td>
-      <td>${r.valid_after_na||""}</td>
-      <td>${r.core_primary_count||""}</td>
-      <td>${r.alpha_primary_count||""}</td>
-      <td>${r.core_final_count||""}</td>
-      <td>${r.alpha_final_count||""}</td>
+      <td>${r.total_input||"0"}</td>
+      <td>${r.valid_after_na||"0"}</td>
+      <td>${r.core_primary_count||"0"}</td>
+      <td>${r.alpha_primary_count||"0"}</td>
+      <td>${r.core_final_count||"0"}</td>
+      <td>${r.alpha_final_count||"0"}</td>
     </tr>`;
   });
 }
@@ -236,9 +267,9 @@ async function init(){
     watchRows = watchMon;
     summaryRows = summary;
     debugRows = debug;
-    const lp = loadLocal("current_positions_v26671", []);
+    const lp = loadLocal("current_positions_v26672", []);
     localPositions = lp.length ? lp : posCsv;
-    const lw = loadLocal("watchlist_v26671", []);
+    const lw = loadLocal("watchlist_v26672", []);
     localWatchlist = lw.length ? lw : watchCsv.map(x => String(x.stock_id || "").trim()).filter(Boolean);
     updateStatus(meta);
     renderTradeTable();

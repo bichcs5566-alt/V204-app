@@ -1,17 +1,28 @@
-v266.7.1（資料一致性＋完整操作整合版）
+v266.7.2 完整覆蓋版（資料修正專用）
 
-這版整合：
-1. v266.7 的資料一致性修正
-2. v266.5.2 的完整操作 UI
+這版修正：
+1. meta.json 強制輸出，解決日期顯示為 --
+2. trade/position/watch/sum/debug 空資料時顯示提示，不再空白
+3. stock_id 全部強制轉字串，避免 merge 對不到造成 價格=0 / 價格分層=未知
+4. price_tier 後端統一輸出英文 key，前端轉中文
+5. 備註 / 狀態欄舊錯碼時顯示中文提示
+6. 今日操作「加入持倉」預設股數改為 1000
+7. 保留完整操作 UI：輸入欄、移除鍵、加入持倉
 
-包含：
-- meta.json 狀態顯示
-- 價格分層英文 key → 前端中文
-- 今日操作加入持倉按鈕可用
-- 持倉監控輸入欄、移除鍵恢復
-- 自選股監控輸入欄、移除鍵恢復
+你要覆蓋的檔案：
+A. repo 根目錄
+- v266_7_2_consistency_fix.py   （由 txt 改名）
 
-提醒：
-- 這版仍是前端操作版，新增/刪除先存在 localStorage
-- v266.7 workflow 與 v266_7_consistency_fix.py 仍然照前一版放置即可
-- 不要覆蓋現有 data 真實 CSV
+B. .github/workflows/
+- v266_7_2_consistency_fix.yml  （由 txt 改名）
+
+C. mobile_dashboard_v1/
+- index.html
+- app.js
+- styles.css
+- README_中文說明.txt
+
+注意：
+1. 不要覆蓋你現有 data 內真實 CSV
+2. 只放入新的 meta.json（若你要也可保留現有，workflow 會重寫）
+3. 上傳後請手動 Run v266.7.2 workflow 一次
