@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT_POS = Path("current_positions.csv")
 DASH_POS = Path("mobile_dashboard_v1/data/current_positions.csv")
+MAIN_PIPELINE = "v266_8_2_complete_fix.yml"
 
 def read_positions(path: Path):
     if not path.exists():
@@ -49,7 +50,7 @@ def main():
             if r["stock_id"] == stock_id:
                 r["shares"] = shares
                 r["avg_cost"] = avg_cost
-                r["note"] = "v266.9-A çåå¯«æ´æ°"
+                r["note"] = "v266.9-D çåå¯«æ´æ°"
                 found = True
                 break
         if not found:
@@ -58,7 +59,7 @@ def main():
                 "shares": shares,
                 "avg_cost": avg_cost,
                 "last_action_date": "",
-                "note": "v266.9-A çåå¯«æ°å¢"
+                "note": "v266.9-D çåå¯«æ°å¢"
             })
     elif action_type == "delete":
         rows = [r for r in rows if r["stock_id"] != stock_id]
@@ -72,18 +73,18 @@ def main():
     subprocess.run(["git","config","user.name","github-actions[bot]"], check=True)
     subprocess.run(["git","config","user.email","41898282+github-actions[bot]@users.noreply.github.com"], check=True)
     subprocess.run(["git","add","current_positions.csv","mobile_dashboard_v1/data/current_positions.csv"], check=True)
-    subprocess.run(["git","diff","--cached","--quiet"], check=False)
-    if subprocess.run(["git","diff","--cached","--quiet"]).returncode != 0:
+
+    diff_result = subprocess.run(["git","diff","--cached","--quiet"])
+    if diff_result.returncode != 0:
         subprocess.run(["git","commit","-m",f"position writeback {action_type} {stock_id}"], check=True)
         subprocess.run(["git","push"], check=True)
 
-    # å¯«åå®æå¾åè§¸ç¼ä¸» pipeline
     token = os.environ.get("GH_TOKEN","").strip()
     repo = os.environ.get("GH_REPO","").strip()
     if token and repo:
         import urllib.request, json
         req = urllib.request.Request(
-            f"https://api.github.com/repos/{repo}/actions/workflows/v266_8_pipeline.yml/dispatches",
+            f"https://api.github.com/repos/{repo}/actions/workflows/{MAIN_PIPELINE}/dispatches",
             data=json.dumps({"ref":"main"}).encode("utf-8"),
             headers={
                 "Accept":"application/vnd.github+json",
@@ -98,3 +99,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
