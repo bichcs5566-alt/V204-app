@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-04-20 02:45:28",
+  "generated_at": "2026-04-20 04:21:06",
   "signal_date": "2026-04-16",
   "trade_date": "2026-04-17",
   "data_state": "fresh",
-  "source": "v266.7_consistency_fix"
+  "source": "v266.7.2_complete_overwrite"
 }
