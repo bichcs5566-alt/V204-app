@@ -31,63 +31,57 @@ function saveConfig(cfg){ saveLocal("github_dispatch_config_v2668", cfg); }
 function resetGithubConfig() {
   localStorage.removeItem("github_dispatch_config_v2668");
   setBackendState("請重新輸入 GitHub 設定", "backend-idle");
-
   const owner = prompt("請輸入 GitHub owner（帳號）", "");
-  if (!owner) { alert("已取消，尚未重新設定。"); return; }
-
+  if (!owner) return;
   const repo = prompt("請輸入 repo 名稱", "");
-  if (!repo) { alert("已取消，尚未重新設定。"); return; }
-
+  if (!repo) return;
   const workflow = prompt("請輸入 workflow 檔名", "v266_8_pipeline.yml");
-  if (!workflow) { alert("已取消，尚未重新設定。"); return; }
-
+  if (!workflow) return;
   const ref = prompt("請輸入 branch", "main");
-  if (!ref) { alert("已取消，尚未重新設定。"); return; }
-
+  if (!ref) return;
   const token = prompt("請輸入 GitHub Token（只存這台裝置）", "");
-  if (!token) { alert("已取消，尚未重新設定。"); return; }
-
-  const newCfg = {
-    owner: owner.trim(),
-    repo: repo.trim(),
-    workflow: workflow.trim(),
-    ref: ref.trim(),
-    token: token.trim()
-  };
-
+  if (!token) return;
+  const newCfg = { owner: owner.trim(), repo: repo.trim(), workflow: workflow.trim(), ref: ref.trim(), token: token.trim() };
   saveConfig(newCfg);
   setBackendState("GitHub 設定已更新", "backend-ok");
-  alert("✅ GitHub 設定完成，現在可以直接按「更新資料與策略」。");
+  alert("✅ GitHub 設定完成");
 }
-
 function promptConfigIfNeeded(){
   const cfg = getConfig();
   if (cfg.owner && cfg.repo && cfg.workflow && cfg.ref && cfg.token) return cfg;
-
   const owner = prompt("請輸入 GitHub owner（帳號）", cfg.owner || "");
   if (owner === null || !owner.trim()) return null;
-
   const repo = prompt("請輸入 repo 名稱", cfg.repo || "");
   if (repo === null || !repo.trim()) return null;
-
   const workflow = prompt("請輸入 workflow 檔名", cfg.workflow || "v266_8_pipeline.yml");
   if (workflow === null || !workflow.trim()) return null;
-
   const ref = prompt("請輸入 branch", cfg.ref || "main");
   if (ref === null || !ref.trim()) return null;
-
   const token = prompt("請輸入 GitHub Token（只存這台裝置）", cfg.token || "");
   if (token === null || !token.trim()) return null;
-
-  const newCfg = {
-    owner: owner.trim(),
-    repo: repo.trim(),
-    workflow: workflow.trim(),
-    ref: ref.trim(),
-    token: token.trim()
-  };
+  const newCfg = { owner: owner.trim(), repo: repo.trim(), workflow: workflow.trim(), ref: ref.trim(), token: token.trim() };
   saveConfig(newCfg);
   return newCfg;
+}
+
+async function githubPost(url, bodyObj){
+  const cfg = promptConfigIfNeeded();
+  if (!cfg) throw new Error("GitHub 設定未完成");
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Accept": "application/vnd.github+json",
+      "Authorization": `Bearer ${cfg.token}`,
+      "X-GitHub-Api-Version": "2022-11-28",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(bodyObj)
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`GitHub API 失敗: ${res.status} ${txt}`);
+  }
+  return true;
 }
 
 async function fetchJSON(path){ const res=await fetch(path+"?t="+Date.now(),{cache:"no-store"}); if(!res.ok) throw new Error(path+" 讀取失敗"); return await res.json(); }
@@ -121,6 +115,12 @@ function setBackendState(text, cls){
   el.textContent = text;
   el.className = cls || "backend-idle";
 }
+function setWritebackState(text, cls){
+  const el = document.getElementById("writebackState");
+  if (!el) return;
+  el.textContent = text;
+  el.className = cls || "backend-idle";
+}
 function parseDateOnly(s){
   if (!s) return null;
   const d = new Date(`${s}T00:00:00`);
@@ -138,23 +138,18 @@ function updateStatus(meta){
   const generated = String(meta.generated_at||"").trim();
   const signal = String(meta.signal_date||"").trim();
   const trade = String(meta.trade_date||"").trim();
-
   const lastEl = document.getElementById("lastUpdate");
   const sigEl = document.getElementById("signalDate");
   const tradeEl = document.getElementById("tradeDate");
   if (lastEl) lastEl.textContent = generated || "--";
   if (sigEl) sigEl.textContent = signal || "--";
   if (tradeEl) tradeEl.textContent = trade || "--";
-
   const el = document.getElementById("dataState");
   if (!el) return;
-
   let stateText = "⚠️ 缺少資料狀態";
   let stateClass = "state-old";
-
   if (meta.data_state === "fail") {
-    stateText = "❌ 讀取失敗";
-    stateClass = "state-fail";
+    stateText = "❌ 讀取失敗"; stateClass = "state-fail";
   } else if (generated && trade) {
     const nowTp = toTaipeiNow();
     const todayStr = nowTp.toLocaleDateString("sv-SE");
@@ -162,59 +157,118 @@ function updateStatus(meta){
     const tradeDate = parseDateOnly(trade);
     const todayDate = parseDateOnly(todayStr);
     let isFresh = false;
-
-    if (trade === todayStr) {
-      isFresh = true;
-    } else if (tradeDate && todayDate) {
+    if (trade === todayStr) isFresh = true;
+    else if (tradeDate && todayDate) {
       const diffDays = Math.round((todayDate - tradeDate) / 86400000);
-
-      if (isWeekend(todayDate)) {
-        isFresh = diffDays >= 1 && diffDays <= 3;
-      } else if (hour < 18) {
-        isFresh = diffDays >= 0 && diffDays <= 3;
-      } else {
-        isFresh = diffDays === 0;
-      }
+      if (isWeekend(todayDate)) isFresh = diffDays >= 1 && diffDays <= 3;
+      else if (hour < 18) isFresh = diffDays >= 0 && diffDays <= 3;
+      else isFresh = diffDays === 0;
     }
-
-    if (isFresh) {
-      stateText = "✅ 最新資料";
-      stateClass = "state-fresh";
-    } else {
-      stateText = "⚠️ 舊資料";
-      stateClass = "state-old";
-    }
+    if (isFresh) { stateText = "✅ 最新資料"; stateClass = "state-fresh"; }
+    else { stateText = "⚠️ 舊資料"; stateClass = "state-old"; }
   }
-
   el.textContent = stateText;
   el.className = stateClass;
   lastMetaGeneratedAt = generated || lastMetaGeneratedAt;
 }
 
-function addTradeToPosition(stockId, refPrice){
-  const shares = prompt(`請輸入 ${stockId} 的持有股數`, "1000");
-  if (shares === null) return;
-  const cost = prompt(`請輸入 ${stockId} 的平均成本`, refPrice || "");
-  if (cost === null) return;
-  const row = { stock_id:String(stockId), shares:String(shares).trim(), avg_cost:String(cost).trim(), last_action_date:new Date().toISOString().slice(0,10), note:"由今日操作加入持倉" };
-  const idx = localPositions.findIndex(x => String(x.stock_id) === String(stockId));
-  if (idx >= 0) localPositions[idx] = row; else localPositions.push(row);
-  saveLocal("current_positions_v2668", localPositions);
-  renderPositionTable();
+async function pollForMetaChange(before, maxLoops=36, waitMs=10000){
+  for (let i=0; i<maxLoops; i++) {
+    await new Promise(r=>setTimeout(r, waitMs));
+    try{
+      const meta = await fetchJSON(`${DATA_BASE}/meta.json`);
+      const generated = String(meta.generated_at||"").trim();
+      if (generated && generated !== before) {
+        await init();
+        return true;
+      }
+    } catch(err) { console.error(err); }
+  }
+  return false;
 }
-function addPositionManual(){
+
+async function dispatchMainPipeline(){
+  const cfg = promptConfigIfNeeded();
+  if (!cfg) throw new Error("GitHub 設定未完成");
+  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/actions/workflows/${cfg.workflow}/dispatches`;
+  await githubPost(url, { ref: cfg.ref });
+}
+
+async function dispatchWriteback(actionType, stockId, shares="", avgCost=""){
+  const cfg = promptConfigIfNeeded();
+  if (!cfg) throw new Error("GitHub 設定未完成");
+  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/actions/workflows/v266_9A_position_writeback.yml/dispatches`;
+  await githubPost(url, {
+    ref: cfg.ref,
+    inputs: {
+      action_type: String(actionType),
+      stock_id: String(stockId),
+      shares: String(shares),
+      avg_cost: String(avgCost)
+    }
+  });
+}
+
+async function addTradeToPosition(stockId, refPrice){
+  const shares = prompt(`請輸入 ${stockId} 的持有股數`, "1000");
+  if (shares === null || !String(shares).trim()) return;
+  const cost = prompt(`請輸入 ${stockId} 的平均成本`, refPrice || "");
+  if (cost === null || !String(cost).trim()) return;
+
+  setWritebackState("送出持倉寫回中", "backend-running");
+  try {
+    const before = lastMetaGeneratedAt;
+    await dispatchWriteback("upsert", stockId, shares, cost);
+    setWritebackState("已寫回，等待策略重算", "backend-running");
+    const ok = await pollForMetaChange(before, 42, 10000);
+    if (ok) setWritebackState("持倉已真寫回", "backend-ok");
+    else setWritebackState("寫回已送出，尚未看到新資料", "backend-running");
+  } catch(err) {
+    console.error(err);
+    setWritebackState("持倉寫回失敗", "backend-err");
+    alert(`持倉真回寫失敗：\n${err.message}`);
+  }
+}
+
+async function addPositionManual(){
   const stockId = document.getElementById("posCode")?.value.trim();
   const shares = document.getElementById("posShares")?.value.trim();
   const avgCost = document.getElementById("posCost")?.value.trim();
   if (!stockId || !shares || !avgCost) return;
-  const row = {stock_id:stockId, shares, avg_cost:avgCost, last_action_date:new Date().toISOString().slice(0,10), note:"由持倉監控新增"};
-  const idx = localPositions.findIndex(x => String(x.stock_id) === stockId);
-  if (idx >= 0) localPositions[idx] = row; else localPositions.push(row);
-  saveLocal("current_positions_v2668", localPositions);
-  document.getElementById("posCode").value=""; document.getElementById("posShares").value=""; document.getElementById("posCost").value="";
-  renderPositionTable();
+
+  setWritebackState("送出持倉寫回中", "backend-running");
+  try {
+    const before = lastMetaGeneratedAt;
+    await dispatchWriteback("upsert", stockId, shares, avgCost);
+    document.getElementById("posCode").value=""; document.getElementById("posShares").value=""; document.getElementById("posCost").value="";
+    setWritebackState("已寫回，等待策略重算", "backend-running");
+    const ok = await pollForMetaChange(before, 42, 10000);
+    if (ok) setWritebackState("持倉已真寫回", "backend-ok");
+    else setWritebackState("寫回已送出，尚未看到新資料", "backend-running");
+  } catch(err) {
+    console.error(err);
+    setWritebackState("持倉寫回失敗", "backend-err");
+    alert(`持倉真回寫失敗：\n${err.message}`);
+  }
 }
-function removePosition(stockId){ localPositions = localPositions.filter(x => String(x.stock_id) !== String(stockId)); saveLocal("current_positions_v2668", localPositions); renderPositionTable(); }
+
+async function removePosition(stockId){
+  if (!confirm(`確定要移除持倉 ${stockId} 嗎？`)) return;
+  setWritebackState("送出持倉刪除中", "backend-running");
+  try {
+    const before = lastMetaGeneratedAt;
+    await dispatchWriteback("delete", stockId, "", "");
+    setWritebackState("已刪除，等待策略重算", "backend-running");
+    const ok = await pollForMetaChange(before, 42, 10000);
+    if (ok) setWritebackState("持倉已真移除", "backend-ok");
+    else setWritebackState("刪除已送出，尚未看到新資料", "backend-running");
+  } catch(err) {
+    console.error(err);
+    setWritebackState("持倉刪除失敗", "backend-err");
+    alert(`持倉刪除失敗：\n${err.message}`);
+  }
+}
+
 function addWatchManual(){ const code = document.getElementById("watchCode")?.value.trim(); if (!code) return; if (!localWatchlist.includes(code)) localWatchlist.push(code); saveLocal("watchlist_v2668", localWatchlist); document.getElementById("watchCode").value=""; renderWatchTable(); }
 function removeWatch(stockId){ localWatchlist = localWatchlist.filter(x => String(x) !== String(stockId)); saveLocal("watchlist_v2668", localWatchlist); renderWatchTable(); }
 
@@ -242,7 +296,6 @@ function renderPositionTable(){
   if (!tbody) return;
   tbody.innerHTML="";
   const merged=[...positionRows];
-  localPositions.forEach(p=>{ if(!merged.find(x=>String(x.stock_id)===String(p.stock_id))){ merged.push({ stock_id:p.stock_id, price_tier:"unknown", ref_price:"", shares:p.shares, avg_cost:p.avg_cost, pnl_pct:"", target_weight:"", current_weight_est:"", action:"HOLD", note:"前端新增，待後端同步" }); }});
   if(!merged.length){tbody.innerHTML='<tr><td colspan="11" class="muted">目前沒有持倉監控資料</td></tr>'; return;}
   merged.forEach(r=>{
     const stockId = nonEmpty(r.stock_id, "-");
@@ -294,19 +347,15 @@ function renderDebugTable(){
 }
 
 async function init(){
-  const [meta, trade, posMon, watchMon, summary, debug, posCsv, watchCsv] = await Promise.all([
+  const [meta, trade, posMon, watchMon, summary, debug] = await Promise.all([
     fetchJSON(`${DATA_BASE}/meta.json`),
     loadCSV("trade_plan.csv"),
     loadCSV("position_monitor.csv", true),
     loadCSV("watchlist_monitor.csv", true),
     loadCSV("full_summary.csv", true),
-    loadCSV("selection_debug.csv", true),
-    loadCSV("current_positions.csv", true),
-    loadCSV("watchlist.csv", true),
+    loadCSV("selection_debug.csv", true)
   ]);
   tradeRows = trade; positionRows = posMon; watchRows = watchMon; summaryRows = summary; debugRows = debug;
-  const lp = loadLocal("current_positions_v2668", []); localPositions = lp.length ? lp : posCsv;
-  const lw = loadLocal("watchlist_v2668", []); localWatchlist = lw.length ? lw : watchCsv.map(x => String(x.stock_id || "").trim()).filter(Boolean);
   updateStatus(meta); renderTradeTable(); renderPositionTable(); renderWatchTable(); renderSummaryTable(); renderDebugTable();
 }
 async function refreshAll(){
@@ -318,63 +367,29 @@ async function refreshAll(){
   catch(err){ console.error(err); btn.textContent = "❌ 失敗"; setBackendState("頁面刷新失敗", "backend-err"); }
   finally{ setTimeout(()=>{ btn.textContent = original; btn.disabled = false; }, 1200); }
 }
-
 async function dispatchBackendUpdate(){
   const btn = document.getElementById("updateBtn");
   if (!btn) return;
   const original = btn.textContent;
-  const cfg = promptConfigIfNeeded();
-  if (!cfg) return;
-
-  btn.disabled = true;
-  btn.textContent = "🚀 送出中...";
-  setBackendState("送出後端更新中", "backend-running");
-
   try{
-    const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/actions/workflows/${cfg.workflow}/dispatches`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Accept": "application/vnd.github+json",
-        "Authorization": `Bearer ${cfg.token}`,
-        "X-GitHub-Api-Version": "2022-11-28",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ ref: cfg.ref })
-    });
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(`dispatch 失敗: ${res.status} ${txt}`);
-    }
+    btn.disabled = true;
+    btn.textContent = "🚀 送出中...";
+    setBackendState("送出後端更新中", "backend-running");
+    const before = lastMetaGeneratedAt;
+    await dispatchMainPipeline();
     btn.textContent = "⏳ 後端執行中...";
     setBackendState("已送出，等待資料更新", "backend-running");
+    const ok = await pollForMetaChange(before, 42, 10000);
+    if (ok) { btn.textContent = "✅ 後端已更新"; setBackendState("資料與策略已更新", "backend-ok"); }
+    else { btn.textContent = "⚠️ 尚未完成"; setBackendState("已送出，但尚未看到新資料", "backend-running"); }
   } catch (err) {
     console.error(err);
     btn.textContent = "❌ 送出失敗";
     setBackendState("後端送出失敗", "backend-err");
     alert(`GitHub 送出失敗：\n${err.message}`);
+  } finally {
     setTimeout(()=>{ btn.textContent = original; btn.disabled = false; }, 1800);
-    return;
   }
-
-  let success = false;
-  const before = lastMetaGeneratedAt;
-  for (let i=0; i<36; i++) {
-    await new Promise(r=>setTimeout(r, 10000));
-    try{
-      const meta = await fetchJSON(`${DATA_BASE}/meta.json`);
-      const generated = String(meta.generated_at||"").trim();
-      if (generated && generated !== before) {
-        await init();
-        success = true;
-        break;
-      }
-    }catch(err){ console.error(err); }
-  }
-
-  if (success) { btn.textContent = "✅ 後端已更新"; setBackendState("資料與策略已更新", "backend-ok"); }
-  else { btn.textContent = "⚠️ 尚未完成"; setBackendState("已送出，但尚未看到新資料", "backend-running"); }
-  setTimeout(()=>{ btn.textContent = original; btn.disabled = false; }, 1800);
 }
 
 document.addEventListener("DOMContentLoaded", ()=>{
@@ -386,5 +401,6 @@ document.addEventListener("DOMContentLoaded", ()=>{
   const addPosBtn = document.getElementById("addPositionBtn"); if (addPosBtn) addPosBtn.addEventListener("click", addPositionManual);
   const addWatchBtn = document.getElementById("addWatchBtn"); if (addWatchBtn) addWatchBtn.addEventListener("click", addWatchManual);
   setBackendState("待命", "backend-idle");
+  setWritebackState("待命", "backend-idle");
   refreshAll();
 });
