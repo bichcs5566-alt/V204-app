@@ -171,7 +171,7 @@ function renderPositionTable(){
   if(!merged.length){tbody.innerHTML='<tr><td colspan="11" class="muted">目前沒有持倉監控資料</td></tr>'; return;}
   merged.forEach(r=>{
     const stockId = nonEmpty(r.stock_id, "-");
-    const tier = tierLabel(r.price_tier);
+    const tier = (String(r.ref_price??"").trim() === "" || Number(r.ref_price) === 0) ? "等待新資料" : tierLabel(r.price_tier);
     const ref = String(r.ref_price??"").trim() === "" || Number(r.ref_price) === 0 ? "等待新資料" : formatNumber(r.ref_price);
     const noteText = safeText(r.note, "目前沒有備註");
     tbody.innerHTML += `<tr>
@@ -209,10 +209,12 @@ function renderWatchTable(){
   if(!merged.length){tbody.innerHTML='<tr><td colspan="8" class="muted">目前沒有自選股監控資料</td></tr>'; return;}
   merged.forEach(r=>{
     const stockId = nonEmpty(r.stock_id, "-");
-    const ref = String(r.ref_price??"").trim() === "" || Number(r.ref_price) === 0 ? "等待新資料" : formatNumber(r.ref_price);
+    const waiting = String(r.ref_price??"").trim() === "" || Number(r.ref_price) === 0;
+    const ref = waiting ? "等待新資料" : formatNumber(r.ref_price);
+    const tier = waiting ? "等待新資料" : tierLabel(r.price_tier);
     tbody.innerHTML += `<tr>
       <td>${stockId}</td>
-      <td>${tierLabel(r.price_tier)}</td>
+      <td>${tier}</td>
       <td>${ref}</td>
       <td>${safeText(r.holding_status, "目前沒有資料")}</td>
       <td>${mapActionLabel(r.strategy_bucket)}</td>
@@ -283,8 +285,23 @@ async function init(){
   }
 }
 
+async function refreshAll(){
+  const btn = document.getElementById("refreshBtn");
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "⏳ 更新中...";
+  try{
+    await init();
+    btn.textContent = "✅ 已更新";
+    setTimeout(()=>{ btn.textContent = original; btn.disabled = false; }, 1200);
+  }catch(err){
+    btn.textContent = "❌ 失敗";
+    setTimeout(()=>{ btn.textContent = original; btn.disabled = false; }, 1200);
+  }
+}
+
 document.addEventListener("DOMContentLoaded", ()=>{
-  document.getElementById("refreshBtn").addEventListener("click", init);
+  document.getElementById("refreshBtn").addEventListener("click", refreshAll);
   document.getElementById("tierFilter").addEventListener("change", renderTradeTable);
   document.getElementById("addPositionBtn").addEventListener("click", addPositionManual);
   document.getElementById("addWatchBtn").addEventListener("click", addWatchManual);
