@@ -1,524 +1,492 @@
-/* v266.11
- * 目標：
- * 1. 今日操作批次時間明顯顯示
- * 2. signal_date / trade_date / data_state 依 meta 真值顯示
- * 3. 持倉 / 自選寫回後輪詢新批次，自動刷新
- * 4. 今日操作 / 持倉 / 自選表格永不因缺欄位整段壞掉
- */
-const DATA_BASE = "./data";
-const FIXED_OWNER = "bichcs5566-alt";
-const FIXED_REPO = "V204-app";
-const FIXED_MAIN_WORKFLOW = "v266_11_pipeline.yml";
-const FIXED_POSITION_WORKFLOW = "v266_11_position_writeback.yml";
-const FIXED_WATCHLIST_WORKFLOW = "v266_11_watchlist_writeback.yml";
-const FIXED_REF = "main";
+const DATA_DIR = './data';
 
-const TIER_LABELS = {
-  lt_50:"50以下", p50_100:"50-100", p100_300:"100-300",
-  p300_500:"300-500", p500_1000:"500-1000", gt_1000:"1000以上", unknown:"未知"
-};
-const ACTION_LABELS = {
-  BUY:"買進", SELL:"賣出", HOLD:"續抱", REDUCE:"減碼", ADD:"加碼",
-  STOP_LOSS:"停損", WATCH:"觀察", CANDIDATE:"候選", BUY_READY:"可買",
-  HOLD_MONITOR:"持有監控", NONE:"未進策略", IGNORE:"忽略"
+const state = {
+  meta: {},
+  tradePlan: [],
+  positionMonitor: [],
+  watchlistMonitor: [],
+  fullSummary: [],
+  localPositions: [],
+  localWatchlist: [],
+  uiBusy: false,
 };
 
-let metaState = {};
-let tradeRows = [];
-let pricePanelRows = [];
-let currentPositionsRows = [];
-let watchSourceRows = [];
-let positionMergedRows = [];
-let watchMergedRows = [];
-let summaryRows = [];
-let debugRows = [];
-let lastMetaSignature = "";
+const STORAGE_KEYS = {
+  positions: 'v1_stable_local_positions',
+  watchlist: 'v1_stable_local_watchlist',
+};
 
-function saveLocal(name, val){ localStorage.setItem(name, JSON.stringify(val)); }
-function loadLocal(name, fallback){ try{ return JSON.parse(localStorage.getItem(name) || JSON.stringify(fallback)); }catch{return fallback;} }
-
-function getConfig(){
-  const local = loadLocal("github_dispatch_config_v26611", {});
-  return { token: local.token || "" };
-}
-function saveConfig(cfg){ saveLocal("github_dispatch_config_v26611", cfg); }
-function resetGithubConfig(){
-  localStorage.removeItem("github_dispatch_config_v26611");
-  const token = prompt("請輸入 GitHub Token（只存這台裝置）", "");
-  if(!token || !token.trim()) return;
-  saveConfig({ token: token.trim() });
-  setBackendState("GitHub 設定已更新", "backend-ok");
-  alert("✅ GitHub 設定完成");
-}
-function promptConfigIfNeeded(){
-  const cfg = getConfig();
-  if(cfg.token) return cfg;
-  const token = prompt("請輸入 GitHub Token（只存這台裝置）", "");
-  if(token === null || !token.trim()) return null;
-  const x = { token: token.trim() };
-  saveConfig(x);
-  return x;
-}
-async function githubPost(url, bodyObj){
-  const cfg = promptConfigIfNeeded();
-  if(!cfg) throw new Error("GitHub Token 未完成設定");
-  const res = await fetch(url, {
-    method:"POST",
-    headers:{
-      "Accept":"application/vnd.github+json",
-      "Authorization":`Bearer ${cfg.token}`,
-      "X-GitHub-Api-Version":"2022-11-28",
-      "Content-Type":"application/json"
-    },
-    body:JSON.stringify(bodyObj)
-  });
-  if(!res.ok){
-    throw new Error(`GitHub API 失敗: ${res.status} ${await res.text()}`);
-  }
-}
-async function dispatchWorkflowByFile(workflowFile, inputs=null){
-  const body = { ref: FIXED_REF };
-  if(inputs) body.inputs = inputs;
-  await githubPost(`https://api.github.com/repos/${FIXED_OWNER}/${FIXED_REPO}/actions/workflows/${workflowFile}/dispatches`, body);
-}
-async function dispatchMainPipeline(){ await dispatchWorkflowByFile(FIXED_MAIN_WORKFLOW); }
-async function dispatchPositionWriteback(actionType, stockId, shares="", avgCost=""){
-  await dispatchWorkflowByFile(FIXED_POSITION_WORKFLOW, {
-    action_type:String(actionType),
-    stock_id:String(stockId),
-    shares:String(shares),
-    avg_cost:String(avgCost)
-  });
-}
-async function dispatchWatchlistWriteback(actionType, stockId){
-  await dispatchWorkflowByFile(FIXED_WATCHLIST_WORKFLOW, {
-    action_type:String(actionType),
-    stock_id:String(stockId)
-  });
+function byId(id) {
+  return document.getElementById(id);
 }
 
-function mapActionLabel(v){
-  const k = String(v || "").trim().toUpperCase();
-  return ACTION_LABELS[k] || String(v || "").trim() || "";
+function setText(id, value) {
+  const el = byId(id);
+  if (el) el.textContent = value;
 }
-function actionClass(v){ return String(v || "").trim().toLowerCase(); }
-function tierLabel(v){ return TIER_LABELS[String(v || "").trim()] || String(v || "").trim() || "未知"; }
-function fmt(v){
+
+function toNum(v) {
+  if (v === null || v === undefined || v === '') return null;
   const n = Number(v);
-  if(!Number.isFinite(n)) return String(v ?? "");
-  return n.toLocaleString("zh-TW", { maximumFractionDigits: 3 });
+  return Number.isFinite(n) ? n : null;
 }
-function safeText(v, fallback=""){
-  const s = String(v ?? "").trim();
-  if(!s) return fallback;
-  if(/Ã|æ|ä|å|ç|é|è|ê|î|ï|ð|þ|œ|�/.test(s)) return "資料已舊版錯碼，等待新資料覆蓋";
-  return s;
+
+function fmtNum(v, digits = 3) {
+  const n = toNum(v);
+  if (n === null) return '—';
+  return n.toLocaleString('zh-TW', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: digits,
+  });
 }
-function toTaipeiNow(){
-  const now = new Date();
-  return new Date(now.toLocaleString("en-US", { timeZone: "Asia/Taipei" }));
+
+function fmtPct(v) {
+  const n = toNum(v);
+  if (n === null) return '目前沒有資料';
+  return `${(n * 100).toFixed(2)}%`;
 }
-function formatBatchDisplay(ts){
-  if(!ts) return "--";
-  const d = new Date(String(ts).replace(" ", "T"));
-  if(Number.isNaN(d.getTime())) return String(ts);
-  return d.toLocaleString("zh-TW", { hour12:false });
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
-function isSameTaipeiDate(ts){
-  if(!ts) return false;
-  const d = new Date(String(ts).replace(" ", "T"));
-  if(Number.isNaN(d.getTime())) return false;
-  return d.toDateString() === toTaipeiNow().toDateString();
-}
-function setText(id, text){
-  const el = document.getElementById(id);
-  if(el) el.textContent = text;
-}
-function setBackendState(text, cls){
-  const el = document.getElementById("backendState");
-  if(!el) return;
-  el.textContent = text;
-  el.className = cls || "backend-idle";
-}
-function setWritebackState(text, cls){
-  const el = document.getElementById("writebackState");
-  if(!el) return;
-  el.textContent = text;
-  el.className = cls || "backend-idle";
-}
-function metaSignature(meta){
-  return [
-    meta.generated_at || "",
-    meta.trade_plan_batch || "",
-    meta.signal_date || "",
-    meta.trade_date || "",
-    meta.data_state || ""
-  ].join("|");
-}
-async function fetchJSON(path){
-  const res = await fetch(`${path}?t=${Date.now()}`, { cache:"no-store" });
-  if(!res.ok) throw new Error(`${path} 讀取失敗`);
-  return await res.json();
-}
-async function fetchText(path){
-  const res = await fetch(`${path}?t=${Date.now()}`, { cache:"no-store" });
-  if(!res.ok) throw new Error(`${path} 讀取失敗`);
-  return await res.text();
-}
-function parseCSV(text){
-  const rows = []; let row = []; let cell = ""; let inQuotes = false;
-  for(let i=0;i<text.length;i++){
-    const ch = text[i], next = text[i+1];
-    if(ch === '"'){
-      if(inQuotes && next === '"'){ cell += '"'; i++; }
-      else inQuotes = !inQuotes;
-    } else if(ch === ',' && !inQuotes){
-      row.push(cell); cell = "";
-    } else if((ch === '\n' || ch === '\r') && !inQuotes){
-      if(ch === '\r' && next === '\n') i++;
-      row.push(cell);
-      if(row.some(v => String(v).trim() !== "")) rows.push(row);
-      row = []; cell = "";
+
+function parseCsvLine(line) {
+  const out = [];
+  let cur = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      out.push(cur);
+      cur = '';
     } else {
-      cell += ch;
+      cur += ch;
     }
   }
-  if(cell.length > 0 || row.length > 0){
-    row.push(cell);
-    if(row.some(v => String(v).trim() !== "")) rows.push(row);
-  }
-  if(!rows.length) return [];
+  out.push(cur);
+  return out;
+}
+
+function parseCsv(text) {
+  const raw = text.replace(/\r/g, '').split('\n').filter(line => line.trim() !== '');
+  if (!raw.length) return [];
+  const rows = raw.map(parseCsvLine);
   const headers = rows[0].map(h => String(h).trim());
-  return rows.slice(1).map(r => {
+  return rows.slice(1).map(cols => {
     const obj = {};
-    headers.forEach((h, idx) => obj[h] = String(r[idx] ?? "").trim());
+    headers.forEach((h, i) => {
+      obj[h] = String(cols[i] ?? '').trim();
+    });
     return obj;
   });
 }
-async function loadCSV(file, optional=false){
-  try { return parseCSV(await fetchText(`${DATA_BASE}/${file}`)); }
-  catch(err){ if(optional) return []; throw err; }
+
+async function fetchCsv(name) {
+  const res = await fetch(`${DATA_DIR}/${name}?t=${Date.now()}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`${name} 讀取失敗`);
+  const text = await res.text();
+  return parseCsv(text);
 }
-function latestPriceFor(stockId){
-  let best = "";
-  for(const r of pricePanelRows){
-    const sid = String(r.stock_id || r.code || "").trim();
-    if(sid !== String(stockId)) continue;
-    best = r.close || r.adj_close || r["收盤價"] || best;
+
+async function fetchJson(name) {
+  const res = await fetch(`${DATA_DIR}/${name}?t=${Date.now()}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`${name} 讀取失敗`);
+  return await res.json();
+}
+
+function loadLocalArray(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
   }
-  return best;
 }
-function updateStatus(meta){
-  metaState = meta || {};
-  lastMetaSignature = metaSignature(metaState);
 
-  setText("lastUpdate", meta.generated_at || "--");
-  setText("signalDate", meta.signal_date || "--");
-  setText("tradeDate", meta.trade_date || "--");
-  setText("planBatch", meta.trade_plan_batch ? formatBatchDisplay(meta.trade_plan_batch) : "--");
+function saveLocalArray(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
 
-  const planEl = document.getElementById("planStatus");
-  if(planEl){
-    if(meta.trade_plan_batch){
-      if(isSameTaipeiDate(meta.trade_plan_batch)){
-        planEl.textContent = `📌 今日操作：🟢 已更新（${formatBatchDisplay(meta.trade_plan_batch)}）`;
-        planEl.className = "state-fresh";
-      } else {
-        planEl.textContent = `📌 今日操作：⚠️ 尚未更新（${formatBatchDisplay(meta.trade_plan_batch)}）`;
-        planEl.className = "state-old";
-      }
-    } else {
-      planEl.textContent = "📌 今日操作：⚠️ 缺少批次時間";
-      planEl.className = "state-old";
+function syncLocalState() {
+  state.localPositions = loadLocalArray(STORAGE_KEYS.positions);
+  state.localWatchlist = loadLocalArray(STORAGE_KEYS.watchlist);
+}
+
+function setMiniStatus(text, kind = 'normal') {
+  const el = byId('ui_status');
+  if (!el) return;
+  el.textContent = text;
+  el.className = `mini-status ${kind}`;
+}
+
+function setBusy(isBusy, label = '') {
+  state.uiBusy = isBusy;
+  const refreshBtn = byId('refresh_btn');
+  if (refreshBtn) {
+    refreshBtn.disabled = isBusy;
+    refreshBtn.textContent = isBusy ? (label || '⏳ 後端執行中...') : '🔄 重新整理頁面';
+  }
+}
+
+function metaReady(meta) {
+  return ['ok', 'fresh'].includes(String(meta?.data_state || '').toLowerCase());
+}
+
+function renderMeta() {
+  const meta = state.meta || {};
+  setText('now_time', meta.now_time || new Date().toLocaleString('zh-TW'));
+  setText('last_update', meta.generated_at || '—');
+  setText('signal_date', meta.signal_date || '—');
+  setText('trade_date', meta.trade_date || '—');
+
+  const ds = String(meta.data_state || '').toLowerCase();
+  let dsText = '讀取中...';
+  let dsKind = 'loading';
+
+  if (ds === 'ok' || ds === 'fresh') {
+    dsText = '✅ 最新資料';
+    dsKind = 'ok';
+  } else if (ds === 'stale') {
+    dsText = '⚠️ 主資料未完整刷新';
+    dsKind = 'warn';
+  } else if (ds === 'loading') {
+    dsText = '⏳ 讀取中';
+    dsKind = 'loading';
+  } else if (ds) {
+    dsText = ds;
+    dsKind = 'warn';
+  }
+
+  setText('data_state', dsText);
+
+  const batch = meta.trade_plan_batch || meta.generated_at || '';
+  setText('trade_plan_batch', batch ? `🟢 已更新（${batch}）` : '—');
+
+  if (metaReady(meta)) {
+    setMiniStatus('頁面資料已同步', 'ok');
+    setBusy(false);
+  } else if (ds === 'stale') {
+    setMiniStatus('主資料尚未完整刷新，但頁面可正常操作', 'warn');
+    setBusy(false);
+  } else {
+    setMiniStatus('資料讀取中，但不鎖定頁面', 'loading');
+    setBusy(false);
+  }
+}
+
+function getMergedPositions() {
+  const map = new Map();
+
+  for (const row of state.positionMonitor || []) {
+    const id = String(row.stock_id || '').trim();
+    if (!id) continue;
+    map.set(id, {
+      stock_id: id,
+      price_tier: row.price_tier || '等待新資料',
+      ref_price: row.ref_price || '等待新資料',
+      shares: row.shares || '',
+      avg_cost: row.avg_cost || '',
+      pnl_pct: row.pnl_pct || '',
+      target_weight: row.target_weight || '',
+      current_weight_est: row.current_weight_est || '',
+      action: row.action || 'HOLD',
+      note: row.note || '',
+      source: 'server',
+    });
+  }
+
+  for (const row of state.localPositions || []) {
+    const id = String(row.stock_id || '').trim();
+    if (!id) continue;
+    const old = map.get(id) || {};
+    map.set(id, {
+      stock_id: id,
+      price_tier: old.price_tier || '等待新資料',
+      ref_price: old.ref_price || '等待新資料',
+      shares: row.shares || old.shares || '1000',
+      avg_cost: row.avg_cost || old.avg_cost || '',
+      pnl_pct: old.pnl_pct || '',
+      target_weight: old.target_weight || '',
+      current_weight_est: old.current_weight_est || '',
+      action: old.action || 'LOCAL',
+      note: row.note || old.note || '本地持倉',
+      source: 'local',
+    });
+  }
+
+  return Array.from(map.values()).sort((a, b) => a.stock_id.localeCompare(b.stock_id));
+}
+
+function getMergedWatchlist() {
+  const map = new Map();
+
+  for (const row of state.watchlistMonitor || []) {
+    const id = String(row.stock_id || '').trim();
+    if (!id) continue;
+    map.set(id, {
+      stock_id: id,
+      price_tier: row.price_tier || '等待新資料',
+      ref_price: row.ref_price || '等待新資料',
+      holding_status: row.holding_status || '未持有',
+      strategy_bucket: row.strategy_bucket || '未進策略',
+      action: row.action || '觀察',
+      pnl_pct: row.pnl_pct || '',
+      source: 'server',
+    });
+  }
+
+  for (const row of state.localWatchlist || []) {
+    const id = String(row.stock_id || '').trim();
+    if (!id) continue;
+    const old = map.get(id) || {};
+    map.set(id, {
+      stock_id: id,
+      price_tier: old.price_tier || '等待新資料',
+      ref_price: old.ref_price || '等待新資料',
+      holding_status: old.holding_status || '未持有',
+      strategy_bucket: old.strategy_bucket || '未進策略',
+      action: old.action || '觀察',
+      pnl_pct: old.pnl_pct || '',
+      source: 'local',
+    });
+  }
+
+  return Array.from(map.values()).sort((a, b) => a.stock_id.localeCompare(b.stock_id));
+}
+
+function renderTradePlan() {
+  const tbody = byId('trade_plan_tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const rows = Array.isArray(state.tradePlan) ? state.tradePlan : [];
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="7">目前沒有資料</td></tr>`;
+    return;
+  }
+
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${escapeHtml(r.action || '—')}</td>
+      <td>${escapeHtml(r.stock_id || '—')}</td>
+      <td>${escapeHtml(r.price_tier || '—')}</td>
+      <td>${escapeHtml(fmtNum(r.ref_price, 3))}</td>
+      <td>${escapeHtml(fmtNum(r.target_weight, 3))}</td>
+      <td>${escapeHtml(fmtNum(r.suggested_amount, 0))}</td>
+      <td>${escapeHtml(r.note || '')}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderPositions() {
+  const tbody = byId('positions_tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const rows = getMergedPositions();
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="7">目前沒有持倉</td></tr>`;
+    return;
+  }
+
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${escapeHtml(r.stock_id)}</td>
+      <td>${escapeHtml(r.price_tier || '等待新資料')}</td>
+      <td>${escapeHtml(r.ref_price || '等待新資料')}</td>
+      <td>${escapeHtml(fmtNum(r.shares, 0))}</td>
+      <td>${escapeHtml(fmtNum(r.avg_cost, 3))}</td>
+      <td>${escapeHtml(r.pnl_pct === '' ? '目前沒有資料' : fmtPct(r.pnl_pct))}</td>
+      <td><button class="danger-btn" data-remove-position="${escapeHtml(r.stock_id)}">移除</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('[data-remove-position]').forEach(btn => {
+    btn.addEventListener('click', () => removePosition(btn.dataset.removePosition));
+  });
+}
+
+function renderWatchlist() {
+  const tbody = byId('watchlist_tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const rows = getMergedWatchlist();
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="8">目前沒有自選股</td></tr>`;
+    return;
+  }
+
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${escapeHtml(r.stock_id)}</td>
+      <td>${escapeHtml(r.price_tier || '等待新資料')}</td>
+      <td>${escapeHtml(r.ref_price || '等待新資料')}</td>
+      <td>${escapeHtml(r.holding_status || '未持有')}</td>
+      <td>${escapeHtml(r.strategy_bucket || '未進策略')}</td>
+      <td>${escapeHtml(r.action || '觀察')}</td>
+      <td>${escapeHtml(r.pnl_pct === '' ? '目前沒有資料' : fmtPct(r.pnl_pct))}</td>
+      <td><button class="danger-btn" data-remove-watch="${escapeHtml(r.stock_id)}">移除</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('[data-remove-watch]').forEach(btn => {
+    btn.addEventListener('click', () => removeWatch(btn.dataset.removeWatch));
+  });
+}
+
+function renderSummary() {
+  const box = byId('summary_box');
+  if (!box) return;
+  const s = Array.isArray(state.fullSummary) && state.fullSummary.length ? state.fullSummary[0] : {};
+  box.innerHTML = `
+    <div class="summary-item"><strong>報酬</strong><span>${escapeHtml(fmtPct(s.return || 0))}</span></div>
+    <div class="summary-item"><strong>MDD</strong><span>${escapeHtml(fmtPct(s.mdd || 0))}</span></div>
+    <div class="summary-item"><strong>Sharpe</strong><span>${escapeHtml(fmtNum(s.sharpe_daily || 0, 3))}</span></div>
+  `;
+}
+
+function addPosition() {
+  const stock = byId('pos_stock')?.value.trim();
+  const shares = byId('pos_shares')?.value.trim();
+  const cost = byId('pos_cost')?.value.trim();
+
+  if (!stock) {
+    setMiniStatus('請輸入股票代號', 'warn');
+    return;
+  }
+
+  const rows = loadLocalArray(STORAGE_KEYS.positions).filter(r => String(r.stock_id) !== stock);
+  rows.push({
+    stock_id: stock,
+    shares: shares || '1000',
+    avg_cost: cost || '',
+    note: '本地持倉',
+  });
+  saveLocalArray(STORAGE_KEYS.positions, rows);
+  syncLocalState();
+  renderPositions();
+
+  byId('pos_stock').value = '';
+  byId('pos_shares').value = '';
+  byId('pos_cost').value = '';
+
+  setMiniStatus(`已加入持倉 ${stock}`, 'ok');
+}
+
+function removePosition(stock) {
+  if (!window.confirm(`確定要移除持倉 ${stock} 嗎？`)) return;
+  const rows = loadLocalArray(STORAGE_KEYS.positions).filter(r => String(r.stock_id) !== stock);
+  saveLocalArray(STORAGE_KEYS.positions, rows);
+  syncLocalState();
+  renderPositions();
+  setMiniStatus(`已移除持倉 ${stock}`, 'ok');
+}
+
+function addWatch() {
+  const stock = byId('watch_stock')?.value.trim();
+  if (!stock) {
+    setMiniStatus('請輸入自選股代號', 'warn');
+    return;
+  }
+
+  const rows = loadLocalArray(STORAGE_KEYS.watchlist);
+  if (!rows.some(r => String(r.stock_id) === stock)) {
+    rows.push({ stock_id: stock });
+  }
+  saveLocalArray(STORAGE_KEYS.watchlist, rows);
+  syncLocalState();
+  renderWatchlist();
+
+  byId('watch_stock').value = '';
+  setMiniStatus(`已加入自選股 ${stock}`, 'ok');
+}
+
+function removeWatch(stock) {
+  if (!window.confirm(`確定要移除自選股 ${stock} 嗎？`)) return;
+  const rows = loadLocalArray(STORAGE_KEYS.watchlist).filter(r => String(r.stock_id) !== stock);
+  saveLocalArray(STORAGE_KEYS.watchlist, rows);
+  syncLocalState();
+  renderWatchlist();
+  setMiniStatus(`已移除自選股 ${stock}`, 'ok');
+}
+
+async function refreshAll() {
+  setBusy(true, '⏳ 讀取資料中...');
+  setMiniStatus('讀取中...', 'loading');
+
+  try {
+    syncLocalState();
+
+    const [meta, tradePlan, positionMonitor, watchlistMonitor, fullSummary] = await Promise.all([
+      fetchJson('meta.json'),
+      fetchCsv('trade_plan.csv'),
+      fetchCsv('position_monitor.csv'),
+      fetchCsv('watchlist_monitor.csv'),
+      fetchCsv('full_summary.csv'),
+    ]);
+
+    state.meta = meta || {};
+    state.tradePlan = tradePlan || [];
+    state.positionMonitor = positionMonitor || [];
+    state.watchlistMonitor = watchlistMonitor || [];
+    state.fullSummary = fullSummary || [];
+
+    renderMeta();
+    renderTradePlan();
+    renderPositions();
+    renderWatchlist();
+    renderSummary();
+  } catch (err) {
+    console.error(err);
+    setMiniStatus(`讀取失敗：${err.message}`, 'error');
+    setBusy(false);
+    renderTradePlan();
+    renderPositions();
+    renderWatchlist();
+    renderSummary();
+  } finally {
+    if (!metaReady(state.meta)) {
+      setBusy(false);
     }
   }
+}
 
-  const dataEl = document.getElementById("dataState");
-  if(dataEl){
-    if(meta.data_state === "ok"){ dataEl.textContent = "✅ 最新資料"; dataEl.className = "state-fresh"; }
-    else if(meta.data_state === "stale"){ dataEl.textContent = "⚠️ 主資料未完整刷新"; dataEl.className = "state-old"; }
-    else if(meta.data_state === "fail"){ dataEl.textContent = "❌ 讀取失敗"; dataEl.className = "state-fail"; }
-    else { dataEl.textContent = "⚠️ 讀取中"; dataEl.className = "state-old"; }
-  }
+function bindEvents() {
+  const refreshBtn = byId('refresh_btn');
+  const posAddBtn = byId('pos_add_btn');
+  const watchAddBtn = byId('watch_add_btn');
+
+  if (refreshBtn) refreshBtn.addEventListener('click', refreshAll);
+  if (posAddBtn) posAddBtn.addEventListener('click', addPosition);
+  if (watchAddBtn) watchAddBtn.addEventListener('click', addWatch);
 }
-async function pollForMetaChange(beforeSignature, loops=120, waitMs=3000){
-  for(let i=0;i<loops;i++){
-    await new Promise(r => setTimeout(r, waitMs));
-    try{
-      const meta = await fetchJSON(`${DATA_BASE}/meta.json`);
-      const sig = metaSignature(meta);
-      if(sig && sig !== beforeSignature){
-        await init();
-        return true;
-      }
-    }catch(err){
-      console.error(err);
-    }
-  }
-  return false;
-}
-async function dispatchBackendUpdate(){
-  const btn = document.getElementById("updateBtn");
-  const original = btn?.textContent || "🚀 更新資料與策略";
-  try{
-    if(btn){ btn.disabled = true; btn.textContent = "🚀 送出中..."; }
-    setBackendState(`已送出，等待資料更新（${FIXED_REPO}/${FIXED_MAIN_WORKFLOW}）`, "backend-running");
-    const before = lastMetaSignature;
-    await dispatchMainPipeline();
-    const ok = await pollForMetaChange(before);
-    if(ok){
-      setBackendState("資料與策略已更新", "backend-ok");
-      if(btn) btn.textContent = "✅ 後端已更新";
-    } else {
-      setBackendState("已送出，但尚未看到新批次", "backend-running");
-      if(btn) btn.textContent = "⚠️ 尚未完成";
-    }
-  }catch(err){
-    console.error(err);
-    setBackendState("後端送出失敗", "backend-err");
-    alert(`GitHub 送出失敗：\n${err.message}`);
-    if(btn) btn.textContent = "❌ 送出失敗";
-  }finally{
-    if(btn) setTimeout(()=>{ btn.textContent = original; btn.disabled = false; }, 1800);
-  }
-}
-async function addTradeToPosition(stockId, refPrice){
-  const shares = prompt(`請輸入 ${stockId} 的持有股數`, "1000");
-  if(shares === null || !String(shares).trim()) return;
-  const cost = prompt(`請輸入 ${stockId} 的平均成本`, refPrice || "");
-  if(cost === null || !String(cost).trim()) return;
-  try{
-    setWritebackState("已送出，等待資料同步與策略重算", "backend-running");
-    const before = lastMetaSignature;
-    await dispatchPositionWriteback("upsert", stockId, shares, cost);
-    const ok = await pollForMetaChange(before);
-    if(ok) setWritebackState("持倉已真寫回", "backend-ok");
-    else setWritebackState("已送出，但尚未看到新批次", "backend-running");
-  }catch(err){
-    console.error(err);
-    setWritebackState("持倉寫回失敗", "backend-err");
-    alert(`持倉真回寫失敗：\n${err.message}`);
-  }
-}
-async function removePosition(stockId){
-  if(!confirm(`確定要移除持倉 ${stockId} 嗎？`)) return;
-  try{
-    setWritebackState("已送出，等待資料同步與策略重算", "backend-running");
-    const before = lastMetaSignature;
-    await dispatchPositionWriteback("delete", stockId, "", "");
-    const ok = await pollForMetaChange(before);
-    if(ok) setWritebackState("持倉已真移除", "backend-ok");
-    else setWritebackState("已送出，但尚未看到新批次", "backend-running");
-  }catch(err){
-    console.error(err);
-    setWritebackState("持倉刪除失敗", "backend-err");
-    alert(`持倉刪除失敗：\n${err.message}`);
-  }
-}
-async function addPositionManual(){
-  const stockId = document.getElementById("posCode")?.value.trim();
-  const shares = document.getElementById("posShares")?.value.trim();
-  const avgCost = document.getElementById("posCost")?.value.trim();
-  if(!stockId || !shares || !avgCost) return;
-  await addTradeToPosition(stockId, avgCost);
-}
-async function addWatchManual(){
-  const code = document.getElementById("watchCode")?.value.trim();
-  if(!code) return;
-  try{
-    setWritebackState("已送出自選股，等待資料同步與策略重算", "backend-running");
-    const before = lastMetaSignature;
-    await dispatchWatchlistWriteback("upsert", code);
-    document.getElementById("watchCode").value = "";
-    const ok = await pollForMetaChange(before);
-    if(ok) setWritebackState("自選股已真寫回", "backend-ok");
-    else setWritebackState("已送出，但尚未看到新批次", "backend-running");
-  }catch(err){
-    console.error(err);
-    setWritebackState("自選股寫回失敗", "backend-err");
-    alert(`自選股真回寫失敗：\n${err.message}`);
-  }
-}
-async function removeWatch(stockId){
-  if(!confirm(`確定要移除自選股 ${stockId} 嗎？`)) return;
-  try{
-    setWritebackState("已送出自選股刪除，等待資料同步與策略重算", "backend-running");
-    const before = lastMetaSignature;
-    await dispatchWatchlistWriteback("delete", stockId);
-    const ok = await pollForMetaChange(before);
-    if(ok) setWritebackState("自選股已真移除", "backend-ok");
-    else setWritebackState("已送出，但尚未看到新批次", "backend-running");
-  }catch(err){
-    console.error(err);
-    setWritebackState("自選股刪除失敗", "backend-err");
-    alert(`自選股刪除失敗：\n${err.message}`);
-  }
-}
-function renderTradeTable(){
-  const tbody = document.querySelector("#trade-table tbody");
-  if(!tbody) return;
-  tbody.innerHTML = "";
-  const tier = document.getElementById("tierFilter")?.value || "全部";
-  let rows = [...tradeRows];
-  if(tier !== "全部") rows = rows.filter(r => String(r.price_tier || "") === tier);
-  if(!rows.length){
-    tbody.innerHTML = '<tr><td colspan="8" class="muted">目前沒有可執行名單</td></tr>';
-    return;
-  }
-  for(const r of rows){
-    const sid = String(r.stock_id || "").trim() || "-";
-    tbody.innerHTML += `
-      <tr>
-        <td class="${actionClass(r.action)}">${mapActionLabel(r.action)}</td>
-        <td>${sid}</td>
-        <td>${tierLabel(r.price_tier)}</td>
-        <td>${fmt(r.ref_price)}</td>
-        <td>${r.target_weight || ""}</td>
-        <td>${fmt(r.suggested_amount)}</td>
-        <td>${safeText(r.note, "目前沒有備註")}</td>
-        <td><button class="sync-btn" data-stock="${sid}" data-price="${r.ref_price || ''}" type="button">加入持倉</button></td>
-      </tr>`;
-  }
-  tbody.querySelectorAll(".sync-btn").forEach(btn => btn.addEventListener("click", ()=>addTradeToPosition(btn.dataset.stock, btn.dataset.price)));
-}
-function renderPositionTable(){
-  const tbody = document.querySelector("#position-table tbody");
-  if(!tbody) return;
-  tbody.innerHTML = "";
-  if(!currentPositionsRows.length){
-    tbody.innerHTML = '<tr><td colspan="11" class="muted">尚未建立持倉</td></tr>';
-    return;
-  }
-  const mergedMap = new Map(positionMergedRows.map(r => [String(r.stock_id), r]));
-  for(const row of currentPositionsRows){
-    const sid = String(row.stock_id || "").trim();
-    const m = mergedMap.get(sid) || {};
-    const ref = m.ref_price || latestPriceFor(sid) || "";
-    const tier = m.price_tier || (ref ? (()=>{const n=Number(ref); if(n<50)return"lt_50"; if(n<100)return"p50_100"; if(n<300)return"p100_300"; if(n<500)return"p300_500"; if(n<1000)return"p500_1000"; return"gt_1000";})() : "unknown");
-    const waiting = !ref;
-    tbody.innerHTML += `
-      <tr>
-        <td>${sid}</td>
-        <td>${waiting ? "等待新資料" : tierLabel(tier)}</td>
-        <td>${waiting ? "等待新資料" : fmt(ref)}</td>
-        <td>${fmt(row.shares)}</td>
-        <td>${fmt(row.avg_cost)}</td>
-        <td>${m.pnl_pct || "目前沒有資料"}</td>
-        <td>${m.target_weight || "目前沒有資料"}</td>
-        <td>${m.current_weight_est || "目前沒有資料"}</td>
-        <td class="${actionClass(m.action || "HOLD")}">${mapActionLabel(m.action || "HOLD")}</td>
-        <td>${safeText(m.note || row.note, "目前沒有備註")}</td>
-        <td><button class="remove-btn" data-stock="${sid}" type="button">移除</button></td>
-      </tr>`;
-  }
-  tbody.querySelectorAll(".remove-btn").forEach(btn => btn.addEventListener("click", ()=>removePosition(btn.dataset.stock)));
-}
-function renderWatchTable(){
-  const tbody = document.querySelector("#watch-table tbody");
-  if(!tbody) return;
-  tbody.innerHTML = "";
-  if(!watchSourceRows.length){
-    tbody.innerHTML = '<tr><td colspan="8" class="muted">尚未加入自選股</td></tr>';
-    return;
-  }
-  const mergedMap = new Map(watchMergedRows.map(r => [String(r.stock_id), r]));
-  for(const row of watchSourceRows){
-    const sid = String(row.stock_id || "").trim();
-    const m = mergedMap.get(sid) || {};
-    const ref = m.ref_price || latestPriceFor(sid) || "";
-    const tier = m.price_tier || (ref ? (()=>{const n=Number(ref); if(n<50)return"lt_50"; if(n<100)return"p50_100"; if(n<300)return"p100_300"; if(n<500)return"p300_500"; if(n<1000)return"p500_1000"; return"gt_1000";})() : "unknown");
-    const waiting = !ref;
-    tbody.innerHTML += `
-      <tr>
-        <td>${sid}</td>
-        <td>${waiting ? "等待新資料" : tierLabel(tier)}</td>
-        <td>${waiting ? "等待新資料" : fmt(ref)}</td>
-        <td>${m.holding_status || "目前沒有資料"}</td>
-        <td>${mapActionLabel(m.strategy_bucket || "NONE")}</td>
-        <td class="${actionClass(m.action || "WATCH")}">${mapActionLabel(m.action || "WATCH")}</td>
-        <td>${m.pnl_pct || "目前沒有資料"}</td>
-        <td><button class="remove-btn" data-stock="${sid}" type="button">移除</button></td>
-      </tr>`;
-  }
-  tbody.querySelectorAll(".remove-btn").forEach(btn => btn.addEventListener("click", ()=>removeWatch(btn.dataset.stock)));
-}
-function renderSummaryTable(){
-  const tbody = document.querySelector("#summary-table tbody");
-  if(!tbody) return;
-  tbody.innerHTML = "";
-  if(!summaryRows.length){
-    tbody.innerHTML = '<tr><td colspan="3" class="muted">目前沒有績效摘要資料</td></tr>';
-    return;
-  }
-  for(const r of summaryRows){
-    tbody.innerHTML += `<tr><td>${r.return || "0"}</td><td>${r.mdd || "0"}</td><td>${r.sharpe_daily || "0"}</td></tr>`;
-  }
-}
-function renderDebugTable(){
-  const tbody = document.querySelector("#debug-table tbody");
-  if(!tbody) return;
-  tbody.innerHTML = "";
-  if(!debugRows.length){
-    tbody.innerHTML = '<tr><td colspan="6" class="muted">目前沒有篩選除錯資料</td></tr>';
-    return;
-  }
-  for(const r of debugRows){
-    tbody.innerHTML += `<tr><td>${r.total_input || "0"}</td><td>${r.valid_after_na || "0"}</td><td>${r.core_primary_count || "0"}</td><td>${r.alpha_primary_count || "0"}</td><td>${r.core_final_count || "0"}</td><td>${r.alpha_final_count || "0"}</td></tr>`;
-  }
-}
-async function init(){
-  const [meta, trade, pricePanel, posMerged, watchMerged, summary, debug, currentPos, watchSource] = await Promise.all([
-    fetchJSON(`${DATA_BASE}/meta.json`),
-    loadCSV("trade_plan.csv", true),
-    loadCSV("price_panel_daily.csv", true),
-    loadCSV("position_monitor_merged.csv", true),
-    loadCSV("watchlist_monitor_merged.csv", true),
-    loadCSV("full_summary.csv", true),
-    loadCSV("selection_debug.csv", true),
-    loadCSV("current_positions.csv", true),
-    loadCSV("watchlist.csv", true)
-  ]);
-  tradeRows = trade;
-  pricePanelRows = pricePanel;
-  positionMergedRows = posMerged;
-  watchMergedRows = watchMerged;
-  summaryRows = summary;
-  debugRows = debug;
-  currentPositionsRows = currentPos;
-  watchSourceRows = watchSource;
-  updateStatus(meta);
-  renderTradeTable();
-  renderPositionTable();
-  renderWatchTable();
-  renderSummaryTable();
-  renderDebugTable();
-}
-async function refreshAll(){
-  const btn = document.getElementById("refreshBtn");
-  const original = btn?.textContent || "🔄 重新整理頁面";
-  try{
-    if(btn){ btn.disabled = true; btn.textContent = "⏳ 更新中..."; }
-    await init();
-    if(btn) btn.textContent = "✅ 已更新";
-  }catch(err){
-    console.error(err);
-    if(btn) btn.textContent = "❌ 失敗";
-    setBackendState("頁面刷新失敗", "backend-err");
-  }finally{
-    if(btn) setTimeout(()=>{ btn.textContent = original; btn.disabled = false; }, 1200);
-  }
-}
-document.addEventListener("DOMContentLoaded", ()=>{
-  const clock = document.getElementById("liveClock");
-  const tick = ()=>{ if(clock) clock.textContent = toTaipeiNow().toLocaleString("zh-TW",{hour12:false}); };
-  tick(); setInterval(tick, 1000);
-  document.getElementById("refreshBtn")?.addEventListener("click", refreshAll);
-  document.getElementById("updateBtn")?.addEventListener("click", dispatchBackendUpdate);
-  document.getElementById("resetConfigBtn")?.addEventListener("click", resetGithubConfig);
-  document.getElementById("tierFilter")?.addEventListener("change", renderTradeTable);
-  document.getElementById("addPositionBtn")?.addEventListener("click", addPositionManual);
-  document.getElementById("addWatchBtn")?.addEventListener("click", addWatchManual);
-  setBackendState("待命", "backend-idle");
-  setWritebackState("待命", "backend-idle");
+
+document.addEventListener('DOMContentLoaded', () => {
+  syncLocalState();
+  bindEvents();
+  renderPositions();
+  renderWatchlist();
+  renderSummary();
   refreshAll();
 });
+
