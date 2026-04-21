@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>每日操作介面 v1 穩定版</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="wrap">
+    <section class="card">
+      <h1>📊 每日操作介面</h1>
+      <div class="actions"><button id="refresh_btn">🔄 重新整理頁面</button></div>
+      <div id="ui_status" class="mini-status normal">待命</div>
+      <div class="meta-grid">
+        <div><strong>現在時間：</strong><span id="now_time">—</span></div>
+        <div><strong>最後更新：</strong><span id="last_update">—</span></div>
+        <div><strong>訊號日：</strong><span id="signal_date">—</span></div>
+        <div><strong>交易日：</strong><span id="trade_date">—</span></div>
+        <div><strong>資料狀態：</strong><span id="data_state">—</span></div>
+        <div><strong>今日操作：</strong><span id="trade_plan_batch">—</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>📌 今日操作</h2>
+      <table>
+        <thead><tr><th>動作</th><th>股票</th><th>價格分層</th><th>參考價格</th><th>目標權重</th><th>建議金額</th><th>備註</th></tr></thead>
+        <tbody id="trade_plan_tbody"></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>📦 持倉監控</h2>
+      <div class="form">
+        <input id="pos_stock" placeholder="股票代號" />
+        <input id="pos_shares" placeholder="股數" />
+        <input id="pos_cost" placeholder="成本" />
+        <button id="pos_add_btn">加入持倉</button>
+      </div>
+      <table>
+        <thead><tr><th>股票</th><th>價格分層</th><th>參考價格</th><th>股數</th><th>成本</th><th>損益%</th><th>移除</th></tr></thead>
+        <tbody id="positions_tbody"></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>📡 自選股監控</h2>
+      <div class="form">
+        <input id="watch_stock" placeholder="輸入股票代號加入監控" />
+        <button id="watch_add_btn">加入監控</button>
+      </div>
+      <table>
+        <thead><tr><th>股票</th><th>價格分層</th><th>參考價格</th><th>持有狀態</th><th>策略池</th><th>動作</th><th>損益%</th><th>移除</th></tr></thead>
+        <tbody id="watchlist_tbody"></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>📈 績效摘要</h2>
+      <div id="summary_box" class="summary-box"></div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
