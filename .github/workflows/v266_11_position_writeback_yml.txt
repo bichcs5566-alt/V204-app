@@ -1,0 +1,49 @@
+name: v266-11-position-writeback
+
+on:
+  workflow_dispatch:
+    inputs:
+      action_type:
+        description: "upsert or delete"
+        required: true
+        type: string
+      stock_id:
+        description: "stock id"
+        required: true
+        type: string
+      shares:
+        description: "shares"
+        required: false
+        type: string
+      avg_cost:
+        description: "avg cost"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  run_writeback:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: v266-11-position
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run position writeback
+        env:
+          ACTION_TYPE: ${{ github.event.inputs.action_type }}
+          STOCK_ID: ${{ github.event.inputs.stock_id }}
+          SHARES: ${{ github.event.inputs.shares }}
+          AVG_COST: ${{ github.event.inputs.avg_cost }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: bichcs5566-alt/V204-app
+        run: |
+          python v266_11_position_writeback.py
