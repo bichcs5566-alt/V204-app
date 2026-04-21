@@ -8,61 +8,55 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 🔹 1. 拉 repo
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # 🔹 2. Python 環境
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # 🔹 3. 安裝套件
       - name: Install dependencies
         run: |
           pip install pandas numpy requests
 
-      # 🔹 4. 跑你的原本策略（這裡維持你既有）
       - name: Run v266 base strategy
         run: |
-          python run_v266_pipeline.py
+          python v266_4_auto_pipeline.py
 
-      # 🔹 5. 確認主資料（🔥這是這版最重要）
       - name: Verify price panel exists
         run: |
           echo "=== 檢查主資料 ==="
           ls -lah
           if [ ! -f price_panel_daily.csv ]; then
-            echo "❌ 缺少 price_panel_daily.csv → pipeline 視為失敗"
+            echo "⚠️ price_panel_daily.csv 尚未存在"
+            echo "=== 嘗試列出可能相關檔案 ==="
+            find . -maxdepth 2 \( -name "*price*" -o -name "*panel*" \) | sort || true
             exit 1
+          else
+            echo "✅ 已存在 price_panel_daily.csv"
           fi
 
-      # 🔹 6. 建立 dashboard data 資料夾
       - name: Prepare dashboard data folder
         run: |
           mkdir -p mobile_dashboard_v1/data
 
-      # 🔹 7. 複製主資料進 dashboard（🔥關鍵修正）
       - name: Copy price panel to dashboard
         run: |
-          cp price_panel_daily.csv mobile_dashboard_v1/data/price_panel_daily.csv
-          echo "✅ 已複製 price_panel_daily.csv → dashboard"
+          cp -f price_panel_daily.csv mobile_dashboard_v1/data/price_panel_daily.csv
+          echo "✅ 已複製 price_panel_daily.csv -> mobile_dashboard_v1/data/price_panel_daily.csv"
 
-      # 🔹 8. 檢查輸出（debug）
       - name: Show output files
         run: |
           echo "=== ROOT ==="
           ls -lah
           echo "=== DASHBOARD DATA ==="
-          ls -lah mobile_dashboard_v1/data
+          ls -lah mobile_dashboard_v1/data || true
 
-      # 🔹 9. commit 回 repo
       - name: Commit outputs
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-
           git add .
-          git commit -m "update: pipeline outputs (v266.11.1 fix)" || echo "No changes"
+          git commit -m "update: pipeline outputs (v266.8.2 fixed)" || echo "No changes"
           git push
