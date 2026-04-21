@@ -1,7 +1,7 @@
 window.GITHUB_CONFIG = {
   owner: "bichcs5566-alt",
   repo: "V204-app",
-  token: "請改成你的 GitHub PAT",
+  token: "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",
   branch: "main",
   workflows: {
     positionWriteback: "v2_position_writeback.yml",
