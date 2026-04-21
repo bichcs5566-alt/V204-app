@@ -1,3 +1,2 @@
 ﻿signal_date,trade_date,stock_id,price_tier,ref_price,shares,avg_cost,pnl_pct,target_weight,current_weight_est,action,note
 2026-04-17,2026-04-20,2426,p50_100,54.4544,1000,54.4544,-0.001,0.03,0.0544,REDUCE,é«æ¼ç®æ¨æ¬é
-2026-04-17,2026-04-20,8046,p500_1000,724.724,1000,724.724,-0.001,0.03,0.724,REDUCE,é«æ¼ç®æ¨æ¬é
