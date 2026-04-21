@@ -16,6 +16,32 @@ const STORAGE_KEYS = {
   watchlist: 'v1_stable_local_watchlist',
 };
 
+const VALUE_MAP = {
+  BUY: '買進',
+  SELL: '賣出',
+  ADD: '加碼',
+  REDUCE: '減碼',
+  HOLD: '持有',
+  HOLD_MONITOR: '持有監控',
+  WATCH: '觀察',
+  BUY_READY: '可買候選',
+  CANDIDATE: '候選',
+  STOP_LOSS: '停損',
+  NONE: '未進策略',
+  LOCAL: '本地資料',
+  ok: '✅ 最新資料',
+  fresh: '✅ 最新資料',
+  stale: '⚠️ 主資料未完整刷新',
+  loading: '⏳ 讀取中',
+  lt_50: '50以下',
+  p50_100: '50-100',
+  p100_300: '100-300',
+  p300_500: '300-500',
+  p500_1000: '500-1000',
+  gt_1000: '1000以上',
+  unknown: '等待新資料',
+};
+
 function byId(id) {
   return document.getElementById(id);
 }
@@ -55,6 +81,58 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
+function tryDecodeMojibake(text) {
+  if (text === null || text === undefined) return '';
+  const s = String(text);
+  if (!/[ÃÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõöøùúûüýþÿ]/.test(s)) {
+    return s;
+  }
+  try {
+    return decodeURIComponent(escape(s));
+  } catch {
+    return s;
+  }
+}
+
+function normalizeValue(value) {
+  let s = tryDecodeMojibake(value).trim();
+
+  if (VALUE_MAP[s] !== undefined) return VALUE_MAP[s];
+
+  if (s === '未持有' || s === '已持有' || s === '目前沒有資料' || s === '等待新資料') return s;
+
+  s = s
+    .replaceAll('æªææ', '未持有')
+    .replaceAll('å·²ææ', '已持有')
+    .replaceAll('è²·é²', '買進')
+    .replaceAll('è³£åº', '賣出')
+    .replaceAll('è§å¯', '觀察')
+    .replaceAll('æ¸ç¢¼', '減碼')
+    .replaceAll('å ç¢¼', '加碼')
+    .replaceAll('ææ', '持有')
+    .replaceAll('æªé²ç­ç¥', '未進策略')
+    .replaceAll('ç­å¾æ°è³æ', '等待新資料');
+
+  if (VALUE_MAP[s] !== undefined) return VALUE_MAP[s];
+  return s;
+}
+
+function displayTier(value) {
+  return normalizeValue(value || 'unknown');
+}
+
+function displayAction(value) {
+  return normalizeValue(value || '');
+}
+
+function displayBucket(value) {
+  return normalizeValue(value || '');
+}
+
+function displayHolding(value) {
+  return normalizeValue(value || '');
+}
+
 function parseCsvLine(line) {
   const out = [];
   let cur = '';
@@ -87,7 +165,7 @@ function parseCsv(text) {
   return rows.slice(1).map(cols => {
     const obj = {};
     headers.forEach((h, i) => {
-      obj[h] = String(cols[i] ?? '').trim();
+      obj[h] = tryDecodeMojibake(String(cols[i] ?? '').trim());
     });
     return obj;
   });
@@ -103,7 +181,12 @@ async function fetchCsv(name) {
 async function fetchJson(name) {
   const res = await fetch(`${DATA_DIR}/${name}?t=${Date.now()}`, { cache: 'no-store' });
   if (!res.ok) throw new Error(`${name} 讀取失敗`);
-  return await res.json();
+  const data = await res.json();
+  const fixed = {};
+  Object.keys(data || {}).forEach(k => {
+    fixed[k] = typeof data[k] === 'string' ? tryDecodeMojibake(data[k]) : data[k];
+  });
+  return fixed;
 }
 
 function loadLocalArray(key) {
@@ -136,7 +219,7 @@ function setBusy(isBusy, label = '') {
   const refreshBtn = byId('refresh_btn');
   if (refreshBtn) {
     refreshBtn.disabled = isBusy;
-    refreshBtn.textContent = isBusy ? (label || '⏳ 後端執行中...') : '🔄 重新整理頁面';
+    refreshBtn.textContent = isBusy ? (label || '⏳ 讀取資料中...') : '🔄 重新整理頁面';
   }
 }
 
@@ -150,21 +233,7 @@ function renderMeta() {
   setText('last_update', meta.generated_at || '—');
   setText('signal_date', meta.signal_date || '—');
   setText('trade_date', meta.trade_date || '—');
-
-  const ds = String(meta.data_state || '').toLowerCase();
-  let dsText = '讀取中...';
-
-  if (ds === 'ok' || ds === 'fresh') {
-    dsText = '✅ 最新資料';
-  } else if (ds === 'stale') {
-    dsText = '⚠️ 主資料未完整刷新';
-  } else if (ds === 'loading') {
-    dsText = '⏳ 讀取中';
-  } else if (ds) {
-    dsText = ds;
-  }
-
-  setText('data_state', dsText);
+  setText('data_state', normalizeValue(String(meta.data_state || 'loading')));
 
   const batch = meta.trade_plan_batch || meta.generated_at || '';
   setText('trade_plan_batch', batch ? `🟢 已更新（${batch}）` : '—');
@@ -172,7 +241,7 @@ function renderMeta() {
   if (metaReady(meta)) {
     setMiniStatus('頁面資料已同步', 'ok');
     setBusy(false);
-  } else if (ds === 'stale') {
+  } else if (String(meta.data_state || '').toLowerCase() === 'stale') {
     setMiniStatus('主資料尚未完整刷新，但頁面可正常操作', 'warn');
     setBusy(false);
   } else {
@@ -189,8 +258,8 @@ function getMergedPositions() {
     if (!id) continue;
     map.set(id, {
       stock_id: id,
-      price_tier: row.price_tier || '等待新資料',
-      ref_price: row.ref_price || '等待新資料',
+      price_tier: row.price_tier || 'unknown',
+      ref_price: row.ref_price || '',
       shares: row.shares || '',
       avg_cost: row.avg_cost || '',
       pnl_pct: row.pnl_pct || '',
@@ -205,8 +274,8 @@ function getMergedPositions() {
     const old = map.get(id) || {};
     map.set(id, {
       stock_id: id,
-      price_tier: old.price_tier || '等待新資料',
-      ref_price: old.ref_price || '等待新資料',
+      price_tier: old.price_tier || 'unknown',
+      ref_price: old.ref_price || '',
       shares: row.shares || old.shares || '1000',
       avg_cost: row.avg_cost || old.avg_cost || '',
       pnl_pct: old.pnl_pct || '',
@@ -226,11 +295,11 @@ function getMergedWatchlist() {
     if (!id) continue;
     map.set(id, {
       stock_id: id,
-      price_tier: row.price_tier || '等待新資料',
-      ref_price: row.ref_price || '等待新資料',
+      price_tier: row.price_tier || 'unknown',
+      ref_price: row.ref_price || '',
       holding_status: row.holding_status || '未持有',
-      strategy_bucket: row.strategy_bucket || '未進策略',
-      action: row.action || '觀察',
+      strategy_bucket: row.strategy_bucket || 'NONE',
+      action: row.action || 'WATCH',
       pnl_pct: row.pnl_pct || '',
     });
   }
@@ -241,11 +310,11 @@ function getMergedWatchlist() {
     const old = map.get(id) || {};
     map.set(id, {
       stock_id: id,
-      price_tier: old.price_tier || '等待新資料',
-      ref_price: old.ref_price || '等待新資料',
+      price_tier: old.price_tier || 'unknown',
+      ref_price: old.ref_price || '',
       holding_status: old.holding_status || '未持有',
-      strategy_bucket: old.strategy_bucket || '未進策略',
-      action: old.action || '觀察',
+      strategy_bucket: old.strategy_bucket || 'NONE',
+      action: old.action || 'WATCH',
       pnl_pct: old.pnl_pct || '',
     });
   }
@@ -267,13 +336,13 @@ function renderTradePlan() {
   rows.forEach(r => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${escapeHtml(r.action || '—')}</td>
+      <td>${escapeHtml(displayAction(r.action || '—'))}</td>
       <td>${escapeHtml(r.stock_id || '—')}</td>
-      <td>${escapeHtml(r.price_tier || '—')}</td>
+      <td>${escapeHtml(displayTier(r.price_tier || '—'))}</td>
       <td>${escapeHtml(fmtNum(r.ref_price, 3))}</td>
       <td>${escapeHtml(fmtNum(r.target_weight, 3))}</td>
       <td>${escapeHtml(fmtNum(r.suggested_amount, 0))}</td>
-      <td>${escapeHtml(r.note || '')}</td>
+      <td>${escapeHtml(normalizeValue(r.note || ''))}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -294,8 +363,8 @@ function renderPositions() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${escapeHtml(r.stock_id)}</td>
-      <td>${escapeHtml(r.price_tier || '等待新資料')}</td>
-      <td>${escapeHtml(r.ref_price || '等待新資料')}</td>
+      <td>${escapeHtml(displayTier(r.price_tier || 'unknown'))}</td>
+      <td>${escapeHtml(r.ref_price ? fmtNum(r.ref_price, 3) : '等待新資料')}</td>
       <td>${escapeHtml(fmtNum(r.shares, 0))}</td>
       <td>${escapeHtml(fmtNum(r.avg_cost, 3))}</td>
       <td>${escapeHtml(r.pnl_pct === '' ? '目前沒有資料' : fmtPct(r.pnl_pct))}</td>
@@ -324,11 +393,11 @@ function renderWatchlist() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${escapeHtml(r.stock_id)}</td>
-      <td>${escapeHtml(r.price_tier || '等待新資料')}</td>
-      <td>${escapeHtml(r.ref_price || '等待新資料')}</td>
-      <td>${escapeHtml(r.holding_status || '未持有')}</td>
-      <td>${escapeHtml(r.strategy_bucket || '未進策略')}</td>
-      <td>${escapeHtml(r.action || '觀察')}</td>
+      <td>${escapeHtml(displayTier(r.price_tier || 'unknown'))}</td>
+      <td>${escapeHtml(r.ref_price ? fmtNum(r.ref_price, 3) : '等待新資料')}</td>
+      <td>${escapeHtml(displayHolding(r.holding_status || '未持有'))}</td>
+      <td>${escapeHtml(displayBucket(r.strategy_bucket || 'NONE'))}</td>
+      <td>${escapeHtml(displayAction(r.action || 'WATCH'))}</td>
       <td>${escapeHtml(r.pnl_pct === '' ? '目前沒有資料' : fmtPct(r.pnl_pct))}</td>
       <td><button class="danger-btn" data-remove-watch="${escapeHtml(r.stock_id)}">移除</button></td>
     `;
