@@ -42,6 +42,15 @@ jobs:
         run: |
           python v266_8_2_complete_fix.py
 
+           - name: Verify root price panel exists
+        run: |
+          ls -lah
+          test -f price_panel_daily.csv || (echo "缺少 price_panel_daily.csv" && exit 1)
+
+      - name: Show latest files
+        run: |
+          ls -lah price_panel_daily.csv || true
+          ls -lah mobile_dashboard_v1/data || true
       - name: Commit outputs back to repo
         run: |
           git config user.name "github-actions[bot]"
