@@ -1,74 +1,68 @@
-name: v266-8-2-complete-fix
+name: v266_8_2_complete_fix
 
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   run_pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      # 🔹 1. 拉 repo
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      # 🔹 2. Python 環境
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install deps
+      # 🔹 3. 安裝套件
+      - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install pandas numpy
+          pip install pandas numpy requests
 
-      - name: Merge price panel if needed
+      # 🔹 4. 跑你的原本策略（這裡維持你既有）
+      - name: Run v266 base strategy
         run: |
+          python run_v266_pipeline.py
+
+      # 🔹 5. 確認主資料（🔥這是這版最重要）
+      - name: Verify price panel exists
+        run: |
+          echo "=== 檢查主資料 ==="
+          ls -lah
           if [ ! -f price_panel_daily.csv ]; then
-            if [ -f merge_chunked_price_panel.py ]; then
-              python merge_chunked_price_panel.py
-            else
-              echo "merge_chunked_price_panel.py 不存在"
-              exit 1
-            fi
-          else
-            echo "price_panel_daily.csv already exists"
+            echo "❌ 缺少 price_panel_daily.csv → pipeline 視為失敗"
+            exit 1
           fi
 
-      - name: Run v266.8.2 complete fix
+      # 🔹 6. 建立 dashboard data 資料夾
+      - name: Prepare dashboard data folder
         run: |
-          python v266_8_2_complete_fix.py
+          mkdir -p mobile_dashboard_v1/data
 
-           - name: Verify root price panel exists
+      # 🔹 7. 複製主資料進 dashboard（🔥關鍵修正）
+      - name: Copy price panel to dashboard
         run: |
+          cp price_panel_daily.csv mobile_dashboard_v1/data/price_panel_daily.csv
+          echo "✅ 已複製 price_panel_daily.csv → dashboard"
+
+      # 🔹 8. 檢查輸出（debug）
+      - name: Show output files
+        run: |
+          echo "=== ROOT ==="
           ls -lah
-          test -f price_panel_daily.csv || (echo "缺少 price_panel_daily.csv" && exit 1)
+          echo "=== DASHBOARD DATA ==="
+          ls -lah mobile_dashboard_v1/data
 
-      - name: Show latest files
+      # 🔹 9. commit 回 repo
+      - name: Commit outputs
         run: |
-          ls -lah price_panel_daily.csv || true
-          ls -lah mobile_dashboard_v1/data || true
-      - name: Commit outputs back to repo
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            trade_plan.csv \
-            position_monitor.csv \
-            watchlist_monitor.csv \
-            full_summary.csv \
-            selection_debug.csv \
-            current_positions.csv \
-            meta.json \
-            mobile_dashboard_v1/data/trade_plan.csv \
-            mobile_dashboard_v1/data/position_monitor.csv \
-            mobile_dashboard_v1/data/watchlist_monitor.csv \
-            mobile_dashboard_v1/data/full_summary.csv \
-            mobile_dashboard_v1/data/selection_debug.csv \
-            mobile_dashboard_v1/data/current_positions.csv \
-            mobile_dashboard_v1/data/meta.json
-          git diff --cached --quiet || git commit -m "fix trade date logic and merge panel v266.8.2"
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add .
+          git commit -m "update: pipeline outputs (v266.11.1 fix)" || echo "No changes"
           git push
