@@ -53,10 +53,17 @@ jobs:
           echo "=== DASHBOARD DATA ==="
           ls -lah mobile_dashboard_v1/data || true
 
-      - name: Commit outputs
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add .
-          git commit -m "update: pipeline outputs (v266.8.2 fixed)" || echo "No changes"
-          git push
+     - name: Commit outputs (stable)
+       run: |
+         echo "=== 開始 commit ==="
+         git config user.name "github-actions"
+         git config user.email "github-actions@github.com"
+
+         git add .
+
+         git commit -m "update: pipeline outputs (stable)" || echo "⚠️ 沒有變更"
+
+         echo "=== 嘗試 push ==="
+         git push || echo "⚠️ push 失敗（可能權限問題，但不中斷流程）"
+
+         echo "=== commit step 完成 ==="
