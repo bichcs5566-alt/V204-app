@@ -1,87 +1,152 @@
-import os
+import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
-import pandas as pd
+from datetime import datetime, timezone, timedelta
+
 import numpy as np
+import pandas as pd
 
 CORE_WEIGHT = 0.75
 ALPHA_WEIGHT = 0.25
-
 CORE_TOP_N = 25
 ALPHA_TOP_N = 6
-
 MIN_CORE_FILL = 5
 MIN_ALPHA_FILL = 2
-
 MAX_POSITION_WEIGHT = 0.10
 BUY_BAND = 0.015
 REDUCE_BAND = -0.015
-
-FEE = 0.0015
 SLIPPAGE = 0.001
-
 INITIAL_CAPITAL = 1000000
-STOP_LOSS_1 = -0.06
 STOP_LOSS_2 = -0.10
+DEFAULT_SHARES = 1000
 
-POSITIONS_FILE = "current_positions.csv"
 PRICE_PANEL_FILE = "price_panel_daily.csv"
-
+MERGE_SCRIPT = "merge_chunked_price_panel.py"
 DASHBOARD_DIR = Path("mobile_dashboard_v1")
 DASHBOARD_DATA_DIR = DASHBOARD_DIR / "data"
+POSITIONS_FILE = "current_positions.csv"
 
 
-def ensure_price_panel():
-    if os.path.exists(PRICE_PANEL_FILE):
-        print(f"[OK] Found {PRICE_PANEL_FILE}")
-        return
-    if os.path.exists("merge_chunked_price_panel.py"):
-        print("[INFO] price_panel_daily.csv missing, running merge_chunked_price_panel.py ...")
-        subprocess.run([sys.executable, "merge_chunked_price_panel.py"], check=True)
-    else:
-        raise FileNotFoundError("price_panel_daily.csv missing and merge_chunked_price_panel.py not found")
-    if not os.path.exists(PRICE_PANEL_FILE):
-        raise FileNotFoundError("Failed to create price_panel_daily.csv")
+def now_taipei():
+    tz = timezone(timedelta(hours=8))
+    return datetime.now(tz)
 
 
-def ensure_dashboard_dir():
+def read_csv_auto(path):
+    for enc in ["utf-8-sig", "utf-8", "cp950", "big5"]:
+        try:
+            return pd.read_csv(path, encoding=enc)
+        except Exception:
+            continue
+    return pd.read_csv(path)
+
+
+def price_tier_key(price):
+    if pd.isna(price):
+        return "unknown"
+    p = float(price)
+    if p < 50:
+        return "lt_50"
+    if p < 100:
+        return "p50_100"
+    if p < 300:
+        return "p100_300"
+    if p < 500:
+        return "p300_500"
+    if p < 1000:
+        return "p500_1000"
+    return "gt_1000"
+
+
+def next_business_day(ts: pd.Timestamp) -> pd.Timestamp:
+    d = pd.Timestamp(ts).normalize() + pd.Timedelta(days=1)
+    while d.weekday() >= 5:
+        d += pd.Timedelta(days=1)
+    return d
+
+
+def ensure_dashboard_files():
     DASHBOARD_DATA_DIR.mkdir(parents=True, exist_ok=True)
     templates = {
         "current_positions.csv": ["stock_id", "shares", "avg_cost", "last_action_date", "note"],
         "watchlist.csv": ["stock_id"],
-        "selection_debug.csv": ["date", "total_input", "valid_after_na", "core_primary_count", "alpha_primary_count", "core_final_count", "alpha_final_count"],
-        "watchlist_monitor.csv": ["signal_date", "trade_date", "stock_id", "price_tier", "ref_price", "holding_status", "shares", "avg_cost", "pnl_pct", "strategy_bucket", "action", "note"],
-        "position_monitor.csv": ["signal_date", "trade_date", "stock_id", "price_tier", "ref_price", "shares", "avg_cost", "pnl_pct", "target_weight", "current_weight_est", "action", "note"],
+        "selection_debug.csv": [
+            "date", "total_input", "valid_after_na",
+            "core_primary_count", "alpha_primary_count",
+            "core_final_count", "alpha_final_count"
+        ],
+        "position_monitor.csv": [
+            "signal_date", "trade_date", "stock_id", "price_tier", "ref_price",
+            "shares", "avg_cost", "pnl_pct", "target_weight", "current_weight_est",
+            "action", "note"
+        ],
+        "watchlist_monitor.csv": [
+            "signal_date", "trade_date", "stock_id", "price_tier", "ref_price",
+            "holding_status", "strategy_bucket", "action", "pnl_pct"
+        ],
+        "trade_plan.csv": [
+            "signal_date", "trade_date", "action", "stock_id", "price_tier",
+            "target_weight", "ref_price", "suggested_amount", "note"
+        ],
+        "full_summary.csv": ["return", "mdd", "sharpe_daily"],
     }
     for name, cols in templates.items():
-        p = DASHBOARD_DATA_DIR / name
-        if not p.exists():
-            pd.DataFrame(columns=cols).to_csv(p, index=False)
+        path = DASHBOARD_DATA_DIR / name
+        if not path.exists():
+            pd.DataFrame(columns=cols).to_csv(path, index=False, encoding="utf-8-sig")
+
+    meta = DASHBOARD_DATA_DIR / "meta.json"
+    if not meta.exists():
+        meta.write_text(json.dumps({}, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def ensure_price_panel():
+    panel = Path(PRICE_PANEL_FILE)
+    if panel.exists():
+        return panel
+
+    merge = Path(MERGE_SCRIPT)
+    if not merge.exists():
+        raise FileNotFoundError(f"æ¾ä¸å° {PRICE_PANEL_FILE}ï¼ä¸ {MERGE_SCRIPT} ä¹ä¸å­å¨")
+
+    print(f"{PRICE_PANEL_FILE} ä¸å­å¨ï¼åå·è¡ {MERGE_SCRIPT}")
+    subprocess.run([sys.executable, str(merge)], check=True)
+
+    if not panel.exists():
+        raise FileNotFoundError(f"å·è¡ {MERGE_SCRIPT} å¾ä»æ¾ä¸å° {PRICE_PANEL_FILE}")
+
+    return panel
+
+
+def sync_price_panel_to_dashboard():
+    src = ensure_price_panel()
+    dst = DASHBOARD_DATA_DIR / PRICE_PANEL_FILE
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dst)
+    print(f"å·²åæ­¥ {src} -> {dst}")
 
 
 def load_price():
-    df = pd.read_csv(PRICE_PANEL_FILE)
+    ensure_price_panel()
+    df = read_csv_auto(PRICE_PANEL_FILE)
     df.columns = [str(c).lower().strip() for c in df.columns]
 
     if "date" not in df.columns:
-        if "trade_date" in df.columns:
-            df["date"] = df["trade_date"]
-        elif "datetime" in df.columns:
-            df["date"] = df["datetime"]
-        else:
-            raise ValueError("no date column")
+        for alt in ["trade_date", "datetime"]:
+            if alt in df.columns:
+                df["date"] = df[alt]
+                break
 
     if "stock_id" not in df.columns:
-        if "symbol" in df.columns:
-            df["stock_id"] = df["symbol"]
-        elif "code" in df.columns:
-            df["stock_id"] = df["code"]
-        else:
-            raise ValueError("no stock_id column")
+        for alt in ["symbol", "code"]:
+            if alt in df.columns:
+                df["stock_id"] = df[alt]
+                break
 
     if "close" not in df.columns:
-        raise ValueError("no close column")
+        raise ValueError("price_panel_daily.csv ç¼ºå° close æ¬ä½")
 
     if "volume" not in df.columns:
         df["volume"] = np.nan
@@ -91,9 +156,8 @@ def load_price():
     df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
     df["stock_id"] = df["stock_id"].astype(str).str.strip()
 
-    df = df.dropna(subset=["date", "stock_id", "close"])
-    df = df[df["close"] > 0].copy()
-    df = df.sort_values(["stock_id", "date"]).reset_index(drop=True)
+    df = df.dropna(subset=["date", "stock_id", "close"]).copy()
+    df = df[df["close"] > 0].sort_values(["stock_id", "date"]).reset_index(drop=True)
     return df
 
 
@@ -107,26 +171,9 @@ def build_features(df):
     return df
 
 
-def price_tier_from_price(price):
-    if pd.isna(price):
-        return "unknown"
-    price = float(price)
-    if price < 50:
-        return "50ä»¥ä¸"
-    if price < 100:
-        return "50-100"
-    if price < 300:
-        return "100-300"
-    if price < 500:
-        return "300-500"
-    if price < 1000:
-        return "500-1000"
-    return "1000ä»¥ä¸"
-
-
-def select_stocks(d):
-    total_input = len(d)
-    valid = d.dropna(subset=["mom20", "mom60", "vol20"]).copy()
+def select_stocks(day_df):
+    total_input = len(day_df)
+    valid = day_df.dropna(subset=["mom20", "mom60", "vol20"]).copy()
     valid_count = len(valid)
 
     core_primary = valid[valid["mom20"] > -0.02].copy()
@@ -139,11 +186,11 @@ def select_stocks(d):
 
     core = core_primary.head(CORE_TOP_N).copy()
     if len(core) < MIN_CORE_FILL:
-        extra = core_fallback[~core_fallback["stock_id"].isin(set(core["stock_id"]))].head(MIN_CORE_FILL - len(core))
+        extra = core_fallback[~core_fallback["stock_id"].isin(core["stock_id"])].head(MIN_CORE_FILL - len(core))
         core = pd.concat([core, extra], ignore_index=True)
     if len(core) < CORE_TOP_N:
-        extra2 = core_fallback[~core_fallback["stock_id"].isin(set(core["stock_id"]))].head(CORE_TOP_N - len(core))
-        core = pd.concat([core, extra2], ignore_index=True).drop_duplicates(subset=["stock_id"]).head(CORE_TOP_N)
+        extra = core_fallback[~core_fallback["stock_id"].isin(core["stock_id"])].head(CORE_TOP_N - len(core))
+        core = pd.concat([core, extra], ignore_index=True).drop_duplicates(subset=["stock_id"]).head(CORE_TOP_N)
 
     alpha_primary = valid[valid["mom20"] > 0].copy()
     alpha_primary["quality"] = (alpha_primary["mom20"] * 0.6 + alpha_primary["mom60"] * 0.4) / (alpha_primary["vol20"] + 1e-6)
@@ -155,14 +202,14 @@ def select_stocks(d):
 
     alpha = alpha_primary.head(ALPHA_TOP_N).copy()
     if len(alpha) < MIN_ALPHA_FILL:
-        extra = alpha_fallback[~alpha_fallback["stock_id"].isin(set(alpha["stock_id"]))].head(MIN_ALPHA_FILL - len(alpha))
+        extra = alpha_fallback[~alpha_fallback["stock_id"].isin(alpha["stock_id"])].head(MIN_ALPHA_FILL - len(alpha))
         alpha = pd.concat([alpha, extra], ignore_index=True)
     if len(alpha) < ALPHA_TOP_N:
-        extra2 = alpha_fallback[~alpha_fallback["stock_id"].isin(set(alpha["stock_id"]))].head(ALPHA_TOP_N - len(alpha))
-        alpha = pd.concat([alpha, extra2], ignore_index=True).drop_duplicates(subset=["stock_id"]).head(ALPHA_TOP_N)
+        extra = alpha_fallback[~alpha_fallback["stock_id"].isin(alpha["stock_id"])].head(ALPHA_TOP_N - len(alpha))
+        alpha = pd.concat([alpha, extra], ignore_index=True).drop_duplicates(subset=["stock_id"]).head(ALPHA_TOP_N)
 
     debug = pd.DataFrame([{
-        "date": d["date"].iloc[0] if len(d) else pd.NaT,
+        "date": str(day_df["date"].iloc[0].date()) if len(day_df) else "",
         "total_input": total_input,
         "valid_after_na": valid_count,
         "core_primary_count": len(core_primary),
@@ -181,37 +228,28 @@ def build_target_weights(core, alpha):
     for _, r in core.iterrows():
         target[r["stock_id"]] = CORE_WEIGHT / core_n
     for _, r in alpha.iterrows():
-        target[r["stock_id"]] = target.get(r["stock_id"], 0.0) + ALPHA_WEIGHT / alpha_n
+        target[r["stock_id"]] = target.get(r["stock_id"], 0) + ALPHA_WEIGHT / alpha_n
 
     for k in list(target.keys()):
         target[k] = min(target[k], MAX_POSITION_WEIGHT)
     return target
 
 
-def load_current_positions():
+def load_positions():
     preferred = DASHBOARD_DATA_DIR / "current_positions.csv"
-    pos_path = preferred if preferred.exists() else Path(POSITIONS_FILE)
+    root_path = Path(POSITIONS_FILE)
+    src = preferred if preferred.exists() else root_path
+    if not src.exists():
+        return pd.DataFrame(columns=["stock_id", "shares", "avg_cost", "last_action_date", "note"])
 
-    if not pos_path.exists():
-        cols = ["stock_id", "shares", "avg_cost", "last_action_date", "note"]
-        pd.DataFrame(columns=cols).to_csv(pos_path, index=False)
-        return pd.DataFrame(columns=cols)
-
-    pos = pd.read_csv(pos_path)
+    pos = read_csv_auto(src)
     pos.columns = [str(c).lower().strip() for c in pos.columns]
-
-    if "stock_id" not in pos.columns:
-        raise ValueError("current_positions.csv must contain stock_id")
-
-    for col in ["shares", "avg_cost"]:
-        if col not in pos.columns:
-            pos[col] = np.nan
-    for col in ["last_action_date", "note"]:
+    for col in ["shares", "avg_cost", "last_action_date", "note"]:
         if col not in pos.columns:
             pos[col] = ""
 
     pos["stock_id"] = pos["stock_id"].astype(str).str.strip()
-    pos["shares"] = pd.to_numeric(pos["shares"], errors="coerce")
+    pos["shares"] = pd.to_numeric(pos["shares"], errors="coerce").fillna(DEFAULT_SHARES)
     pos["avg_cost"] = pd.to_numeric(pos["avg_cost"], errors="coerce")
     return pos[["stock_id", "shares", "avg_cost", "last_action_date", "note"]]
 
@@ -221,7 +259,7 @@ def load_watchlist():
     if not path.exists():
         return set()
     try:
-        df = pd.read_csv(path)
+        df = read_csv_auto(path)
         if "stock_id" not in df.columns:
             return set()
         return set(df["stock_id"].astype(str).str.strip())
@@ -229,364 +267,183 @@ def load_watchlist():
         return set()
 
 
-def build_trade_plan(df, latest_capital=INITIAL_CAPITAL):
-    df = df.dropna(subset=["ret1", "mom5", "mom20", "mom60", "vol20"]).copy()
-    dates = sorted(df["date"].unique())
-    if len(dates) < 2:
-        raise ValueError("not enough dates")
+def build_outputs(df):
+    dates = sorted(pd.Series(df["date"].dt.normalize().unique()))
+    if len(dates) < 1:
+        raise ValueError("äº¤ææ¥ä¸è¶³ï¼ç¡æ³ç¢çè¨è")
 
-    signal_date = dates[-2]
-    trade_date = dates[-1]
+    signal_date = pd.Timestamp(dates[-1]).normalize()
+    trade_date = next_business_day(signal_date)
+    signal_df = df[df["date"].dt.normalize() == signal_date].copy()
 
-    signal_df = df[df["date"] == signal_date].copy()
-    trade_df = df[df["date"] == trade_date].copy()
+    latest_close_df = (
+        df.sort_values(["stock_id", "date"])
+          .groupby("stock_id", as_index=False)
+          .tail(1)
+          .copy()
+    )
+    price_map = {r["stock_id"]: r["close"] for _, r in latest_close_df.iterrows()}
 
-    trade_price = {r["stock_id"]: r["close"] for _, r in trade_df.iterrows()}
-    current_positions = load_current_positions()
-    current_map = current_positions.set_index("stock_id").to_dict("index") if len(current_positions) > 0 else {}
+    positions = load_positions()
+    pos_map = positions.set_index("stock_id").to_dict("index") if len(positions) else {}
     watchlist = load_watchlist()
 
     core, alpha, debug = select_stocks(signal_df)
     target = build_target_weights(core, alpha)
-
     core_set = set(core["stock_id"])
     alpha_set = set(alpha["stock_id"])
-    all_symbols = sorted(set(target.keys()) | set(current_map.keys()) | watchlist)
+    all_symbols = sorted(set(target.keys()) | set(pos_map.keys()) | watchlist)
 
-    rows = []
+    trade_rows, pos_rows, watch_rows = [], [], []
+
     for stock_id in all_symbols:
-        px_raw = trade_price.get(stock_id, np.nan)
+        px_raw = price_map.get(stock_id, np.nan)
         ref_price = px_raw * (1 + SLIPPAGE) if pd.notna(px_raw) else np.nan
-        target_weight = float(target.get(stock_id, 0.0))
-        current = current_map.get(stock_id, {})
-        current_shares = current.get("shares", np.nan)
+        tier = price_tier_key(ref_price)
+
+        target_weight = float(target.get(stock_id, 0))
+        current = pos_map.get(stock_id, {})
+        shares = current.get("shares", DEFAULT_SHARES)
         avg_cost = current.get("avg_cost", np.nan)
 
-        source = []
-        if stock_id in core_set:
-            source.append("CORE")
-        if stock_id in alpha_set:
-            source.append("ALPHA")
-        if stock_id in watchlist:
-            source.append("WATCHLIST")
-        source_text = "+".join(source)
+        pnl_pct = np.nan
+        if pd.notna(px_raw) and pd.notna(avg_cost) and float(avg_cost) > 0:
+            pnl_pct = px_raw / avg_cost - 1.0
 
-        suggested_amount = latest_capital * target_weight if target_weight > 0 else 0.0
-        suggested_shares = suggested_amount / ref_price if (pd.notna(ref_price) and ref_price > 0 and target_weight > 0) else np.nan
-        estimated_total_cost = suggested_amount * (1 + FEE) if target_weight > 0 else 0.0
+        current_value = shares * px_raw if pd.notna(shares) and pd.notna(px_raw) else np.nan
+        current_weight_est = current_value / INITIAL_CAPITAL if pd.notna(current_value) else np.nan
 
-        action = None
-        note = []
-
-        if stock_id in current_map:
-            if pd.notna(px_raw) and pd.notna(avg_cost) and avg_cost > 0:
-                pnl = px_raw / avg_cost - 1.0
-            else:
-                pnl = np.nan
-
-            if pd.notna(pnl) and pnl <= STOP_LOSS_2:
+        if stock_id in pos_map:
+            if pd.notna(pnl_pct) and pnl_pct <= STOP_LOSS_2:
                 action = "STOP_LOSS"
-                note.append(f"pnl<= {STOP_LOSS_2:.0%}")
+                note = "éåææ¢ä»¶"
             elif target_weight <= 0:
                 action = "SELL"
-                note.append("not_in_target")
-            else:
-                current_value = (current_shares * px_raw) if (pd.notna(current_shares) and pd.notna(px_raw)) else np.nan
-                current_weight_est = current_value / latest_capital if (pd.notna(current_value) and latest_capital > 0) else np.nan
-
-                if pd.notna(current_weight_est):
-                    diff = target_weight - current_weight_est
-                    if diff > BUY_BAND:
-                        action = "BUY"
-                        note.append("increase_to_target")
-                    elif diff < REDUCE_BAND:
-                        action = "REDUCE"
-                        note.append("decrease_to_target")
-                    else:
-                        action = "HOLD"
-                        note.append("within_band")
+                note = "ä¸å¨ç®æ¨æ± "
+            elif pd.notna(current_weight_est):
+                diff = target_weight - current_weight_est
+                if diff > BUY_BAND:
+                    action = "ADD"
+                    note = "ä½æ¼ç®æ¨æ¬é"
+                elif diff < REDUCE_BAND:
+                    action = "REDUCE"
+                    note = "é«æ¼ç®æ¨æ¬é"
                 else:
                     action = "HOLD"
-                    note.append("missing_position_size")
-        else:
-            if target_weight > 0:
-                action = "BUY"
-                note.append("new_entry")
-            elif stock_id in watchlist:
-                action = "WATCH"
-                note.append("watchlist_only")
-
-        if action is None:
-            continue
-
-        rows.append({
-            "signal_date": signal_date,
-            "trade_date": trade_date,
-            "action": action,
-            "stock_id": stock_id,
-            "price_tier": price_tier_from_price(ref_price),
-            "target_weight": round(target_weight, 4),
-            "ref_price": round(ref_price, 4) if pd.notna(ref_price) else np.nan,
-            "current_shares": round(current_shares, 2) if pd.notna(current_shares) else np.nan,
-            "avg_cost": round(avg_cost, 4) if pd.notna(avg_cost) else np.nan,
-            "suggested_amount": round(suggested_amount, 2),
-            "suggested_shares": round(suggested_shares, 2) if pd.notna(suggested_shares) else np.nan,
-            "estimated_total_cost": round(estimated_total_cost, 2),
-            "source": source_text,
-            "note": ";".join(note),
-        })
-
-    plan = pd.DataFrame(rows)
-    action_order = {"STOP_LOSS": 0, "SELL": 1, "REDUCE": 2, "BUY": 3, "HOLD": 4, "WATCH": 5}
-    if not plan.empty:
-        plan["action_rank"] = plan["action"].map(action_order).fillna(99)
-        plan = plan.sort_values(["action_rank", "target_weight", "ref_price"], ascending=[True, False, True]).drop(columns=["action_rank"])
-    return plan, core, alpha, signal_date, trade_date, debug
-
-
-def build_watchlist_monitor(df):
-    dates = sorted(df["date"].unique())
-    if len(dates) < 2:
-        return pd.DataFrame()
-
-    signal_date = dates[-2]
-    trade_date = dates[-1]
-
-    signal_df = df[df["date"] == signal_date].copy()
-    trade_df = df[df["date"] == trade_date].copy()
-    trade_price = {r["stock_id"]: r["close"] for _, r in trade_df.iterrows()}
-    current_positions = load_current_positions()
-    current_map = current_positions.set_index("stock_id").to_dict("index") if len(current_positions) > 0 else {}
-    watchlist = sorted(load_watchlist())
-
-    core, alpha, _ = select_stocks(signal_df)
-    core_set = set(core["stock_id"])
-    alpha_set = set(alpha["stock_id"])
-
-    rows = []
-    for stock_id in watchlist:
-        px_raw = trade_price.get(stock_id, np.nan)
-        ref_price = px_raw * (1 + SLIPPAGE) if pd.notna(px_raw) else np.nan
-        holding = stock_id in current_map
-        avg_cost = current_map.get(stock_id, {}).get("avg_cost", np.nan)
-        shares = current_map.get(stock_id, {}).get("shares", np.nan)
-
-        if holding and pd.notna(px_raw) and pd.notna(avg_cost) and avg_cost > 0:
-            pnl_pct = px_raw / avg_cost - 1.0
-        else:
-            pnl_pct = np.nan
-
-        if stock_id in core_set:
-            strategy_bucket = "CORE"
-            action = "åé¸"
-        elif stock_id in alpha_set:
-            strategy_bucket = "ALPHA"
-            action = "åé¸"
-        else:
-            strategy_bucket = "NONE"
-            action = "è§å¯"
-
-        if holding:
-            if pd.notna(pnl_pct) and pnl_pct <= STOP_LOSS_2:
-                action = "åæ"
-            else:
-                action = "ææç£æ§"
-
-        rows.append({
-            "signal_date": signal_date,
-            "trade_date": trade_date,
-            "stock_id": stock_id,
-            "price_tier": price_tier_from_price(ref_price),
-            "ref_price": round(ref_price, 4) if pd.notna(ref_price) else np.nan,
-            "holding_status": "å·²ææ" if holding else "æªææ",
-            "shares": round(shares, 2) if pd.notna(shares) else np.nan,
-            "avg_cost": round(avg_cost, 4) if pd.notna(avg_cost) else np.nan,
-            "pnl_pct": round(pnl_pct, 4) if pd.notna(pnl_pct) else np.nan,
-            "strategy_bucket": strategy_bucket,
-            "action": action,
-            "note": ""
-        })
-    return pd.DataFrame(rows)
-
-
-def build_position_monitor(df, latest_capital=INITIAL_CAPITAL):
-    dates = sorted(df["date"].unique())
-    if len(dates) < 2:
-        return pd.DataFrame()
-
-    signal_date = dates[-2]
-    trade_date = dates[-1]
-    signal_df = df[df["date"] == signal_date].copy()
-    trade_df = df[df["date"] == trade_date].copy()
-    trade_price = {r["stock_id"]: r["close"] for _, r in trade_df.iterrows()}
-
-    current_positions = load_current_positions()
-    if current_positions.empty:
-        return pd.DataFrame(columns=[
-            "signal_date","trade_date","stock_id","price_tier","ref_price","shares",
-            "avg_cost","pnl_pct","target_weight","current_weight_est","action","note"
-        ])
-
-    core, alpha, _ = select_stocks(signal_df)
-    target = build_target_weights(core, alpha)
-
-    rows = []
-    for _, pos in current_positions.iterrows():
-        stock_id = str(pos["stock_id"]).strip()
-        shares = pos["shares"]
-        avg_cost = pos["avg_cost"]
-        px_raw = trade_price.get(stock_id, np.nan)
-        ref_price = px_raw * (1 + SLIPPAGE) if pd.notna(px_raw) else np.nan
-        target_weight = float(target.get(stock_id, 0.0))
-
-        if pd.notna(px_raw) and pd.notna(avg_cost) and avg_cost > 0:
-            pnl_pct = px_raw / avg_cost - 1.0
-        else:
-            pnl_pct = np.nan
-
-        current_value = (shares * px_raw) if (pd.notna(shares) and pd.notna(px_raw)) else np.nan
-        current_weight_est = current_value / latest_capital if (pd.notna(current_value) and latest_capital > 0) else np.nan
-
-        action = "HOLD"
-        note = []
-
-        if pd.notna(pnl_pct) and pnl_pct <= STOP_LOSS_2:
-            action = "STOP_LOSS"
-            note.append(f"pnl<= {STOP_LOSS_2:.0%}")
-        elif target_weight <= 0:
-            action = "SELL"
-            note.append("not_in_target")
-        elif pd.notna(current_weight_est):
-            diff = target_weight - current_weight_est
-            if diff > BUY_BAND:
-                action = "ADD"
-                note.append("below_target")
-            elif diff < REDUCE_BAND:
-                action = "REDUCE"
-                note.append("above_target")
+                    note = "æ¬éå¨å®¹è¨±ç¯å"
             else:
                 action = "HOLD"
-                note.append("within_band")
-        else:
-            note.append("missing_weight")
+                note = "ç¼ºå°ç®åæ¬é"
 
-        rows.append({
-            "signal_date": signal_date,
-            "trade_date": trade_date,
-            "stock_id": stock_id,
-            "price_tier": price_tier_from_price(ref_price),
-            "ref_price": round(ref_price, 4) if pd.notna(ref_price) else np.nan,
-            "shares": round(shares, 2) if pd.notna(shares) else np.nan,
-            "avg_cost": round(avg_cost, 4) if pd.notna(avg_cost) else np.nan,
-            "pnl_pct": round(pnl_pct, 4) if pd.notna(pnl_pct) else np.nan,
-            "target_weight": round(target_weight, 4),
-            "current_weight_est": round(current_weight_est, 4) if pd.notna(current_weight_est) else np.nan,
-            "action": action,
-            "note": ";".join(note)
-        })
+            pos_rows.append({
+                "signal_date": str(signal_date.date()),
+                "trade_date": str(trade_date.date()),
+                "stock_id": stock_id,
+                "price_tier": tier,
+                "ref_price": round(ref_price, 4) if pd.notna(ref_price) else "",
+                "shares": int(shares) if pd.notna(shares) else DEFAULT_SHARES,
+                "avg_cost": round(avg_cost, 4) if pd.notna(avg_cost) else "",
+                "pnl_pct": round(pnl_pct, 4) if pd.notna(pnl_pct) else "",
+                "target_weight": round(target_weight, 4),
+                "current_weight_est": round(current_weight_est, 4) if pd.notna(current_weight_est) else "",
+                "action": action,
+                "note": note
+            })
+        elif target_weight > 0:
+            trade_rows.append({
+                "signal_date": str(signal_date.date()),
+                "trade_date": str(trade_date.date()),
+                "action": "BUY",
+                "stock_id": stock_id,
+                "price_tier": tier,
+                "target_weight": round(target_weight, 4),
+                "ref_price": round(ref_price, 4) if pd.notna(ref_price) else "",
+                "suggested_amount": round(INITIAL_CAPITAL * target_weight, 2),
+                "note": "æ°é²å ´"
+            })
 
-    return pd.DataFrame(rows)
+        if stock_id in watchlist:
+            bucket = "NONE"
+            if stock_id in core_set:
+                bucket = "CANDIDATE"
+            elif stock_id in alpha_set:
+                bucket = "BUY_READY"
+
+            watch_action = "WATCH"
+            if stock_id in pos_map:
+                watch_action = "HOLD_MONITOR"
+            elif stock_id in alpha_set:
+                watch_action = "BUY_READY"
+            elif stock_id in core_set:
+                watch_action = "CANDIDATE"
+
+            watch_rows.append({
+                "signal_date": str(signal_date.date()),
+                "trade_date": str(trade_date.date()),
+                "stock_id": stock_id,
+                "price_tier": tier,
+                "ref_price": round(ref_price, 4) if pd.notna(ref_price) else "",
+                "holding_status": "å·²ææ" if stock_id in pos_map else "æªææ",
+                "strategy_bucket": bucket,
+                "action": watch_action,
+                "pnl_pct": round(pnl_pct, 4) if pd.notna(pnl_pct) else ""
+            })
+
+    summary = pd.DataFrame([{"return": 0, "mdd": 0, "sharpe_daily": 0}])
+
+    latest_signal_date = str(signal_date.date())
+    latest_trade_date = str(trade_date.date())
+
+    meta = {
+        "generated_at": now_taipei().strftime("%Y-%m-%d %H:%M:%S"),
+        "signal_date": latest_signal_date,
+        "trade_date": latest_trade_date,
+        "price_panel_latest_date": latest_signal_date,
+        "trade_plan_batch": now_taipei().strftime("%Y-%m-%d %H:%M:%S"),
+        "data_state": "ok",
+        "source": "v266.4_auto_pipeline_bridge"
+    }
+
+    return (
+        pd.DataFrame(trade_rows),
+        pd.DataFrame(pos_rows),
+        pd.DataFrame(watch_rows),
+        summary,
+        debug,
+        meta,
+    )
 
 
-def run_backtest(df):
-    df = df.dropna(subset=["ret1", "mom5", "mom20", "mom60", "vol20"]).copy()
-    dates = sorted(df["date"].unique())
-    cash = INITIAL_CAPITAL
-    holdings = {}
-    nav_list = []
-
-    for i in range(len(dates) - 1):
-        today = dates[i]
-        next_day = dates[i + 1]
-        today_df = df[df["date"] == today].copy()
-        next_df = df[df["date"] == next_day].copy()
-        next_price = {r["stock_id"]: r["close"] for _, r in next_df.iterrows()}
-
-        core, alpha, _ = select_stocks(today_df)
-        target = build_target_weights(core, alpha)
-
-        nav = cash
-        for s, pos in holdings.items():
-            if s in next_price:
-                nav += pos["shares"] * next_price[s]
-
-        new_holdings = {}
-        new_cash = nav
-        for s, w in target.items():
-            if s not in next_price:
-                continue
-            price = next_price[s] * (1 + SLIPPAGE)
-            alloc_value = nav * w
-            shares = alloc_value / price
-            gross_cost = shares * price
-            total_cost = gross_cost * (1 + FEE)
-            if total_cost > new_cash:
-                continue
-            new_cash -= total_cost
-            new_holdings[s] = {"shares": shares, "cost": price}
-
-        holdings = new_holdings
-        cash = new_cash
-
-        nav = cash
-        for s, pos in holdings.items():
-            if s in next_price:
-                nav += pos["shares"] * next_price[s]
-        nav_list.append({"date": next_day, "nav": nav})
-
-    nav_df = pd.DataFrame(nav_list)
-    nav_df["ret"] = nav_df["nav"].pct_change().fillna(0.0)
-    return nav_df
+def write_csv_both(df, filename):
+    df.to_csv(filename, index=False, encoding="utf-8-sig")
+    df.to_csv(DASHBOARD_DATA_DIR / filename, index=False, encoding="utf-8-sig")
 
 
-def evaluate(nav_df):
-    total_return = nav_df["nav"].iloc[-1] / nav_df["nav"].iloc[0] - 1.0
-    mdd = (nav_df["nav"] / nav_df["nav"].cummax() - 1.0).min()
-    sharpe = nav_df["ret"].mean() / (nav_df["ret"].std() + 1e-6)
-    return pd.DataFrame([{"return": total_return, "mdd": mdd, "sharpe_daily": sharpe}])
+def main():
+    ensure_dashboard_files()
+    sync_price_panel_to_dashboard()
+    df = build_features(load_price())
+    trade_df, pos_df, watch_df, summary_df, debug_df, meta = build_outputs(df)
 
+    write_csv_both(trade_df, "trade_plan.csv")
+    write_csv_both(pos_df, "position_monitor.csv")
+    write_csv_both(watch_df, "watchlist_monitor.csv")
+    write_csv_both(summary_df, "full_summary.csv")
+    write_csv_both(debug_df, "selection_debug.csv")
 
-def save_output_both(df, filename):
-    df.to_csv(filename, index=False)
-    df.to_csv(DASHBOARD_DATA_DIR / filename, index=False)
+    positions = load_positions()
+    positions.to_csv(DASHBOARD_DATA_DIR / "current_positions.csv", index=False, encoding="utf-8-sig")
+    positions.to_csv("current_positions.csv", index=False, encoding="utf-8-sig")
+
+    (DASHBOARD_DATA_DIR / "meta.json").write_text(
+        json.dumps(meta, ensure_ascii=False, indent=2),
+        encoding="utf-8"
+    )
+    Path("meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    print("å®æ v266.4 auto pipeline æ¥è»ä¿®æ­£ç")
+    print(json.dumps(meta, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
-    ensure_dashboard_dir()
-    ensure_price_panel()
-
-    df = load_price()
-    df = build_features(df)
-
-    nav_df = run_backtest(df)
-    summary_df = evaluate(nav_df)
-    trade_plan_df, core_df, alpha_df, signal_date, trade_date, debug_df = build_trade_plan(df)
-    watchlist_monitor_df = build_watchlist_monitor(df)
-    position_monitor_df = build_position_monitor(df)
-
-    core_df["price_tier"] = core_df["close"].apply(price_tier_from_price)
-    alpha_df["price_tier"] = alpha_df["close"].apply(price_tier_from_price)
-
-    save_output_both(nav_df, "daily_nav.csv")
-    save_output_both(summary_df, "full_summary.csv")
-    save_output_both(trade_plan_df, "trade_plan.csv")
-    save_output_both(core_df, "core_candidates.csv")
-    save_output_both(alpha_df, "alpha_candidates.csv")
-    save_output_both(debug_df, "selection_debug.csv")
-    save_output_both(watchlist_monitor_df, "watchlist_monitor.csv")
-    save_output_both(position_monitor_df, "position_monitor.csv")
-
-    current_positions = load_current_positions()
-    current_positions.to_csv(DASHBOARD_DATA_DIR / "current_positions.csv", index=False)
-    current_positions.to_csv(POSITIONS_FILE, index=False)
-
-    watchlist_path = DASHBOARD_DATA_DIR / "watchlist.csv"
-    if not watchlist_path.exists():
-        pd.DataFrame(columns=["stock_id"]).to_csv(watchlist_path, index=False)
-
-    print("Signal date:", signal_date)
-    print("Trade date:", trade_date)
-    print("Dashboard data dir:", str(DASHBOARD_DATA_DIR))
-    print(summary_df.to_string(index=False))
-    print("\nTop trade plan:")
-    print(trade_plan_df.head(15).to_string(index=False))
+    main()
