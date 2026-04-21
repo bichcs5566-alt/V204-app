@@ -1,0 +1,38 @@
+name: v1_stable_pipeline
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 11 * * 1-5"
+
+jobs:
+  run_pipeline:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install pandas numpy requests
+
+      - name: Run stable pipeline
+        run: |
+          python v1_stable_pipeline.py
+
+      - name: Commit outputs
+        continue-on-error: true
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add mobile_dashboard_v1/data root_exports || true
+          git commit -m "update: v1 stable data" || echo "No changes"
+          git push || echo "Push skipped"
