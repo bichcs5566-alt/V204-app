@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>每日操作介面 v2.2 本機 Token 設定版</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="github_config.js"></script>
+</head>
+<body>
+  <main class="wrap">
+    <section class="card">
+      <h1>📊 每日操作介面</h1>
+
+      <div class="actions">
+        <button id="refresh_btn">🔄 重新整理頁面</button>
+        <button id="pipeline_btn">🚀 更新資料與策略</button>
+      </div>
+
+      <div id="ui_status" class="mini-status normal">待命</div>
+
+      <div class="meta-grid">
+        <div><strong>現在時間：</strong><span id="now_time">—</span></div>
+        <div><strong>最後更新：</strong><span id="last_update">—</span></div>
+        <div><strong>訊號日：</strong><span id="signal_date">—</span></div>
+        <div><strong>交易日：</strong><span id="trade_date">—</span></div>
+        <div><strong>資料狀態：</strong><span id="data_state">—</span></div>
+        <div><strong>今日操作：</strong><span id="trade_plan_batch">—</span></div>
+        <div><strong>持倉寫回：</strong><span id="position_writeback_state">—</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>🔐 GitHub 本機設定</h2>
+      <div class="note">這版不把 token 放在 repo 檔案內。設定只會存在你這台裝置的瀏覽器。</div>
+
+      <div class="form settings-form">
+        <input id="cfg_owner" placeholder="GitHub owner" />
+        <input id="cfg_repo" placeholder="Repo 名稱" />
+        <input id="cfg_branch" placeholder="Branch（例如 main）" />
+        <input id="cfg_token" type="password" placeholder="GitHub PAT Token" />
+        <button id="save_cfg_btn">儲存設定</button>
+        <button id="clear_cfg_btn" class="danger-btn" type="button">清除設定</button>
+      </div>
+
+      <div class="meta-grid">
+        <div><strong>設定狀態：</strong><span id="cfg_status">未檢查</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>💰 價格分層</h2>
+      <div class="note">此版先保留展示，不做互動分層鎖定。</div>
+    </section>
+
+    <section class="card">
+      <h2>📌 今日操作</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>動作</th>
+            <th>股票</th>
+            <th>價格分層</th>
+            <th>參考價格</th>
+            <th>目標權重</th>
+            <th>建議金額</th>
+            <th>備註</th>
+          </tr>
+        </thead>
+        <tbody id="trade_plan_tbody"></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>📦 持倉監控</h2>
+      <div class="form">
+        <input id="pos_stock" placeholder="股票代號" />
+        <input id="pos_shares" placeholder="股數" />
+        <input id="pos_cost" placeholder="成本" />
+        <button id="pos_add_btn">加入持倉</button>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>股票</th>
+            <th>價格分層</th>
+            <th>參考價格</th>
+            <th>股數</th>
+            <th>成本</th>
+            <th>損益%</th>
+            <th>動作</th>
+            <th>移除</th>
+          </tr>
+        </thead>
+        <tbody id="positions_tbody"></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>📡 自選股監控</h2>
+      <div class="note">v2.2 先保留展示，自選股同步等下一版再接。</div>
+      <table>
+        <thead>
+          <tr>
+            <th>股票</th>
+            <th>價格分層</th>
+            <th>參考價格</th>
+            <th>持有狀態</th>
+            <th>策略池</th>
+            <th>動作</th>
+            <th>損益%</th>
+          </tr>
+        </thead>
+        <tbody id="watchlist_tbody"></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>📈 績效摘要</h2>
+      <div id="summary_box" class="summary-box"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
