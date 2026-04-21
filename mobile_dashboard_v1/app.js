@@ -59,7 +59,6 @@ function parseCsvLine(line) {
   const out = [];
   let cur = '';
   let inQuotes = false;
-
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
     if (ch === '"') {
@@ -154,20 +153,15 @@ function renderMeta() {
 
   const ds = String(meta.data_state || '').toLowerCase();
   let dsText = '讀取中...';
-  let dsKind = 'loading';
 
   if (ds === 'ok' || ds === 'fresh') {
     dsText = '✅ 最新資料';
-    dsKind = 'ok';
   } else if (ds === 'stale') {
     dsText = '⚠️ 主資料未完整刷新';
-    dsKind = 'warn';
   } else if (ds === 'loading') {
     dsText = '⏳ 讀取中';
-    dsKind = 'loading';
   } else if (ds) {
     dsText = ds;
-    dsKind = 'warn';
   }
 
   setText('data_state', dsText);
@@ -200,11 +194,8 @@ function getMergedPositions() {
       shares: row.shares || '',
       avg_cost: row.avg_cost || '',
       pnl_pct: row.pnl_pct || '',
-      target_weight: row.target_weight || '',
-      current_weight_est: row.current_weight_est || '',
       action: row.action || 'HOLD',
       note: row.note || '',
-      source: 'server',
     });
   }
 
@@ -219,11 +210,8 @@ function getMergedPositions() {
       shares: row.shares || old.shares || '1000',
       avg_cost: row.avg_cost || old.avg_cost || '',
       pnl_pct: old.pnl_pct || '',
-      target_weight: old.target_weight || '',
-      current_weight_est: old.current_weight_est || '',
       action: old.action || 'LOCAL',
       note: row.note || old.note || '本地持倉',
-      source: 'local',
     });
   }
 
@@ -244,7 +232,6 @@ function getMergedWatchlist() {
       strategy_bucket: row.strategy_bucket || '未進策略',
       action: row.action || '觀察',
       pnl_pct: row.pnl_pct || '',
-      source: 'server',
     });
   }
 
@@ -260,7 +247,6 @@ function getMergedWatchlist() {
       strategy_bucket: old.strategy_bucket || '未進策略',
       action: old.action || '觀察',
       pnl_pct: old.pnl_pct || '',
-      source: 'local',
     });
   }
 
@@ -274,7 +260,7 @@ function renderTradePlan() {
 
   const rows = Array.isArray(state.tradePlan) ? state.tradePlan : [];
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="7">目前沒有資料</td></tr>`;
+    tbody.innerHTML = '<tr><td colspan="7">目前沒有資料</td></tr>';
     return;
   }
 
@@ -300,7 +286,7 @@ function renderPositions() {
 
   const rows = getMergedPositions();
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="7">目前沒有持倉</td></tr>`;
+    tbody.innerHTML = '<tr><td colspan="7">目前沒有持倉</td></tr>';
     return;
   }
 
@@ -330,7 +316,7 @@ function renderWatchlist() {
 
   const rows = getMergedWatchlist();
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="8">目前沒有自選股</td></tr>`;
+    tbody.innerHTML = '<tr><td colspan="8">目前沒有自選股</td></tr>';
     return;
   }
 
@@ -386,9 +372,9 @@ function addPosition() {
   syncLocalState();
   renderPositions();
 
-  byId('pos_stock').value = '';
-  byId('pos_shares').value = '';
-  byId('pos_cost').value = '';
+  if (byId('pos_stock')) byId('pos_stock').value = '';
+  if (byId('pos_shares')) byId('pos_shares').value = '';
+  if (byId('pos_cost')) byId('pos_cost').value = '';
 
   setMiniStatus(`已加入持倉 ${stock}`, 'ok');
 }
@@ -410,14 +396,12 @@ function addWatch() {
   }
 
   const rows = loadLocalArray(STORAGE_KEYS.watchlist);
-  if (!rows.some(r => String(r.stock_id) === stock)) {
-    rows.push({ stock_id: stock });
-  }
+  if (!rows.some(r => String(r.stock_id) === stock)) rows.push({ stock_id: stock });
   saveLocalArray(STORAGE_KEYS.watchlist, rows);
   syncLocalState();
   renderWatchlist();
 
-  byId('watch_stock').value = '';
+  if (byId('watch_stock')) byId('watch_stock').value = '';
   setMiniStatus(`已加入自選股 ${stock}`, 'ok');
 }
 
@@ -436,7 +420,6 @@ async function refreshAll() {
 
   try {
     syncLocalState();
-
     const [meta, tradePlan, positionMonitor, watchlistMonitor, fullSummary] = await Promise.all([
       fetchJson('meta.json'),
       fetchCsv('trade_plan.csv'),
@@ -484,9 +467,9 @@ function bindEvents() {
 document.addEventListener('DOMContentLoaded', () => {
   syncLocalState();
   bindEvents();
+  renderTradePlan();
   renderPositions();
   renderWatchlist();
   renderSummary();
   refreshAll();
 });
-
