@@ -1,8 +1,7 @@
 {
-  "generated_at": "2026-04-21 09:54:19",
+  "generated_at": "2026-04-21 10:51:24",
   "signal_date": "2026-04-17",
   "trade_date": "2026-04-20",
-  "data_state": "stale",
-  "source": "v266.10.3_pipeline",
-  "trade_plan_batch": "2026-04-21 09:54:19"
+  "data_state": "fresh",
+  "source": "v266.8.2_complete_fix"
 }
