@@ -1,4 +1,4 @@
-name: v1_stable_pipeline
+name: v2_7_pipeline
 
 on:
   workflow_dispatch:
@@ -6,130 +6,33 @@ on:
 jobs:
   run_pipeline:
     runs-on: ubuntu-latest
-
     permissions:
       contents: write
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
-        run: |
-          pip install pandas numpy requests
+      - run: pip install pandas
 
-      # 先嘗試補主資料
-      - name: Rebuild price panel if merge script exists
-        run: |
-          set -e
-          if [ -f "merge_chunked_price_panel.py" ]; then
-            echo "found merge_chunked_price_panel.py, rebuilding price_panel_daily.csv"
-            python merge_chunked_price_panel.py
-          else
-            echo "merge_chunked_price_panel.py not found, skip rebuild"
-          fi
+      - name: Update market data
+        run: python update_market_data.py
 
-      # 檢查主資料是否存在，並印出最後日期
-      - name: Verify price panel
-        run: |
-          set -e
-          if [ ! -f "price_panel_daily.csv" ]; then
-            echo "price_panel_daily.csv not found"
-            exit 1
-          fi
+      - name: Run main pipeline
+        run: python v1_stable_pipeline.py
 
-          python - << 'PY'
-          import pandas as pd
-          from pathlib import Path
-
-          path = Path("price_panel_daily.csv")
-          print(f"price panel size: {path.stat().st_size / 1024 / 1024:.2f} MB")
-
-          df = pd.read_csv(path, nrows=200000, encoding="utf-8-sig")
-          df.columns = [str(c).lower().strip() for c in df.columns]
-
-          date_col = None
-          for c in ["date", "trade_date", "datetime"]:
-              if c in df.columns:
-                  date_col = c
-                  break
-
-          if date_col is None:
-              print("no date column found in first sample")
-          else:
-              ds = pd.to_datetime(df[date_col], errors="coerce").dropna()
-              if len(ds):
-                  print("sample latest date:", ds.max())
-              else:
-                  print("date column exists but no valid date in sample")
-          PY
-
-      - name: Run stable pipeline
-        run: |
-          python v1_stable_pipeline.py
-
-      - name: Ensure dashboard data folder
+      - name: Sync dashboard
         run: |
           mkdir -p mobile_dashboard_v1/data
+          cp meta.json mobile_dashboard_v1/data/meta.json
 
-      - name: Sync ONLY dashboard files
-        run: |
-          set -e
-
-          copy_if_exists () {
-            if [ -f "$1" ]; then
-              cp "$1" "$2"
-              echo "copied: $1 -> $2"
-            else
-              echo "missing: $1"
-            fi
-          }
-
-          copy_if_exists meta.json mobile_dashboard_v1/data/meta.json
-          copy_if_exists trade_plan.csv mobile_dashboard_v1/data/trade_plan.csv
-          copy_if_exists position_monitor.csv mobile_dashboard_v1/data/position_monitor.csv
-          copy_if_exists watchlist_monitor.csv mobile_dashboard_v1/data/watchlist_monitor.csv
-          copy_if_exists full_summary.csv mobile_dashboard_v1/data/full_summary.csv
-          copy_if_exists selection_debug.csv mobile_dashboard_v1/data/selection_debug.csv
-          copy_if_exists current_positions.csv mobile_dashboard_v1/data/current_positions.csv
-          copy_if_exists watchlist.csv mobile_dashboard_v1/data/watchlist.csv
-
-      - name: Remove oversized files from git index if created
-        run: |
-          git rm --cached -f price_panel_daily.csv 2>/dev/null || true
-          git rm --cached -f mobile_dashboard_v1/data/price_panel_daily.csv 2>/dev/null || true
-
-      - name: Show dashboard data
-        run: |
-          echo "=== DASHBOARD DATA ==="
-          ls -lah mobile_dashboard_v1/data
-          echo "=== META.JSON ==="
-          cat mobile_dashboard_v1/data/meta.json || true
-
-      - name: Commit dashboard files only
+      - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add mobile_dashboard_v1/data/meta.json
-          git add mobile_dashboard_v1/data/trade_plan.csv
-          git add mobile_dashboard_v1/data/position_monitor.csv
-          git add mobile_dashboard_v1/data/watchlist_monitor.csv
-          git add mobile_dashboard_v1/data/full_summary.csv
-          git add mobile_dashboard_v1/data/selection_debug.csv
-          git add mobile_dashboard_v1/data/current_positions.csv
-          git add mobile_dashboard_v1/data/watchlist.csv
-
-          if git diff --cached --quiet; then
-            echo "no dashboard changes to commit"
-          else
-            git commit -m "update: dashboard data after price refresh"
-            git push
-          fi
+          git add .
+          git commit -m "v2.7 update market data"
+          git push || echo "no changes"
