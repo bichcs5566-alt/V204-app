@@ -2,18 +2,19 @@ name: v1_stable_pipeline
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 11 * * 1-5"
 
 jobs:
   run_pipeline:
     runs-on: ubuntu-latest
+
     permissions:
       contents: write
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -28,11 +29,49 @@ jobs:
         run: |
           python v1_stable_pipeline.py
 
-      - name: Commit outputs
-        continue-on-error: true
+      - name: Ensure dashboard data folder
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add mobile_dashboard_v1/data root_exports || true
-          git commit -m "update: v1 stable data" || echo "No changes"
-          git push || echo "Push skipped"
+          mkdir -p mobile_dashboard_v1/data
+
+      - name: Sync output files to dashboard data
+        run: |
+          set -e
+
+          copy_if_exists () {
+            if [ -f "$1" ]; then
+              cp "$1" "$2"
+              echo "copied: $1 -> $2"
+            else
+              echo "missing: $1"
+            fi
+          }
+
+          copy_if_exists meta.json mobile_dashboard_v1/data/meta.json
+          copy_if_exists trade_plan.csv mobile_dashboard_v1/data/trade_plan.csv
+          copy_if_exists position_monitor.csv mobile_dashboard_v1/data/position_monitor.csv
+          copy_if_exists watchlist_monitor.csv mobile_dashboard_v1/data/watchlist_monitor.csv
+          copy_if_exists full_summary.csv mobile_dashboard_v1/data/full_summary.csv
+          copy_if_exists selection_debug.csv mobile_dashboard_v1/data/selection_debug.csv
+          copy_if_exists current_positions.csv mobile_dashboard_v1/data/current_positions.csv
+          copy_if_exists watchlist.csv mobile_dashboard_v1/data/watchlist.csv
+
+      - name: Show synced files
+        run: |
+          echo "=== ROOT FILES ==="
+          ls -lah
+          echo "=== DASHBOARD DATA ==="
+          ls -lah mobile_dashboard_v1/data
+
+      - name: Commit updated files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add mobile_dashboard_v1/data/*.csv mobile_dashboard_v1/data/*.json *.csv *.json || true
+
+          if git diff --cached --quiet; then
+            echo "no changes to commit"
+          else
+            git commit -m "update: stable pipeline outputs"
+            git push
+          fi
