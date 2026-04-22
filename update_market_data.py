@@ -1,61 +1,65 @@
+import requests
 import pandas as pd
 from datetime import datetime
 
-# v2.7 修正版
-# 重點修正：
-# 1. 欄位名稱改成 stock_id（不要再用 stock）
-# 2. 若檔案原本是 stock 欄，也自動轉成 stock_id
-# 3. 只做最小測試補值，避免主流程直接炸掉
+OUTPUT = "price_panel_daily.csv"
 
-PRICE_PANEL_FILE = "price_panel_daily.csv"
+today = datetime.now().strftime("%Y%m%d")
 
-today = datetime.now().strftime("%Y-%m-%d")
+# 台股 TWSE API
+url = f"https://www.twse.com.tw/exchangeReport/MI_INDEX?response=json&date={today}&type=ALL"
 
+res = requests.get(url)
+
+if res.status_code != 200:
+    print("TWSE fetch failed")
+    exit(1)
+
+data = res.json()
+
+if "data9" not in data:
+    print("no data9 field")
+    exit(1)
+
+rows = data["data9"]
+
+records = []
+
+for r in rows:
+    try:
+        stock_id = r[0]
+        close = r[8].replace(",", "")
+        volume = r[2].replace(",", "")
+
+        if close == "--":
+            continue
+
+        records.append({
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "stock_id": stock_id,
+            "close": float(close),
+            "volume": int(volume)
+        })
+    except:
+        continue
+
+df = pd.DataFrame(records)
+
+# 只保留最近 30 天（避免爆 GitHub 100MB）
 try:
-    df = pd.read_csv(PRICE_PANEL_FILE, encoding="utf-8-sig")
-except Exception:
-    df = pd.DataFrame(columns=["date", "stock_id", "close", "volume"])
+    old = pd.read_csv(OUTPUT)
+    df = pd.concat([old, df], ignore_index=True)
+except:
+    pass
 
-df.columns = [str(c).strip().lower() for c in df.columns]
+df["date"] = pd.to_datetime(df["date"])
 
-# 舊欄位相容
-if "stock_id" not in df.columns:
-    if "stock" in df.columns:
-        df = df.rename(columns={"stock": "stock_id"})
-    elif "symbol" in df.columns:
-        df = df.rename(columns={"symbol": "stock_id"})
-    elif "code" in df.columns:
-        df = df.rename(columns={"code": "stock_id"})
+df = df.sort_values("date").drop_duplicates(["date", "stock_id"], keep="last")
 
-# 補齊必要欄位
-for col, default in {
-    "date": today,
-    "stock_id": "TEST",
-    "close": 100,
-    "volume": 0,
-}.items():
-    if col not in df.columns:
-        df[col] = default
+df = df[df["date"] >= df["date"].max() - pd.Timedelta(days=30)]
 
-# 這裡只是最小測試資料，確保主 pipeline 不會因缺欄而中斷
-new_row = pd.DataFrame([{
-    "date": today,
-    "stock_id": "TEST",
-    "close": 100,
-    "volume": 0,
-}])
+df.to_csv(OUTPUT, index=False, encoding="utf-8-sig")
 
-df = pd.concat([df, new_row], ignore_index=True)
-
-# 保留主流程常用欄位
-keep_cols = []
-for c in ["date", "stock_id", "close", "volume"]:
-    if c in df.columns:
-        keep_cols.append(c)
-
-df = df[keep_cols].copy()
-df.to_csv(PRICE_PANEL_FILE, index=False, encoding="utf-8-sig")
-
-print("updated price_panel_daily.csv")
-print("latest append date:", today)
-print("columns:", list(df.columns))
+print("update_market_data done")
+print("latest date:", df["date"].max())
+print("rows:", len(df))
