@@ -1,7 +1,9 @@
 {
-  "generated_at": "2026-04-22 21:31:49",
+  "generated_at": "2026-04-22 22:13:22",
   "signal_date": "2026-04-17",
   "trade_date": "2026-04-20",
   "data_state": "fresh",
-  "source": "v266.8.2_complete_fix"
+  "source": "v2.6_integrated_dashboard",
+  "trade_plan_batch": "2026-04-22 22:13:22",
+  "position_writeback_state": "idle"
 }
