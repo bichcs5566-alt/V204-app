@@ -1,0 +1,31 @@
+name: v2_8_auto_update
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7 11 * * 1-5'  # 台灣 19:07（避開整點）
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: pip install pandas requests
+
+      - name: Update market data
+        run: python update_market_data.py
+
+      - name: Run main pipeline
+        run: python v1_stable_pipeline.py
+
+      - name: Commit results
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add .
+          git commit -m "v2.8 auto update"
+          git push
