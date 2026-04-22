@@ -7,6 +7,10 @@ const state = {
   watchlistMonitor: [],
   fullSummary: [],
   uiBusy: false,
+  autoPolling: false,
+  pollTimer: null,
+  pollStartTs: 0,
+  lastKnownGeneratedAt: '',
 };
 
 const VALUE_MAP = {
@@ -221,12 +225,64 @@ async function dispatchWorkflow(workflowFile, inputs={}){
   }
 }
 
+function stopAutoPolling(){
+  if(state.pollTimer){
+    clearTimeout(state.pollTimer);
+    state.pollTimer = null;
+  }
+  state.autoPolling = false;
+}
+
+async function autoPollForFreshData(){
+  const maxMs = 180000;
+  const intervalMs = 8000;
+
+  if (!state.autoPolling) return;
+
+  try{
+    const meta = await fetchJson('meta.json');
+    const newGeneratedAt = String(meta.generated_at || '');
+    const changed = newGeneratedAt && newGeneratedAt !== state.lastKnownGeneratedAt;
+    const fresh = metaReady(meta);
+
+    if (changed || fresh){
+      stopAutoPolling();
+      setMiniStatus('✅ 已偵測到新資料，正在自動同步頁面', 'ok');
+      await refreshAll();
+      return;
+    }
+
+    const elapsed = Date.now() - state.pollStartTs;
+    if (elapsed >= maxMs){
+      stopAutoPolling();
+      setMiniStatus('已送出 pipeline，但 3 分鐘內尚未看到新資料，請手動再重新整理一次', 'warn');
+      return;
+    }
+
+    setMiniStatus('已送出 pipeline，系統自動等待新資料回寫...', 'loading');
+    state.pollTimer = setTimeout(autoPollForFreshData, intervalMs);
+  }catch(err){
+    const elapsed = Date.now() - state.pollStartTs;
+    if (elapsed >= maxMs){
+      stopAutoPolling();
+      setMiniStatus('自動同步逾時，請手動重新整理', 'warn');
+      return;
+    }
+    state.pollTimer = setTimeout(autoPollForFreshData, intervalMs);
+  }
+}
+
 async function runPipeline(){
   try{
     setBusy(true,'⏳ 送出 pipeline 中...');
     const cfg = getCfg();
-    await dispatchWorkflow(cfg.workflows?.pipeline || 'v2_pipeline.yml', {});
-    setMiniStatus('已送出 pipeline，請稍候 1-2 分鐘後再重新整理', 'warn');
+    state.lastKnownGeneratedAt = String(state.meta?.generated_at || '');
+    await dispatchWorkflow(cfg.workflows?.pipeline || 'v1_stable_pipeline.yml', {});
+    setMiniStatus('已送出 pipeline，系統將自動同步最新資料', 'warn');
+    stopAutoPolling();
+    state.autoPolling = true;
+    state.pollStartTs = Date.now();
+    state.pollTimer = setTimeout(autoPollForFreshData, 4000);
   }catch(err){
     console.error(err);
     setMiniStatus(`送出 pipeline 失敗：${err.message}`, 'error');
@@ -245,6 +301,11 @@ function renderMeta(){
   const batch = meta.trade_plan_batch || meta.generated_at || '';
   setText('trade_plan_batch', batch ? `🟢 已更新（${batch}）` : '—');
   setText('position_writeback_state', normalizeValue(meta.position_writeback_state || 'idle'));
+
+  if (state.autoPolling) {
+    setMiniStatus('已送出 pipeline，系統自動等待新資料回寫...', 'loading');
+    return;
+  }
 
   if(metaReady(meta)) setMiniStatus('頁面資料已同步', 'ok');
   else if(String(meta.data_state || '').toLowerCase() === 'stale') setMiniStatus('主資料尚未完整刷新，但頁面可正常操作', 'warn');
@@ -373,7 +434,6 @@ async function removePosition(stock){
 
 async function refreshAll(){
   setBusy(true,'⏳ 讀取資料中...');
-  setMiniStatus('讀取中...','loading');
   try{
     const [meta, tradePlan, positionMonitor, watchlistMonitor, fullSummary] = await Promise.all([
       fetchJson('meta.json'),
