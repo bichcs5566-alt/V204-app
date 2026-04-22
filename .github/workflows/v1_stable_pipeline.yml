@@ -33,7 +33,7 @@ jobs:
         run: |
           mkdir -p mobile_dashboard_v1/data
 
-      - name: Sync output files to dashboard data
+      - name: Sync ONLY dashboard files
         run: |
           set -e
 
@@ -55,23 +55,33 @@ jobs:
           copy_if_exists current_positions.csv mobile_dashboard_v1/data/current_positions.csv
           copy_if_exists watchlist.csv mobile_dashboard_v1/data/watchlist.csv
 
-      - name: Show synced files
+      - name: Remove oversized files from git index if created
         run: |
-          echo "=== ROOT FILES ==="
-          ls -lah
+          git rm --cached -f price_panel_daily.csv 2>/dev/null || true
+          git rm --cached -f mobile_dashboard_v1/data/price_panel_daily.csv 2>/dev/null || true
+
+      - name: Show dashboard data
+        run: |
           echo "=== DASHBOARD DATA ==="
           ls -lah mobile_dashboard_v1/data
 
-      - name: Commit updated files
+      - name: Commit dashboard files only
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add mobile_dashboard_v1/data/*.csv mobile_dashboard_v1/data/*.json *.csv *.json || true
+          git add mobile_dashboard_v1/data/meta.json
+          git add mobile_dashboard_v1/data/trade_plan.csv
+          git add mobile_dashboard_v1/data/position_monitor.csv
+          git add mobile_dashboard_v1/data/watchlist_monitor.csv
+          git add mobile_dashboard_v1/data/full_summary.csv
+          git add mobile_dashboard_v1/data/selection_debug.csv
+          git add mobile_dashboard_v1/data/current_positions.csv
+          git add mobile_dashboard_v1/data/watchlist.csv
 
           if git diff --cached --quiet; then
-            echo "no changes to commit"
+            echo "no dashboard changes to commit"
           else
-            git commit -m "update: stable pipeline outputs"
+            git commit -m "update: dashboard data only"
             git push
           fi
