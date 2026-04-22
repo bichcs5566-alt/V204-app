@@ -7,11 +7,10 @@ from datetime import datetime, timezone, timedelta
 import numpy as np
 import pandas as pd
 
-# =========================
-# v2.6_integrated_dashboard
-# 主引擎整合版（Phase 1）
-# 檔名建議覆蓋：v1_stable_pipeline.py
-# =========================
+# ==========================================
+# v1_stable_pipeline.py
+# 完整改修可覆蓋版（整合目前修正）
+# ==========================================
 
 CORE_WEIGHT = 0.75
 ALPHA_WEIGHT = 0.25
@@ -140,10 +139,13 @@ def load_price():
                 break
 
     if "stock_id" not in df.columns:
-        for alt in ["symbol", "code"]:
+        for alt in ["symbol", "code", "stock"]:
             if alt in df.columns:
                 df["stock_id"] = df[alt]
                 break
+
+    if "stock_id" not in df.columns:
+        raise ValueError("price_panel_daily.csv 缺少 stock_id 欄位")
 
     if "close" not in df.columns:
         raise ValueError("price_panel_daily.csv 缺少 close 欄位")
@@ -151,7 +153,7 @@ def load_price():
     if "volume" not in df.columns:
         df["volume"] = np.nan
 
-    df["date"] = pd.to_datetime(df["date"])
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
     df["close"] = pd.to_numeric(df["close"], errors="coerce")
     df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
     df["stock_id"] = df["stock_id"].astype(str).str.strip()
@@ -292,6 +294,7 @@ def latest_signal_date(df):
 def build_outputs(df):
     signal_date = latest_signal_date(df)
     trade_date = next_business_day(signal_date)
+    price_panel_latest_date = signal_date
 
     signal_df = df[df["date"].dt.normalize() == signal_date].copy()
 
@@ -418,13 +421,16 @@ def build_outputs(df):
         "sharpe_daily": 0
     }])
 
+    now_str = now_taipei().strftime("%Y-%m-%d %H:%M:%S")
     meta = {
-        "generated_at": now_taipei().strftime("%Y-%m-%d %H:%M:%S"),
+        "generated_at": now_str,
+        "now_time": now_str,
         "signal_date": str(signal_date.date()),
         "trade_date": str(trade_date.date()),
+        "price_panel_latest_date": str(price_panel_latest_date.date()),
         "data_state": "fresh",
-        "source": "v2.6_integrated_dashboard",
-        "trade_plan_batch": now_taipei().strftime("%Y-%m-%d %H:%M:%S"),
+        "source": "v2.8_real_market_auto",
+        "trade_plan_batch": now_str,
         "position_writeback_state": "idle"
     }
 
@@ -472,7 +478,7 @@ def main():
     (DASHBOARD_DATA_DIR / "meta.json").write_text(meta_text, encoding="utf-8")
     Path("meta.json").write_text(meta_text, encoding="utf-8")
 
-    print("完成 v2.6_integrated_dashboard Phase 1")
+    print("完成 v1_stable_pipeline 完整改修版")
     print(meta_text)
 
 
