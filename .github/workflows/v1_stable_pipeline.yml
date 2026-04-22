@@ -25,6 +25,52 @@ jobs:
         run: |
           pip install pandas numpy requests
 
+      # 先嘗試補主資料
+      - name: Rebuild price panel if merge script exists
+        run: |
+          set -e
+          if [ -f "merge_chunked_price_panel.py" ]; then
+            echo "found merge_chunked_price_panel.py, rebuilding price_panel_daily.csv"
+            python merge_chunked_price_panel.py
+          else
+            echo "merge_chunked_price_panel.py not found, skip rebuild"
+          fi
+
+      # 檢查主資料是否存在，並印出最後日期
+      - name: Verify price panel
+        run: |
+          set -e
+          if [ ! -f "price_panel_daily.csv" ]; then
+            echo "price_panel_daily.csv not found"
+            exit 1
+          fi
+
+          python - << 'PY'
+          import pandas as pd
+          from pathlib import Path
+
+          path = Path("price_panel_daily.csv")
+          print(f"price panel size: {path.stat().st_size / 1024 / 1024:.2f} MB")
+
+          df = pd.read_csv(path, nrows=200000, encoding="utf-8-sig")
+          df.columns = [str(c).lower().strip() for c in df.columns]
+
+          date_col = None
+          for c in ["date", "trade_date", "datetime"]:
+              if c in df.columns:
+                  date_col = c
+                  break
+
+          if date_col is None:
+              print("no date column found in first sample")
+          else:
+              ds = pd.to_datetime(df[date_col], errors="coerce").dropna()
+              if len(ds):
+                  print("sample latest date:", ds.max())
+              else:
+                  print("date column exists but no valid date in sample")
+          PY
+
       - name: Run stable pipeline
         run: |
           python v1_stable_pipeline.py
@@ -64,6 +110,8 @@ jobs:
         run: |
           echo "=== DASHBOARD DATA ==="
           ls -lah mobile_dashboard_v1/data
+          echo "=== META.JSON ==="
+          cat mobile_dashboard_v1/data/meta.json || true
 
       - name: Commit dashboard files only
         run: |
@@ -82,6 +130,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "no dashboard changes to commit"
           else
-            git commit -m "update: dashboard data only"
+            git commit -m "update: dashboard data after price refresh"
             git push
           fi
