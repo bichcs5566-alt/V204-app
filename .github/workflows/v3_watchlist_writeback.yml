@@ -37,7 +37,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pandas
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Run watchlist writeback
         run: |
@@ -66,6 +67,6 @@ jobs:
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              workflow_id: 'v1_stable_pipeline.yml',
+              workflow_id: 'v3_0_auto_update.yml',
               ref: 'main'
             })
