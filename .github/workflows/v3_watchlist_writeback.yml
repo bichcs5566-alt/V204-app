@@ -67,6 +67,6 @@ jobs:
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              workflow_id: 'v3_0_auto_update.yml',
+              workflow_id: 'v3_1_auto_update.yml',
               ref: 'main'
             })
