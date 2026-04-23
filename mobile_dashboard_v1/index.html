@@ -2,33 +2,160 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>每日操作介面 v2.2 本機 Token 設定版</title>
-  <link rel="stylesheet" href="styles.css" />
-  <script src="github_config.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>每日操作介面 v2.9</title>
+  <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <main class="wrap">
-    <section class="card">
-      <h1>📊 每日操作介面</h1>
-
-      <div class="actions">
-        <button id="refresh_btn">🔄 重新整理頁面</button>
-        <button id="pipeline_btn">🚀 更新資料與策略</button>
+  <div class="page">
+    <header class="hero card">
+      <div class="hero-title">📊 每日操作介面</div>
+      <div class="hero-actions">
+        <button id="refreshBtn" class="btn btn-primary">🔄 重新整理頁面</button>
+        <button id="updateBtn" class="btn btn-secondary">🚀 更新資料與策略</button>
       </div>
-
-      <div id="ui_status" class="mini-status normal">待命</div>
+      <div id="syncBanner" class="sync-banner">頁面載入中…</div>
 
       <div class="meta-grid">
-        <div><strong>現在時間：</strong><span id="now_time">—</span></div>
-        <div><strong>最後更新：</strong><span id="last_update">—</span></div>
-        <div><strong>訊號日：</strong><span id="signal_date">—</span></div>
-        <div><strong>交易日：</strong><span id="trade_date">—</span></div>
-        <div><strong>資料狀態：</strong><span id="data_state">—</span></div>
-        <div><strong>今日操作：</strong><span id="trade_plan_batch">—</span></div>
-        <div><strong>持倉寫回：</strong><span id="position_writeback_state">—</span></div>
+        <div><span class="meta-label">現在時間：</span><span id="nowTime">--</span></div>
+        <div><span class="meta-label">最後更新：</span><span id="generatedAt">--</span></div>
+        <div><span class="meta-label">訊號日：</span><span id="signalDate">--</span></div>
+        <div><span class="meta-label">交易日：</span><span id="tradeDate">--</span></div>
+        <div><span class="meta-label">主資料日期：</span><span id="panelDate">--</span></div>
+        <div><span class="meta-label">資料狀態：</span><span id="dataState">--</span></div>
+        <div><span class="meta-label">來源版本：</span><span id="sourceName">--</span></div>
+        <div><span class="meta-label">持倉寫回：</span><span id="writebackState">--</span></div>
+      </div>
+    </header>
+
+    <section class="card">
+      <div class="section-title">📍 今日應做</div>
+      <div id="actionSummary" class="action-summary-grid">
+        <div class="summary-box">
+          <div class="summary-label">主要動作</div>
+          <div id="headlineAction" class="summary-value">--</div>
+          <div id="headlineDesc" class="summary-sub">--</div>
+        </div>
+        <div class="summary-box">
+          <div class="summary-label">買進檔數</div>
+          <div id="buyCount" class="summary-value">0</div>
+          <div id="buyAmount" class="summary-sub">建議金額：0</div>
+        </div>
+        <div class="summary-box">
+          <div class="summary-label">持倉動作</div>
+          <div id="positionActionCount" class="summary-value">0</div>
+          <div id="positionActionDesc" class="summary-sub">目前無加減碼</div>
+        </div>
+        <div class="summary-box">
+          <div class="summary-label">風險提示</div>
+          <div id="riskLevel" class="summary-value">--</div>
+          <div id="riskDesc" class="summary-sub">--</div>
+        </div>
       </div>
     </section>
+
+    <section class="card">
+      <div class="section-title">💰 價位分層</div>
+      <div class="subtle-note">此版先以展示為主，後續再接互動分層控制。</div>
+      <div id="tierSummary" class="tier-grid"></div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">📌 今日操作</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>動作</th>
+              <th>股票</th>
+              <th>價格分層</th>
+              <th>參考價格</th>
+              <th>目標權重</th>
+              <th>建議金額</th>
+              <th>備註</th>
+            </tr>
+          </thead>
+          <tbody id="tradePlanBody">
+            <tr><td colspan="7" class="empty">載入中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">📦 持倉監控</div>
+      <div class="subtle-note">v2.9 先定稿畫面，新增 / 移除持股寫回將在下一階段閉環接上。</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>股票</th>
+              <th>價格分層</th>
+              <th>參考價格</th>
+              <th>股數</th>
+              <th>成本</th>
+              <th>損益%</th>
+              <th>目標權重</th>
+              <th>動作</th>
+              <th>備註</th>
+            </tr>
+          </thead>
+          <tbody id="positionBody">
+            <tr><td colspan="9" class="empty">載入中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">📡 自選股監控</div>
+      <div class="subtle-note">v2.9 先定稿畫面，新增 / 移除自選股寫回將在下一階段閉環接上。</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>股票</th>
+              <th>價格分層</th>
+              <th>參考價格</th>
+              <th>持有狀態</th>
+              <th>策略池</th>
+              <th>動作</th>
+              <th>損益%</th>
+            </tr>
+          </thead>
+          <tbody id="watchlistBody">
+            <tr><td colspan="7" class="empty">載入中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">📈 績效摘要</div>
+      <div id="summaryCards" class="perf-grid">
+        <div class="perf-box"><div class="perf-label">報酬</div><div id="returnVal" class="perf-value">--</div></div>
+        <div class="perf-box"><div class="perf-label">MDD</div><div id="mddVal" class="perf-value">--</div></div>
+        <div class="perf-box"><div class="perf-label">Sharpe</div><div id="sharpeVal" class="perf-value">--</div></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">🧪 篩選除錯</div>
+      <div class="debug-grid">
+        <div><span class="meta-label">輸入檔數：</span><span id="dbgTotal">--</span></div>
+        <div><span class="meta-label">有效檔數：</span><span id="dbgValid">--</span></div>
+        <div><span class="meta-label">Core 初選：</span><span id="dbgCorePrimary">--</span></div>
+        <div><span class="meta-label">Alpha 初選：</span><span id="dbgAlphaPrimary">--</span></div>
+        <div><span class="meta-label">Core 最終：</span><span id="dbgCoreFinal">--</span></div>
+        <div><span class="meta-label">Alpha 最終：</span><span id="dbgAlphaFinal">--</span></div>
+      </div>
+    </section>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
+
 
     <section class="card">
       <h2>🔐 GitHub 本機設定</h2>
