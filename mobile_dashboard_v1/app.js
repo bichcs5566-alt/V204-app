@@ -1,479 +1,348 @@
-const DATA_DIR = './data';
+const DATA_DIR = "./data";
 
-const state = {
-  meta: {},
-  tradePlan: [],
-  positionMonitor: [],
-  watchlistMonitor: [],
-  fullSummary: [],
-  uiBusy: false,
-  autoPolling: false,
-  pollTimer: null,
-  pollStartTs: 0,
-  lastKnownGeneratedAt: '',
-};
-
-const VALUE_MAP = {
-  BUY: '買進', SELL: '賣出', ADD: '加碼', REDUCE: '減碼', HOLD: '持有',
-  HOLD_MONITOR: '持有監控', WATCH: '觀察', BUY_READY: '可買候選', CANDIDATE: '候選',
-  STOP_LOSS: '停損', NONE: '未進策略', LOCAL: '本地資料',
-  ok: '✅ 最新資料', fresh: '✅ 最新資料', stale: '⚠️ 主資料未完整刷新', loading: '⏳ 讀取中',
-  submitted: '已送出，等待資料同步與策略重算', synced: '已同步', idle: '待命', failed: '失敗，請重試',
-  lt_50: '50以下', p50_100: '50-100', p100_300: '100-300', p300_500: '300-500', p500_1000: '500-1000', gt_1000: '1000以上',
-  unknown: '等待新資料',
-};
-
-const CFG_KEYS = {
-  owner: 'v22_cfg_owner',
-  repo: 'v22_cfg_repo',
-  branch: 'v22_cfg_branch',
-  token: 'v22_cfg_token',
-};
-
-function byId(id){ return document.getElementById(id); }
-function setText(id, value){ const el = byId(id); if (el) el.textContent = value; }
-function toNum(v){ if (v === null || v === undefined || v === '') return null; const n = Number(v); return Number.isFinite(n) ? n : null; }
-function fmtNum(v, digits=3){ const n = toNum(v); if (n === null) return '—'; return n.toLocaleString('zh-TW',{minimumFractionDigits:0,maximumFractionDigits:digits}); }
-function fmtPct(v){ const n = toNum(v); if (n === null) return '目前沒有資料'; return `${(n*100).toFixed(2)}%`; }
-function escapeHtml(value){ return String(value ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
-
-function tryDecodeMojibake(text){
-  if (text === null || text === undefined) return '';
-  const s = String(text);
-  if (!/[ÃÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõöøùúûüýþÿ]/.test(s)) return s;
-  try { return decodeURIComponent(escape(s)); } catch { return s; }
-}
-
-function normalizeValue(value){
-  let s = tryDecodeMojibake(value).trim();
-  if (VALUE_MAP[s] !== undefined) return VALUE_MAP[s];
-  s = s
-    .replaceAll('æªææ', '未持有')
-    .replaceAll('å·²ææ', '已持有')
-    .replaceAll('è²·é²', '買進')
-    .replaceAll('è³£åº', '賣出')
-    .replaceAll('è§å¯', '觀察')
-    .replaceAll('æ¸ç¢¼', '減碼')
-    .replaceAll('å ç¢¼', '加碼')
-    .replaceAll('ææ', '持有')
-    .replaceAll('æªé²ç­ç¥', '未進策略')
-    .replaceAll('ç­å¾æ°è³æ', '等待新資料')
-    .replaceAll('æ°é²å ´', '新進場');
-  return VALUE_MAP[s] ?? s;
-}
-
-function parseCsvLine(line){
-  const out=[]; let cur=''; let inQuotes=false;
-  for (let i=0;i<line.length;i++){
-    const ch=line[i];
-    if (ch === '"'){
-      if (inQuotes && line[i+1] === '"'){ cur += '"'; i++; }
-      else { inQuotes = !inQuotes; }
-    } else if (ch === ',' && !inQuotes){
-      out.push(cur); cur='';
-    } else {
-      cur += ch;
-    }
-  }
-  out.push(cur);
-  return out;
-}
-
-function parseCsv(text){
-  const raw=text.replace(/\r/g,'').split('\n').filter(line=>line.trim()!=='');
-  if(!raw.length) return [];
-  const rows=raw.map(parseCsvLine);
-  const headers=rows[0].map(h=>String(h).trim());
-  return rows.slice(1).map(cols=>{
-    const obj={};
-    headers.forEach((h,i)=> obj[h]=tryDecodeMojibake(String(cols[i] ?? '').trim()));
-    return obj;
-  });
-}
-
-async function fetchCsv(name){
-  const res=await fetch(`${DATA_DIR}/${name}?t=${Date.now()}`,{cache:'no-store'});
-  if(!res.ok) throw new Error(`${name} 讀取失敗`);
-  return parseCsv(await res.text());
-}
-
-async function fetchJson(name){
-  const res=await fetch(`${DATA_DIR}/${name}?t=${Date.now()}`,{cache:'no-store'});
-  if(!res.ok) throw new Error(`${name} 讀取失敗`);
-  const data=await res.json();
-  const fixed={};
-  Object.keys(data || {}).forEach(k=>{
-    fixed[k]=typeof data[k]==='string' ? tryDecodeMojibake(data[k]) : data[k];
-  });
-  return fixed;
-}
-
-function setMiniStatus(text, kind='normal'){
-  const el=byId('ui_status');
-  if(!el) return;
-  el.textContent=text;
-  el.className=`mini-status ${kind}`;
-}
-
-function setBusy(isBusy, label=''){
-  state.uiBusy=isBusy;
-  const refreshBtn=byId('refresh_btn');
-  const pipelineBtn=byId('pipeline_btn');
-  if(refreshBtn){
-    refreshBtn.disabled=isBusy;
-    refreshBtn.textContent=isBusy ? (label || '⏳ 讀取資料中...') : '🔄 重新整理頁面';
-  }
-  if(pipelineBtn) pipelineBtn.disabled=isBusy;
-}
-
-function metaReady(meta){
-  return ['ok','fresh'].includes(String(meta?.data_state || '').toLowerCase());
-}
-
-function getDefaultCfg(){
-  return window.GITHUB_CONFIG || {};
-}
-
-function getLocalCfg(){
-  return {
-    owner: localStorage.getItem(CFG_KEYS.owner) || '',
-    repo: localStorage.getItem(CFG_KEYS.repo) || '',
-    branch: localStorage.getItem(CFG_KEYS.branch) || '',
-    token: localStorage.getItem(CFG_KEYS.token) || '',
-  };
-}
-
-function getCfg(){
-  const d = getDefaultCfg();
-  const l = getLocalCfg();
-  return {
-    owner: l.owner || d.owner || '',
-    repo: l.repo || d.repo || '',
-    branch: l.branch || d.branch || '',
-    token: l.token || '',
-    workflows: d.workflows || {},
-  };
-}
-
-function loadConfigForm(){
-  const cfg = getCfg();
-  if(byId('cfg_owner')) byId('cfg_owner').value = cfg.owner || '';
-  if(byId('cfg_repo')) byId('cfg_repo').value = cfg.repo || '';
-  if(byId('cfg_branch')) byId('cfg_branch').value = cfg.branch || '';
-  if(byId('cfg_token')) byId('cfg_token').value = cfg.token || '';
-  renderCfgStatus();
-}
-
-function renderCfgStatus(){
-  const cfg = getCfg();
-  const ok = !!(cfg.owner && cfg.repo && cfg.branch && cfg.token);
-  setText('cfg_status', ok ? '✅ 已儲存本機設定' : '⚠️ 尚未完成本機設定');
-}
-
-function saveConfig(){
-  const owner = byId('cfg_owner')?.value.trim() || '';
-  const repo = byId('cfg_repo')?.value.trim() || '';
-  const branch = byId('cfg_branch')?.value.trim() || '';
-  const token = byId('cfg_token')?.value.trim() || '';
-
-  localStorage.setItem(CFG_KEYS.owner, owner);
-  localStorage.setItem(CFG_KEYS.repo, repo);
-  localStorage.setItem(CFG_KEYS.branch, branch);
-  localStorage.setItem(CFG_KEYS.token, token);
-
-  renderCfgStatus();
-  setMiniStatus('GitHub 本機設定已儲存', 'ok');
-}
-
-function clearConfig(){
-  localStorage.removeItem(CFG_KEYS.owner);
-  localStorage.removeItem(CFG_KEYS.repo);
-  localStorage.removeItem(CFG_KEYS.branch);
-  localStorage.removeItem(CFG_KEYS.token);
-
-  if(byId('cfg_owner')) byId('cfg_owner').value = '';
-  if(byId('cfg_repo')) byId('cfg_repo').value = '';
-  if(byId('cfg_branch')) byId('cfg_branch').value = '';
-  if(byId('cfg_token')) byId('cfg_token').value = '';
-
-  renderCfgStatus();
-  setMiniStatus('已清除本機設定', 'warn');
-}
-
-async function dispatchWorkflow(workflowFile, inputs={}){
-  const cfg = getCfg();
-  if(!cfg.owner || !cfg.repo || !cfg.branch || !cfg.token){
-    throw new Error('尚未完成 GitHub 本機設定');
-  }
-
-  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/actions/workflows/${workflowFile}/dispatches`;
-  const body = JSON.stringify({ ref: cfg.branch, inputs });
-
-  const res = await fetch(url,{
-    method:'POST',
-    headers:{
-      'Accept':'application/vnd.github+json',
-      'Authorization':`Bearer ${cfg.token}`,
-      'Content-Type':'application/json',
-    },
-    body,
-  });
-
-  if(!res.ok){
-    const text = await res.text();
-    throw new Error(`${res.status} ${text}`);
-  }
-}
-
-function stopAutoPolling(){
-  if(state.pollTimer){
-    clearTimeout(state.pollTimer);
-    state.pollTimer = null;
-  }
-  state.autoPolling = false;
-}
-
-async function autoPollForFreshData(){
-  const maxMs = 180000;
-  const intervalMs = 8000;
-
-  if (!state.autoPolling) return;
-
-  try{
-    const meta = await fetchJson('meta.json');
-    const newGeneratedAt = String(meta.generated_at || '');
-    const changed = newGeneratedAt && newGeneratedAt !== state.lastKnownGeneratedAt;
-    const fresh = metaReady(meta);
-
-    if (changed || fresh){
-      stopAutoPolling();
-      setMiniStatus('✅ 已偵測到新資料，正在自動同步頁面', 'ok');
-      await refreshAll();
-      return;
-    }
-
-    const elapsed = Date.now() - state.pollStartTs;
-    if (elapsed >= maxMs){
-      stopAutoPolling();
-      setMiniStatus('已送出 pipeline，但 3 分鐘內尚未看到新資料，請手動再重新整理一次', 'warn');
-      return;
-    }
-
-    setMiniStatus('已送出 pipeline，系統自動等待新資料回寫...', 'loading');
-    state.pollTimer = setTimeout(autoPollForFreshData, intervalMs);
-  }catch(err){
-    const elapsed = Date.now() - state.pollStartTs;
-    if (elapsed >= maxMs){
-      stopAutoPolling();
-      setMiniStatus('自動同步逾時，請手動重新整理', 'warn');
-      return;
-    }
-    state.pollTimer = setTimeout(autoPollForFreshData, intervalMs);
-  }
-}
-
-async function runPipeline(){
-  try{
-    setBusy(true,'⏳ 送出 pipeline 中...');
-    const cfg = getCfg();
-    state.lastKnownGeneratedAt = String(state.meta?.generated_at || '');
-    await dispatchWorkflow(cfg.workflows?.pipeline || 'v1_stable_pipeline.yml', {});
-    setMiniStatus('已送出 pipeline，系統將自動同步最新資料', 'warn');
-    stopAutoPolling();
-    state.autoPolling = true;
-    state.pollStartTs = Date.now();
-    state.pollTimer = setTimeout(autoPollForFreshData, 4000);
-  }catch(err){
-    console.error(err);
-    setMiniStatus(`送出 pipeline 失敗：${err.message}`, 'error');
-  }finally{
-    setBusy(false);
-  }
-}
-
-function renderMeta(){
-  const meta=state.meta || {};
-  setText('now_time', meta.now_time || new Date().toLocaleString('zh-TW'));
-  setText('last_update', meta.generated_at || '—');
-  setText('signal_date', meta.signal_date || '—');
-  setText('trade_date', meta.trade_date || '—');
-  setText('data_state', normalizeValue(String(meta.data_state || 'loading')));
-  const batch = meta.trade_plan_batch || meta.generated_at || '';
-  setText('trade_plan_batch', batch ? `🟢 已更新（${batch}）` : '—');
-  setText('position_writeback_state', normalizeValue(meta.position_writeback_state || 'idle'));
-
-  if (state.autoPolling) {
-    setMiniStatus('已送出 pipeline，系統自動等待新資料回寫...', 'loading');
-    return;
-  }
-
-  if(metaReady(meta)) setMiniStatus('頁面資料已同步', 'ok');
-  else if(String(meta.data_state || '').toLowerCase() === 'stale') setMiniStatus('主資料尚未完整刷新，但頁面可正常操作', 'warn');
-  else setMiniStatus('資料讀取中，但不鎖定頁面', 'loading');
-}
-
-function renderTradePlan(){
-  const tbody=byId('trade_plan_tbody'); if(!tbody) return; tbody.innerHTML='';
-  const rows=Array.isArray(state.tradePlan)?state.tradePlan:[];
-  if(!rows.length){ tbody.innerHTML='<tr><td colspan="7">目前沒有資料</td></tr>'; return; }
-  rows.forEach(r=>{
-    const tr=document.createElement('tr');
-    tr.innerHTML=`
-      <td>${escapeHtml(normalizeValue(r.action || '—'))}</td>
-      <td>${escapeHtml(r.stock_id || '—')}</td>
-      <td>${escapeHtml(normalizeValue(r.price_tier || 'unknown'))}</td>
-      <td>${escapeHtml(fmtNum(r.ref_price,3))}</td>
-      <td>${escapeHtml(fmtNum(r.target_weight,3))}</td>
-      <td>${escapeHtml(fmtNum(r.suggested_amount,0))}</td>
-      <td>${escapeHtml(normalizeValue(r.note || ''))}</td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-function renderPositions(){
-  const tbody=byId('positions_tbody'); if(!tbody) return; tbody.innerHTML='';
-  const rows=Array.isArray(state.positionMonitor)?state.positionMonitor:[];
-  if(!rows.length){ tbody.innerHTML='<tr><td colspan="8">目前沒有持倉</td></tr>'; return; }
-  rows.forEach(r=>{
-    const tr=document.createElement('tr');
-    tr.innerHTML=`
-      <td>${escapeHtml(r.stock_id || '')}</td>
-      <td>${escapeHtml(normalizeValue(r.price_tier || 'unknown'))}</td>
-      <td>${escapeHtml(r.ref_price ? fmtNum(r.ref_price,3) : '等待新資料')}</td>
-      <td>${escapeHtml(fmtNum(r.shares,0))}</td>
-      <td>${escapeHtml(fmtNum(r.avg_cost,3))}</td>
-      <td>${escapeHtml(r.pnl_pct === '' ? '目前沒有資料' : fmtPct(r.pnl_pct))}</td>
-      <td>${escapeHtml(normalizeValue(r.action || 'HOLD'))}</td>
-      <td><button class="danger-btn" data-remove-position="${escapeHtml(r.stock_id || '')}">移除</button></td>`;
-    tbody.appendChild(tr);
-  });
-  tbody.querySelectorAll('[data-remove-position]').forEach(btn=>{
-    btn.addEventListener('click', ()=> removePosition(btn.dataset.removePosition));
-  });
-}
-
-function renderWatchlist(){
-  const tbody=byId('watchlist_tbody'); if(!tbody) return; tbody.innerHTML='';
-  const rows=Array.isArray(state.watchlistMonitor)?state.watchlistMonitor:[];
-  if(!rows.length){ tbody.innerHTML='<tr><td colspan="7">目前沒有自選股</td></tr>'; return; }
-  rows.forEach(r=>{
-    const tr=document.createElement('tr');
-    tr.innerHTML=`
-      <td>${escapeHtml(r.stock_id || '')}</td>
-      <td>${escapeHtml(normalizeValue(r.price_tier || 'unknown'))}</td>
-      <td>${escapeHtml(r.ref_price ? fmtNum(r.ref_price,3) : '等待新資料')}</td>
-      <td>${escapeHtml(normalizeValue(r.holding_status || '未持有'))}</td>
-      <td>${escapeHtml(normalizeValue(r.strategy_bucket || 'NONE'))}</td>
-      <td>${escapeHtml(normalizeValue(r.action || 'WATCH'))}</td>
-      <td>${escapeHtml(r.pnl_pct === '' ? '目前沒有資料' : fmtPct(r.pnl_pct))}</td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-function renderSummary(){
-  const box=byId('summary_box'); if(!box) return;
-  const s=Array.isArray(state.fullSummary)&&state.fullSummary.length?state.fullSummary[0]:{};
-  box.innerHTML=`
-    <div class="summary-item"><strong>報酬</strong><span>${escapeHtml(fmtPct(s.return || 0))}</span></div>
-    <div class="summary-item"><strong>MDD</strong><span>${escapeHtml(fmtPct(s.mdd || 0))}</span></div>
-    <div class="summary-item"><strong>Sharpe</strong><span>${escapeHtml(fmtNum(s.sharpe_daily || 0,3))}</span></div>`;
-}
-
-async function addPosition(){
-  const stock=byId('pos_stock')?.value.trim();
-  const shares=byId('pos_shares')?.value.trim();
-  const cost=byId('pos_cost')?.value.trim();
-
-  if(!stock){
-    setMiniStatus('請輸入股票代號','warn');
-    return;
-  }
-
-  try{
-    setBusy(true,'⏳ 送出持倉中...');
-    const cfg=getCfg();
-    await dispatchWorkflow(cfg.workflows?.positionWriteback || 'v2_position_writeback.yml', {
-      action_type:'upsert',
-      stock_id:stock,
-      shares:shares || '1000',
-      avg_cost:cost || '',
-      note:'前端送出'
-    });
-    setMiniStatus(`已送出持倉 ${stock}，請再按一次「更新資料與策略」`, 'warn');
-    if(byId('pos_stock')) byId('pos_stock').value='';
-    if(byId('pos_shares')) byId('pos_shares').value='';
-    if(byId('pos_cost')) byId('pos_cost').value='';
-  }catch(err){
-    console.error(err);
-    setMiniStatus(`持倉送出失敗：${err.message}`, 'error');
-  }finally{
-    setBusy(false);
-  }
-}
-
-async function removePosition(stock){
-  if(!window.confirm(`確定要移除持倉 ${stock} 嗎？`)) return;
-  try{
-    setBusy(true,'⏳ 送出刪除中...');
-    const cfg=getCfg();
-    await dispatchWorkflow(cfg.workflows?.positionWriteback || 'v2_position_writeback.yml', {
-      action_type:'delete',
-      stock_id:stock,
-      shares:'',
-      avg_cost:'',
-      note:'前端刪除'
-    });
-    setMiniStatus(`已送出移除持倉 ${stock}，請再按一次「更新資料與策略」`, 'warn');
-  }catch(err){
-    console.error(err);
-    setMiniStatus(`移除持倉失敗：${err.message}`, 'error');
-  }finally{
-    setBusy(false);
-  }
-}
-
-async function refreshAll(){
-  setBusy(true,'⏳ 讀取資料中...');
-  try{
-    const [meta, tradePlan, positionMonitor, watchlistMonitor, fullSummary] = await Promise.all([
-      fetchJson('meta.json'),
-      fetchCsv('trade_plan.csv'),
-      fetchCsv('position_monitor.csv'),
-      fetchCsv('watchlist_monitor.csv'),
-      fetchCsv('full_summary.csv'),
-    ]);
-    state.meta=meta||{};
-    state.tradePlan=tradePlan||[];
-    state.positionMonitor=positionMonitor||[];
-    state.watchlistMonitor=watchlistMonitor||[];
-    state.fullSummary=fullSummary||[];
-    renderMeta();
-    renderTradePlan();
-    renderPositions();
-    renderWatchlist();
-    renderSummary();
-  }catch(err){
-    console.error(err);
-    setMiniStatus(`讀取失敗：${err.message}`,'error');
-  }finally{
-    setBusy(false);
-  }
-}
-
-function bindEvents(){
-  byId('refresh_btn')?.addEventListener('click', refreshAll);
-  byId('pipeline_btn')?.addEventListener('click', runPipeline);
-  byId('pos_add_btn')?.addEventListener('click', addPosition);
-  byId('save_cfg_btn')?.addEventListener('click', saveConfig);
-  byId('clear_cfg_btn')?.addEventListener('click', clearConfig);
-}
-
-document.addEventListener('DOMContentLoaded', ()=>{
-  bindEvents();
-  loadConfigForm();
-  renderTradePlan();
-  renderPositions();
-  renderWatchlist();
-  renderSummary();
-  refreshAll();
+document.addEventListener("DOMContentLoaded", async () => {
+  bindUI();
+  await loadAll();
 });
+
+function bindUI() {
+  document.getElementById("refreshBtn").addEventListener("click", async () => {
+    setBanner("頁面重新同步中…", "#2f7d32");
+    await loadAll(true);
+  });
+
+  document.getElementById("updateBtn").addEventListener("click", () => {
+    setBanner("v2.9 先定稿介面。更新資料仍沿用你現在已打通的 workflow。", "#92400e");
+  });
+}
+
+function setBanner(text, color = "#2f7d32") {
+  const el = document.getElementById("syncBanner");
+  el.textContent = text;
+  el.style.color = color;
+}
+
+async function loadAll(force = false) {
+  try {
+    const [meta, tradePlan, position, watchlist, summary, debug] = await Promise.all([
+      fetchJSON(`${DATA_DIR}/meta.json`, force),
+      fetchCSV(`${DATA_DIR}/trade_plan.csv`, force),
+      fetchCSV(`${DATA_DIR}/position_monitor.csv`, force),
+      fetchCSV(`${DATA_DIR}/watchlist_monitor.csv`, force),
+      fetchCSV(`${DATA_DIR}/full_summary.csv`, force),
+      fetchCSV(`${DATA_DIR}/selection_debug.csv`, force),
+    ]);
+
+    renderMeta(meta);
+    renderTradePlan(tradePlan);
+    renderPosition(position);
+    renderWatchlist(watchlist);
+    renderSummary(summary);
+    renderDebug(debug);
+    renderTierSummary(tradePlan, position, watchlist);
+    renderActionSummary(tradePlan, position);
+    setBanner("頁面資料已同步", "#2f7d32");
+  } catch (err) {
+    console.error(err);
+    setBanner(`讀取失敗：${err.message}`, "#b42318");
+  }
+}
+
+async function fetchJSON(url, force = false) {
+  const finalUrl = force ? `${url}?t=${Date.now()}` : url;
+  const res = await fetch(finalUrl, { cache: "no-store" });
+  if (!res.ok) throw new Error(`JSON 讀取失敗：${url}`);
+  return await res.json();
+}
+
+async function fetchCSV(url, force = false) {
+  const finalUrl = force ? `${url}?t=${Date.now()}` : url;
+  const res = await fetch(finalUrl, { cache: "no-store" });
+  if (!res.ok) throw new Error(`CSV 讀取失敗：${url}`);
+  const text = await res.text();
+  return parseCSV(text);
+}
+
+function parseCSV(text) {
+  const cleaned = text.replace(/^\uFEFF/, "").trim();
+  if (!cleaned) return [];
+  const lines = cleaned.split(/\r?\n/);
+  const headers = splitCSVLine(lines[0]).map(h => h.trim());
+  return lines.slice(1).filter(Boolean).map(line => {
+    const values = splitCSVLine(line);
+    const row = {};
+    headers.forEach((h, i) => row[h] = (values[i] ?? "").trim());
+    return row;
+  });
+}
+
+function splitCSVLine(line) {
+  const result = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === "," && !inQuotes) {
+      result.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+function renderMeta(meta) {
+  text("nowTime", meta.now_time || meta.generated_at || "--");
+  text("generatedAt", meta.generated_at || "--");
+  text("signalDate", meta.signal_date || "--");
+  text("tradeDate", meta.trade_date || "--");
+  text("panelDate", meta.price_panel_latest_date || "--");
+  text("sourceName", meta.source || "--");
+  text("writebackState", prettyWriteback(meta.position_writeback_state));
+  text("dataState", prettyDataState(meta.data_state));
+}
+
+function renderTradePlan(rows) {
+  const body = document.getElementById("tradePlanBody");
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="7" class="empty">今天沒有新的交易計畫</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map(r => `
+    <tr>
+      <td>${badgeForAction(r.action)}</td>
+      <td>${safe(r.stock_id)}</td>
+      <td>${prettyTier(r.price_tier)}</td>
+      <td>${safe(r.ref_price)}</td>
+      <td>${safe(r.target_weight)}</td>
+      <td>${safeMoney(r.suggested_amount)}</td>
+      <td>${safe(r.note)}</td>
+    </tr>
+  `).join("");
+}
+
+function renderPosition(rows) {
+  const body = document.getElementById("positionBody");
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="9" class="empty">目前沒有持倉資料</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map(r => `
+    <tr>
+      <td>${safe(r.stock_id)}</td>
+      <td>${prettyTier(r.price_tier)}</td>
+      <td>${safe(r.ref_price)}</td>
+      <td>${safeInt(r.shares)}</td>
+      <td>${safe(r.avg_cost)}</td>
+      <td>${safePct(r.pnl_pct)}</td>
+      <td>${safe(r.target_weight)}</td>
+      <td>${badgeForAction(r.action)}</td>
+      <td>${safe(r.note)}</td>
+    </tr>
+  `).join("");
+}
+
+function renderWatchlist(rows) {
+  const body = document.getElementById("watchlistBody");
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="7" class="empty">目前沒有自選股資料</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map(r => `
+    <tr>
+      <td>${safe(r.stock_id)}</td>
+      <td>${prettyTier(r.price_tier)}</td>
+      <td>${safe(r.ref_price)}</td>
+      <td>${safe(r.holding_status)}</td>
+      <td>${safe(r.strategy_bucket)}</td>
+      <td>${badgeForWatchAction(r.action)}</td>
+      <td>${safePct(r.pnl_pct)}</td>
+    </tr>
+  `).join("");
+}
+
+function renderSummary(rows) {
+  const row = rows[0] || {};
+  text("returnVal", pctDisplay(row["return"]));
+  text("mddVal", pctDisplay(row["mdd"]));
+  text("sharpeVal", blankDash(row["sharpe_daily"]));
+}
+
+function renderDebug(rows) {
+  const row = rows[0] || {};
+  text("dbgTotal", blankDash(row.total_input));
+  text("dbgValid", blankDash(row.valid_after_na));
+  text("dbgCorePrimary", blankDash(row.core_primary_count));
+  text("dbgAlphaPrimary", blankDash(row.alpha_primary_count));
+  text("dbgCoreFinal", blankDash(row.core_final_count));
+  text("dbgAlphaFinal", blankDash(row.alpha_final_count));
+}
+
+function renderTierSummary(tradeRows, positionRows, watchRows) {
+  const all = [...tradeRows, ...positionRows, ...watchRows];
+  const tiers = {};
+  all.forEach(r => {
+    const key = prettyTier(r.price_tier || "unknown");
+    tiers[key] = (tiers[key] || 0) + 1;
+  });
+
+  const container = document.getElementById("tierSummary");
+  const entries = Object.entries(tiers);
+  if (!entries.length) {
+    container.innerHTML = `<div class="tier-box"><div class="tier-label">分層狀態</div><div class="tier-value">--</div><div class="tier-sub">目前沒有可展示的價格分層</div></div>`;
+    return;
+  }
+
+  container.innerHTML = entries.map(([k, v]) => `
+    <div class="tier-box">
+      <div class="tier-label">${k}</div>
+      <div class="tier-value">${v}</div>
+      <div class="tier-sub">此分層目前有 ${v} 檔資料</div>
+    </div>
+  `).join("");
+}
+
+function renderActionSummary(tradeRows, positionRows) {
+  const buys = tradeRows.filter(r => (r.action || "").toUpperCase() === "BUY");
+  const positionActions = positionRows.filter(r => ["ADD", "REDUCE", "SELL", "STOP_LOSS"].includes((r.action || "").toUpperCase()));
+
+  let headline = "觀察";
+  let desc = "今天沒有新的買進動作";
+  if (buys.length > 0) {
+    headline = "偏多";
+    desc = `今天有 ${buys.length} 檔新進場候選`;
+  } else if (positionActions.length > 0) {
+    headline = "調整";
+    desc = `今天有 ${positionActions.length} 筆持倉調整`;
+  }
+
+  const totalBuyAmount = buys.reduce((acc, r) => acc + toNum(r.suggested_amount), 0);
+  const stopLossCount = positionRows.filter(r => (r.action || "").toUpperCase() === "STOP_LOSS").length;
+
+  text("headlineAction", headline);
+  text("headlineDesc", desc);
+  text("buyCount", String(buys.length));
+  text("buyAmount", `建議金額：${moneyDisplay(totalBuyAmount)}`);
+  text("positionActionCount", String(positionActions.length));
+  text("positionActionDesc", positionActions.length ? "請優先查看持倉監控區" : "目前無加減碼");
+  text("riskLevel", stopLossCount > 0 ? "偏高" : buys.length > 8 ? "中等" : "正常");
+  text("riskDesc", stopLossCount > 0 ? `有 ${stopLossCount} 筆停損訊號` : "目前沒有明顯停損警示");
+}
+
+function badgeForAction(actionRaw) {
+  const action = (actionRaw || "").toUpperCase();
+  const map = {
+    BUY: ["badge-buy", "買進"],
+    HOLD: ["badge-hold", "持有"],
+    SELL: ["badge-sell", "賣出"],
+    ADD: ["badge-add", "加碼"],
+    REDUCE: ["badge-reduce", "減碼"],
+    STOP_LOSS: ["badge-stop", "停損"],
+  };
+  const pair = map[action] || ["badge-hold", safe(actionRaw)];
+  return `<span class="badge ${pair[0]}">${pair[1]}</span>`;
+}
+
+function badgeForWatchAction(actionRaw) {
+  const action = (actionRaw || "").toUpperCase();
+  const map = {
+    WATCH: ["badge-watch", "觀察"],
+    HOLD_MONITOR: ["badge-hold", "持有監控"],
+    BUY_READY: ["badge-buy", "可留意"],
+    CANDIDATE: ["badge-add", "候選"],
+  };
+  const pair = map[action] || ["badge-watch", safe(actionRaw)];
+  return `<span class="badge ${pair[0]}">${pair[1]}</span>`;
+}
+
+function prettyTier(tier) {
+  const map = {
+    lt_50: "50以下",
+    p50_100: "50-100",
+    p100_300: "100-300",
+    p300_500: "300-500",
+    p500_1000: "500-1000",
+    gt_1000: "1000以上",
+    unknown: "未分類",
+  };
+  return map[tier] || tier || "--";
+}
+
+function prettyDataState(state) {
+  const map = {
+    fresh: "✅ 最新資料",
+    ok: "✅ 正常",
+    stale: "⚠️ 舊資料",
+    loading: "⌛ 讀取中",
+    idle: "待命",
+  };
+  return map[state] || state || "--";
+}
+
+function prettyWriteback(state) {
+  const map = {
+    idle: "待命",
+    submitted: "已送出",
+    syncing: "同步中",
+    success: "已完成",
+    failed: "失敗",
+  };
+  return map[state] || state || "--";
+}
+
+function pctDisplay(v) {
+  const n = toNum(v);
+  if (Number.isNaN(n)) return "--";
+  return `${(n * 100).toFixed(2)}%`;
+}
+
+function safePct(v) {
+  const n = toNum(v);
+  if (Number.isNaN(n)) return "--";
+  return `${(n * 100).toFixed(2)}%`;
+}
+
+function moneyDisplay(v) {
+  const n = Number(v || 0);
+  if (!Number.isFinite(n)) return "0";
+  return n.toLocaleString("zh-TW", { maximumFractionDigits: 0 });
+}
+
+function safeMoney(v) {
+  const n = Number(String(v || "").replace(/,/g, ""));
+  if (!Number.isFinite(n)) return "--";
+  return n.toLocaleString("zh-TW", { maximumFractionDigits: 0 });
+}
+
+function safeInt(v) {
+  const n = Number(String(v || "").replace(/,/g, ""));
+  if (!Number.isFinite(n)) return "--";
+  return n.toLocaleString("zh-TW", { maximumFractionDigits: 0 });
+}
+
+function blankDash(v) {
+  return (v === undefined || v === null || v === "") ? "--" : String(v);
+}
+
+function safe(v) {
+  return blankDash(v);
+}
+
+function toNum(v) {
+  const n = Number(String(v ?? "").replace(/,/g, ""));
+  return Number.isFinite(n) ? n : NaN;
+}
+
+function text(id, value) {
+  document.getElementById(id).textContent = value;
+}
