@@ -1,7 +1,9 @@
 const DATA_DIR = "./data";
+const GH_CONFIG_KEY = "v3_github_config";
 
 document.addEventListener("DOMContentLoaded", async () => {
   bindUI();
+  loadSavedConfig();
   await loadAll();
 });
 
@@ -11,15 +13,181 @@ function bindUI() {
     await loadAll(true);
   });
 
-  document.getElementById("updateBtn").addEventListener("click", () => {
-    setBanner("v2.9 先定稿介面。更新資料仍沿用你現在已打通的 workflow。", "#92400e");
+  document.getElementById("updateBtn").addEventListener("click", async () => {
+    const cfg = getGithubConfig();
+    if (!cfg) return;
+    await dispatchWorkflow("v1_stable_pipeline.yml", {}, "已送出主流程，等待資料更新…");
+  });
+
+  document.getElementById("saveConfigBtn").addEventListener("click", saveConfig);
+  document.getElementById("clearConfigBtn").addEventListener("click", clearConfig);
+
+  document.getElementById("addPositionBtn").addEventListener("click", submitAddPosition);
+  document.getElementById("addWatchlistBtn").addEventListener("click", submitAddWatch);
+
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-remove-position]");
+    if (btn) {
+      const stockId = btn.getAttribute("data-remove-position");
+      await submitRemovePosition(stockId);
+      return;
+    }
+
+    const btn2 = e.target.closest("[data-remove-watch]");
+    if (btn2) {
+      const stockId = btn2.getAttribute("data-remove-watch");
+      await submitRemoveWatch(stockId);
+    }
   });
 }
 
-function setBanner(text, color = "#2f7d32") {
-  const el = document.getElementById("syncBanner");
-  el.textContent = text;
-  el.style.color = color;
+function loadSavedConfig() {
+  try {
+    const raw = localStorage.getItem(GH_CONFIG_KEY);
+    if (!raw) {
+      text("configStatus", "未儲存");
+      return;
+    }
+    const cfg = JSON.parse(raw);
+    val("ghOwner", cfg.owner || "");
+    val("ghRepo", cfg.repo || "");
+    val("ghBranch", cfg.branch || "main");
+    val("ghToken", cfg.token || "");
+    text("configStatus", "✅ 已儲存本機設定");
+  } catch {
+    text("configStatus", "讀取失敗");
+  }
+}
+
+function saveConfig() {
+  const cfg = {
+    owner: val("ghOwner").trim(),
+    repo: val("ghRepo").trim(),
+    branch: val("ghBranch").trim() || "main",
+    token: val("ghToken").trim(),
+  };
+
+  if (!cfg.owner || !cfg.repo || !cfg.branch || !cfg.token) {
+    setBanner("GitHub 設定不可空白", "#b42318");
+    text("configStatus", "欄位不完整");
+    return;
+  }
+
+  localStorage.setItem(GH_CONFIG_KEY, JSON.stringify(cfg));
+  text("configStatus", "✅ 已儲存本機設定");
+  setBanner("GitHub 本機設定已儲存", "#2f7d32");
+}
+
+function clearConfig() {
+  localStorage.removeItem(GH_CONFIG_KEY);
+  ["ghOwner", "ghRepo", "ghBranch", "ghToken"].forEach(id => val(id, ""));
+  text("configStatus", "已清除");
+  setBanner("GitHub 本機設定已清除", "#92400e");
+}
+
+function getGithubConfig() {
+  const raw = localStorage.getItem(GH_CONFIG_KEY);
+  if (!raw) {
+    setBanner("請先在 GitHub 本機設定區儲存 owner / repo / branch / token", "#b42318");
+    text("configStatus", "未儲存");
+    return null;
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    setBanner("GitHub 本機設定格式錯誤，請重新儲存", "#b42318");
+    text("configStatus", "格式錯誤");
+    return null;
+  }
+}
+
+async function dispatchWorkflow(workflowId, inputs = {}, successMessage = "已送出") {
+  const cfg = getGithubConfig();
+  if (!cfg) return false;
+
+  const url = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/actions/workflows/${workflowId}/dispatches`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Accept": "application/vnd.github+json",
+      "Authorization": `Bearer ${cfg.token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      ref: cfg.branch,
+      inputs
+    })
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    setBanner(`送出 workflow 失敗：${res.status} ${txt}`, "#b42318");
+    return false;
+  }
+
+  setBanner(successMessage, "#2f7d32");
+  return true;
+}
+
+async function submitAddPosition() {
+  const stockId = val("positionStockInput").trim();
+  const shares = val("positionSharesInput").trim();
+  const avgCost = val("positionCostInput").trim();
+
+  if (!stockId || !shares || !avgCost) {
+    setBanner("加入持倉前請填完整：股票代號 / 股數 / 成本", "#b42318");
+    return;
+  }
+
+  const ok = await dispatchWorkflow("v3_position_writeback.yml", {
+    action: "add",
+    stock_id: stockId,
+    shares: shares,
+    avg_cost: avgCost
+  }, `已送出持倉新增：${stockId}`);
+
+  if (ok) {
+    val("positionStockInput", "");
+    val("positionSharesInput", "");
+    val("positionCostInput", "");
+  }
+}
+
+async function submitRemovePosition(stockId) {
+  if (!confirm(`確定要移除持倉 ${stockId} 嗎？`)) return;
+
+  await dispatchWorkflow("v3_position_writeback.yml", {
+    action: "remove",
+    stock_id: stockId,
+    shares: "",
+    avg_cost: ""
+  }, `已送出持倉移除：${stockId}`);
+}
+
+async function submitAddWatch() {
+  const stockId = val("watchlistStockInput").trim();
+  if (!stockId) {
+    setBanner("加入自選股前請先輸入股票代號", "#b42318");
+    return;
+  }
+
+  const ok = await dispatchWorkflow("v3_watchlist_writeback.yml", {
+    action: "add",
+    stock_id: stockId
+  }, `已送出自選股新增：${stockId}`);
+
+  if (ok) {
+    val("watchlistStockInput", "");
+  }
+}
+
+async function submitRemoveWatch(stockId) {
+  if (!confirm(`確定要移除自選股 ${stockId} 嗎？`)) return;
+
+  await dispatchWorkflow("v3_watchlist_writeback.yml", {
+    action: "remove",
+    stock_id: stockId
+  }, `已送出自選股移除：${stockId}`);
 }
 
 async function loadAll(force = false) {
@@ -41,7 +209,9 @@ async function loadAll(force = false) {
     renderDebug(debug);
     renderTierSummary(tradePlan, position, watchlist);
     renderActionSummary(tradePlan, position);
-    setBanner("頁面資料已同步", "#2f7d32");
+    if (!document.getElementById("syncBanner").textContent.includes("已送出")) {
+      setBanner("頁面資料已同步", "#2f7d32");
+    }
   } catch (err) {
     console.error(err);
     setBanner(`讀取失敗：${err.message}`, "#b42318");
@@ -80,7 +250,6 @@ function splitCSVLine(line) {
   const result = [];
   let current = "";
   let inQuotes = false;
-
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
     if (ch === '"') {
@@ -134,7 +303,7 @@ function renderTradePlan(rows) {
 function renderPosition(rows) {
   const body = document.getElementById("positionBody");
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="9" class="empty">目前沒有持倉資料</td></tr>`;
+    body.innerHTML = `<tr><td colspan="10" class="empty">目前沒有持倉資料</td></tr>`;
     return;
   }
   body.innerHTML = rows.map(r => `
@@ -148,6 +317,7 @@ function renderPosition(rows) {
       <td>${safe(r.target_weight)}</td>
       <td>${badgeForAction(r.action)}</td>
       <td>${safe(r.note)}</td>
+      <td><button class="btn-remove" data-remove-position="${safe(r.stock_id)}">移除</button></td>
     </tr>
   `).join("");
 }
@@ -155,7 +325,7 @@ function renderPosition(rows) {
 function renderWatchlist(rows) {
   const body = document.getElementById("watchlistBody");
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="7" class="empty">目前沒有自選股資料</td></tr>`;
+    body.innerHTML = `<tr><td colspan="8" class="empty">目前沒有自選股資料</td></tr>`;
     return;
   }
   body.innerHTML = rows.map(r => `
@@ -167,6 +337,7 @@ function renderWatchlist(rows) {
       <td>${safe(r.strategy_bucket)}</td>
       <td>${badgeForWatchAction(r.action)}</td>
       <td>${safePct(r.pnl_pct)}</td>
+      <td><button class="btn-remove" data-remove-watch="${safe(r.stock_id)}">移除</button></td>
     </tr>
   `).join("");
 }
@@ -198,7 +369,6 @@ function renderTierSummary(tradeRows, positionRows, watchRows) {
 
   const container = document.getElementById("tierSummary");
   const entries = Object.entries(tiers);
-
   if (!entries.length) {
     container.innerHTML = `<div class="tier-box"><div class="tier-label">分層狀態</div><div class="tier-value">--</div><div class="tier-sub">目前沒有可展示的價格分層</div></div>`;
     return;
@@ -276,7 +446,7 @@ function prettyTier(tier) {
     gt_1000: "1000以上",
     unknown: "未分類",
   };
-  return map[tier] || tier || "--";
+  return map[tier] || tier || "未分類";
 }
 
 function prettyDataState(state) {
@@ -345,5 +515,15 @@ function toNum(v) {
 }
 
 function text(id, value) {
-  document.getElementById(id).textContent = value;
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function val(id, setValue) {
+  const el = document.getElementById(id);
+  if (!el) return "";
+  if (typeof setValue !== "undefined") {
+    el.value = setValue;
+  }
+  return el.value || "";
 }
