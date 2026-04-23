@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>每日操作介面 v2.9 clean</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="page">
+    <section class="card hero-card">
+      <div class="title">📊 每日操作介面</div>
+
+      <div class="action-row">
+        <button id="refreshBtn" class="btn">🔄 重新整理頁面</button>
+        <button id="updateBtn" class="btn">🚀 更新資料與策略</button>
+      </div>
+
+      <div id="syncBanner" class="sync-banner">頁面載入中…</div>
+
+      <div class="meta-list">
+        <div><span class="label">現在時間：</span><span id="nowTime">--</span></div>
+        <div><span class="label">最後更新：</span><span id="generatedAt">--</span></div>
+        <div><span class="label">訊號日：</span><span id="signalDate">--</span></div>
+        <div><span class="label">交易日：</span><span id="tradeDate">--</span></div>
+        <div><span class="label">主資料日期：</span><span id="panelDate">--</span></div>
+        <div><span class="label">資料狀態：</span><span id="dataState">--</span></div>
+        <div><span class="label">來源版本：</span><span id="sourceName">--</span></div>
+        <div><span class="label">持倉寫回：</span><span id="writebackState">--</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">📍 今日應做</div>
+
+      <div class="summary-grid">
+        <div class="summary-box">
+          <div class="summary-label">主要動作</div>
+          <div id="headlineAction" class="summary-value">--</div>
+          <div id="headlineDesc" class="summary-sub">--</div>
+        </div>
+
+        <div class="summary-box">
+          <div class="summary-label">買進檔數</div>
+          <div id="buyCount" class="summary-value">0</div>
+          <div id="buyAmount" class="summary-sub">建議金額：0</div>
+        </div>
+
+        <div class="summary-box">
+          <div class="summary-label">持倉動作</div>
+          <div id="positionActionCount" class="summary-value">0</div>
+          <div id="positionActionDesc" class="summary-sub">目前無加減碼</div>
+        </div>
+
+        <div class="summary-box">
+          <div class="summary-label">風險提示</div>
+          <div id="riskLevel" class="summary-value">--</div>
+          <div id="riskDesc" class="summary-sub">--</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">💰 價位分層</div>
+      <div class="note">此版先以展示為主，後續再接互動分層控制。</div>
+      <div id="tierSummary" class="tier-grid"></div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">📌 今日操作</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>動作</th>
+              <th>股票</th>
+              <th>價格分層</th>
+              <th>參考價格</th>
+              <th>目標權重</th>
+              <th>建議金額</th>
+              <th>備註</th>
+            </tr>
+          </thead>
+          <tbody id="tradePlanBody">
+            <tr><td colspan="7" class="empty">載入中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">📦 持倉監控</div>
+      <div class="note">v2.9 先定稿畫面，新增 / 移除持股寫回將在下一階段閉環接上。</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>股票</th>
+              <th>價格分層</th>
+              <th>參考價格</th>
+              <th>股數</th>
+              <th>成本</th>
+              <th>損益%</th>
+              <th>目標權重</th>
+              <th>動作</th>
+              <th>備註</th>
+            </tr>
+          </thead>
+          <tbody id="positionBody">
+            <tr><td colspan="9" class="empty">載入中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">📡 自選股監控</div>
+      <div class="note">v2.9 先定稿畫面，新增 / 移除自選股寫回將在下一階段閉環接上。</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>股票</th>
+              <th>價格分層</th>
+              <th>參考價格</th>
+              <th>持有狀態</th>
+              <th>策略池</th>
+              <th>動作</th>
+              <th>損益%</th>
+            </tr>
+          </thead>
+          <tbody id="watchlistBody">
+            <tr><td colspan="7" class="empty">載入中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">📈 績效摘要</div>
+      <div class="perf-grid">
+        <div class="perf-box">
+          <div class="perf-label">報酬</div>
+          <div id="returnVal" class="perf-value">--</div>
+        </div>
+        <div class="perf-box">
+          <div class="perf-label">MDD</div>
+          <div id="mddVal" class="perf-value">--</div>
+        </div>
+        <div class="perf-box">
+          <div class="perf-label">Sharpe</div>
+          <div id="sharpeVal" class="perf-value">--</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">🧪 篩選除錯</div>
+      <div class="meta-list">
+        <div><span class="label">輸入檔數：</span><span id="dbgTotal">--</span></div>
+        <div><span class="label">有效檔數：</span><span id="dbgValid">--</span></div>
+        <div><span class="label">Core 初選：</span><span id="dbgCorePrimary">--</span></div>
+        <div><span class="label">Alpha 初選：</span><span id="dbgAlphaPrimary">--</span></div>
+        <div><span class="label">Core 最終：</span><span id="dbgCoreFinal">--</span></div>
+        <div><span class="label">Alpha 最終：</span><span id="dbgAlphaFinal">--</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">🔐 GitHub 本機設定</div>
+      <div class="note">這版不把 token 放在 repo 檔案內。設定只會存在你這台裝置的瀏覽器。</div>
+      <div class="meta-list">
+        <div><span class="label">設定狀態：</span><span>✅ 已儲存本機設定</span></div>
+      </div>
+    </section>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
