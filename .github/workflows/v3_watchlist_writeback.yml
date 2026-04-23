@@ -19,6 +19,10 @@ permissions:
   contents: write
   actions: write
 
+concurrency:
+  group: v3-watchlist-writeback
+  cancel-in-progress: false
+
 jobs:
   writeback:
     runs-on: ubuntu-latest
@@ -46,8 +50,9 @@ jobs:
             --action "${{ github.event.inputs.action }}" \
             --stock_id "${{ github.event.inputs.stock_id }}"
 
-      - name: Commit watchlist.csv
+      - name: Commit watchlist.csv with rebase retry
         run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
@@ -55,12 +60,35 @@ jobs:
 
           if git diff --cached --quiet; then
             echo "no watchlist.csv changes"
-          else
-            git commit -m "v3 watchlist writeback: ${{ github.event.inputs.action }} ${{ github.event.inputs.stock_id }}"
-            git push origin HEAD:main
+            exit 0
           fi
 
+          git commit -m "v3 watchlist writeback: ${{ github.event.inputs.action }} ${{ github.event.inputs.stock_id }}"
+
+          for i in 1 2 3; do
+            echo "push attempt $i"
+            git fetch origin main
+            git pull --rebase origin main || {
+              echo "rebase failed, abort and retry"
+              git rebase --abort || true
+              sleep 2
+              continue
+            }
+
+            if git push origin HEAD:main; then
+              echo "push success"
+              exit 0
+            fi
+
+            echo "push failed, retry after fetch/rebase"
+            sleep 2
+          done
+
+          echo "push failed after 3 attempts"
+          exit 1
+
       - name: Trigger main pipeline
+        if: success()
         uses: actions/github-script@v7
         with:
           script: |
