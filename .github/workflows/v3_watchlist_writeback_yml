@@ -1,0 +1,71 @@
+name: v3_watchlist_writeback
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "add 或 remove"
+        required: true
+        type: choice
+        options:
+          - add
+          - remove
+      stock_id:
+        description: "股票代號"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  writeback:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install pandas
+
+      - name: Run watchlist writeback
+        run: |
+          python v3_watchlist_writeback.py \
+            --action "${{ github.event.inputs.action }}" \
+            --stock_id "${{ github.event.inputs.stock_id }}"
+
+      - name: Commit watchlist.csv
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add watchlist.csv
+
+          if git diff --cached --quiet; then
+            echo "no watchlist.csv changes"
+          else
+            git commit -m "v3 watchlist writeback: ${{ github.event.inputs.action }} ${{ github.event.inputs.stock_id }}"
+            git push origin HEAD:main
+          fi
+
+      - name: Trigger main pipeline
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'v1_stable_pipeline.yml',
+              ref: 'main'
+            })
