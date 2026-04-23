@@ -6,9 +6,7 @@ html, body {
   color: #0f172a;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif;
 }
-body {
-  overflow-x: hidden;
-}
+body { overflow-x: hidden; }
 .page {
   width: 100%;
   max-width: 860px;
@@ -35,6 +33,23 @@ body {
   gap: 12px;
   margin-bottom: 14px;
 }
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.form-grid-watch {
+  grid-template-columns: 1fr;
+}
+.input {
+  width: 100%;
+  border: 1px solid #cfd4dc;
+  border-radius: 16px;
+  padding: 14px 12px;
+  font-size: 17px;
+  background: #fff;
+}
 .btn {
   appearance: none;
   border: 0;
@@ -46,15 +61,29 @@ body {
   line-height: 1.25;
   padding: 16px 12px;
 }
+.btn-danger {
+  background: #9b2c20;
+}
+.btn-full {
+  width: 100%;
+}
+.btn-remove {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 800;
+}
 .sync-banner {
   color: #2f7d32;
   font-size: 17px;
   font-weight: 800;
   margin-bottom: 14px;
 }
-.label {
-  font-weight: 900;
-}
+.label { font-weight: 900; }
 .meta-list {
   display: grid;
   grid-template-columns: 1fr;
@@ -69,39 +98,30 @@ body {
   margin-top: -4px;
   margin-bottom: 14px;
 }
-.summary-grid,
-.tier-grid,
-.perf-grid {
+.summary-grid, .tier-grid, .perf-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
 }
-.summary-box,
-.tier-box,
-.perf-box {
+.summary-box, .tier-box, .perf-box {
   background: white;
   border-radius: 18px;
   padding: 16px;
   box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.06);
 }
-.summary-label,
-.tier-label,
-.perf-label {
+.summary-label, .tier-label, .perf-label {
   color: #667085;
   font-size: 14px;
   font-weight: 800;
   margin-bottom: 8px;
 }
-.summary-value,
-.tier-value,
-.perf-value {
+.summary-value, .tier-value, .perf-value {
   color: #0f172a;
   font-size: 28px;
   font-weight: 900;
   line-height: 1.1;
 }
-.summary-sub,
-.tier-sub {
+.summary-sub, .tier-sub {
   color: #475467;
   font-size: 15px;
   line-height: 1.4;
@@ -115,7 +135,7 @@ body {
 }
 table {
   width: 100%;
-  min-width: 760px;
+  min-width: 900px;
   border-collapse: collapse;
   background: white;
 }
@@ -155,16 +175,10 @@ th {
 .badge-watch { background: #ede9fe; color: #6d28d9; }
 
 @media (min-width: 760px) {
-  .summary-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-  .tier-grid {
-    grid-template-columns: 1fr 1fr 1fr;
-  }
-  .perf-grid {
-    grid-template-columns: 1fr 1fr 1fr;
-  }
-  .meta-list {
-    grid-template-columns: 1fr 1fr;
-  }
+  .summary-grid { grid-template-columns: 1fr 1fr; }
+  .tier-grid { grid-template-columns: 1fr 1fr 1fr; }
+  .perf-grid { grid-template-columns: 1fr 1fr 1fr; }
+  .meta-list { grid-template-columns: 1fr 1fr; }
+  .form-grid { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .form-grid-watch { grid-template-columns: 1fr 220px; }
 }
