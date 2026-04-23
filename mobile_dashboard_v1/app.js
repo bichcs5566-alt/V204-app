@@ -107,15 +107,15 @@ function renderMeta(meta) {
   text("signalDate", meta.signal_date || "--");
   text("tradeDate", meta.trade_date || "--");
   text("panelDate", meta.price_panel_latest_date || "--");
+  text("dataState", prettyDataState(meta.data_state));
   text("sourceName", meta.source || "--");
   text("writebackState", prettyWriteback(meta.position_writeback_state));
-  text("dataState", prettyDataState(meta.data_state));
 }
 
 function renderTradePlan(rows) {
   const body = document.getElementById("tradePlanBody");
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="7" class="empty">今天沒有新的交易計畫</td></tr>`;
+    body.innerHTML = `<tr><td colspan="7" class="empty">目前沒有資料</td></tr>`;
     return;
   }
   body.innerHTML = rows.map(r => `
@@ -198,6 +198,7 @@ function renderTierSummary(tradeRows, positionRows, watchRows) {
 
   const container = document.getElementById("tierSummary");
   const entries = Object.entries(tiers);
+
   if (!entries.length) {
     container.innerHTML = `<div class="tier-box"><div class="tier-label">分層狀態</div><div class="tier-value">--</div><div class="tier-sub">目前沒有可展示的價格分層</div></div>`;
     return;
