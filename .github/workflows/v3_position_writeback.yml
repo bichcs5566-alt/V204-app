@@ -45,15 +45,16 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pandas
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Run position writeback
         run: |
-          python v3_position_writeback.py \
-            --action "${{ github.event.inputs.action }}" \
-            --stock_id "${{ github.event.inputs.stock_id }}" \
-            ${{ github.event.inputs.shares != '' && format('--shares "{0}"', github.event.inputs.shares) || '' }} \
-            ${{ github.event.inputs.avg_cost != '' && format('--avg_cost "{0}"', github.event.inputs.avg_cost) || '' }}
+          CMD='python v3_position_writeback.py --action "${{ github.event.inputs.action }}" --stock_id "${{ github.event.inputs.stock_id }}"'
+          if [ "${{ github.event.inputs.action }}" = "add" ]; then
+            CMD="$CMD --shares \"${{ github.event.inputs.shares }}\" --avg_cost \"${{ github.event.inputs.avg_cost }}\""
+          fi
+          eval $CMD
 
       - name: Commit current_positions.csv
         run: |
@@ -76,6 +77,6 @@ jobs:
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              workflow_id: 'v1_stable_pipeline.yml',
+              workflow_id: 'v3_0_auto_update.yml',
               ref: 'main'
             })
