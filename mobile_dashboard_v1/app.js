@@ -4,7 +4,7 @@ document.addEventListener("DOMContentLoaded",async()=>{bindUI();loadSavedConfig(
 
 function bindUI(){
   bind("refreshBtn","click",async()=>{setBanner("頁面重新同步中…","#2f7d32");await loadAll(true);});
-  bind("updateBtn","click",async()=>{await dispatchWorkflow("v3_1_auto_update.yml",{},"已送出更新資料與策略，請等待 Actions 跑完後重新整理。");});
+  bind("updateBtn","click",async()=>{await dispatchWorkflow("v2_8_auto_update.yml",{},"已送出更新資料與策略，請等待 Actions 跑完後重新整理。");});
   bind("saveConfigBtn","click",saveConfig);
   bind("clearConfigBtn","click",clearConfig);
   bind("addPositionBtn","click",submitAddPositionInstant);
