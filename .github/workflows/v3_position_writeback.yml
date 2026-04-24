@@ -2,6 +2,34 @@ name: v3_position_writeback
 
 on:
   workflow_dispatch:
+    inputs:
+      action:
+        description: "add or remove"
+        required: true
+        type: choice
+        options:
+          - add
+          - remove
+      stock_id:
+        description: "stock id"
+        required: true
+        type: string
+      shares:
+        description: "shares"
+        required: false
+        type: string
+      avg_cost:
+        description: "avg cost"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: v3-position-writeback
+  cancel-in-progress: false
 
 jobs:
   writeback:
@@ -11,7 +39,13 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           persist-credentials: true
+
+      - name: Sync latest main before editing
+        run: |
+          git fetch origin main
+          git reset --hard origin/main
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -19,24 +53,59 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Run position writeback
-        run: python v3_position_writeback.py
-
-      - name: Commit & Push (safe mode)
         run: |
+          CMD='python v3_position_writeback.py --action "${{ github.event.inputs.action }}" --stock_id "${{ github.event.inputs.stock_id }}"'
+          if [ "${{ github.event.inputs.action }}" = "add" ]; then
+            CMD="$CMD --shares \"${{ github.event.inputs.shares }}\" --avg_cost \"${{ github.event.inputs.avg_cost }}\""
+          fi
+          eval $CMD
+
+      - name: Commit & Push safe
+        run: |
+          set -e
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions@github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add mobile_dashboard_v1/data/current_positions.csv
+          git add current_positions.csv
 
-          git commit -m "v3.2.1 position writeback" || echo "no changes"
+          if git diff --cached --quiet; then
+            echo "no current_positions.csv changes"
+            exit 0
+          fi
 
-          # ✅ 關鍵：避免衝突
-          git pull --rebase origin main || git rebase --abort
+          git commit -m "v3.2.5 position writeback: ${{ github.event.inputs.action }} ${{ github.event.inputs.stock_id }}"
 
-          git push origin main || (
-            git pull origin main --no-rebase &&
-            git push origin main
-          )
+          for i in 1 2 3; do
+            echo "push attempt $i"
+            if git push origin HEAD:main; then
+              echo "push success"
+              exit 0
+            fi
+
+            echo "push rejected, sync and replay"
+            git fetch origin main
+            git reset --soft origin/main
+            git add current_positions.csv
+            git commit -m "v3.2.5 position writeback retry: ${{ github.event.inputs.action }} ${{ github.event.inputs.stock_id }}" || true
+            sleep 2
+          done
+
+          echo "push failed after 3 attempts"
+          exit 1
+
+      - name: Trigger main pipeline
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'v3_1_auto_update.yml',
+              ref: 'main'
+            })
