@@ -434,6 +434,30 @@ def build_outputs(df):
         "position_writeback_state": "idle"
     }
 
+    # candidates output：讓前端 / 檢查檔可以看到每日實際選股池
+    core_out = core.copy()
+    alpha_out = alpha.copy()
+
+    for out, bucket in [(core_out, "CORE"), (alpha_out, "ALPHA")]:
+        if len(out):
+            out["price_tier"] = out["close"].apply(price_tier_key)
+            out["strategy_bucket"] = bucket
+
+    candidate_cols = [
+        "date", "stock_id", "price_tier", "close",
+        "mom5", "mom20", "mom60", "vol20",
+        "score", "quality", "strategy_bucket"
+    ]
+
+    for col in candidate_cols:
+        if col not in core_out.columns:
+            core_out[col] = ""
+        if col not in alpha_out.columns:
+            alpha_out[col] = ""
+
+    core_out = core_out[candidate_cols]
+    alpha_out = alpha_out[candidate_cols]
+
     return (
         pd.DataFrame(trade_rows),
         pd.DataFrame(pos_rows),
@@ -441,6 +465,8 @@ def build_outputs(df):
         summary,
         debug,
         positions,
+        core_out,
+        alpha_out,
         meta,
     )
 
@@ -464,6 +490,8 @@ def main():
         summary_df,
         debug_df,
         positions_df,
+        core_df,
+        alpha_df,
         meta
     ) = build_outputs(df)
 
@@ -472,13 +500,15 @@ def main():
     write_csv_both(watch_df, "watchlist_monitor.csv", write_root=True)
     write_csv_both(summary_df, "full_summary.csv", write_root=True)
     write_csv_both(debug_df, "selection_debug.csv", write_root=True)
+    write_csv_both(core_df, "core_candidates.csv", write_root=True)
+    write_csv_both(alpha_df, "alpha_candidates.csv", write_root=True)
     write_csv_both(positions_df, "current_positions.csv", write_root=True)
 
     meta_text = json.dumps(meta, ensure_ascii=False, indent=2)
     (DASHBOARD_DATA_DIR / "meta.json").write_text(meta_text, encoding="utf-8")
     Path("meta.json").write_text(meta_text, encoding="utf-8")
 
-    print("完成 v1_stable_pipeline 完整改修版")
+    print("完成 v1_stable_pipeline candidates write hotfix")
     print(meta_text)
 
 
