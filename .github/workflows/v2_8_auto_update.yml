@@ -3,7 +3,10 @@ name: v2_8_auto_update
 on:
   workflow_dispatch:
   schedule:
-    - cron: '7 11 * * 1-5'  # 台灣 19:07（避開整點）
+    - cron: '7 11 * * 1-5'   # 台灣 19:07
+
+permissions:
+  contents: write
 
 jobs:
   run:
@@ -11,21 +14,44 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install pandas requests
+        run: |
+          pip install pandas requests numpy
 
       - name: Update market data
-        run: python update_market_data.py
+        run: |
+          python update_market_data.py
 
       - name: Run main pipeline
-        run: python v1_stable_pipeline.py
+        run: |
+          python v1_stable_pipeline.py
 
       - name: Commit results
         run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add .
-          git commit -m "v2.8 auto update"
-          git push
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add mobile_dashboard_v1/data/meta.json
+          git add mobile_dashboard_v1/data/trade_plan.csv
+          git add mobile_dashboard_v1/data/position_monitor.csv
+          git add mobile_dashboard_v1/data/watchlist_monitor.csv
+          git add mobile_dashboard_v1/data/full_summary.csv
+          git add mobile_dashboard_v1/data/selection_debug.csv
+          git add current_positions.csv meta.json trade_plan.csv position_monitor.csv watchlist_monitor.csv full_summary.csv selection_debug.csv || true
+
+          if git diff --cached --quiet; then
+            echo "no changes to commit"
+          else
+            git commit -m "v2.8 auto update"
+            git push origin HEAD:main
+          fi
