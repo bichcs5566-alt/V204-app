@@ -1,1 +1,2 @@
-﻿
+﻿signal_date,trade_date,action,stock_id,price_tier,target_weight,ref_price,suggested_amount,note
+2026-04-22,2026-04-23,BUY,TEST,p100_300,0.1,100.1,100000.0,新進場
