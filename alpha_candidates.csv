@@ -1,2 +1,1 @@
 ﻿date,stock_id,price_tier,close,mom5,mom20,mom60,vol20,score,quality,strategy_bucket
-2026-04-22,TEST,p100_300,100,,,,,0.0,0.0,ALPHA_FALLBACK
