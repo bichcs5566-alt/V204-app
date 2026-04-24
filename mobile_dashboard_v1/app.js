@@ -4,7 +4,7 @@ document.addEventListener("DOMContentLoaded",async()=>{bindUI();loadSavedConfig(
 
 function bindUI(){
   bind("refreshBtn","click",async()=>{setBanner("頁面重新同步中…","#2f7d32");await loadAll(true);});
-  bind("updateBtn","click",async()=>{await dispatchWorkflow("v3_1_auto_update.yml",{},"已送出更新資料與策略，請等待 Actions 跑完後重新整理。");});
+  bind("updateBtn","click",async()=>{await dispatchWorkflow("v3_1_auto_update.yml",{},"已送出更新資料與策略，請等待 Actions 跑完後重新整理。",true);});
   bind("saveConfigBtn","click",saveConfig);
   bind("clearConfigBtn","click",clearConfig);
   bind("addPositionBtn","click",submitAddPositionInstant);
@@ -21,9 +21,24 @@ function clearConfig(){localStorage.removeItem(GH_CONFIG_KEY);["ghOwner","ghRepo
 
 function getGithubConfig(){const raw=localStorage.getItem(GH_CONFIG_KEY);if(!raw){setBanner("請先在 GitHub 本機設定區儲存 owner / repo / branch / token","#b42318");text("configStatus","未儲存");return null}try{return JSON.parse(raw)}catch{setBanner("GitHub 本機設定格式錯誤，請重新儲存","#b42318");text("configStatus","格式錯誤");return null}}
 
-async function dispatchWorkflow(workflowId,inputs={},successMessage="已送出"){const cfg=getGithubConfig();if(!cfg)return false;const url=`https://api.github.com/repos/${cfg.owner}/${cfg.repo}/actions/workflows/${workflowId}/dispatches`;const res=await fetch(url,{method:"POST",headers:{"Accept":"application/vnd.github+json","Authorization":`Bearer ${cfg.token}`,"Content-Type":"application/json","X-GitHub-Api-Version":"2022-11-28"},body:JSON.stringify({ref:cfg.branch,inputs})});if(!res.ok){const txt=await res.text();console.error(txt);setBanner(`同步送出失敗：${res.status}，畫面已回復`, "#b42318");return false}setBanner(successMessage,"#2f7d32");return true}
+async function dispatchWorkflow(workflowId,inputs={},successMessage="已送出",autoRefresh=false){
+  const cfg=getGithubConfig();if(!cfg)return false;
+  const url=`https://api.github.com/repos/${cfg.owner}/${cfg.repo}/actions/workflows/${workflowId}/dispatches`;
+  const res=await fetch(url,{method:"POST",headers:{"Accept":"application/vnd.github+json","Authorization":`Bearer ${cfg.token}`,"Content-Type":"application/json","X-GitHub-Api-Version":"2022-11-28"},body:JSON.stringify({ref:cfg.branch,inputs})});
+  if(!res.ok){const txt=await res.text();console.error(txt);setBanner(`同步送出失敗：${res.status}，畫面已回復`,"#b42318");return false}
+  setBanner(successMessage,"#2f7d32");
+  if(autoRefresh) scheduleAutoRefresh();
+  return true;
+}
 
-/* v3.5 即時持倉：先改畫面，再背景同步 GitHub */
+function scheduleAutoRefresh(){
+  setTimeout(()=>setBanner("已送出，等待 GitHub Actions 寫回…","#2f7d32"),2000);
+  setTimeout(async()=>{setBanner("第一次自動同步確認中…","#2f7d32");await loadAll(true);},12000);
+  setTimeout(async()=>{setBanner("第二次自動同步確認中…","#2f7d32");await loadAll(true);},35000);
+  setTimeout(async()=>{setBanner("最後同步確認中…","#2f7d32");await loadAll(true);},70000);
+}
+
+/* v3.5.1 即時持倉 + 自動同步確認 */
 async function submitAddPositionInstant(){
   const stockId=val("positionStockInput").trim();
   const shares=val("positionSharesInput").trim();
@@ -62,7 +77,7 @@ async function submitAddPositionInstant(){
     stock_id:stockId,
     shares:shares,
     avg_cost:avgCost
-  },`✅ 已送出持倉新增 / 更新：${stockId}。Actions 跑完後重新整理即可確認正式資料。`);
+  },`✅ 已送出持倉新增 / 更新：${stockId}，系統會自動確認同步結果。`,true);
 
   if(!ok){
     POSITION_CACHE=oldCache;
@@ -89,7 +104,7 @@ async function submitRemovePositionInstant(stockId){
     stock_id:stockId,
     shares:"",
     avg_cost:""
-  },`✅ 已送出持倉移除：${stockId}。Actions 跑完後重新整理即可確認正式資料。`);
+  },`✅ 已送出持倉移除：${stockId}，系統會自動確認同步結果。`,true);
 
   if(!ok){
     POSITION_CACHE=oldCache;
