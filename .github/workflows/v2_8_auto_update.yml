@@ -3,63 +3,29 @@ name: v2_8_auto_update
 on:
   workflow_dispatch:
   schedule:
-    - cron: '7 11 * * 1-5'   # 台灣 19:07（UTC 11:07）
-
-permissions:
-  contents: write
-
-concurrency:
-  group: v2_8_auto_update
-  cancel-in-progress: false
+    - cron: '7 11 * * 1-5'  # 台灣 19:07（避開整點）
 
 jobs:
-  run-pipeline:
+  run:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+      - name: Checkout
+        uses: actions/checkout@v3
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pandas numpy requests
+        run: pip install pandas requests
 
-      - name: Run v1 stable pipeline
-        run: |
-          python v1_stable_pipeline.py
+      - name: Update market data
+        run: python update_market_data.py
 
-      - name: Verify dashboard outputs
-        run: |
-          test -f mobile_dashboard_v1/data/meta.json
-          test -f mobile_dashboard_v1/data/trade_plan.csv
-          test -f mobile_dashboard_v1/data/position_monitor.csv
-          test -f mobile_dashboard_v1/data/core_candidates.csv
-          test -f mobile_dashboard_v1/data/alpha_candidates.csv
-          echo "dashboard outputs ok"
+      - name: Run main pipeline
+        run: python v1_stable_pipeline.py
 
-      - name: Commit and push results
+      - name: Commit results
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
           git add .
-          git status --short
-
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-            exit 0
-          fi
-
-          git commit -m "auto update data and strategy via v1 stable pipeline"
-
-          git pull --rebase origin main || git pull origin main --no-rebase
-          git push origin main
+          git commit -m "v2.8 auto update"
+          git push
