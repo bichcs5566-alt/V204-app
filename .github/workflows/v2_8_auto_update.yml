@@ -8,12 +8,16 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: v2_8_auto_update
+  cancel-in-progress: false
+
 jobs:
   run:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -22,26 +26,42 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.10'
 
       - name: Install dependencies
         run: |
-          pip install pandas requests numpy
+          python -m pip install --upgrade pip
+          pip install pandas numpy requests
 
+      # Step 1：先更新市場資料，產生 / 更新 price_panel_daily.csv
       - name: Update market data
         run: |
           python update_market_data.py
 
-      - name: Run main pipeline
+      # Step 2：再跑 v1 主策略，產出 candidates / trade_plan / monitors / meta
+      - name: Run v1 stable pipeline
         run: |
           python v1_stable_pipeline.py
 
-      - name: Commit results
+      # Step 3：確認關鍵輸出存在
+      - name: Verify outputs
+        run: |
+          test -f mobile_dashboard_v1/data/meta.json
+          test -f mobile_dashboard_v1/data/trade_plan.csv
+          test -f mobile_dashboard_v1/data/position_monitor.csv
+          test -f mobile_dashboard_v1/data/core_candidates.csv
+          test -f mobile_dashboard_v1/data/alpha_candidates.csv
+          test -f price_panel_daily.csv
+          echo "outputs ok"
+
+      # Step 4：寫回所有資料
+      - name: Commit and push results
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git add price_panel_daily.csv || true
+
           git add mobile_dashboard_v1/data/meta.json
           git add mobile_dashboard_v1/data/trade_plan.csv
           git add mobile_dashboard_v1/data/position_monitor.csv
@@ -50,11 +70,17 @@ jobs:
           git add mobile_dashboard_v1/data/selection_debug.csv
           git add mobile_dashboard_v1/data/core_candidates.csv
           git add mobile_dashboard_v1/data/alpha_candidates.csv
-          git add current_positions.csv meta.json trade_plan.csv position_monitor.csv watchlist_monitor.csv full_summary.csv selection_debug.csv core_candidates.csv alpha_candidates.csv || true
+
+          git add meta.json trade_plan.csv position_monitor.csv watchlist_monitor.csv full_summary.csv selection_debug.csv core_candidates.csv alpha_candidates.csv || true
+
+          git status --short
 
           if git diff --cached --quiet; then
-            echo "no changes to commit"
-          else
-            git commit -m "v2.8 auto update"
-            git push origin HEAD:main
+            echo "No changes to commit"
+            exit 0
           fi
+
+          git commit -m "auto update market data and v1 strategy outputs"
+
+          git pull --rebase origin main || git pull origin main --no-rebase
+          git push origin main
