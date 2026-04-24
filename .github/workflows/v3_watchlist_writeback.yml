@@ -2,16 +2,24 @@ name: v3_watchlist_writeback
 
 on:
   workflow_dispatch:
+    inputs:
+      action:
+        description: "add or remove"
+        required: true
+        type: choice
+        options:
+          - add
+          - remove
+      stock_id:
+        description: "stock id"
+        required: true
 
 jobs:
   writeback:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: true
+      - uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -19,24 +27,20 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install pandas
 
       - name: Run watchlist writeback
-        run: python v3_watchlist_writeback.py
+        run: |
+          python v3_watchlist_writeback.py \
+            --action "${{ github.event.inputs.action }}" \
+            --stock_id "${{ github.event.inputs.stock_id }}"
 
-      - name: Commit & Push (safe mode)
+      - name: Commit & Push (safe)
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions@github.com"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          git pull --rebase origin main
           git add mobile_dashboard_v1/data/watchlist.csv
-
-          git commit -m "v3.2.1 watchlist writeback" || echo "no changes"
-
-          # ✅ 關鍵：避免衝突
-          git pull --rebase origin main || git rebase --abort
-
-          git push origin main || (
-            git pull origin main --no-rebase &&
-            git push origin main
-          )
+          git commit -m "watchlist update" || echo "no changes"
+          git push origin main
