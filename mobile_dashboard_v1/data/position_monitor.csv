@@ -1,3 +1,3 @@
 ﻿stock_id,price_tier,ref_price,shares,avg_cost,pnl_pct,target_weight,action,note
-2426,lt_50,47.7477,1000,54.4544,-0.124,0.0,STOP_LOSS,達停損條件
-3026,p100_300,216.216,1000,233.7335,-0.0759,0.0,SELL,不在目標池
+2426,unknown,,1000,54.4544,,0.0,SELL,不在目標池
+3026,unknown,,1000,233.7335,,0.0,SELL,不在目標池
