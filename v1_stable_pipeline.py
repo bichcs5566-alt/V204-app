@@ -528,6 +528,41 @@ def write_csv_both(df, filename, write_root=False):
         df.to_csv(filename, index=False, encoding="utf-8-sig")
 
 
+
+def ensure_price_panel():
+    """
+    v1.0.2 hotfix:
+    只讀真實 price_panel_daily.csv。
+    優先順序：
+    1. mobile_dashboard_v1/data/price_panel_daily.csv
+    2. root/price_panel_daily.csv
+
+    找不到就直接停止，不再產生 TEST / demo 假資料。
+    """
+    paths = [
+        Path("mobile_dashboard_v1/data/price_panel_daily.csv"),
+        Path("price_panel_daily.csv"),
+    ]
+
+    for p in paths:
+        if p.exists():
+            print(f"✅ 使用 price_panel: {p}")
+            return p
+
+    raise FileNotFoundError(
+        "找不到 price_panel_daily.csv。請確認 root/price_panel_daily.csv "
+        "或 mobile_dashboard_v1/data/price_panel_daily.csv 是否存在。"
+    )
+
+
+def load_price_panel():
+    panel_path = ensure_price_panel()
+    df = pd.read_csv(panel_path)
+    if df.empty:
+        raise ValueError(f"price_panel_daily.csv 是空檔案：{panel_path}")
+    print(f"✅ price_panel rows: {len(df):,}")
+    return df
+
 def main():
     ensure_dashboard_files()
 
@@ -557,7 +592,7 @@ def main():
     (DASHBOARD_DATA_DIR / "meta.json").write_text(meta_text, encoding="utf-8")
     Path("meta.json").write_text(meta_text, encoding="utf-8")
 
-    print("完成 v1_stable_pipeline v1.0.1 candidates hotfix")
+    print("完成 v1_stable_pipeline v1.0.2 price_panel hotfix")
     print(meta_text)
 
 
