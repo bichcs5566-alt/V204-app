@@ -228,6 +228,68 @@ def select_stocks(day_df):
     return core, alpha, debug
 
 
+def normalize_candidate_output(df, bucket):
+    cols = [
+        "date", "stock_id", "price_tier", "close",
+        "mom5", "mom20", "mom60", "vol20",
+        "score", "quality", "strategy_bucket"
+    ]
+
+    out = df.copy()
+    if "date" not in out.columns:
+        out["date"] = ""
+    if "stock_id" not in out.columns:
+        out["stock_id"] = ""
+    if "close" not in out.columns:
+        out["close"] = np.nan
+    if "score" not in out.columns:
+        out["score"] = np.nan
+    if "quality" not in out.columns:
+        out["quality"] = np.nan
+
+    for c in ["mom5", "mom20", "mom60", "vol20"]:
+        if c not in out.columns:
+            out[c] = np.nan
+
+    out["price_tier"] = out["close"].apply(price_tier_key)
+    out["strategy_bucket"] = bucket
+
+    return out[cols]
+
+
+def fallback_candidates(signal_df):
+    base = signal_df.copy()
+
+    if base.empty:
+        empty = pd.DataFrame(columns=[
+            "date", "stock_id", "price_tier", "close",
+            "mom5", "mom20", "mom60", "vol20",
+            "score", "quality", "strategy_bucket"
+        ])
+        return empty.copy(), empty.copy()
+
+    for c in ["mom5", "mom20", "mom60", "vol20"]:
+        if c not in base.columns:
+            base[c] = np.nan
+
+    base["score"] = (
+        base["mom20"].fillna(0) * 0.6
+        + base["mom60"].fillna(0) * 0.3
+        + base["mom5"].fillna(0) * 0.1
+    )
+    vol = base["vol20"].fillna(base["vol20"].median()).fillna(0.01)
+    base["quality"] = base["score"] / (vol + 1e-6)
+    base = base.sort_values(["score", "quality", "close"], ascending=[False, False, False])
+
+    core_fb = base.drop_duplicates(subset=["stock_id"]).head(CORE_TOP_N).copy()
+    alpha_fb = base.drop_duplicates(subset=["stock_id"]).head(ALPHA_TOP_N).copy()
+
+    core_fb = normalize_candidate_output(core_fb, "CORE_FALLBACK")
+    alpha_fb = normalize_candidate_output(alpha_fb, "ALPHA_FALLBACK")
+
+    return core_fb, alpha_fb
+
+
 def build_target_weights(core, alpha):
     target = {}
     core_n = max(len(core), 1)
@@ -311,6 +373,17 @@ def build_outputs(df):
     watchlist = load_watchlist()
 
     core, alpha, debug = select_stocks(signal_df)
+
+    if core.empty and alpha.empty:
+        print("⚠️ core/alpha candidates are empty, use fallback candidates")
+        core, alpha = fallback_candidates(signal_df)
+        if len(debug):
+            debug.loc[0, "core_final_count"] = len(core)
+            debug.loc[0, "alpha_final_count"] = len(alpha)
+    else:
+        core = normalize_candidate_output(core, "CORE")
+        alpha = normalize_candidate_output(alpha, "ALPHA")
+
     target = build_target_weights(core, alpha)
 
     core_set = set(core["stock_id"])
@@ -441,6 +514,8 @@ def build_outputs(df):
         summary,
         debug,
         positions,
+        core,
+        alpha,
         meta,
     )
 
@@ -464,6 +539,8 @@ def main():
         summary_df,
         debug_df,
         positions_df,
+        core_df,
+        alpha_df,
         meta
     ) = build_outputs(df)
 
@@ -472,13 +549,15 @@ def main():
     write_csv_both(watch_df, "watchlist_monitor.csv", write_root=True)
     write_csv_both(summary_df, "full_summary.csv", write_root=True)
     write_csv_both(debug_df, "selection_debug.csv", write_root=True)
+    write_csv_both(core_df, "core_candidates.csv", write_root=True)
+    write_csv_both(alpha_df, "alpha_candidates.csv", write_root=True)
     write_csv_both(positions_df, "current_positions.csv", write_root=True)
 
     meta_text = json.dumps(meta, ensure_ascii=False, indent=2)
     (DASHBOARD_DATA_DIR / "meta.json").write_text(meta_text, encoding="utf-8")
     Path("meta.json").write_text(meta_text, encoding="utf-8")
 
-    print("完成 v1_stable_pipeline 完整改修版")
+    print("完成 v1_stable_pipeline v1.0.1 candidates hotfix")
     print(meta_text)
 
 
