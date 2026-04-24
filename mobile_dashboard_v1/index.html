@@ -1,205 +1,108 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>每日操作介面 v3.0</title>
-  <link rel="stylesheet" href="./styles.css" />
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>每日操作介面 v3.4</title>
+<link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <div class="page">
-    <section class="card hero-card">
-      <div class="title">📊 每日操作介面</div>
+<div class="page">
+<section class="card">
+<div class="title">📊 每日操作介面</div>
+<div class="action-row">
+<button id="refreshBtn" class="btn">🔄 重新整理頁面</button>
+<button id="updateBtn" class="btn">🚀 更新資料與策略</button>
+</div>
+<div id="syncBanner" class="sync-banner">頁面載入中…</div>
+<div class="meta-list">
+<div><span class="label">現在時間：</span><span id="nowTime">--</span></div>
+<div><span class="label">最後更新：</span><span id="generatedAt">--</span></div>
+<div><span class="label">訊號日：</span><span id="signalDate">--</span></div>
+<div><span class="label">交易日：</span><span id="tradeDate">--</span></div>
+<div><span class="label">主資料日期：</span><span id="panelDate">--</span></div>
+<div><span class="label">資料狀態：</span><span id="dataState">--</span></div>
+<div><span class="label">來源版本：</span><span id="sourceName">--</span></div>
+<div><span class="label">持倉寫回：</span><span id="writebackState">--</span></div>
+</div>
+</section>
 
-      <div class="action-row">
-        <button id="refreshBtn" class="btn">🔄 重新整理頁面</button>
-        <button id="updateBtn" class="btn">🚀 更新資料與策略</button>
-      </div>
+<section class="card">
+<div class="section-title">📍 今日應做</div>
+<div class="summary-grid">
+<div class="summary-box"><div class="summary-label">主要動作</div><div id="headlineAction" class="summary-value">--</div><div id="headlineDesc" class="summary-sub">--</div></div>
+<div class="summary-box"><div class="summary-label">買進檔數</div><div id="buyCount" class="summary-value">0</div><div id="buyAmount" class="summary-sub">建議金額：0</div></div>
+<div class="summary-box"><div class="summary-label">持倉動作</div><div id="positionActionCount" class="summary-value">0</div><div id="positionActionDesc" class="summary-sub">目前無加減碼</div></div>
+<div class="summary-box"><div class="summary-label">風險提示</div><div id="riskLevel" class="summary-value">--</div><div id="riskDesc" class="summary-sub">--</div></div>
+</div>
+</section>
 
-      <div id="syncBanner" class="sync-banner">頁面載入中…</div>
+<section class="card">
+<div class="section-title">💰 價位分層</div>
+<div class="note">v3.4：只統計持倉清單，讓系統回到每日操作核心。</div>
+<div id="tierSummary" class="tier-grid"></div>
+</section>
 
-      <div class="meta-list">
-        <div><span class="label">現在時間：</span><span id="nowTime">--</span></div>
-        <div><span class="label">最後更新：</span><span id="generatedAt">--</span></div>
-        <div><span class="label">訊號日：</span><span id="signalDate">--</span></div>
-        <div><span class="label">交易日：</span><span id="tradeDate">--</span></div>
-        <div><span class="label">主資料日期：</span><span id="panelDate">--</span></div>
-        <div><span class="label">資料狀態：</span><span id="dataState">--</span></div>
-        <div><span class="label">來源版本：</span><span id="sourceName">--</span></div>
-        <div><span class="label">持倉寫回：</span><span id="writebackState">--</span></div>
-      </div>
-    </section>
+<section class="card">
+<div class="section-title">📌 今日操作</div>
+<div class="table-wrap"><table>
+<thead><tr><th>動作</th><th>股票</th><th>價格分層</th><th>參考價格</th><th>目標權重</th><th>建議金額</th><th>備註</th></tr></thead>
+<tbody id="tradePlanBody"><tr><td colspan="7" class="empty">載入中…</td></tr></tbody>
+</table></div>
+</section>
 
-    <section class="card">
-      <div class="section-title">📍 今日應做</div>
-      <div class="summary-grid">
-        <div class="summary-box">
-          <div class="summary-label">主要動作</div>
-          <div id="headlineAction" class="summary-value">--</div>
-          <div id="headlineDesc" class="summary-sub">--</div>
-        </div>
-        <div class="summary-box">
-          <div class="summary-label">買進檔數</div>
-          <div id="buyCount" class="summary-value">0</div>
-          <div id="buyAmount" class="summary-sub">建議金額：0</div>
-        </div>
-        <div class="summary-box">
-          <div class="summary-label">持倉動作</div>
-          <div id="positionActionCount" class="summary-value">0</div>
-          <div id="positionActionDesc" class="summary-sub">目前無加減碼</div>
-        </div>
-        <div class="summary-box">
-          <div class="summary-label">風險提示</div>
-          <div id="riskLevel" class="summary-value">--</div>
-          <div id="riskDesc" class="summary-sub">--</div>
-        </div>
-      </div>
-    </section>
+<section class="card">
+<div class="section-title">📦 持倉監控</div>
+<div class="note">持倉就是主要監控清單。輸入股票代號、股數、成本後，寫回 current_positions.csv 並重跑策略。</div>
+<div class="form-grid">
+<input id="positionStockInput" class="input" placeholder="股票代號，例如 2330" />
+<input id="positionSharesInput" class="input" placeholder="股數，例如 1000" inputmode="numeric" />
+<input id="positionCostInput" class="input" placeholder="成本，例如 950" inputmode="decimal" />
+<button id="addPositionBtn" class="btn btn-full">加入 / 更新持倉</button>
+</div>
+<div class="table-wrap"><table>
+<thead><tr><th>股票</th><th>價格分層</th><th>參考價格</th><th>股數</th><th>成本</th><th>損益%</th><th>目標權重</th><th>動作</th><th>備註</th><th>移除</th></tr></thead>
+<tbody id="positionBody"><tr><td colspan="10" class="empty">載入中…</td></tr></tbody>
+</table></div>
+</section>
 
-    <section class="card">
-      <div class="section-title">💰 價位分層</div>
-      <div class="note">此版先以展示為主，互動分層控制留到下一版。</div>
-      <div id="tierSummary" class="tier-grid"></div>
-    </section>
+<section class="card">
+<div class="section-title">📈 績效摘要</div>
+<div class="perf-grid">
+<div class="perf-box"><div class="perf-label">報酬</div><div id="returnVal" class="perf-value">--</div></div>
+<div class="perf-box"><div class="perf-label">MDD</div><div id="mddVal" class="perf-value">--</div></div>
+<div class="perf-box"><div class="perf-label">Sharpe</div><div id="sharpeVal" class="perf-value">--</div></div>
+</div>
+</section>
 
-    <section class="card">
-      <div class="section-title">📌 今日操作</div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>動作</th>
-              <th>股票</th>
-              <th>價格分層</th>
-              <th>參考價格</th>
-              <th>目標權重</th>
-              <th>建議金額</th>
-              <th>備註</th>
-            </tr>
-          </thead>
-          <tbody id="tradePlanBody">
-            <tr><td colspan="7" class="empty">載入中…</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+<section class="card">
+<div class="section-title">🧪 篩選除錯</div>
+<div class="meta-list">
+<div><span class="label">輸入檔數：</span><span id="dbgTotal">--</span></div>
+<div><span class="label">有效檔數：</span><span id="dbgValid">--</span></div>
+<div><span class="label">Core 初選：</span><span id="dbgCorePrimary">--</span></div>
+<div><span class="label">Alpha 初選：</span><span id="dbgAlphaPrimary">--</span></div>
+<div><span class="label">Core 最終：</span><span id="dbgCoreFinal">--</span></div>
+<div><span class="label">Alpha 最終：</span><span id="dbgAlphaFinal">--</span></div>
+</div>
+</section>
 
-    <section class="card">
-      <div class="section-title">📦 持倉監控</div>
-      <div class="note">v3.0 已接上加入 / 移除持倉。送出後會寫回 CSV，並重跑主流程。</div>
-
-      <div class="form-grid">
-        <input id="positionStockInput" class="input" placeholder="股票代號" />
-        <input id="positionSharesInput" class="input" placeholder="股數" inputmode="numeric" />
-        <input id="positionCostInput" class="input" placeholder="成本" inputmode="decimal" />
-        <button id="addPositionBtn" class="btn btn-full">加入持倉</button>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>股票</th>
-              <th>價格分層</th>
-              <th>參考價格</th>
-              <th>股數</th>
-              <th>成本</th>
-              <th>損益%</th>
-              <th>目標權重</th>
-              <th>動作</th>
-              <th>備註</th>
-              <th>移除</th>
-            </tr>
-          </thead>
-          <tbody id="positionBody">
-            <tr><td colspan="10" class="empty">載入中…</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="card">
-      <div class="section-title">📡 自選股監控</div>
-      <div class="note">v3.0 已接上加入 / 移除自選股。送出後會寫回 CSV，並重跑主流程。</div>
-
-      <div class="form-grid form-grid-watch">
-        <input id="watchlistStockInput" class="input" placeholder="股票代號" />
-        <button id="addWatchlistBtn" class="btn btn-full">加入自選股</button>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>股票</th>
-              <th>價格分層</th>
-              <th>參考價格</th>
-              <th>持有狀態</th>
-              <th>策略池</th>
-              <th>動作</th>
-              <th>損益%</th>
-              <th>移除</th>
-            </tr>
-          </thead>
-          <tbody id="watchlistBody">
-            <tr><td colspan="8" class="empty">載入中…</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="card">
-      <div class="section-title">📈 績效摘要</div>
-      <div class="perf-grid">
-        <div class="perf-box">
-          <div class="perf-label">報酬</div>
-          <div id="returnVal" class="perf-value">--</div>
-        </div>
-        <div class="perf-box">
-          <div class="perf-label">MDD</div>
-          <div id="mddVal" class="perf-value">--</div>
-        </div>
-        <div class="perf-box">
-          <div class="perf-label">Sharpe</div>
-          <div id="sharpeVal" class="perf-value">--</div>
-        </div>
-      </div>
-    </section>
-
-    <section class="card">
-      <div class="section-title">🧪 篩選除錯</div>
-      <div class="meta-list">
-        <div><span class="label">輸入檔數：</span><span id="dbgTotal">--</span></div>
-        <div><span class="label">有效檔數：</span><span id="dbgValid">--</span></div>
-        <div><span class="label">Core 初選：</span><span id="dbgCorePrimary">--</span></div>
-        <div><span class="label">Alpha 初選：</span><span id="dbgAlphaPrimary">--</span></div>
-        <div><span class="label">Core 最終：</span><span id="dbgCoreFinal">--</span></div>
-        <div><span class="label">Alpha 最終：</span><span id="dbgAlphaFinal">--</span></div>
-      </div>
-    </section>
-
-    <section class="card">
-      <div class="section-title">🔐 GitHub 本機設定</div>
-      <div class="note">token 只存在這台裝置的瀏覽器 localStorage，不會寫進 repo。</div>
-
-      <div class="form-grid">
-        <input id="ghOwner" class="input" placeholder="owner，例如 bichcs5566-alt" />
-        <input id="ghRepo" class="input" placeholder="repo，例如 V204-app" />
-        <input id="ghBranch" class="input" placeholder="branch，例如 main" />
-        <input id="ghToken" class="input" placeholder="GitHub token" />
-      </div>
-
-      <div class="action-row">
-        <button id="saveConfigBtn" class="btn">儲存設定</button>
-        <button id="clearConfigBtn" class="btn btn-danger">清除設定</button>
-      </div>
-
-      <div class="meta-list">
-        <div><span class="label">設定狀態：</span><span id="configStatus">未檢查</span></div>
-      </div>
-    </section>
-  </div>
-
-  <script src="./app.js"></script>
+<section class="card">
+<div class="section-title">🔐 GitHub 本機設定</div>
+<div class="note">token 只存在這台裝置的瀏覽器，不會寫進 repo。持倉新增/移除需要這組設定。</div>
+<div class="form-grid config-grid">
+<input id="ghOwner" class="input" placeholder="owner，例如 bichcs5566-alt" />
+<input id="ghRepo" class="input" placeholder="repo，例如 V204-app" />
+<input id="ghBranch" class="input" placeholder="branch，例如 main" />
+<input id="ghToken" class="input" placeholder="GitHub token" />
+</div>
+<div class="action-row">
+<button id="saveConfigBtn" class="btn">儲存設定</button>
+<button id="clearConfigBtn" class="btn btn-danger">清除設定</button>
+</div>
+<div class="meta-list"><div><span class="label">設定狀態：</span><span id="configStatus">未檢查</span></div></div>
+</section>
+</div>
+<script src="./app.js"></script>
 </body>
 </html>
