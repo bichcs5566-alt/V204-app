@@ -41,10 +41,6 @@ jobs:
           test -f data/price_panel_parts/manifest.json || (echo "Missing data/price_panel_parts/manifest.json" && exit 1)
           python merge_chunked_price_panel.py
 
-      # 關鍵修補：
-      # merge 出來的歷史資料欄位是 trade_date / symbol。
-      # v1 主程式要吃 date / stock_id / close。
-      # 這一步只做欄位標準化，不改策略。
       - name: Normalize price panel columns
         run: |
           python - <<'PY'
@@ -67,32 +63,26 @@ jobs:
 
           df = df.rename(columns=rename)
 
-          need = ["date", "stock_id", "close"]
-          missing = [c for c in need if c not in df.columns]
+          required = ["date", "stock_id", "close"]
+          missing = [c for c in required if c not in df.columns]
           if missing:
-              raise SystemExit(f"price_panel_daily.csv missing required columns after normalize: {missing}; columns={list(df.columns)}")
+              raise SystemExit(f"missing required columns after normalize: {missing}; columns={list(df.columns)}")
 
           df["date"] = df["date"].astype(str).str[:10]
           df["stock_id"] = df["stock_id"].astype(str).str.strip()
           df["close"] = pd.to_numeric(df["close"], errors="coerce")
-
           if "volume" in df.columns:
               df["volume"] = pd.to_numeric(df["volume"], errors="coerce").fillna(0)
 
           df = df[df["stock_id"].notna() & (df["stock_id"] != "")]
           df = df[df["close"].notna()]
 
-          # 保留原欄位，但把 v1 必要欄位排前面
           front = ["date", "stock_id", "close"]
           rest = [c for c in df.columns if c not in front]
           df = df[front + rest]
 
+          # 只給本次 Action / v1_stable_pipeline.py 使用，不提交到 GitHub。
           df.to_csv(path, index=False)
-
-          # 同步一份到 dashboard data，避免前端或其他流程讀不同位置
-          out_dir = Path("mobile_dashboard_v1/data")
-          out_dir.mkdir(parents=True, exist_ok=True)
-          df.to_csv(out_dir / "price_panel_daily.csv", index=False)
 
           print("after columns:", list(df.columns))
           print("after rows:", len(df))
@@ -161,13 +151,18 @@ jobs:
                   print(path, "read failed:", e)
           PY
 
+      - name: Remove huge temporary price panel before commit
+        run: |
+          # GitHub 單檔限制 100MB；歷史 price_panel_daily.csv 約 472MB，只能在 Action 內暫用，不能 commit。
+          rm -f price_panel_daily.csv
+          rm -f mobile_dashboard_v1/data/price_panel_daily.csv
+          git checkout -- price_panel_daily.csv mobile_dashboard_v1/data/price_panel_daily.csv 2>/dev/null || true
+
       - name: Commit results
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add price_panel_daily.csv || true
-          git add mobile_dashboard_v1/data/price_panel_daily.csv || true
           git add mobile_dashboard_v1/data/meta.json
           git add mobile_dashboard_v1/data/trade_plan.csv
           git add mobile_dashboard_v1/data/position_monitor.csv
@@ -179,12 +174,15 @@ jobs:
 
           git add meta.json trade_plan.csv position_monitor.csv watchlist_monitor.csv full_summary.csv selection_debug.csv core_candidates.csv alpha_candidates.csv || true
 
+          # 防呆：絕對不要提交巨大歷史 panel
+          git reset -- price_panel_daily.csv mobile_dashboard_v1/data/price_panel_daily.csv 2>/dev/null || true
+
           git status --short
 
           if git diff --cached --quiet; then
             echo "no changes to commit"
           else
-            git commit -m "v2.8 auto update from normalized historical price panel"
+            git commit -m "v2.8 auto update from normalized historical panel outputs"
             git pull --rebase origin main || git pull origin main --no-rebase
             git push origin HEAD:main
           fi
