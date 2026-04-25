@@ -1,0 +1,114 @@
+name: v3_7_1_chip_light_update
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '20 11 * * 1-5'   # 台灣 19:20，建議在 v2_8_auto_update 後面
+
+permissions:
+  contents: write
+
+concurrency:
+  group: v3_7_1_chip_light_update
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy requests
+
+      - name: Build temporary historical price panel
+        run: |
+          test -f merge_chunked_price_panel.py || (echo "Missing merge_chunked_price_panel.py" && exit 1)
+          test -d data/price_panel_parts || (echo "Missing data/price_panel_parts" && exit 1)
+          python merge_chunked_price_panel.py
+
+      - name: Normalize temporary price panel
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          from pathlib import Path
+          p = Path("price_panel_daily.csv")
+          df = pd.read_csv(p)
+          if "trade_date" in df.columns and "date" not in df.columns:
+              df = df.rename(columns={"trade_date": "date"})
+          if "symbol" in df.columns and "stock_id" not in df.columns:
+              df = df.rename(columns={"symbol": "stock_id"})
+          need = ["date", "stock_id", "close"]
+          missing = [c for c in need if c not in df.columns]
+          if missing:
+              raise SystemExit(f"missing columns: {missing}")
+          df["date"] = pd.to_datetime(df["date"], errors="coerce")
+          df["stock_id"] = df["stock_id"].astype(str).str.strip()
+          df["close"] = pd.to_numeric(df["close"], errors="coerce")
+          if "volume" in df.columns:
+              df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
+          else:
+              df["volume"] = 0
+          df = df.dropna(subset=["date", "stock_id", "close"])
+          df = df[df["close"] > 0].copy()
+          df["date"] = df["date"].dt.strftime("%Y-%m-%d")
+          front = ["date", "stock_id", "close", "volume"]
+          rest = [c for c in df.columns if c not in front]
+          df = df[front + rest].sort_values(["stock_id", "date"])
+          print("rows:", len(df))
+          print("unique dates:", df["date"].nunique())
+          print("unique stocks:", df["stock_id"].nunique())
+          if df["date"].nunique() < 60:
+              raise SystemExit("historical panel too short")
+          df.to_csv(p, index=False, encoding="utf-8-sig")
+          PY
+
+      - name: Run v3.7.1 chip light radar
+        run: |
+          test -f v3_7_1_chip_light_builder.py || (echo "Missing v3_7_1_chip_light_builder.py" && exit 1)
+          python v3_7_1_chip_light_builder.py
+
+      - name: Verify chip output
+        run: |
+          test -f mobile_dashboard_v1/data/chip_light.csv
+          python - <<'PY'
+          import pandas as pd
+          df = pd.read_csv("mobile_dashboard_v1/data/chip_light.csv")
+          print(df.head(20).to_string(index=False))
+          if "stock_id" not in df.columns or "chip_label" not in df.columns:
+              raise SystemExit("chip_light.csv schema invalid")
+          PY
+
+      - name: Remove temporary huge panel
+        run: |
+          rm -f price_panel_daily.csv
+          git reset -- price_panel_daily.csv 2>/dev/null || true
+
+      - name: Commit chip light output
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add v3_7_1_chip_light_builder.py || true
+          git add mobile_dashboard_v1/data/chip_light.csv
+          git add chip_light.csv || true
+          git status --short
+          if git diff --cached --quiet; then
+            echo "no changes to commit"
+          else
+            git commit -m "v3.7.1 update chip light radar"
+            git pull --rebase origin main || git pull origin main --no-rebase
+            git push origin HEAD:main
+          fi
