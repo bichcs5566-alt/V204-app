@@ -1,2 +1,2 @@
 ﻿signal_date,trade_date,stock_id,price_tier,ref_price,shares,avg_cost,pnl_pct,target_weight,current_weight_est,action,note
-2026-04-24,2026-04-27,4741,p50_100,55.4554,1000,55.4554,-0.001,0.03,0.0554,REDUCE,高於目標權重
+2026-04-24,2026-04-27,3426,lt_50,47.6977,1000,47.6977,-0.001,0.0417,0.0477,HOLD,權重在容許範圍
