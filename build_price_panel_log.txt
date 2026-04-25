@@ -1,81 +1,81 @@
-[2026-04-18 10:56:53] === build_full_price_panel_10y_chunked_branch_only start ===
-[2026-04-18 10:56:53] start=2015-01-01 end=2026-12-31 limit_symbols=None max_part_bytes=89128960
-[2026-04-18 10:56:53] Recovered existing symbol candidates from repo CSVs: 613
-[2026-04-18 10:56:54] TWSE symbol source failed: https://openapi.twse.com.tw/v1/opendata/t187ap03_O | Not JSON: https://openapi.twse.com.tw/v1/opendata/t187ap03_O
-[2026-04-18 10:56:56] TWSE symbols loaded from https://openapi.twse.com.tw/v1/opendata/t187ap03_L: 1075
-[2026-04-18 10:57:05] TPEX symbols loaded from https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes: 1033
-[2026-04-18 10:57:05] Universe saved: symbol_universe.csv | symbols=2437
-[2026-04-18 10:57:05] Downloading chunk 1/31 | tickers=80
-[2026-04-18 10:57:09] Chunk 1/31 saved | rows=219360 | symbols=80
-[2026-04-18 10:57:11] Downloading chunk 2/31 | tickers=80
-[2026-04-18 10:57:16] Chunk 2/31 saved | rows=219360 | symbols=80
-[2026-04-18 10:57:17] Downloading chunk 3/31 | tickers=80
-[2026-04-18 10:57:23] Chunk 3/31 saved | rows=219360 | symbols=80
-[2026-04-18 10:57:24] Downloading chunk 4/31 | tickers=80
-[2026-04-18 10:57:30] Chunk 4/31 saved | rows=219360 | symbols=80
-[2026-04-18 10:57:31] Downloading chunk 5/31 | tickers=80
-[2026-04-18 10:57:37] Chunk 5/31 saved | rows=219440 | symbols=80
-[2026-04-18 10:57:38] Downloading chunk 6/31 | tickers=80
-[2026-04-18 10:57:44] Chunk 6/31 saved | rows=219360 | symbols=80
-[2026-04-18 10:57:45] Downloading chunk 7/31 | tickers=80
-[2026-04-18 10:57:52] Chunk 7/31 saved | rows=221600 | symbols=80
-[2026-04-18 10:57:53] Downloading chunk 8/31 | tickers=80
-[2026-04-18 10:58:01] Chunk 8/31 saved | rows=219600 | symbols=80
-[2026-04-18 10:58:03] Downloading chunk 9/31 | tickers=80
-[2026-04-18 10:58:09] Chunk 9/31 saved | rows=219440 | symbols=80
-[2026-04-18 10:58:10] Downloading chunk 10/31 | tickers=80
-[2026-04-18 10:58:19] Chunk 10/31 saved | rows=219360 | symbols=80
-[2026-04-18 10:58:20] Downloading chunk 11/31 | tickers=80
-[2026-04-18 10:58:28] Chunk 11/31 saved | rows=219440 | symbols=80
-[2026-04-18 10:58:29] Downloading chunk 12/31 | tickers=80
-[2026-04-18 10:58:35] Chunk 12/31 saved | rows=219360 | symbols=80
-[2026-04-18 10:58:37] Downloading chunk 13/31 | tickers=80
-[2026-04-18 10:58:43] Chunk 13/31 saved | rows=219440 | symbols=80
-[2026-04-18 10:58:45] Downloading chunk 14/31 | tickers=80
-[2026-04-18 10:58:52] Chunk 14/31 saved | rows=219360 | symbols=80
-[2026-04-18 10:58:54] Downloading chunk 15/31 | tickers=80
-[2026-04-18 10:59:00] Chunk 15/31 saved | rows=219360 | symbols=80
-[2026-04-18 10:59:02] Downloading chunk 16/31 | tickers=80
-[2026-04-18 10:59:10] Chunk 16/31 saved | rows=219360 | symbols=80
-[2026-04-18 10:59:11] Downloading chunk 17/31 | tickers=80
-[2026-04-18 10:59:17] Chunk 17/31 saved | rows=219360 | symbols=80
-[2026-04-18 10:59:19] Downloading chunk 18/31 | tickers=80
-[2026-04-18 10:59:31] Chunk 18/31 saved | rows=219440 | symbols=80
-[2026-04-18 10:59:33] Downloading chunk 19/31 | tickers=80
-[2026-04-18 10:59:39] Chunk 19/31 saved | rows=219360 | symbols=80
-[2026-04-18 10:59:40] Downloading chunk 20/31 | tickers=80
-[2026-04-18 10:59:46] Chunk 20/31 saved | rows=222720 | symbols=80
-[2026-04-18 10:59:48] Downloading chunk 21/31 | tickers=80
-[2026-04-18 10:59:53] Chunk 21/31 saved | rows=219360 | symbols=80
-[2026-04-18 10:59:54] Downloading chunk 22/31 | tickers=80
-[2026-04-18 11:00:00] Chunk 22/31 saved | rows=221120 | symbols=80
-[2026-04-18 11:00:02] Downloading chunk 23/31 | tickers=80
-[2026-04-18 11:00:09] Chunk 23/31 saved | rows=219360 | symbols=80
-[2026-04-18 11:00:10] Downloading chunk 24/31 | tickers=80
-[2026-04-18 11:00:17] Chunk 24/31 saved | rows=219680 | symbols=80
-[2026-04-18 11:00:19] Downloading chunk 25/31 | tickers=80
-[2026-04-18 11:00:24] Chunk 25/31 saved | rows=219440 | symbols=80
-[2026-04-18 11:00:26] Downloading chunk 26/31 | tickers=80
-[2026-04-18 11:00:31] Chunk 26/31 saved | rows=219440 | symbols=80
-[2026-04-18 11:00:33] Downloading chunk 27/31 | tickers=80
-[2026-04-18 11:00:38] Chunk 27/31 saved | rows=88880 | symbols=80
-[2026-04-18 11:00:39] Downloading chunk 28/31 | tickers=80
-[2026-04-18 11:00:45] Chunk 28/31 saved | rows=219440 | symbols=80
-[2026-04-18 11:00:47] Downloading chunk 29/31 | tickers=80
-[2026-04-18 11:00:53] Chunk 29/31 saved | rows=219440 | symbols=80
-[2026-04-18 11:00:55] Downloading chunk 30/31 | tickers=80
-[2026-04-18 11:01:01] Chunk 30/31 saved | rows=219600 | symbols=80
-[2026-04-18 11:01:02] Downloading chunk 31/31 | tickers=37
-[2026-04-18 11:01:06] Chunk 31/31 saved | rows=101454 | symbols=37
-[2026-04-18 11:01:10] Panel built in memory | rows=4777799 | symbols=1957
-[2026-04-18 11:01:15] Saved price_panel_daily_part_001.csv | rows=808018 | bytes=88467964
-[2026-04-18 11:01:21] Saved price_panel_daily_part_002.csv | rows=808018 | bytes=87515468
-[2026-04-18 11:01:27] Saved price_panel_daily_part_003.csv | rows=808018 | bytes=86377648
-[2026-04-18 11:01:32] Saved price_panel_daily_part_004.csv | rows=808018 | bytes=84042861
-[2026-04-18 11:01:38] Saved price_panel_daily_part_005.csv | rows=808018 | bytes=81078655
-[2026-04-18 11:01:42] Saved price_panel_daily_part_006.csv | rows=737709 | bytes=70106327
-[2026-04-18 11:01:43] Manifest saved: data/price_panel_parts/manifest.json | parts=6
-[2026-04-18 11:01:43] Summary saved: build_price_panel_summary.csv
-[2026-04-18 11:01:43]      start        end    rows  symbols   min_date   max_date  twse_symbols  tpex_symbols  covers_target  universe_symbols  part_count
-2015-01-01 2026-12-31 4777799     1957 2015-01-02 2026-04-17          1075          1017           True              2437           6
-[2026-04-18 11:01:43] === build_full_price_panel_10y_chunked_branch_only done ===
+[2026-04-25 00:59:32] === build_full_price_panel_10y_chunked_branch_only start ===
+[2026-04-25 00:59:32] start=2015-01-01 end=2026-12-31 limit_symbols=None max_part_bytes=89128960
+[2026-04-25 00:59:32] Recovered existing symbol candidates from repo CSVs: 2082
+[2026-04-25 00:59:33] TWSE symbol source failed: https://openapi.twse.com.tw/v1/opendata/t187ap03_O | Not JSON: https://openapi.twse.com.tw/v1/opendata/t187ap03_O
+[2026-04-25 00:59:35] TWSE symbols loaded from https://openapi.twse.com.tw/v1/opendata/t187ap03_L: 1076
+[2026-04-25 00:59:40] TPEX symbols loaded from https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes: 1026
+[2026-04-25 00:59:40] Universe saved: symbol_universe.csv | symbols=2431
+[2026-04-25 00:59:40] Downloading chunk 1/31 | tickers=80
+[2026-04-25 00:59:45] Chunk 1/31 saved | rows=219760 | symbols=80
+[2026-04-25 00:59:46] Downloading chunk 2/31 | tickers=80
+[2026-04-25 00:59:51] Chunk 2/31 saved | rows=219760 | symbols=80
+[2026-04-25 00:59:53] Downloading chunk 3/31 | tickers=80
+[2026-04-25 01:00:01] Chunk 3/31 saved | rows=219760 | symbols=80
+[2026-04-25 01:00:03] Downloading chunk 4/31 | tickers=80
+[2026-04-25 01:00:10] Chunk 4/31 saved | rows=219760 | symbols=80
+[2026-04-25 01:00:11] Downloading chunk 5/31 | tickers=80
+[2026-04-25 01:00:18] Chunk 5/31 saved | rows=219840 | symbols=80
+[2026-04-25 01:00:20] Downloading chunk 6/31 | tickers=80
+[2026-04-25 01:00:26] Chunk 6/31 saved | rows=219760 | symbols=80
+[2026-04-25 01:00:28] Downloading chunk 7/31 | tickers=80
+[2026-04-25 01:00:37] Chunk 7/31 saved | rows=222000 | symbols=80
+[2026-04-25 01:00:38] Downloading chunk 8/31 | tickers=80
+[2026-04-25 01:00:46] Chunk 8/31 saved | rows=220000 | symbols=80
+[2026-04-25 01:00:48] Downloading chunk 9/31 | tickers=80
+[2026-04-25 01:00:56] Chunk 9/31 saved | rows=219840 | symbols=80
+[2026-04-25 01:00:58] Downloading chunk 10/31 | tickers=80
+[2026-04-25 01:01:07] Chunk 10/31 saved | rows=219760 | symbols=80
+[2026-04-25 01:01:08] Downloading chunk 11/31 | tickers=80
+[2026-04-25 01:01:15] Chunk 11/31 saved | rows=219840 | symbols=80
+[2026-04-25 01:01:17] Downloading chunk 12/31 | tickers=80
+[2026-04-25 01:01:24] Chunk 12/31 saved | rows=219760 | symbols=80
+[2026-04-25 01:01:26] Downloading chunk 13/31 | tickers=80
+[2026-04-25 01:01:34] Chunk 13/31 saved | rows=219840 | symbols=80
+[2026-04-25 01:01:36] Downloading chunk 14/31 | tickers=80
+[2026-04-25 01:01:43] Chunk 14/31 saved | rows=219760 | symbols=80
+[2026-04-25 01:01:45] Downloading chunk 15/31 | tickers=80
+[2026-04-25 01:01:52] Chunk 15/31 saved | rows=219760 | symbols=80
+[2026-04-25 01:01:54] Downloading chunk 16/31 | tickers=80
+[2026-04-25 01:02:00] Chunk 16/31 saved | rows=219760 | symbols=80
+[2026-04-25 01:02:01] Downloading chunk 17/31 | tickers=80
+[2026-04-25 01:02:09] Chunk 17/31 saved | rows=219760 | symbols=80
+[2026-04-25 01:02:10] Downloading chunk 18/31 | tickers=80
+[2026-04-25 01:02:19] Chunk 18/31 saved | rows=219840 | symbols=80
+[2026-04-25 01:02:21] Downloading chunk 19/31 | tickers=80
+[2026-04-25 01:02:31] Chunk 19/31 saved | rows=219760 | symbols=80
+[2026-04-25 01:02:32] Downloading chunk 20/31 | tickers=80
+[2026-04-25 01:02:41] Chunk 20/31 saved | rows=223120 | symbols=80
+[2026-04-25 01:02:42] Downloading chunk 21/31 | tickers=80
+[2026-04-25 01:02:47] Chunk 21/31 saved | rows=219760 | symbols=80
+[2026-04-25 01:02:48] Downloading chunk 22/31 | tickers=80
+[2026-04-25 01:02:58] Chunk 22/31 saved | rows=221520 | symbols=80
+[2026-04-25 01:02:59] Downloading chunk 23/31 | tickers=80
+[2026-04-25 01:03:07] Chunk 23/31 saved | rows=219760 | symbols=80
+[2026-04-25 01:03:09] Downloading chunk 24/31 | tickers=80
+[2026-04-25 01:03:19] Chunk 24/31 saved | rows=220080 | symbols=80
+[2026-04-25 01:03:20] Downloading chunk 25/31 | tickers=80
+[2026-04-25 01:03:28] Chunk 25/31 saved | rows=219840 | symbols=80
+[2026-04-25 01:03:30] Downloading chunk 26/31 | tickers=80
+[2026-04-25 01:03:35] Chunk 26/31 saved | rows=219840 | symbols=80
+[2026-04-25 01:03:37] Downloading chunk 27/31 | tickers=80
+[2026-04-25 01:03:42] Chunk 27/31 saved | rows=219760 | symbols=80
+[2026-04-25 01:03:44] Downloading chunk 28/31 | tickers=80
+[2026-04-25 01:03:49] Chunk 28/31 saved | rows=219840 | symbols=80
+[2026-04-25 01:03:51] Downloading chunk 29/31 | tickers=80
+[2026-04-25 01:03:57] Chunk 29/31 saved | rows=219840 | symbols=80
+[2026-04-25 01:03:59] Downloading chunk 30/31 | tickers=80
+[2026-04-25 01:04:05] Chunk 30/31 saved | rows=220000 | symbols=80
+[2026-04-25 01:04:07] Downloading chunk 31/31 | tickers=31
+[2026-04-25 01:04:11] Chunk 31/31 saved | rows=85157 | symbols=31
+[2026-04-25 01:04:14] Panel built in memory | rows=4790773 | symbols=1960
+[2026-04-25 01:04:19] Saved price_panel_daily_part_001.csv | rows=808093 | bytes=88478611
+[2026-04-25 01:04:23] Saved price_panel_daily_part_002.csv | rows=808093 | bytes=87528721
+[2026-04-25 01:04:28] Saved price_panel_daily_part_003.csv | rows=808093 | bytes=86392179
+[2026-04-25 01:04:32] Saved price_panel_daily_part_004.csv | rows=808093 | bytes=84060345
+[2026-04-25 01:04:36] Saved price_panel_daily_part_005.csv | rows=808093 | bytes=81106279
+[2026-04-25 01:04:40] Saved price_panel_daily_part_006.csv | rows=750308 | bytes=71277414
+[2026-04-25 01:04:40] Manifest saved: data/price_panel_parts/manifest.json | parts=6
+[2026-04-25 01:04:40] Summary saved: build_price_panel_summary.csv
+[2026-04-25 01:04:40]      start        end    rows  symbols   min_date   max_date  twse_symbols  tpex_symbols  covers_target  universe_symbols  part_count
+2015-01-01 2026-12-31 4790773     1960 2015-01-02 2026-04-24          1076          1010           True              2431           6
+[2026-04-25 01:04:40] === build_full_price_panel_10y_chunked_branch_only done ===

@@ -1,58 +1,58 @@
 {
-  "created_at": "2026-04-18T11:01:42.962628",
+  "created_at": "2026-04-25T01:04:40.067246",
   "start": "2015-01-01",
   "end": "2026-12-31",
   "part_count": 6,
-  "total_rows": 4777799,
-  "total_symbols": 1957,
+  "total_rows": 4790773,
+  "total_symbols": 1960,
   "parts": [
     {
       "file": "data/price_panel_parts/price_panel_daily_part_001.csv",
-      "rows": 808018,
-      "bytes": 88467964,
+      "rows": 808093,
+      "bytes": 88478611,
       "min_date": "2015-01-02",
-      "max_date": "2017-02-09",
-      "symbols": 1626
+      "max_date": "2017-02-08",
+      "symbols": 1627
     },
     {
       "file": "data/price_panel_parts/price_panel_daily_part_002.csv",
-      "rows": 808018,
-      "bytes": 87515468,
-      "min_date": "2017-02-09",
-      "max_date": "2019-01-30",
-      "symbols": 1696
+      "rows": 808093,
+      "bytes": 87528721,
+      "min_date": "2017-02-08",
+      "max_date": "2019-01-29",
+      "symbols": 1697
     },
     {
       "file": "data/price_panel_parts/price_panel_daily_part_003.csv",
-      "rows": 808018,
-      "bytes": 86377648,
-      "min_date": "2019-01-30",
-      "max_date": "2021-01-08",
-      "symbols": 1749
+      "rows": 808093,
+      "bytes": 86392179,
+      "min_date": "2019-01-29",
+      "max_date": "2021-01-07",
+      "symbols": 1750
     },
     {
       "file": "data/price_panel_parts/price_panel_daily_part_004.csv",
-      "rows": 808018,
-      "bytes": 84042861,
-      "min_date": "2021-01-08",
+      "rows": 808093,
+      "bytes": 84060345,
+      "min_date": "2021-01-07",
       "max_date": "2022-11-18",
-      "symbols": 1810
+      "symbols": 1811
     },
     {
       "file": "data/price_panel_parts/price_panel_daily_part_005.csv",
-      "rows": 808018,
-      "bytes": 81078655,
+      "rows": 808093,
+      "bytes": 81106279,
       "min_date": "2022-11-18",
-      "max_date": "2024-09-11",
-      "symbols": 1898
+      "max_date": "2024-09-10",
+      "symbols": 1899
     },
     {
       "file": "data/price_panel_parts/price_panel_daily_part_006.csv",
-      "rows": 737709,
-      "bytes": 70106327,
-      "min_date": "2024-09-11",
-      "max_date": "2026-04-17",
-      "symbols": 1953
+      "rows": 750308,
+      "bytes": 71277414,
+      "min_date": "2024-09-10",
+      "max_date": "2026-04-24",
+      "symbols": 1956
     }
   ]
 }
