@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-04-25 09:58:42",
-  "now_time": "2026-04-25 09:58:42",
+  "generated_at": "2026-04-25 10:14:26",
+  "now_time": "2026-04-25 10:14:26",
   "signal_date": "2026-04-17",
   "trade_date": "2026-04-20",
   "price_panel_latest_date": "2026-04-17",
   "data_state": "fresh",
   "source": "v2.8_real_market_auto",
-  "trade_plan_batch": "2026-04-25 09:58:42",
+  "trade_plan_batch": "2026-04-25 10:14:26",
   "position_writeback_state": "idle"
 }
