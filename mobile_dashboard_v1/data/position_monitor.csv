@@ -1,2 +1,2 @@
 ﻿signal_date,trade_date,stock_id,price_tier,ref_price,shares,avg_cost,pnl_pct,target_weight,current_weight_est,action,note
-2026-04-24,2026-04-27,2409,lt_50,17.2172,1000,19,-0.0947,0.0,0.0172,SELL,不在目標池
+2026-04-24,2026-04-27,3037,p500_1000,790.79,1000,790.79,-0.001,0.03,0.79,REDUCE,高於目標權重
