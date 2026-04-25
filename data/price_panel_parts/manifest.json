@@ -1,58 +1,58 @@
 {
-  "created_at": "2026-04-18T11:01:42.962628",
+  "created_at": "2026-04-25T02:39:36.327712",
   "start": "2015-01-01",
   "end": "2026-12-31",
   "part_count": 6,
-  "total_rows": 4777799,
-  "total_symbols": 1957,
+  "total_rows": 4790773,
+  "total_symbols": 1960,
   "parts": [
     {
       "file": "data/price_panel_parts/price_panel_daily_part_001.csv",
-      "rows": 808018,
-      "bytes": 88467964,
+      "rows": 808153,
+      "bytes": 88487230,
       "min_date": "2015-01-02",
       "max_date": "2017-02-09",
-      "symbols": 1626
+      "symbols": 1627
     },
     {
       "file": "data/price_panel_parts/price_panel_daily_part_002.csv",
-      "rows": 808018,
-      "bytes": 87515468,
+      "rows": 808153,
+      "bytes": 87534513,
       "min_date": "2017-02-09",
       "max_date": "2019-01-30",
-      "symbols": 1696
+      "symbols": 1697
     },
     {
       "file": "data/price_panel_parts/price_panel_daily_part_003.csv",
-      "rows": 808018,
-      "bytes": 86377648,
+      "rows": 808153,
+      "bytes": 86398628,
       "min_date": "2019-01-30",
       "max_date": "2021-01-08",
-      "symbols": 1749
+      "symbols": 1750
     },
     {
       "file": "data/price_panel_parts/price_panel_daily_part_004.csv",
-      "rows": 808018,
-      "bytes": 84042861,
+      "rows": 808153,
+      "bytes": 84064600,
       "min_date": "2021-01-08",
       "max_date": "2022-11-18",
-      "symbols": 1810
+      "symbols": 1811
     },
     {
       "file": "data/price_panel_parts/price_panel_daily_part_005.csv",
-      "rows": 808018,
-      "bytes": 81078655,
+      "rows": 808153,
+      "bytes": 81111271,
       "min_date": "2022-11-18",
       "max_date": "2024-09-11",
-      "symbols": 1898
+      "symbols": 1899
     },
     {
       "file": "data/price_panel_parts/price_panel_daily_part_006.csv",
-      "rows": 737709,
-      "bytes": 70106327,
+      "rows": 750008,
+      "bytes": 71247295,
       "min_date": "2024-09-11",
-      "max_date": "2026-04-17",
-      "symbols": 1953
+      "max_date": "2026-04-24",
+      "symbols": 1956
     }
   ]
 }
