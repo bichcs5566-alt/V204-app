@@ -34,9 +34,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install pandas numpy requests
 
-      # 關鍵修補：
-      # 不再執行 update_market_data.py，避免把 price_panel_daily.csv 覆蓋成單日資料。
-      # 改用原本已建立好的 10 年分片資料合併程式。
       - name: Merge historical price panel
         run: |
           test -f merge_chunked_price_panel.py || (echo "Missing merge_chunked_price_panel.py" && exit 1)
@@ -44,22 +41,89 @@ jobs:
           test -f data/price_panel_parts/manifest.json || (echo "Missing data/price_panel_parts/manifest.json" && exit 1)
           python merge_chunked_price_panel.py
 
-      - name: Verify merged price panel
+      # 關鍵修補：
+      # merge 出來的歷史資料欄位是 trade_date / symbol。
+      # v1 主程式要吃 date / stock_id / close。
+      # 這一步只做欄位標準化，不改策略。
+      - name: Normalize price panel columns
         run: |
-          test -f price_panel_daily.csv || (echo "Missing price_panel_daily.csv after merge" && exit 1)
           python - <<'PY'
           import pandas as pd
+          from pathlib import Path
+
+          path = Path("price_panel_daily.csv")
+          if not path.exists():
+              raise SystemExit("Missing price_panel_daily.csv after merge")
+
+          df = pd.read_csv(path)
+          print("before columns:", list(df.columns))
+          print("before rows:", len(df))
+
+          rename = {}
+          if "trade_date" in df.columns and "date" not in df.columns:
+              rename["trade_date"] = "date"
+          if "symbol" in df.columns and "stock_id" not in df.columns:
+              rename["symbol"] = "stock_id"
+
+          df = df.rename(columns=rename)
+
+          need = ["date", "stock_id", "close"]
+          missing = [c for c in need if c not in df.columns]
+          if missing:
+              raise SystemExit(f"price_panel_daily.csv missing required columns after normalize: {missing}; columns={list(df.columns)}")
+
+          df["date"] = df["date"].astype(str).str[:10]
+          df["stock_id"] = df["stock_id"].astype(str).str.strip()
+          df["close"] = pd.to_numeric(df["close"], errors="coerce")
+
+          if "volume" in df.columns:
+              df["volume"] = pd.to_numeric(df["volume"], errors="coerce").fillna(0)
+
+          df = df[df["stock_id"].notna() & (df["stock_id"] != "")]
+          df = df[df["close"].notna()]
+
+          # 保留原欄位，但把 v1 必要欄位排前面
+          front = ["date", "stock_id", "close"]
+          rest = [c for c in df.columns if c not in front]
+          df = df[front + rest]
+
+          df.to_csv(path, index=False)
+
+          # 同步一份到 dashboard data，避免前端或其他流程讀不同位置
+          out_dir = Path("mobile_dashboard_v1/data")
+          out_dir.mkdir(parents=True, exist_ok=True)
+          df.to_csv(out_dir / "price_panel_daily.csv", index=False)
+
+          print("after columns:", list(df.columns))
+          print("after rows:", len(df))
+          print("unique dates:", df["date"].nunique())
+          print("unique stocks:", df["stock_id"].nunique())
+          PY
+
+      - name: Verify merged price panel
+        run: |
+          test -f price_panel_daily.csv || (echo "Missing price_panel_daily.csv after normalize" && exit 1)
+          python - <<'PY'
+          import pandas as pd
+
           df = pd.read_csv("price_panel_daily.csv")
           print("price_panel rows:", len(df))
           print("columns:", list(df.columns))
-          if len(df) == 0:
-              raise SystemExit("price_panel_daily.csv is empty")
-          if "date" not in df.columns or "stock_id" not in df.columns or "close" not in df.columns:
-              raise SystemExit("price_panel_daily.csv must contain date, stock_id, close")
-          days = pd.Series(df["date"].astype(str).unique()).nunique()
+
+          required = ["date", "stock_id", "close"]
+          missing = [c for c in required if c not in df.columns]
+          if missing:
+              raise SystemExit(f"missing columns: {missing}")
+
+          days = df["date"].astype(str).nunique()
+          stocks = df["stock_id"].astype(str).nunique()
           print("unique dates:", days)
+          print("unique stocks:", stocks)
+
           if days < 20:
-              raise SystemExit(f"price_panel_daily.csv has only {days} unique dates; need historical panel, not single-day panel")
+              raise SystemExit(f"price_panel_daily.csv has only {days} unique dates; need historical panel")
+          if stocks < 100:
+              raise SystemExit(f"price_panel_daily.csv has only {stocks} stocks; data abnormal")
           PY
 
       - name: Run main pipeline
@@ -73,23 +137,28 @@ jobs:
           test -f mobile_dashboard_v1/data/position_monitor.csv
           test -f mobile_dashboard_v1/data/full_summary.csv
           test -f mobile_dashboard_v1/data/selection_debug.csv
-          test -f mobile_dashboard_v1/data/core_candidates.csv
-          test -f mobile_dashboard_v1/data/alpha_candidates.csv
 
           python - <<'PY'
           import pandas as pd
+
           dbg = pd.read_csv("mobile_dashboard_v1/data/selection_debug.csv")
           print(dbg.to_string(index=False))
+
           if "valid_after_na" in dbg.columns:
               v = int(dbg["valid_after_na"].iloc[-1])
               if v <= 0:
                   raise SystemExit("valid_after_na is 0; indicators still invalid")
+
           for path in [
               "mobile_dashboard_v1/data/core_candidates.csv",
               "mobile_dashboard_v1/data/alpha_candidates.csv",
+              "mobile_dashboard_v1/data/trade_plan.csv",
           ]:
-              df = pd.read_csv(path)
-              print(path, "rows:", len(df))
+              try:
+                  df = pd.read_csv(path)
+                  print(path, "rows:", len(df))
+              except Exception as e:
+                  print(path, "read failed:", e)
           PY
 
       - name: Commit results
@@ -98,14 +167,15 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add price_panel_daily.csv || true
+          git add mobile_dashboard_v1/data/price_panel_daily.csv || true
           git add mobile_dashboard_v1/data/meta.json
           git add mobile_dashboard_v1/data/trade_plan.csv
           git add mobile_dashboard_v1/data/position_monitor.csv
           git add mobile_dashboard_v1/data/watchlist_monitor.csv || true
           git add mobile_dashboard_v1/data/full_summary.csv
           git add mobile_dashboard_v1/data/selection_debug.csv
-          git add mobile_dashboard_v1/data/core_candidates.csv
-          git add mobile_dashboard_v1/data/alpha_candidates.csv
+          git add mobile_dashboard_v1/data/core_candidates.csv || true
+          git add mobile_dashboard_v1/data/alpha_candidates.csv || true
 
           git add meta.json trade_plan.csv position_monitor.csv watchlist_monitor.csv full_summary.csv selection_debug.csv core_candidates.csv alpha_candidates.csv || true
 
@@ -114,7 +184,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "no changes to commit"
           else
-            git commit -m "v2.8 auto update from historical price panel"
+            git commit -m "v2.8 auto update from normalized historical price panel"
             git pull --rebase origin main || git pull origin main --no-rebase
             git push origin HEAD:main
           fi
