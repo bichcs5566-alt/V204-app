@@ -1,10 +1,23 @@
 /*
-v3.7.1_chip_light_ui_patch.js
-只新增籌碼輕量標記顯示，不動主系統。
+v3.7.1b_chip_light_ui_patch_fixed.js
+
+修正 v3.7.1 欄位錯位問題。
+
+原則：
+1. 不動主系統
+2. 不動策略
+3. 不動 trade_plan.csv
+4. 不動持倉寫回
+5. 只修正前端顯示
+
+做法：
+- 不再把「籌碼狀態」插到備註前面
+- 固定把「籌碼狀態」加在表格最右邊
+- 若偵測到舊版 v3.7.1 已插入錯位欄位，先清掉舊版標記後重新加
 */
 
 (function () {
-  const VERSION = "v3.7.1-chip-light-ui";
+  const VERSION = "v3.7.1b-chip-light-ui-fixed";
   const CHIP_PATH = "mobile_dashboard_v1/data/chip_light.csv";
 
   function splitLine(line) {
@@ -14,11 +27,18 @@ v3.7.1_chip_light_ui_patch.js
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
       if (ch === '"') {
-        if (quote && line[i + 1] === '"') { cur += '"'; i++; }
-        else quote = !quote;
+        if (quote && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          quote = !quote;
+        }
       } else if (ch === "," && !quote) {
-        out.push(cur); cur = "";
-      } else cur += ch;
+        out.push(cur);
+        cur = "";
+      } else {
+        cur += ch;
+      }
     }
     out.push(cur);
     return out;
@@ -53,33 +73,62 @@ v3.7.1_chip_light_ui_patch.js
     }
   }
 
-  function norm(s) { return String(s || "").replace(/\s+/g, "").trim(); }
+  function norm(s) {
+    return String(s || "").replace(/\s+/g, "").trim();
+  }
+
   function getTable() {
     const body = document.getElementById("tradePlanBody");
     if (!body) return null;
     return body.closest("table");
   }
+
   function getHeaders(table) {
     return Array.from(table.querySelectorAll("thead th")).map(th => norm(th.textContent));
   }
-  function idx(headers, keys) {
-    for (const k of keys) {
-      const i = headers.findIndex(h => h.includes(k));
-      if (i >= 0) return i;
-    }
-    return -1;
+
+  function findStockIndex(headers) {
+    return headers.findIndex(h =>
+      h.includes("股票") ||
+      h.includes("stock") ||
+      h.includes("代號")
+    );
   }
 
-  function ensureColumn(table) {
+  function removeOldChipColumn(table) {
     const headerRow = table.querySelector("thead tr");
     if (!headerRow) return;
+
+    const ths = Array.from(headerRow.children);
+    const chipIndexes = [];
+
+    ths.forEach((th, i) => {
+      if (norm(th.textContent).includes("籌碼狀態")) chipIndexes.push(i);
+    });
+
+    // 從右往左刪，避免 index 位移
+    chipIndexes.reverse().forEach(i => {
+      if (headerRow.children[i]) headerRow.children[i].remove();
+
+      Array.from(document.querySelectorAll("#tradePlanBody tr")).forEach(tr => {
+        if (tr.children[i]) tr.children[i].remove();
+        delete tr.dataset.v371Done;
+        delete tr.dataset.v371bDone;
+      });
+    });
+  }
+
+  function ensureRightColumn(table) {
+    const headerRow = table.querySelector("thead tr");
+    if (!headerRow) return;
+
     const headers = getHeaders(table);
-    if (headers.some(h => h.includes("籌碼狀態"))) return;
-    const noteIdx = idx(headers, ["備註"]);
+    if (headers.some(h => h === "籌碼狀態")) return;
+
     const th = document.createElement("th");
     th.textContent = "籌碼狀態";
-    if (noteIdx >= 0 && headerRow.children[noteIdx]) headerRow.insertBefore(th, headerRow.children[noteIdx]);
-    else headerRow.appendChild(th);
+    th.dataset.v371bChip = "1";
+    headerRow.appendChild(th);
   }
 
   function chipText(row) {
@@ -93,53 +142,72 @@ v3.7.1_chip_light_ui_patch.js
   }
 
   function chipStyle(text) {
-    if (text.includes("🔥") || text.includes("強勢")) return "font-weight:900;color:#b42318;white-space:nowrap;";
-    if (text.includes("🟢") || text.includes("偏強")) return "font-weight:900;color:#087443;white-space:nowrap;";
-    if (text.includes("⚠️")) return "font-weight:900;color:#b54708;white-space:nowrap;";
+    if (text.includes("🔥") || text.includes("強勢")) {
+      return "font-weight:900;color:#b42318;white-space:nowrap;";
+    }
+    if (text.includes("🟢") || text.includes("偏強")) {
+      return "font-weight:900;color:#087443;white-space:nowrap;";
+    }
+    if (text.includes("⚠️")) {
+      return "font-weight:900;color:#b54708;white-space:nowrap;";
+    }
     return "color:#667085;white-space:nowrap;";
+  }
+
+  function addHint() {
+    if (document.getElementById("chipLightHint")) return;
+
+    const section = document.getElementById("tradePlanBody")?.closest("section");
+    if (!section) return;
+
+    const hint = document.createElement("div");
+    hint.id = "chipLightHint";
+    hint.style.cssText = "margin:8px 0 12px;color:#667085;font-size:14px;line-height:1.5;";
+    hint.textContent = "v3.7.1b：籌碼狀態為右側輕量標記，只輔助判斷，不改變原本買賣名單。";
+
+    const wrap = section.querySelector(".table-wrap");
+    if (wrap) section.insertBefore(hint, wrap);
+    else section.appendChild(hint);
   }
 
   async function applyChipLabels() {
     const table = getTable();
     if (!table) return;
-    const chipMap = await loadChip();
-    ensureColumn(table);
+
+    // 第一次執行時，先把舊版錯位欄位清掉
+    if (table.dataset.v371bCleaned !== "1") {
+      removeOldChipColumn(table);
+      table.dataset.v371bCleaned = "1";
+    }
+
+    ensureRightColumn(table);
+
     const headers = getHeaders(table);
-    const stockIdx = idx(headers, ["股票", "stock"]);
+    const stockIdx = findStockIndex(headers);
     if (stockIdx < 0) return;
+
+    const chipMap = await loadChip();
 
     const rows = Array.from(document.querySelectorAll("#tradePlanBody tr"))
       .filter(tr => !tr.querySelector(".empty"));
 
     rows.forEach(tr => {
-      if (tr.dataset.v371Done === "1") return;
+      if (tr.dataset.v371bDone === "1") return;
+
       const cells = Array.from(tr.children);
       const stockId = String(cells[stockIdx]?.textContent || "").trim();
       const row = chipMap.get(stockId);
       const text = chipText(row);
+
       const td = document.createElement("td");
       td.textContent = text;
       td.title = row ? (row.chip_note || text) : "尚無籌碼標記";
       td.style.cssText = chipStyle(text);
-      const currentHeaders = getHeaders(table);
-      const currentNoteIdx = idx(currentHeaders, ["備註"]);
-      if (currentNoteIdx >= 0 && tr.children[currentNoteIdx]) tr.insertBefore(td, tr.children[currentNoteIdx]);
-      else tr.appendChild(td);
-      tr.dataset.v371Done = "1";
-    });
-  }
+      td.dataset.v371bChip = "1";
 
-  function addHint() {
-    if (document.getElementById("chipLightHint")) return;
-    const section = document.getElementById("tradePlanBody")?.closest("section");
-    if (!section) return;
-    const hint = document.createElement("div");
-    hint.id = "chipLightHint";
-    hint.style.cssText = "margin:8px 0 12px;color:#667085;font-size:14px;line-height:1.5;";
-    hint.textContent = "v3.7.1：籌碼狀態為輕量標記，只輔助判斷，不改變原本買賣名單。";
-    const wrap = section.querySelector(".table-wrap");
-    if (wrap) section.insertBefore(hint, wrap);
-    else section.appendChild(hint);
+      tr.appendChild(td);
+      tr.dataset.v371bDone = "1";
+    });
   }
 
   function refresh() {
@@ -149,13 +217,18 @@ v3.7.1_chip_light_ui_patch.js
 
   function boot() {
     refresh();
+
     new MutationObserver(() => {
-      clearTimeout(window.__v371Timer);
-      window.__v371Timer = setTimeout(refresh, 500);
+      clearTimeout(window.__v371bTimer);
+      window.__v371bTimer = setTimeout(refresh, 500);
     }).observe(document.body, { childList: true, subtree: true });
+
     console.log(`${VERSION} loaded`);
   }
 
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
-  else boot();
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
 })();
