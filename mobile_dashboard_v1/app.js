@@ -108,16 +108,6 @@ async function loadAll(force=false){
       fetchCSV(`${DATA_DIR}/full_summary.csv`,force),
       fetchCSV(`${DATA_DIR}/selection_debug.csv`,force)
     ]);
-    // ===== v3.8.1 merge chip data =====
-const chipMap = {};
-tradePlan.forEach(r => {
-    chipMap[r.stock_id] = r.chip_label || "";
-});
-
-position.forEach(r => {
-    r.chip_label = chipMap[r.stock_id] || "";
-});
-
 POSITION_CACHE = position;
     renderMeta(meta);renderTradePlan(tradePlan);renderPosition(position);renderSummary(summary);renderDebug(debug);renderTierSummary(position);renderActionSummary(tradePlan,position);
     if(!document.getElementById("syncBanner").textContent.includes("已送出"))setBanner("頁面資料已同步","#2f7d32");
@@ -187,37 +177,3 @@ function toNum(v){const n=Number(String(v??"").replace(/,/g,""));return Number.i
 function text(id,value){const el=document.getElementById(id);if(el)el.textContent=value}
 function val(id,setValue){const el=document.getElementById(id);if(!el)return"";if(typeof setValue!=="undefined")el.value=setValue;return el.value||""}
 function setBanner(text,color="#2f7d32"){const el=document.getElementById("syncBanner");if(el){el.textContent=text;el.style.color=color}}
-// ================================
-// v3.8.1 Decision Hint PRO
-// ================================
-
-function getDecisionHint(action, chip_label) {
-    action = (action || "").toUpperCase();
-    chip_label = chip_label || "";
-
-    const isStrong = chip_label.includes("強");
-    const isNormal = chip_label.includes("普通");
-
-    if (isStrong) {
-        if (action === "BUY") return "🔥 主升段初期 → 可進場";
-        if (action === "HOLD") return "🚀 主升段中 → 持有";
-        if (action === "ADD") return "➕ 強勢加碼區";
-        if (action === "REDUCE") return "⚠️ 主升段尾 → 建議減碼";
-        if (action === "STOP_LOSS") return "❗ 強轉弱 → 出場";
-    }
-
-    if (isNormal) {
-        if (action === "BUY") return "⚠️ 普通 → 小倉測試";
-        if (action === "HOLD") return "📊 整理中";
-        if (action === "REDUCE") return "⚠️ 動能轉弱 → 減碼";
-    }
-
-    // fallback（永遠不會空白）
-    if (action === "BUY") return "👉 可進場";
-    if (action === "HOLD") return "👉 持有";
-    if (action === "ADD") return "👉 加碼";
-    if (action === "REDUCE") return "👉 減碼";
-    if (action === "STOP_LOSS") return "👉 出場";
-
-    return "—";
-}
