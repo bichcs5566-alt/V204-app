@@ -1,24 +1,42 @@
 /*
-v3.7.1f_chip_light_ui_patch_button_right_fixed.js
+v3.7.1g_chip_light_ui_patch_path_fixed.js
 
-修正：
-1. 今日操作：備註｜籌碼狀態｜加入持倉
-2. 持倉監控：備註｜籌碼狀態｜移除
-3. 按鈕永遠固定在最右邊
-4. 不再用猜 index 的方式插入資料列
-5. 直接尋找「加入持倉 / 移除」按鈕所在 td，再把籌碼欄插在按鈕 td 前面
-
-原則：
-- 不動主策略
-- 不動 trade_plan.csv
-- 不動 current_positions.csv
-- 不動寫回流程
-- 只修前端顯示
+最終修正重點：
+1. 自動嘗試多個 chip_light.csv 路徑
+2. 修正 GitHub Pages / repo page / root page 路徑差異
+3. 今日操作：備註｜籌碼狀態｜加入持倉
+4. 持倉監控：備註｜籌碼狀態｜移除
+5. 按鈕永遠固定右邊
+6. 不動主策略、不動資料、不動寫回，只修前端顯示
 */
 
 (function () {
-  const VERSION = "v3.7.1f-chip-light-ui-button-right-fixed";
-  const CHIP_PATH = "mobile_dashboard_v1/data/chip_light.csv";
+  const VERSION = "v3.7.1g-chip-light-ui-path-fixed";
+
+  function getCandidateChipPaths() {
+    const path = window.location.pathname || "/";
+    const parts = path.split("/").filter(Boolean);
+    const repo = parts.length ? parts[0] : "";
+
+    const candidates = [
+      "./mobile_dashboard_v1/data/chip_light.csv",
+      "mobile_dashboard_v1/data/chip_light.csv",
+      "./data/chip_light.csv",
+      "data/chip_light.csv"
+    ];
+
+    if (repo) {
+      candidates.push(`/${repo}/mobile_dashboard_v1/data/chip_light.csv`);
+      candidates.push(`/${repo}/data/chip_light.csv`);
+    }
+
+    candidates.push("/mobile_dashboard_v1/data/chip_light.csv");
+
+    return [...new Set(candidates)];
+  }
+
+  let CHIP_LOADED_FROM = "";
+  let CHIP_LOAD_ERROR = "";
 
   function splitLine(line) {
     const out = [];
@@ -47,7 +65,7 @@ v3.7.1f_chip_light_ui_patch_button_right_fixed.js
   function parseCSV(text) {
     const lines = String(text || "").trim().split(/\r?\n/).filter(Boolean);
     if (!lines.length) return [];
-    const headers = splitLine(lines[0]).map(h => h.trim());
+    const headers = splitLine(lines[0]).map(h => h.trim().replace(/^\ufeff/, ""));
     return lines.slice(1).map(line => {
       const vals = splitLine(line);
       const row = {};
@@ -56,21 +74,59 @@ v3.7.1f_chip_light_ui_patch_button_right_fixed.js
     });
   }
 
+  function cleanId(v) {
+    return String(v || "")
+      .replace(/^\ufeff/, "")
+      .replace(/[^\dA-Za-z]/g, "")
+      .trim();
+  }
+
   async function loadChip() {
-    try {
-      const res = await fetch(`${CHIP_PATH}?ts=${Date.now()}`, { cache: "no-store" });
-      if (!res.ok) return new Map();
-      const rows = parseCSV(await res.text());
-      const map = new Map();
-      rows.forEach(r => {
-        const id = String(r.stock_id || "").trim();
-        if (id) map.set(id, r);
-      });
-      return map;
-    } catch (e) {
-      console.warn("chip_light load failed", e);
-      return new Map();
+    const paths = getCandidateChipPaths();
+    const errors = [];
+
+    for (const p of paths) {
+      try {
+        const joiner = p.includes("?") ? "&" : "?";
+        const url = `${p}${joiner}v=${Date.now()}`;
+        const res = await fetch(url, { cache: "no-store" });
+
+        if (!res.ok) {
+          errors.push(`${p} -> ${res.status}`);
+          continue;
+        }
+
+        const text = await res.text();
+        const rows = parseCSV(text);
+
+        if (!rows.length) {
+          errors.push(`${p} -> empty`);
+          continue;
+        }
+
+        const map = new Map();
+        rows.forEach(r => {
+          const id = cleanId(r.stock_id || r.stock || r.symbol || r.code);
+          if (id) map.set(id, r);
+        });
+
+        if (map.size > 0) {
+          CHIP_LOADED_FROM = p;
+          CHIP_LOAD_ERROR = "";
+          console.log("chip_light loaded from:", p, "rows:", map.size);
+          return map;
+        }
+
+        errors.push(`${p} -> no stock_id`);
+      } catch (e) {
+        errors.push(`${p} -> ${e.message || e}`);
+      }
     }
+
+    CHIP_LOADED_FROM = "";
+    CHIP_LOAD_ERROR = errors.join(" | ");
+    console.warn("chip_light load failed:", CHIP_LOAD_ERROR);
+    return new Map();
   }
 
   function norm(s) {
@@ -146,10 +202,12 @@ v3.7.1f_chip_light_ui_patch_button_right_fixed.js
         delete tr.dataset.v371dDone;
         delete tr.dataset.v371eDone;
         delete tr.dataset.v371fDone;
+        delete tr.dataset.v371gDone;
         delete tr.dataset.v371cPositionDone;
         delete tr.dataset.v371dPositionDone;
         delete tr.dataset.v371ePositionDone;
         delete tr.dataset.v371fPositionDone;
+        delete tr.dataset.v371gPositionDone;
       });
     });
   }
@@ -164,7 +222,7 @@ v3.7.1f_chip_light_ui_patch_button_right_fixed.js
     const actionIdx = findIndex(headers, actionKeys);
     const th = document.createElement("th");
     th.textContent = "籌碼狀態";
-    th.dataset.v371fChip = "1";
+    th.dataset.v371gChip = "1";
 
     if (actionIdx >= 0 && headerRow.children[actionIdx]) {
       headerRow.insertBefore(th, headerRow.children[actionIdx]);
@@ -178,6 +236,7 @@ v3.7.1f_chip_light_ui_patch_button_right_fixed.js
     for (const td of cells) {
       const t = norm(td.textContent);
       if (texts.some(x => t.includes(x))) return td;
+
       const btn = td.querySelector("button");
       if (btn) {
         const bt = norm(btn.textContent);
@@ -190,100 +249,96 @@ v3.7.1f_chip_light_ui_patch_button_right_fixed.js
   function getStockIdFromRow(tr, table) {
     const headers = getHeaders(table);
     const stockIdx = findIndex(headers, ["股票", "stock", "代號"]);
+
     if (stockIdx >= 0 && tr.children[stockIdx]) {
-      return String(tr.children[stockIdx].textContent || "").trim();
+      const id = cleanId(tr.children[stockIdx].textContent);
+      if (id) return id;
     }
 
-    // fallback：找第一個像台股代號的格子
     for (const td of Array.from(tr.children)) {
-      const text = String(td.textContent || "").trim();
-      if (/^[0-9]{4}[A-Z]?$/.test(text)) return text;
+      const id = cleanId(td.textContent);
+      if (/^[0-9]{4}[A-Z]?$/.test(id)) return id;
     }
 
     return "";
   }
 
   function makeChipTd(stockId, chipMap) {
-    const row = chipMap.get(stockId);
+    const key = cleanId(stockId);
+    const row = chipMap.get(key);
     const text = chipText(row);
 
     const td = document.createElement("td");
     td.textContent = text;
-    td.title = row ? (row.chip_note || text) : "尚無籌碼標記";
+    td.title = row ? (row.chip_note || text) : `尚無籌碼標記：${key}`;
     td.style.cssText = chipStyle(text);
-    td.dataset.v371fChip = "1";
+    td.dataset.v371gChip = "1";
     return td;
   }
 
-  function addTradeHint() {
-    const old = document.getElementById("chipLightHint");
-    if (old) {
-      old.textContent = "v3.7.1f：籌碼狀態為輕量標記，只輔助判斷，不改變原本買賣名單。";
-      return;
-    }
-
+  function addTradeHint(chipMap) {
     const section = document.getElementById("tradePlanBody")?.closest("section");
     if (!section) return;
 
-    const hint = document.createElement("div");
-    hint.id = "chipLightHint";
-    hint.style.cssText = "margin:8px 0 12px;color:#667085;font-size:14px;line-height:1.5;";
-    hint.textContent = "v3.7.1f：籌碼狀態為輕量標記，只輔助判斷，不改變原本買賣名單。";
+    let hint = document.getElementById("chipLightHint");
+    if (!hint) {
+      hint = document.createElement("div");
+      hint.id = "chipLightHint";
+      hint.style.cssText = "margin:8px 0 12px;color:#667085;font-size:14px;line-height:1.5;";
+      const wrap = section.querySelector(".table-wrap");
+      if (wrap) section.insertBefore(hint, wrap);
+      else section.appendChild(hint);
+    }
 
-    const wrap = section.querySelector(".table-wrap");
-    if (wrap) section.insertBefore(hint, wrap);
-    else section.appendChild(hint);
+    if (CHIP_LOADED_FROM) {
+      hint.textContent = `v3.7.1g：籌碼狀態已載入（${chipMap.size}檔），只輔助判斷，不改變原本買賣名單。`;
+    } else {
+      hint.textContent = "v3.7.1g：籌碼資料尚未載入，請確認 chip_light.csv 路徑或 Pages 快取。";
+    }
   }
 
-  async function applyTradeChip() {
+  async function applyTradeChip(chipMap) {
     const table = getTradeTable();
     if (!table) return;
 
-    if (table.dataset.v371fCleaned !== "1") {
+    if (table.dataset.v371gCleaned !== "1") {
       removeAllChipColumns(table);
-      table.dataset.v371fCleaned = "1";
+      table.dataset.v371gCleaned = "1";
     }
 
     ensureChipHeaderBeforeAction(table, ["加入持倉", "加入"]);
-
-    const chipMap = await loadChip();
 
     const rows = Array.from(document.querySelectorAll("#tradePlanBody tr"))
       .filter(tr => !tr.querySelector(".empty"));
 
     rows.forEach(tr => {
-      if (tr.dataset.v371fDone === "1") return;
+      if (tr.dataset.v371gDone === "1") return;
 
       const stockId = getStockIdFromRow(tr, table);
       const chipTd = makeChipTd(stockId, chipMap);
 
-      // 直接找「加入持倉」按鈕所在格，插在它前面，保證按鈕留在右邊
       const actionCell = findActionCellByButtonText(tr, ["加入持倉", "加入"]);
-      if (actionCell) {
-        tr.insertBefore(chipTd, actionCell);
-      } else {
-        tr.appendChild(chipTd);
-      }
+      if (actionCell) tr.insertBefore(chipTd, actionCell);
+      else tr.appendChild(chipTd);
 
-      tr.dataset.v371fDone = "1";
+      tr.dataset.v371gDone = "1";
     });
 
-    addTradeHint();
+    addTradeHint(chipMap);
   }
 
-  async function applyPositionChip() {
+  async function applyPositionChip(chipMap) {
     const table = getPositionTable();
     if (!table) return;
     if (table === getTradeTable()) return;
 
-    if (table.dataset.v371fPositionCleaned !== "1") {
+    if (table.dataset.v371gPositionCleaned !== "1") {
       removeAllChipColumns(table);
-      table.dataset.v371fPositionCleaned = "1";
+      table.dataset.v371gPositionCleaned = "1";
     }
 
     ensureChipHeaderBeforeAction(table, ["移除"]);
 
-    const chipMap = await loadChip();
     const body = table.querySelector("tbody");
     if (!body) return;
 
@@ -291,36 +346,42 @@ v3.7.1f_chip_light_ui_patch_button_right_fixed.js
       .filter(tr => !tr.querySelector(".empty"));
 
     rows.forEach(tr => {
-      if (tr.dataset.v371fPositionDone === "1") return;
+      if (tr.dataset.v371gPositionDone === "1") return;
 
       const stockId = getStockIdFromRow(tr, table);
-      if (!stockId) return;
-
       const chipTd = makeChipTd(stockId, chipMap);
 
-      // 直接找「移除」按鈕所在格，插在它前面，保證移除按鈕留在右邊
       const removeCell = findActionCellByButtonText(tr, ["移除"]);
-      if (removeCell) {
-        tr.insertBefore(chipTd, removeCell);
-      } else {
-        tr.appendChild(chipTd);
-      }
+      if (removeCell) tr.insertBefore(chipTd, removeCell);
+      else tr.appendChild(chipTd);
 
-      tr.dataset.v371fPositionDone = "1";
+      tr.dataset.v371gPositionDone = "1";
     });
   }
 
-  function refresh() {
-    applyTradeChip();
-    applyPositionChip();
+  let chipCache = null;
+  let chipCacheTime = 0;
+
+  async function getChipMap() {
+    const now = Date.now();
+    if (chipCache && now - chipCacheTime < 30000) return chipCache;
+    chipCache = await loadChip();
+    chipCacheTime = now;
+    return chipCache;
+  }
+
+  async function refresh() {
+    const chipMap = await getChipMap();
+    await applyTradeChip(chipMap);
+    await applyPositionChip(chipMap);
   }
 
   function boot() {
     refresh();
 
     new MutationObserver(() => {
-      clearTimeout(window.__v371fTimer);
-      window.__v371fTimer = setTimeout(refresh, 700);
+      clearTimeout(window.__v371gTimer);
+      window.__v371gTimer = setTimeout(refresh, 700);
     }).observe(document.body, { childList: true, subtree: true });
 
     console.log(`${VERSION} loaded`);
