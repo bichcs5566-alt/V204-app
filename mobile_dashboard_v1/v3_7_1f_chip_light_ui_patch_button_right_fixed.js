@@ -1,9 +1,12 @@
 /*
-v3.7.1e_chip_light_ui_patch_position_reverse.js
+v3.7.1f_chip_light_ui_patch_button_right_fixed.js
 
 修正：
 1. 今日操作：備註｜籌碼狀態｜加入持倉
 2. 持倉監控：備註｜籌碼狀態｜移除
+3. 按鈕永遠固定在最右邊
+4. 不再用猜 index 的方式插入資料列
+5. 直接尋找「加入持倉 / 移除」按鈕所在 td，再把籌碼欄插在按鈕 td 前面
 
 原則：
 - 不動主策略
@@ -14,7 +17,7 @@ v3.7.1e_chip_light_ui_patch_position_reverse.js
 */
 
 (function () {
-  const VERSION = "v3.7.1e-chip-light-ui-position-reverse";
+  const VERSION = "v3.7.1f-chip-light-ui-button-right-fixed";
   const CHIP_PATH = "mobile_dashboard_v1/data/chip_light.csv";
 
   function splitLine(line) {
@@ -27,11 +30,15 @@ v3.7.1e_chip_light_ui_patch_position_reverse.js
         if (quote && line[i + 1] === '"') {
           cur += '"';
           i++;
-        } else quote = !quote;
+        } else {
+          quote = !quote;
+        }
       } else if (ch === "," && !quote) {
         out.push(cur);
         cur = "";
-      } else cur += ch;
+      } else {
+        cur += ch;
+      }
     }
     out.push(cur);
     return out;
@@ -138,31 +145,13 @@ v3.7.1e_chip_light_ui_patch_position_reverse.js
         delete tr.dataset.v371cDone;
         delete tr.dataset.v371dDone;
         delete tr.dataset.v371eDone;
+        delete tr.dataset.v371fDone;
         delete tr.dataset.v371cPositionDone;
         delete tr.dataset.v371dPositionDone;
         delete tr.dataset.v371ePositionDone;
+        delete tr.dataset.v371fPositionDone;
       });
     });
-  }
-
-  function addTradeHint() {
-    const old = document.getElementById("chipLightHint");
-    if (old) {
-      old.textContent = "v3.7.1e：籌碼狀態為輕量標記，只輔助判斷，不改變原本買賣名單。";
-      return;
-    }
-
-    const section = document.getElementById("tradePlanBody")?.closest("section");
-    if (!section) return;
-
-    const hint = document.createElement("div");
-    hint.id = "chipLightHint";
-    hint.style.cssText = "margin:8px 0 12px;color:#667085;font-size:14px;line-height:1.5;";
-    hint.textContent = "v3.7.1e：籌碼狀態為輕量標記，只輔助判斷，不改變原本買賣名單。";
-
-    const wrap = section.querySelector(".table-wrap");
-    if (wrap) section.insertBefore(hint, wrap);
-    else section.appendChild(hint);
   }
 
   function ensureChipHeaderBeforeAction(table, actionKeys) {
@@ -175,7 +164,7 @@ v3.7.1e_chip_light_ui_patch_position_reverse.js
     const actionIdx = findIndex(headers, actionKeys);
     const th = document.createElement("th");
     th.textContent = "籌碼狀態";
-    th.dataset.v371eChip = "1";
+    th.dataset.v371fChip = "1";
 
     if (actionIdx >= 0 && headerRow.children[actionIdx]) {
       headerRow.insertBefore(th, headerRow.children[actionIdx]);
@@ -184,21 +173,78 @@ v3.7.1e_chip_light_ui_patch_position_reverse.js
     }
   }
 
+  function findActionCellByButtonText(tr, texts) {
+    const cells = Array.from(tr.children);
+    for (const td of cells) {
+      const t = norm(td.textContent);
+      if (texts.some(x => t.includes(x))) return td;
+      const btn = td.querySelector("button");
+      if (btn) {
+        const bt = norm(btn.textContent);
+        if (texts.some(x => bt.includes(x))) return td;
+      }
+    }
+    return null;
+  }
+
+  function getStockIdFromRow(tr, table) {
+    const headers = getHeaders(table);
+    const stockIdx = findIndex(headers, ["股票", "stock", "代號"]);
+    if (stockIdx >= 0 && tr.children[stockIdx]) {
+      return String(tr.children[stockIdx].textContent || "").trim();
+    }
+
+    // fallback：找第一個像台股代號的格子
+    for (const td of Array.from(tr.children)) {
+      const text = String(td.textContent || "").trim();
+      if (/^[0-9]{4}[A-Z]?$/.test(text)) return text;
+    }
+
+    return "";
+  }
+
+  function makeChipTd(stockId, chipMap) {
+    const row = chipMap.get(stockId);
+    const text = chipText(row);
+
+    const td = document.createElement("td");
+    td.textContent = text;
+    td.title = row ? (row.chip_note || text) : "尚無籌碼標記";
+    td.style.cssText = chipStyle(text);
+    td.dataset.v371fChip = "1";
+    return td;
+  }
+
+  function addTradeHint() {
+    const old = document.getElementById("chipLightHint");
+    if (old) {
+      old.textContent = "v3.7.1f：籌碼狀態為輕量標記，只輔助判斷，不改變原本買賣名單。";
+      return;
+    }
+
+    const section = document.getElementById("tradePlanBody")?.closest("section");
+    if (!section) return;
+
+    const hint = document.createElement("div");
+    hint.id = "chipLightHint";
+    hint.style.cssText = "margin:8px 0 12px;color:#667085;font-size:14px;line-height:1.5;";
+    hint.textContent = "v3.7.1f：籌碼狀態為輕量標記，只輔助判斷，不改變原本買賣名單。";
+
+    const wrap = section.querySelector(".table-wrap");
+    if (wrap) section.insertBefore(hint, wrap);
+    else section.appendChild(hint);
+  }
+
   async function applyTradeChip() {
     const table = getTradeTable();
     if (!table) return;
 
-    if (table.dataset.v371eCleaned !== "1") {
+    if (table.dataset.v371fCleaned !== "1") {
       removeAllChipColumns(table);
-      table.dataset.v371eCleaned = "1";
+      table.dataset.v371fCleaned = "1";
     }
 
     ensureChipHeaderBeforeAction(table, ["加入持倉", "加入"]);
-
-    const headers = getHeaders(table);
-    const stockIdx = findIndex(headers, ["股票", "stock", "代號"]);
-    const chipIdx = findIndex(headers, ["籌碼狀態"]);
-    if (stockIdx < 0 || chipIdx < 0) return;
 
     const chipMap = await loadChip();
 
@@ -206,26 +252,20 @@ v3.7.1e_chip_light_ui_patch_position_reverse.js
       .filter(tr => !tr.querySelector(".empty"));
 
     rows.forEach(tr => {
-      if (tr.dataset.v371eDone === "1") return;
+      if (tr.dataset.v371fDone === "1") return;
 
-      const cells = Array.from(tr.children);
-      const stockId = String(cells[stockIdx]?.textContent || "").trim();
-      const row = chipMap.get(stockId);
-      const text = chipText(row);
+      const stockId = getStockIdFromRow(tr, table);
+      const chipTd = makeChipTd(stockId, chipMap);
 
-      const td = document.createElement("td");
-      td.textContent = text;
-      td.title = row ? (row.chip_note || text) : "尚無籌碼標記";
-      td.style.cssText = chipStyle(text);
-      td.dataset.v371eChip = "1";
-
-      if (tr.children[chipIdx]) {
-        tr.insertBefore(td, tr.children[chipIdx]);
+      // 直接找「加入持倉」按鈕所在格，插在它前面，保證按鈕留在右邊
+      const actionCell = findActionCellByButtonText(tr, ["加入持倉", "加入"]);
+      if (actionCell) {
+        tr.insertBefore(chipTd, actionCell);
       } else {
-        tr.appendChild(td);
+        tr.appendChild(chipTd);
       }
 
-      tr.dataset.v371eDone = "1";
+      tr.dataset.v371fDone = "1";
     });
 
     addTradeHint();
@@ -236,18 +276,12 @@ v3.7.1e_chip_light_ui_patch_position_reverse.js
     if (!table) return;
     if (table === getTradeTable()) return;
 
-    if (table.dataset.v371ePositionCleaned !== "1") {
+    if (table.dataset.v371fPositionCleaned !== "1") {
       removeAllChipColumns(table);
-      table.dataset.v371ePositionCleaned = "1";
+      table.dataset.v371fPositionCleaned = "1";
     }
 
-    // 持倉監控：籌碼狀態插在「移除」前面
     ensureChipHeaderBeforeAction(table, ["移除"]);
-
-    const headers = getHeaders(table);
-    const stockIdx = findIndex(headers, ["股票", "stock", "代號"]);
-    const chipIdx = findIndex(headers, ["籌碼狀態"]);
-    if (stockIdx < 0 || chipIdx < 0) return;
 
     const chipMap = await loadChip();
     const body = table.querySelector("tbody");
@@ -257,28 +291,22 @@ v3.7.1e_chip_light_ui_patch_position_reverse.js
       .filter(tr => !tr.querySelector(".empty"));
 
     rows.forEach(tr => {
-      if (tr.dataset.v371ePositionDone === "1") return;
+      if (tr.dataset.v371fPositionDone === "1") return;
 
-      const cells = Array.from(tr.children);
-      const stockId = String(cells[stockIdx]?.textContent || "").trim();
+      const stockId = getStockIdFromRow(tr, table);
       if (!stockId) return;
 
-      const row = chipMap.get(stockId);
-      const text = chipText(row);
+      const chipTd = makeChipTd(stockId, chipMap);
 
-      const td = document.createElement("td");
-      td.textContent = text;
-      td.title = row ? (row.chip_note || text) : "尚無籌碼標記";
-      td.style.cssText = chipStyle(text);
-      td.dataset.v371eChip = "1";
-
-      if (tr.children[chipIdx]) {
-        tr.insertBefore(td, tr.children[chipIdx]);
+      // 直接找「移除」按鈕所在格，插在它前面，保證移除按鈕留在右邊
+      const removeCell = findActionCellByButtonText(tr, ["移除"]);
+      if (removeCell) {
+        tr.insertBefore(chipTd, removeCell);
       } else {
-        tr.appendChild(td);
+        tr.appendChild(chipTd);
       }
 
-      tr.dataset.v371ePositionDone = "1";
+      tr.dataset.v371fPositionDone = "1";
     });
   }
 
@@ -291,8 +319,8 @@ v3.7.1e_chip_light_ui_patch_position_reverse.js
     refresh();
 
     new MutationObserver(() => {
-      clearTimeout(window.__v371eTimer);
-      window.__v371eTimer = setTimeout(refresh, 700);
+      clearTimeout(window.__v371fTimer);
+      window.__v371fTimer = setTimeout(refresh, 700);
     }).observe(document.body, { childList: true, subtree: true });
 
     console.log(`${VERSION} loaded`);
