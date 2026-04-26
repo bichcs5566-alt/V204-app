@@ -177,3 +177,26 @@ function toNum(v){const n=Number(String(v??"").replace(/,/g,""));return Number.i
 function text(id,value){const el=document.getElementById(id);if(el)el.textContent=value}
 function val(id,setValue){const el=document.getElementById(id);if(!el)return"";if(typeof setValue!=="undefined")el.value=setValue;return el.value||""}
 function setBanner(text,color="#2f7d32"){const el=document.getElementById("syncBanner");if(el){el.textContent=text;el.style.color=color}}
+// ================================
+// v3.8 Decision Hint Patch
+// ================================
+
+function getDecisionHint(action, chip_label) {
+    if (!action) return "-";
+
+    // 強勢
+    if (chip_label && chip_label.includes("強")) {
+        if (action === "BUY") return "🔥 主升段初期 → 可進場";
+        if (action === "HOLD") return "🚀 主升段中 → 持有";
+        if (action.includes("減")) return "⚠️ 主升段尾 → 建議減碼";
+    }
+
+    // 普通
+    if (chip_label && chip_label.includes("普通")) {
+        if (action === "BUY") return "⚠️ 普通偏弱 → 小倉測試";
+        if (action.includes("減")) return "❗ 動能轉弱 → 降風險";
+    }
+
+    // fallback
+    return "—";
+}
