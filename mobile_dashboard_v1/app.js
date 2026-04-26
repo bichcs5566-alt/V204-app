@@ -228,8 +228,8 @@ function buildChipMapV383(chipRows){
     if(!sid)return;
     map[sid]={
       chip_score:r.chip_score||"",
-      chip_label:r.chip_label||"",
-      chip_tags:r.chip_tags||"",
+      "":r.""||"",
+      "":r.""||"",
       chip_note:r.chip_note||"",
       vol_ratio_5:r.vol_ratio_5||"",
       mom5:r.mom5||"",
@@ -261,7 +261,7 @@ function chipPercentV383(r){
     return Math.max(0,Math.min(100,Math.round(score*12.5)));
   }
 
-  const label=String(r.chip_label||"");
+  const label=String(r.""||"");
   if(label.includes("強"))return 75;
   if(label.includes("普通"))return 50;
   if(label.includes("注意"))return 35;
@@ -288,7 +288,7 @@ function chipMiniBadgeV383(r){
   const level=chipLevelV383(pct);
   const cls=chipClassV383(level);
   const text=(pct===null||pct===undefined||!Number.isFinite(Number(pct)))?"--":`${Math.round(pct)}%（${level}）`;
-  return `<span class="chip-mini ${cls}" title="${safe(r.chip_note||r.chip_label||"")}">${text}</span>`;
+  return `<span class="chip-mini ${cls}" title="${safe(r.chip_note||r.""||"")}">${text}</span>`;
 }
 
 
@@ -302,7 +302,7 @@ function getEntryFilterV382(r){
   const near=toNum(r.near_high_20);
   const mom5=toNum(r.mom5);
   const mom20=toNum(r.mom20);
-  const chip=String(r.chip_label||r.chip_tags||"");
+  const chip=String(r.""||r.""||"");
   const hasPriceSignal=Number.isFinite(near)||Number.isFinite(mom5)||Number.isFinite(mom20);
 
   if(action!=="BUY"){
@@ -333,7 +333,7 @@ function getEntryFilterV382(r){
     return {level:"early",label:"✅ 可進場",note:"籌碼偏強且未明顯追高",allow:true};
   }
 
-  return {level:"pullback",label:"⏳ 觀察",note:"未符合可進場條件，先不要直接追",allow:false};
+  return {level:"pullback",label:"⏳ 觀察",note:"等回檔",allow:false};
 }
 
 function getDisplayActionV382(r,filter){
@@ -353,7 +353,7 @@ function badgeForActionV382(displayAction,originalAction,filter){
   if(action==="WAIT")return `<span class="entry-display-action entry-wait">買進<br>等回檔</span>`;
 
   if(original==="BUY"){
-    const label=(filter&&filter.level==="early")?"買進<br>可進場":"買進<br>觀察";
+    const label=(filter&&filter.level==="early")?"買進<br>可進場":"買進<br>等回檔";
     const cls=(filter&&filter.level==="early")?"entry-buy":"entry-hold";
     return `<span class="entry-display-action ${cls}">${label}</span>`;
   }
