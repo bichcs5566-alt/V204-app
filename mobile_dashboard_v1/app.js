@@ -19,14 +19,21 @@ function injectV382Style(){
   const style=document.createElement("style");
   style.id="v382-style";
   style.textContent=`
-    .entry-filter{display:inline-block;padding:6px 10px;border-radius:999px;font-size:13px;font-weight:900;white-space:nowrap;background:#f2f4f7;color:#344054}
+    .entry-filter{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:900;white-space:nowrap;background:#f2f4f7;color:#344054}
     .entry-early{background:#ecfdf3;color:#027a48}
     .entry-pullback{background:#fff8e6;color:#b54708}
     .entry-late{background:#fdecec;color:#b42318}
     .entry-normal{background:#eef3ff;color:#25406f}
-    .entry-display-action{display:inline-block;padding:6px 10px;border-radius:999px;font-size:13px;font-weight:900;white-space:nowrap}
+    .entry-display-action{display:inline-block;padding:5px 8px;border-radius:999px;font-size:12px;font-weight:900;white-space:nowrap;line-height:1.25}
     .entry-skip{background:#fdecec;color:#b42318}
     .entry-wait{background:#fff8e6;color:#b54708}
+    .entry-buy{background:#ecfdf3;color:#027a48}
+    .entry-hold{background:#eef3ff;color:#25406f}
+    .chip-mini{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:900;white-space:nowrap;background:#f2f4f7;color:#344054}
+    .chip-strong{background:#ecfdf3;color:#027a48}
+    .chip-mid{background:#fff8e6;color:#b54708}
+    .chip-weak{background:#fdecec;color:#b42318}
+    .chip-none{background:#f2f4f7;color:#667085}
   `;
   document.head.appendChild(style);
 }
@@ -120,14 +127,21 @@ async function submitRemovePositionInstant(stockId){
 
 async function loadAll(force=false){
   try{
-    const[meta,tradePlan,position,summary,debug]=await Promise.all([
+    const[meta,tradePlanRaw,positionRaw,summary,debug,chipRows]=await Promise.all([
       fetchJSON(`${DATA_DIR}/meta.json`,force),
       fetchCSV(`${DATA_DIR}/trade_plan.csv`,force),
       fetchCSV(`${DATA_DIR}/position_monitor.csv`,force),
       fetchCSV(`${DATA_DIR}/full_summary.csv`,force),
-      fetchCSV(`${DATA_DIR}/selection_debug.csv`,force)
+      fetchCSV(`${DATA_DIR}/selection_debug.csv`,force),
+      fetchCSV(`${DATA_DIR}/chip_light.csv`,force).catch(()=>[])
     ]);
-POSITION_CACHE = position;
+
+    const chipMap=buildChipMapV383(chipRows);
+    const tradePlan=mergeChipIntoRowsV383(tradePlanRaw,chipMap);
+    const position=mergeChipIntoRowsV383(positionRaw,chipMap);
+
+    POSITION_CACHE = position;
+    ensureV383Headers();
     renderMeta(meta);renderTradePlan(tradePlan);renderPosition(position);renderSummary(summary);renderDebug(debug);renderTierSummary(position);renderActionSummary(tradePlan,position);
     if(!document.getElementById("syncBanner").textContent.includes("已送出"))setBanner("頁面資料已同步","#2f7d32");
   }catch(err){console.error(err);setBanner(`讀取失敗：${err.message}`,"#b42318")}
@@ -146,14 +160,14 @@ function renderTradePlan(rows){
   body.innerHTML=rows.map(r=>{
     const filter=getEntryFilterV382(r);
     const displayAction=getDisplayActionV382(r,filter);
-    return `<tr><td>${badgeForActionV382(displayAction,r.action)}</td><td>${safe(r.stock_id)}</td><td>${prettyTier(r.price_tier)}</td><td>${safe(r.ref_price)}</td><td>${safe(r.target_weight)}</td><td>${safeMoney(r.suggested_amount)}</td><td>${entryFilterBadgeV382(filter)}</td><td>${safe(composeNoteV382(r,filter))}</td></tr>`;
+    return `<tr><td>${badgeForActionV382(displayAction,r.action,filter)}</td><td>${safe(r.stock_id)}</td><td>${prettyTier(r.price_tier)}</td><td>${safe(r.ref_price)}</td><td>${safe(r.target_weight)}</td><td>${safeMoney(r.suggested_amount)}</td><td>${chipMiniBadgeV383(r)}</td><td>${safe(composeNoteV382(r,filter))}</td></tr>`;
   }).join("")
 }
 
 function renderPosition(rows){
   const body=document.getElementById("positionBody");
-  if(!rows.length){body.innerHTML=`<tr><td colspan="10" class="empty">目前沒有持倉資料</td></tr>`;return}
-  body.innerHTML=rows.map(r=>`<tr><td>${safe(r.stock_id)}</td><td>${prettyTier(r.price_tier)}</td><td>${safe(r.ref_price)}</td><td>${safeInt(r.shares)}</td><td>${safe(r.avg_cost)}</td><td>${safePct(r.pnl_pct)}</td><td>${safe(r.target_weight)}</td><td>${badgeForAction(r.action)}</td><td>${safe(r.note)}</td><td><button class="btn-remove" data-remove-position="${safe(r.stock_id)}">移除</button></td></tr>`).join("");
+  if(!rows.length){body.innerHTML=`<tr><td colspan="11" class="empty">目前沒有持倉資料</td></tr>`;return}
+  body.innerHTML=rows.map(r=>`<tr><td>${safe(r.stock_id)}</td><td>${prettyTier(r.price_tier)}</td><td>${safe(r.ref_price)}</td><td>${safeInt(r.shares)}</td><td>${safe(r.avg_cost)}</td><td>${safePct(r.pnl_pct)}</td><td>${safe(r.target_weight)}</td><td>${badgeForAction(r.action)}</td><td>${chipMiniBadgeV383(r)}</td><td>${safe(r.note)}</td><td><button class="btn-remove" data-remove-position="${safe(r.stock_id)}">移除</button></td></tr>`).join("");
 }
 
 function renderSummary(rows){const row=rows[0]||{};text("returnVal",pctDisplay(row["return"]));text("mddVal",pctDisplay(row["mdd"]));text("sharpeVal",blankDash(row["sharpe_daily"]))}
@@ -180,6 +194,104 @@ function renderActionSummary(tradeRows,positionRows){
 }
 
 
+
+// ================================
+// v3.8.3 Chip Mini UI
+// 目的：籌碼只顯示「集中度%（強/中/弱）」；避免長文字干擾操作
+// ================================
+
+function ensureV383Headers(){
+  const tradeBody=document.getElementById("tradePlanBody");
+  const tradeTable=tradeBody?tradeBody.closest("table"):null;
+  const tradeHead=tradeTable?tradeTable.querySelector("thead tr"):null;
+  if(tradeHead&&tradeHead.children.length===7){
+    tradeHead.children[6].textContent="籌碼";
+    const th=document.createElement("th");
+    th.textContent="備註";
+    tradeHead.appendChild(th);
+  }
+
+  const posBody=document.getElementById("positionBody");
+  const posTable=posBody?posBody.closest("table"):null;
+  const posHead=posTable?posTable.querySelector("thead tr"):null;
+  if(posHead&&posHead.children.length===10){
+    const th=document.createElement("th");
+    th.textContent="籌碼";
+    posHead.insertBefore(th,posHead.children[8]);
+  }
+}
+
+function buildChipMapV383(chipRows){
+  const map={};
+  (chipRows||[]).forEach(r=>{
+    const sid=normalizeStockIdV383(r.stock_id||r.stock||r.symbol||r.code);
+    if(!sid)return;
+    map[sid]={
+      chip_score:r.chip_score||"",
+      chip_label:r.chip_label||"",
+      chip_tags:r.chip_tags||"",
+      chip_note:r.chip_note||"",
+      vol_ratio_5:r.vol_ratio_5||"",
+      mom5:r.mom5||"",
+      mom20:r.mom20||"",
+      near_high_20:r.near_high_20||""
+    };
+  });
+  return map;
+}
+
+function mergeChipIntoRowsV383(rows,chipMap){
+  return (rows||[]).map(r=>{
+    const sid=normalizeStockIdV383(r.stock_id||r.stock||r.symbol||r.code);
+    const chip=chipMap[sid]||{};
+    return {...r,...chip};
+  });
+}
+
+function normalizeStockIdV383(v){
+  return String(v??"").replace(/^\uFEFF/,"").replace(/[^\dA-Za-z]/g,"").trim();
+}
+
+function chipPercentV383(r){
+  const direct=toNum(r.concentration_pct||r.chip_pct||r.chip_percent);
+  if(Number.isFinite(direct))return Math.max(0,Math.min(100,direct));
+
+  const score=toNum(r.chip_score);
+  if(Number.isFinite(score)){
+    return Math.max(0,Math.min(100,Math.round(score*12.5)));
+  }
+
+  const label=String(r.chip_label||"");
+  if(label.includes("強"))return 75;
+  if(label.includes("普通"))return 50;
+  if(label.includes("注意"))return 35;
+
+  return null;
+}
+
+function chipLevelV383(pct){
+  if(pct===null||pct===undefined||!Number.isFinite(Number(pct)))return "—";
+  if(pct>=70)return "強";
+  if(pct>=45)return "中";
+  return "弱";
+}
+
+function chipClassV383(level){
+  if(level==="強")return "chip-strong";
+  if(level==="中")return "chip-mid";
+  if(level==="弱")return "chip-weak";
+  return "chip-none";
+}
+
+function chipMiniBadgeV383(r){
+  const pct=chipPercentV383(r);
+  const level=chipLevelV383(pct);
+  const cls=chipClassV383(level);
+  const text=(pct===null||pct===undefined||!Number.isFinite(Number(pct)))?"--":`${Math.round(pct)}%（${level}）`;
+  return `<span class="chip-mini ${cls}" title="${safe(r.chip_note||r.chip_label||"")}">${text}</span>`;
+}
+
+
 // ================================
 // v3.8.2 Entry Filter Patch
 // 目的：不改原策略，只在操作層提示「起漲 / 等回檔 / 尾段不追」
@@ -191,32 +303,37 @@ function getEntryFilterV382(r){
   const mom5=toNum(r.mom5);
   const mom20=toNum(r.mom20);
   const chip=String(r.chip_label||r.chip_tags||"");
+  const hasPriceSignal=Number.isFinite(near)||Number.isFinite(mom5)||Number.isFinite(mom20);
 
   if(action!=="BUY"){
     return {level:"normal",label:"—",note:"非新進場，不套用進場過濾",allow:true};
   }
 
-  // 防追高：已接近20日高點且短線動能過熱，視為主升段尾端
-  if((near>=0.97&&mom5>=0.06)||(near>=0.985)||(mom5>=0.10)){
+  if(!hasPriceSignal){
+    return {level:"pullback",label:"⏳ 資料不足",note:"缺 near_high_20 / mom5 / mom20，先觀察，不直接追",allow:false};
+  }
+
+  if(mom20>0&&mom5<0){
+    return {level:"pullback",label:"⚠️ 強勢回檔",note:"中期仍強但短線轉弱，等止跌或二次轉強",allow:false};
+  }
+
+  if((near>=0.97&&mom5>=0.03)||(near>=0.985)||(mom5>=0.08)){
     return {level:"late",label:"❌ 尾段不追",note:"接近高點或短線過熱，先跳過，避免追在回檔前",allow:false};
   }
 
-  // 強勢但偏高：不立刻追，等回檔
   if(near>=0.93||mom5>=0.05){
     return {level:"pullback",label:"⏳ 等回檔",note:"強勢但偏高，建議等回檔約 -3% 再評估",allow:false};
   }
 
-  // 起漲/初動：20日動能轉正但短線尚未過熱
   if(mom20>0&&mom5>=0&&mom5<0.05&&near<0.93){
-    return {level:"early",label:"✅ 初動可觀察",note:"動能轉強但尚未過熱，可列入優先觀察",allow:true};
+    return {level:"early",label:"✅ 可進場",note:"動能轉強但尚未過熱，可列入優先觀察",allow:true};
   }
 
-  // 若籌碼偏強但價格未過熱，保留原 BUY
   if((chip.includes("強")||chip.includes("偏強"))&&near<0.93){
-    return {level:"early",label:"✅ 強勢未過熱",note:"籌碼偏強且未明顯追高",allow:true};
+    return {level:"early",label:"✅ 可進場",note:"籌碼偏強且未明顯追高",allow:true};
   }
 
-  return {level:"normal",label:"✔ 正常",note:"未觸發尾段/回檔過濾",allow:true};
+  return {level:"pullback",label:"⏳ 觀察",note:"未符合可進場條件，先不要直接追",allow:false};
 }
 
 function getDisplayActionV382(r,filter){
@@ -228,10 +345,19 @@ function getDisplayActionV382(r,filter){
   return action;
 }
 
-function badgeForActionV382(displayAction,originalAction){
+function badgeForActionV382(displayAction,originalAction,filter){
   const action=(displayAction||"").toUpperCase();
-  if(action==="SKIP")return `<span class="entry-display-action entry-skip">跳過</span>`;
-  if(action==="WAIT")return `<span class="entry-display-action entry-wait">等回檔</span>`;
+  const original=(originalAction||displayAction||"").toUpperCase();
+
+  if(action==="SKIP")return `<span class="entry-display-action entry-skip">買進<br>尾段不追</span>`;
+  if(action==="WAIT")return `<span class="entry-display-action entry-wait">買進<br>等回檔</span>`;
+
+  if(original==="BUY"){
+    const label=(filter&&filter.level==="early")?"買進<br>可進場":"買進<br>觀察";
+    const cls=(filter&&filter.level==="early")?"entry-buy":"entry-hold";
+    return `<span class="entry-display-action ${cls}">${label}</span>`;
+  }
+
   return badgeForAction(originalAction||displayAction);
 }
 
