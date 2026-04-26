@@ -282,3 +282,107 @@ function toNum(v){const n=Number(String(v??"").replace(/,/g,""));return Number.i
 function text(id,value){const el=document.getElementById(id);if(el)el.textContent=value}
 function val(id,setValue){const el=document.getElementById(id);if(!el)return"";if(typeof setValue!=="undefined")el.value=setValue;return el.value||""}
 function setBanner(text,color="#2f7d32"){const el=document.getElementById("syncBanner");if(el){el.textContent=text;el.style.color=color}}
+// ================================
+// v3.9 Execution Layer（不破壞補丁）
+// ================================
+
+// ===== 行為比例 =====
+function getActionRatioV39(action){
+  action = (action || "").toUpperCase();
+  if(action === "BUY") return 1.0;
+  if(action === "ADD") return 0.5;
+  if(action === "REDUCE") return 0.3;
+  if(action === "SELL") return 1.0;
+  return 0;
+}
+
+// ===== 張數計算 =====
+function calcLotsV39(r){
+  const shares = Number(r.shares || 0);
+  const price = Number(r.ref_price || r.avg_cost || 0);
+  const amount = Number((r.suggested_amount || "").toString().replace(/,/g,"")) || 0;
+  const action = (r.action || "").toUpperCase();
+
+  const lotSize = 1000;
+
+  // 買
+  if(action === "BUY"){
+    if(!price || !amount) return "--";
+    const lots = Math.floor(amount / (price * lotSize));
+    return Math.max(lots, 1);
+  }
+
+  // 減碼 / 出場
+  if(action === "REDUCE" || action === "SELL"){
+    const ratio = getActionRatioV39(action);
+    let lots = Math.floor((shares * ratio) / lotSize);
+
+    if(lots < 1 && shares >= lotSize){
+      lots = 1; // 最少1張
+    }
+
+    return lots;
+  }
+
+  return "--";
+}
+
+// ===== 大盤狀態（簡化）=====
+function getMarketV39(r){
+  const mom20 = Number(r.mom20 || 0);
+  const near = Number(r.near_high_20 || 0);
+
+  if(mom20 > 0 && near > 0.9) return "🟢 多頭";
+  if(mom20 > 0) return "🟡 中性";
+  return "🔴 空頭";
+}
+
+// ===== 決策（升級版）=====
+function getDecisionV39(r){
+  const action = (r.action || "").toUpperCase();
+  const chip = r.chip_label || "";
+
+  if(chip.includes("強")){
+    if(action==="BUY") return "🔥 建倉100%";
+    if(action==="ADD") return "🚀 加碼50%";
+    if(action==="REDUCE") return "⚠️ 減碼30%";
+    if(action==="SELL") return "❗ 全出";
+  }
+
+  if(chip.includes("普通")){
+    if(action==="BUY") return "⚠️ 小倉測試";
+    if(action==="REDUCE") return "👉 減碼";
+  }
+
+  return "—";
+}
+
+// ===== Debug（只顯示，不影響原系統）=====
+function attachV39Debug(){
+  const rows = document.querySelectorAll("#positionBody tr");
+
+  rows.forEach((row, idx) => {
+    const data = POSITION_CACHE[idx];
+    if(!data) return;
+
+    const lots = calcLotsV39(data);
+    const market = getMarketV39(data);
+    const decision = getDecisionV39(data);
+
+    row.title = `
+v3.9:
+決策: ${decision}
+張數: ${lots}
+市場: ${market}
+    `;
+  });
+}
+
+// ===== 自動掛載（不干擾原 render）=====
+setTimeout(() => {
+  try{
+    attachV39Debug();
+  }catch(e){
+    console.log("v3.9 debug fail", e);
+  }
+}, 1500);
