@@ -1,53 +1,55 @@
-// v3.7.2：持倉改為讀 CSV + 修正籌碼顯示
+// v3.7.2b：強制對應版本（一定會顯示）
 
-async function loadChipData() {
-    try {
-        const res = await fetch('./data/chip_scores.csv');
-        const text = await res.text();
-        const rows = text.split('\n').slice(1);
+async function loadChipMap() {
+    const res = await fetch('./data/chip_scores.csv');
+    const text = await res.text();
+    const rows = text.split('\n').slice(1);
 
-        const map = {};
-        rows.forEach(r => {
-            const cols = r.split(',');
-            if (cols.length < 4) return;
+    const map = {};
+    rows.forEach(r => {
+        const c = r.split(',');
+        if (c.length < 4) return;
 
-            const stock = cols[0];
-            const label = cols[2];
-            const tags = cols[3];
+        map[c[0]] = `${c[2]}｜${c[3]}`;
+    });
 
-            map[stock] = `${label}｜${tags}`;
+    return map;
+}
+
+async function loadPositionMap() {
+    const res = await fetch('./data/current_positions.csv');
+    const text = await res.text();
+    const rows = text.split('\n').slice(1);
+
+    const map = {};
+    rows.forEach(r => {
+        const c = r.split(',');
+        if (c.length < 1) return;
+
+        map[c[0]] = true;
+    });
+
+    return map;
+}
+
+async function injectChip() {
+    const chipMap = await loadChipMap();
+    const posMap = await loadPositionMap();
+
+    const rows = document.querySelectorAll('table tbody tr');
+
+    rows.forEach(row => {
+        const text = row.innerText;
+
+        let stock = null;
+
+        // 🔥 從 row 文字找股票代號
+        Object.keys(posMap).forEach(s => {
+            if (text.includes(s)) {
+                stock = s;
+            }
         });
 
-        return map;
-
-    } catch (e) {
-        console.log('chip load fail', e);
-        return {};
-    }
-}
-
-async function loadPositions() {
-    try {
-        const res = await fetch('./data/current_positions.csv');
-        const text = await res.text();
-        const rows = text.split('\n').slice(1);
-
-        return rows.map(r => r.split(',')[0]);
-
-    } catch (e) {
-        console.log('position load fail', e);
-        return [];
-    }
-}
-
-async function injectChipToPositions() {
-    const chipMap = await loadChipData();
-    const positions = await loadPositions();
-
-    const rows = document.querySelectorAll('#positions-table tbody tr');
-
-    rows.forEach((row, i) => {
-        const stock = positions[i];
         if (!stock) return;
 
         const chip = chipMap[stock] || '—';
@@ -57,13 +59,11 @@ async function injectChipToPositions() {
         if (!td) {
             td = document.createElement('td');
             td.className = 'chip-col';
-            row.insertBefore(td, row.children[2]); // 插在備註旁
+            row.appendChild(td);
         }
 
         td.innerText = chip;
     });
 }
 
-setTimeout(() => {
-    injectChipToPositions();
-}, 1000);
+setTimeout(injectChip, 1200);
