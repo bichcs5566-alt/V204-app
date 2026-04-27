@@ -362,6 +362,11 @@ def build_features(df):
     df["mom20"] = g["close"].pct_change(20)
     df["mom60"] = g["close"].pct_change(60)
     df["vol20"] = g["ret1"].rolling(20).std().reset_index(level=0, drop=True)
+
+    # 突破判斷用：前20日高點 / 前10日高點，不含今日，避免偷看
+    df["prev_high_20"] = g["close"].shift(1).rolling(20).max().reset_index(level=0, drop=True)
+    df["prev_high_10"] = g["close"].shift(1).rolling(10).max().reset_index(level=0, drop=True)
+
     df = add_decision_features(df)
     return df
 
@@ -627,6 +632,40 @@ def action_weight_multiplier(action, score):
     return 0.0
 
 
+def is_breakout_signal(row, score):
+    """
+    v1.6 突破進場：
+    - 收盤突破前10日高點：初步突破
+    - 收盤突破前20日高點：強突破
+    """
+    close = to_num(row.get("close"), np.nan) if hasattr(row, "get") else np.nan
+    prev_high_10 = to_num(row.get("prev_high_10"), np.nan) if hasattr(row, "get") else np.nan
+    prev_high_20 = to_num(row.get("prev_high_20"), np.nan) if hasattr(row, "get") else np.nan
+    score_num = to_num(score, 0)
+
+    if pd.notna(close) and pd.notna(prev_high_20) and close > prev_high_20 * 1.005 and score_num >= 55:
+        return True, "突破20日高點"
+    if pd.notna(close) and pd.notna(prev_high_10) and close > prev_high_10 * 1.005 and score_num >= 60:
+        return True, "突破10日高點"
+    return False, ""
+
+
+def normalize_watch_grade(action, score):
+    """
+    不收斂名單，但把 WATCH 分成強弱。
+    """
+    action = str(action or "").upper()
+    score_num = to_num(score, 0)
+
+    if action == "BUY":
+        return "BUY"
+    if action == "WATCH":
+        if score_num >= 60:
+            return "WATCH_A"
+        return "WATCH_B"
+    return action
+
+
 def build_trade_plan(positions, price_map, target, signal_date, trade_date, signal_row_map=None, prev_trade_plan=None):
     """
     trade_plan 可以出現策略新選股，但不會寫入 current_positions.csv。
@@ -682,17 +721,30 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
         elif action == "SKIP":
             continue
 
+        # v1.6：從 WATCH 裡抓真正突破，直接轉 BUY
+        breakout_ok, breakout_reason = is_breakout_signal(row, score)
+        if action == "WATCH" and breakout_ok:
+            action = "BUY"
+            state_note = (state_note + "；" if state_note else "") + breakout_reason
+
+        action_display = normalize_watch_grade(action, score)
+
         multiplier = action_weight_multiplier(action, score)
         final_weight = target_weight * multiplier
         suggested_amount = INITIAL_CAPITAL * final_weight
 
         raw_reason = (state_note + "；" if state_note else "") + score_info.get("entry_reason", "模組化進場判斷")
         simple_note = human_action_note(action, score, stage, raw_reason, prev_action)
+        if action_display == "WATCH_A":
+            simple_note = simple_note.replace("接近突破", "接近突破A級")
+        elif action_display == "WATCH_B":
+            simple_note = simple_note.replace("均線收斂", "均線收斂B級").replace("觀察名單", "觀察B級")
 
         rows.append({
             "signal_date": str(signal_date.date()),
             "trade_date": str(trade_date.date()),
-            "action": action,
+            "action": action_display,
+            "raw_action": action,
             "stock_id": stock_id,
             "price_tier": tier,
             "target_weight": round(final_weight, 4),
@@ -706,7 +758,7 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
             "note": simple_note,
             "detail_note": raw_reason,
         })
-    cols = ["signal_date", "trade_date", "action", "stock_id", "price_tier", "target_weight", "ref_price", "suggested_amount", "entry_score", "stage", "prev_action", "prev_entry_score", "prev_trade_date", "note", "detail_note"]
+    cols = ["signal_date", "trade_date", "action", "raw_action", "stock_id", "price_tier", "target_weight", "ref_price", "suggested_amount", "entry_score", "stage", "prev_action", "prev_entry_score", "prev_trade_date", "note", "detail_note"]
     return pd.DataFrame(rows, columns=cols)
 
 def build_watchlist_monitor(watchlist, positions, price_map, core, alpha, signal_date, trade_date):
@@ -799,7 +851,7 @@ def build_outputs(df, prev_trade_plan=None):
         "trade_date": str(trade_date.date()),
         "price_panel_latest_date": str(price_panel_latest_date.date()),
         "data_state": "fresh",
-        "source": "v1.5_display_weight_optimized",
+        "source": "v1.6_breakout_watch_grade_no_limit",
         "execution_rule": "T日盤後產生訊號，T+1交易",
         "prev_trade_plan_file": PREV_TRADE_PLAN_FILE,
         "trade_plan_history_file": f"trade_plan_history/{str(trade_date.date())}.csv",
