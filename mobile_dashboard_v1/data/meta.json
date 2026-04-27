@@ -1,7 +1,9 @@
 {
-  "generated_at": "2026-04-27 16:01:43",
-  "signal_date": "2026-04-22",
-  "trade_date": "2026-04-24",
-  "data_state": "fresh",
-  "source": "v266.7.2_complete_overwrite"
+  "generated_at": "2026-04-28 00:14:48",
+  "signal_date": "2026-04-24",
+  "trade_date": "2026-04-27",
+  "data_state": "stale",
+  "source": "v266.11_pipeline",
+  "price_panel_latest_date": "2026-04-24",
+  "trade_plan_batch": "2026-04-28 00:14:48"
 }
