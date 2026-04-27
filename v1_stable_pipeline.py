@@ -367,16 +367,71 @@ def build_features(df):
 
 
 def select_stocks(day_df):
+    """
+    v1.4.2 測試版：均線糾結候選池
+    目的：
+    - 不再先用過嚴的動能條件把股票砍光
+    - 先找「MA5/MA10/MA20靠近、準備方向選擇」的股票
+    - 再交給 decision_modules 做 BUY / WATCH / SKIP
+    """
     total_input = len(day_df)
-    valid = day_df.dropna(subset=["mom20", "mom60", "vol20"]).copy()
+
+    required = ["close", "ma5", "ma10", "ma20", "mom5", "mom20", "mom60", "vol20"]
+    valid = day_df.copy()
+    for col in required:
+        if col not in valid.columns:
+            valid[col] = np.nan
+
+    valid = valid.dropna(subset=["close", "ma5", "ma10", "ma20"]).copy()
     valid_count = len(valid)
 
-    core_primary = valid[valid["mom20"] > -0.02].copy()
-    core_primary["score"] = core_primary["mom20"] * 0.6 + core_primary["mom60"] * 0.4
+    if valid_count == 0:
+        debug = pd.DataFrame([{
+            "date": str(day_df["date"].iloc[0].date()) if len(day_df) else "",
+            "total_input": total_input,
+            "valid_after_na": 0,
+            "core_primary_count": 0,
+            "alpha_primary_count": 0,
+            "core_final_count": 0,
+            "alpha_final_count": 0,
+        }])
+        return pd.DataFrame(), pd.DataFrame(), debug
+
+    # 均線糾結：MA5/10/20 最大與最小距離越小越好
+    valid["ma_max"] = valid[["ma5", "ma10", "ma20"]].max(axis=1)
+    valid["ma_min"] = valid[["ma5", "ma10", "ma20"]].min(axis=1)
+    valid["ma_converge_pct"] = (valid["ma_max"] - valid["ma_min"]) / valid["close"]
+
+    # 方向條件：價格不要跌破太多，短動能不要太差
+    valid["above_ma20_flag"] = (valid["close"] >= valid["ma20"] * 0.98).astype(int)
+    valid["ma_bull_flag"] = ((valid["ma5"] >= valid["ma10"]) & (valid["ma10"] >= valid["ma20"])).astype(int)
+    valid["mom5_safe_flag"] = (valid["mom5"].fillna(-9) > -0.03).astype(int)
+
+    # 核心池：均線靠近 + 尚未明顯轉弱
+    core_primary = valid[
+        (valid["ma_converge_pct"] <= 0.06) &
+        (valid["above_ma20_flag"] == 1) &
+        (valid["mom5_safe_flag"] == 1)
+    ].copy()
+
+    # 分數：越糾結越前面；方向與動能加分
+    score_base = 1 - core_primary["ma_converge_pct"].clip(0, 0.20)
+    core_primary["score"] = (
+        score_base * 0.55
+        + core_primary["ma_bull_flag"] * 0.20
+        + core_primary["above_ma20_flag"] * 0.15
+        + core_primary["mom5"].fillna(0).clip(-0.1, 0.2) * 0.10
+    )
     core_primary = core_primary.sort_values("score", ascending=False)
 
+    # fallback：即使沒有完全符合，也用最接近均線糾結的前段名單
     core_fallback = valid.copy()
-    core_fallback["score"] = core_fallback["mom20"] * 0.6 + core_fallback["mom60"] * 0.4
+    core_fallback["score"] = (
+        (1 - core_fallback["ma_converge_pct"].clip(0, 0.25)) * 0.60
+        + core_fallback["above_ma20_flag"] * 0.20
+        + core_fallback["ma_bull_flag"] * 0.15
+        + core_fallback["mom5"].fillna(0).clip(-0.1, 0.2) * 0.05
+    )
     core_fallback = core_fallback.sort_values("score", ascending=False)
 
     core = core_primary.head(CORE_TOP_N).copy()
@@ -388,16 +443,21 @@ def select_stocks(day_df):
         extra = core_fallback[~core_fallback["stock_id"].isin(core["stock_id"])].head(CORE_TOP_N - len(core))
         core = pd.concat([core, extra], ignore_index=True).drop_duplicates(subset=["stock_id"]).head(CORE_TOP_N)
 
-    alpha_primary = valid[valid["mom20"] > 0].copy()
+    # Alpha池：均線糾結後剛轉強，優先給短線/波段觀察
+    alpha_primary = valid[
+        (valid["ma_converge_pct"] <= 0.05) &
+        (valid["close"] >= valid["ma20"]) &
+        (valid["mom5"].fillna(-9) > 0)
+    ].copy()
     alpha_primary["quality"] = (
-        alpha_primary["mom20"] * 0.6 + alpha_primary["mom60"] * 0.4
-    ) / (alpha_primary["vol20"] + 1e-6)
+        (1 - alpha_primary["ma_converge_pct"].clip(0, 0.20)) * 0.55
+        + alpha_primary["ma_bull_flag"] * 0.25
+        + alpha_primary["mom5"].fillna(0).clip(0, 0.2) * 0.20
+    ) / (alpha_primary["vol20"].fillna(alpha_primary["vol20"].median()).fillna(0.03) + 1e-6)
     alpha_primary = alpha_primary.sort_values("quality", ascending=False)
 
-    alpha_fallback = valid.copy()
-    alpha_fallback["quality"] = (
-        alpha_fallback["mom20"] * 0.6 + alpha_fallback["mom60"] * 0.4
-    ) / (alpha_fallback["vol20"] + 1e-6)
+    alpha_fallback = core.copy()
+    alpha_fallback["quality"] = alpha_fallback["score"] / (alpha_fallback["vol20"].fillna(alpha_fallback["vol20"].median()).fillna(0.03) + 1e-6)
     alpha_fallback = alpha_fallback.sort_values("quality", ascending=False)
 
     alpha = alpha_primary.head(ALPHA_TOP_N).copy()
@@ -522,6 +582,51 @@ def build_position_monitor(positions, price_map, target, signal_date, trade_date
     return pd.DataFrame(rows, columns=cols)
 
 
+
+def human_action_note(action, score, stage, raw_reason="", prev_action=""):
+    """
+    把技術理由轉成手機上可以一眼理解的交易語言。
+    """
+    action = str(action or "").upper()
+    prev_action = str(prev_action or "").upper()
+    score_num = to_num(score, 0)
+
+    if action == "BUY":
+        if prev_action == "WATCH":
+            return f"突破確認：前次觀察轉買進｜分數{int(score_num)}｜可照建議金額進場"
+        return f"突破確認：趨勢轉強｜分數{int(score_num)}｜可進場"
+
+    if action == "WATCH":
+        if score_num >= 60:
+            return f"接近突破：可小倉試單｜分數{int(score_num)}｜隔日看是否放量站穩"
+        if "均線" in str(raw_reason) or "MA" in str(raw_reason):
+            return f"均線收斂：等待方向｜分數{int(score_num)}｜先觀察不追高"
+        return f"觀察名單：條件尚未確認｜分數{int(score_num)}｜等待突破"
+
+    if action == "SELL":
+        return f"轉弱出場：條件破壞｜分數{int(score_num)}"
+
+    return f"暫不操作：條件不足｜分數{int(score_num)}"
+
+
+def action_weight_multiplier(action, score):
+    """
+    權重分級：
+    BUY = 完整權重
+    WATCH = 小倉參考權重，不代表一定要買；用來讓資金規劃有感。
+    """
+    action = str(action or "").upper()
+    score_num = to_num(score, 0)
+
+    if action == "BUY":
+        return 1.0
+    if action == "WATCH":
+        if score_num >= 60:
+            return 0.5   # 接近突破
+        return 0.3       # 一般觀察
+    return 0.0
+
+
 def build_trade_plan(positions, price_map, target, signal_date, trade_date, signal_row_map=None, prev_trade_plan=None):
     """
     trade_plan 可以出現策略新選股，但不會寫入 current_positions.csv。
@@ -576,8 +681,14 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
             state_note = (state_note + "；" if state_note else "") + "放寬版保留觀察"
         elif action == "SKIP":
             continue
-        suggested_amount = INITIAL_CAPITAL * target_weight if action == "BUY" else 0
-        final_weight = target_weight if action == "BUY" else 0
+
+        multiplier = action_weight_multiplier(action, score)
+        final_weight = target_weight * multiplier
+        suggested_amount = INITIAL_CAPITAL * final_weight
+
+        raw_reason = (state_note + "；" if state_note else "") + score_info.get("entry_reason", "模組化進場判斷")
+        simple_note = human_action_note(action, score, stage, raw_reason, prev_action)
+
         rows.append({
             "signal_date": str(signal_date.date()),
             "trade_date": str(trade_date.date()),
@@ -592,9 +703,10 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
             "prev_action": prev_action,
             "prev_entry_score": prev_score,
             "prev_trade_date": prev_trade_date,
-            "note": (state_note + "；" if state_note else "") + score_info.get("entry_reason", "模組化進場判斷"),
+            "note": simple_note,
+            "detail_note": raw_reason,
         })
-    cols = ["signal_date", "trade_date", "action", "stock_id", "price_tier", "target_weight", "ref_price", "suggested_amount", "entry_score", "stage", "prev_action", "prev_entry_score", "prev_trade_date", "note"]
+    cols = ["signal_date", "trade_date", "action", "stock_id", "price_tier", "target_weight", "ref_price", "suggested_amount", "entry_score", "stage", "prev_action", "prev_entry_score", "prev_trade_date", "note", "detail_note"]
     return pd.DataFrame(rows, columns=cols)
 
 def build_watchlist_monitor(watchlist, positions, price_map, core, alpha, signal_date, trade_date):
@@ -687,7 +799,7 @@ def build_outputs(df, prev_trade_plan=None):
         "trade_date": str(trade_date.date()),
         "price_panel_latest_date": str(price_panel_latest_date.date()),
         "data_state": "fresh",
-        "source": "v1.4.1_relaxed_entry",
+        "source": "v1.5_display_weight_optimized",
         "execution_rule": "T日盤後產生訊號，T+1交易",
         "prev_trade_plan_file": PREV_TRADE_PLAN_FILE,
         "trade_plan_history_file": f"trade_plan_history/{str(trade_date.date())}.csv",
