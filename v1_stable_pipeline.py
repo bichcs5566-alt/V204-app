@@ -19,7 +19,7 @@ except Exception:
 
 # =========================================================
 # v1_stable_pipeline.py
-# v1.4 signal/trade date + history version
+# v1.4.1 relaxed entry + history version
 #
 # 核心修正：
 # 1. current_positions.csv 是唯一持倉來源。
@@ -561,7 +561,7 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
             prev_action = str(prev_row.get("action", "")).upper().strip()
             prev_score = prev_row.get("entry_score", "")
             prev_trade_date = prev_row.get("trade_date", "")
-            if prev_action == "WATCH" and score >= 80:
+            if prev_action == "WATCH" and score >= 70:
                 action = "BUY"
                 state_note = "昨日觀察轉今日買進"
             elif prev_action == "BUY" and score >= 60 and raw_action != "BUY":
@@ -571,7 +571,10 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
                 action = "SKIP"
                 state_note = "前次名單轉弱"
 
-        if action == "SKIP":
+        if action == "SKIP" and score >= 45:
+            action = "WATCH"
+            state_note = (state_note + "；" if state_note else "") + "放寬版保留觀察"
+        elif action == "SKIP":
             continue
         suggested_amount = INITIAL_CAPITAL * target_weight if action == "BUY" else 0
         final_weight = target_weight if action == "BUY" else 0
@@ -684,7 +687,7 @@ def build_outputs(df, prev_trade_plan=None):
         "trade_date": str(trade_date.date()),
         "price_panel_latest_date": str(price_panel_latest_date.date()),
         "data_state": "fresh",
-        "source": "v1.4_signal_trade_history",
+        "source": "v1.4.1_relaxed_entry",
         "execution_rule": "T日盤後產生訊號，T+1交易",
         "prev_trade_plan_file": PREV_TRADE_PLAN_FILE,
         "trade_plan_history_file": f"trade_plan_history/{str(trade_date.date())}.csv",
