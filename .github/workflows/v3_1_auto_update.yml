@@ -64,6 +64,7 @@ jobs:
           add_if_exists watchlist_monitor.csv
           add_if_exists full_summary.csv
           add_if_exists selection_debug.csv
+          add_if_exists latest_features.csv
           add_if_exists current_positions.csv
           add_if_exists watchlist.csv
 
@@ -74,6 +75,7 @@ jobs:
           add_if_exists mobile_dashboard_v1/data/watchlist_monitor.csv
           add_if_exists mobile_dashboard_v1/data/full_summary.csv
           add_if_exists mobile_dashboard_v1/data/selection_debug.csv
+          add_if_exists mobile_dashboard_v1/data/latest_features.csv
           add_if_exists mobile_dashboard_v1/data/current_positions.csv
           add_if_exists mobile_dashboard_v1/data/watchlist.csv
           add_if_exists mobile_dashboard_v1/data/meta.json
