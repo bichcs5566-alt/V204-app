@@ -1,301 +1,279 @@
-const DATA_DIR="./data";const GH_CONFIG_KEY="v3_github_config";let POSITION_CACHE=[];
+/*
+v3.5.3_tradeplan_inline_filter_add.js
 
-document.addEventListener("DOMContentLoaded",async()=>{injectV384bStyle();bindUI();loadSavedConfig();await loadAll();});
+目的：
+只修「今日操作」區塊，不動 v1、不動策略、不動 yml、不改 app.js。
 
-function bindUI(){
-  bind("refreshBtn","click",async()=>{setBanner("頁面重新同步中…","#2f7d32");await loadAll(true);});
-  bind("updateBtn","click",async()=>{await dispatchWorkflow("v2_8_auto_update.yml",{},"已送出更新資料與策略，請等待 Actions 跑完後重新整理。");});
-  bind("saveConfigBtn","click",saveConfig);
-  bind("clearConfigBtn","click",clearConfig);
-  bind("addPositionBtn","click",submitAddPositionInstant);
-  document.addEventListener("click",async e=>{const b=e.target.closest("[data-remove-position]");if(b)await submitRemovePositionInstant(b.getAttribute("data-remove-position"));});
-}
+你要的效果：
+1. 今日操作表格上方新增「價位分層下拉」
+2. 選價位後，只顯示該分層股票
+3. 每一列右側新增「加入持倉」按鈕
+4. 按下後直接把該股票填入持倉區：
+   - 股票代號 = 今日操作該列股票
+   - 成本 = 參考價格
+   - 股數 = 建議金額 / 參考價格，取整張 1000 股，最低 1000
+5. 自動觸發原本的「加入 / 更新持倉」按鈕
+6. 不自己讀 trade_plan.csv，避免路徑錯誤
+*/
 
-function bind(id,event,handler){const el=document.getElementById(id);if(!el)return;el.addEventListener(event,async e=>{try{await handler(e)}catch(err){console.error(err);setBanner(`操作失敗：${err.message}`,"#b42318")}})}
+(function () {
+  const VERSION = "v3.5.3-tradeplan-inline-filter-add";
 
-
-function injectV384bStyle(){
-  if(document.getElementById("v384b-style"))return;
-  const style=document.createElement("style");
-  style.id="v384b-style";
-  style.textContent=`
-    .entry-display-action{display:inline-block;padding:5px 8px;border-radius:999px;font-size:12px;font-weight:900;white-space:nowrap;line-height:1.25}
-    .entry-skip{background:#fdecec;color:#b42318}
-    .entry-wait{background:#fff8e6;color:#b54708}
-    .entry-buy{background:#ecfdf3;color:#027a48}
-  `;
-  document.head.appendChild(style);
-}
-
-
-function loadSavedConfig(){try{const raw=localStorage.getItem(GH_CONFIG_KEY);if(!raw){text("configStatus","未儲存");val("ghOwner","bichcs5566-alt");val("ghBranch","main");return}const cfg=JSON.parse(raw);val("ghOwner",cfg.owner||"bichcs5566-alt");val("ghRepo",cfg.repo||"");val("ghBranch",cfg.branch||"main");val("ghToken",cfg.token||"");text("configStatus","✅ 已儲存本機設定")}catch{text("configStatus","讀取失敗")}}
-
-function saveConfig(){const cfg={owner:val("ghOwner").trim(),repo:val("ghRepo").trim(),branch:val("ghBranch").trim()||"main",token:val("ghToken").trim()};if(!cfg.owner||!cfg.repo||!cfg.branch||!cfg.token){setBanner("GitHub 設定不可空白","#b42318");text("configStatus","欄位不完整");return}localStorage.setItem(GH_CONFIG_KEY,JSON.stringify(cfg));text("configStatus","✅ 已儲存本機設定");setBanner("GitHub 本機設定已儲存","#2f7d32")}
-
-function clearConfig(){localStorage.removeItem(GH_CONFIG_KEY);["ghOwner","ghRepo","ghBranch","ghToken"].forEach(id=>val(id,""));text("configStatus","已清除");setBanner("GitHub 本機設定已清除","#92400e")}
-
-function getGithubConfig(){const raw=localStorage.getItem(GH_CONFIG_KEY);if(!raw){setBanner("請先在 GitHub 本機設定區儲存 owner / repo / branch / token","#b42318");text("configStatus","未儲存");return null}try{return JSON.parse(raw)}catch{setBanner("GitHub 本機設定格式錯誤，請重新儲存","#b42318");text("configStatus","格式錯誤");return null}}
-
-async function dispatchWorkflow(workflowId,inputs={},successMessage="已送出"){const cfg=getGithubConfig();if(!cfg)return false;const url=`https://api.github.com/repos/${cfg.owner}/${cfg.repo}/actions/workflows/${workflowId}/dispatches`;const res=await fetch(url,{method:"POST",headers:{"Accept":"application/vnd.github+json","Authorization":`Bearer ${cfg.token}`,"Content-Type":"application/json","X-GitHub-Api-Version":"2022-11-28"},body:JSON.stringify({ref:cfg.branch,inputs})});if(!res.ok){const txt=await res.text();console.error(txt);setBanner(`同步送出失敗：${res.status}，畫面已回復`, "#b42318");return false}setBanner(successMessage,"#2f7d32");return true}
-
-/* v3.5 即時持倉：先改畫面，再背景同步 GitHub */
-async function submitAddPositionInstant(){
-  const stockId=val("positionStockInput").trim();
-  const shares=val("positionSharesInput").trim();
-  const avgCost=val("positionCostInput").trim();
-
-  if(!stockId||!shares||!avgCost){
-    setBanner("加入持倉前請填完整：股票代號 / 股數 / 成本","#b42318");
-    return;
+  function normText(s) {
+    return String(s || "").replace(/\s+/g, "").trim();
   }
 
-  const oldCache=deepClone(POSITION_CACHE);
-  const row={
-    stock_id:stockId,
-    price_tier:priceTierFromPrice(avgCost),
-    ref_price:"同步中",
-    shares:shares,
-    avg_cost:avgCost,
-    pnl_pct:"",
-    target_weight:"",
-    action:"SYNCING",
-    note:"正在寫回 GitHub..."
-  };
-
-  POSITION_CACHE=upsertByStockId(POSITION_CACHE,row);
-  renderPosition(POSITION_CACHE);
-  renderTierSummary(POSITION_CACHE);
-  renderActionSummary([],POSITION_CACHE);
-  setBanner(`已先加入畫面：${stockId}，背景同步中...`,"#2f7d32");
-
-  val("positionStockInput","");
-  val("positionSharesInput","");
-  val("positionCostInput","");
-
-  const ok=await dispatchWorkflow("v3_position_writeback.yml",{
-    action:"add",
-    stock_id:stockId,
-    shares:shares,
-    avg_cost:avgCost
-  },`✅ 已送出持倉新增 / 更新：${stockId}。Actions 跑完後重新整理即可確認正式資料。`);
-
-  if(!ok){
-    POSITION_CACHE=oldCache;
-    renderPosition(POSITION_CACHE);
-    renderTierSummary(POSITION_CACHE);
-    renderActionSummary([],POSITION_CACHE);
-  }
-}
-
-async function submitRemovePositionInstant(stockId){
-  stockId=String(stockId||"").trim();
-  if(!stockId){setBanner("找不到要移除的股票代號","#b42318");return}
-  if(!confirm(`確定要移除持倉 ${stockId} 嗎？`))return;
-
-  const oldCache=deepClone(POSITION_CACHE);
-  POSITION_CACHE=POSITION_CACHE.filter(r=>String(r.stock_id).trim()!==stockId);
-  renderPosition(POSITION_CACHE);
-  renderTierSummary(POSITION_CACHE);
-  renderActionSummary([],POSITION_CACHE);
-  setBanner(`已先從畫面移除：${stockId}，背景同步中...`,"#2f7d32");
-
-  const ok=await dispatchWorkflow("v3_position_writeback.yml",{
-    action:"remove",
-    stock_id:stockId,
-    shares:"",
-    avg_cost:""
-  },`✅ 已送出持倉移除：${stockId}。Actions 跑完後重新整理即可確認正式資料。`);
-
-  if(!ok){
-    POSITION_CACHE=oldCache;
-    renderPosition(POSITION_CACHE);
-    renderTierSummary(POSITION_CACHE);
-    renderActionSummary([],POSITION_CACHE);
-  }
-}
-
-async function loadAll(force=false){
-  try{
-    const[meta,tradePlanRaw,position,summary,debug,chipRows]=await Promise.all([
-      fetchJSON(`${DATA_DIR}/meta.json`,force),
-      fetchCSV(`${DATA_DIR}/trade_plan.csv`,force),
-      fetchCSV(`${DATA_DIR}/position_monitor.csv`,force),
-      fetchCSV(`${DATA_DIR}/full_summary.csv`,force),
-      fetchCSV(`${DATA_DIR}/selection_debug.csv`,force),
-      fetchCSV(`${DATA_DIR}/chip_light.csv`,force).catch(()=>[])
-    ]);
-
-    const chipMap=buildChipMapV384b(chipRows);
-    const tradePlan=mergeChipIntoRowsV384b(tradePlanRaw,chipMap);
-
-    POSITION_CACHE = position;
-    restoreV384bHeaders();
-    renderMeta(meta);renderTradePlan(tradePlan);renderPosition(position);renderSummary(summary);renderDebug(debug);renderTierSummary(position);renderActionSummary(tradePlan,position);
-    if(!document.getElementById("syncBanner").textContent.includes("已送出"))setBanner("頁面資料已同步","#2f7d32");
-  }catch(err){console.error(err);setBanner(`讀取失敗：${err.message}`,"#b42318")}
-}
-
-async function fetchJSON(url,force=false){const finalUrl=force?`${url}?t=${Date.now()}`:url;const res=await fetch(finalUrl,{cache:"no-store"});if(!res.ok)throw new Error(`JSON 讀取失敗：${url}`);return await res.json()}
-async function fetchCSV(url,force=false){const finalUrl=force?`${url}?t=${Date.now()}`:url;const res=await fetch(finalUrl,{cache:"no-store"});if(!res.ok)throw new Error(`CSV 讀取失敗：${url}`);return parseCSV(await res.text())}
-
-function parseCSV(text){const cleaned=text.replace(/^\uFEFF/,"").trim();if(!cleaned)return[];const lines=cleaned.split(/\r?\n/);const headers=splitCSVLine(lines[0]).map(h=>h.trim());return lines.slice(1).filter(Boolean).map(line=>{const values=splitCSVLine(line),row={};headers.forEach((h,i)=>row[h]=(values[i]??"").trim());return row})}
-function splitCSVLine(line){const result=[];let current="",inQuotes=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){if(inQuotes&&line[i+1]==='"'){current+='"';i++}else inQuotes=!inQuotes}else if(ch===","&&!inQuotes){result.push(current);current=""}else current+=ch}result.push(current);return result}
-
-function renderMeta(meta){text("nowTime",meta.now_time||meta.generated_at||"--");text("generatedAt",meta.generated_at||"--");text("signalDate",meta.signal_date||"--");text("tradeDate",meta.trade_date||"--");text("panelDate",meta.price_panel_latest_date||"--");text("dataState",prettyDataState(meta.data_state));text("sourceName",meta.source||"--");text("writebackState",prettyWriteback(meta.position_writeback_state))}
-function renderTradePlan(rows){const body=document.getElementById("tradePlanBody");if(!rows.length){body.innerHTML=`<tr><td colspan="7" class="empty">目前沒有資料</td></tr>`;return}body.innerHTML=rows.map(r=>`<tr><td>${actionDecisionBadgeV384b(r)}</td><td>${safe(r.stock_id)}</td><td>${prettyTier(r.price_tier)}</td><td>${safe(r.ref_price)}</td><td>${safe(r.target_weight)}</td><td>${safeMoney(r.suggested_amount)}</td><td>${safe(r.note)}</td></tr>`).join("")}
-
-function renderPosition(rows){
-  const body=document.getElementById("positionBody");
-  if(!rows.length){body.innerHTML=`<tr><td colspan="10" class="empty">目前沒有持倉資料</td></tr>`;return}
-  body.innerHTML=rows.map(r=>`<tr><td>${safe(r.stock_id)}</td><td>${prettyTier(r.price_tier)}</td><td>${safe(r.ref_price)}</td><td>${safeInt(r.shares)}</td><td>${safe(r.avg_cost)}</td><td>${safePct(r.pnl_pct)}</td><td>${safe(r.target_weight)}</td><td>${badgeForAction(r.action)}</td><td>${safe(r.note)}</td><td><button class="btn-remove" data-remove-position="${safe(r.stock_id)}">移除</button></td></tr>`).join("");
-}
-
-function renderSummary(rows){const row=rows[0]||{};text("returnVal",pctDisplay(row["return"]));text("mddVal",pctDisplay(row["mdd"]));text("sharpeVal",blankDash(row["sharpe_daily"]))}
-function renderDebug(rows){const row=rows[0]||{};text("dbgTotal",blankDash(row.total_input));text("dbgValid",blankDash(row.valid_after_na));text("dbgCorePrimary",blankDash(row.core_primary_count));text("dbgAlphaPrimary",blankDash(row.alpha_primary_count));text("dbgCoreFinal",blankDash(row.core_final_count));text("dbgAlphaFinal",blankDash(row.alpha_final_count))}
-
-function renderTierSummary(positionRows){
-  const tiers={};positionRows.forEach(r=>{const key=prettyTier(r.price_tier||priceTierFromPrice(r.avg_cost)||"unknown");tiers[key]=(tiers[key]||0)+1});
-  const container=document.getElementById("tierSummary"),entries=Object.entries(tiers);
-  if(!entries.length){container.innerHTML=`<div class="tier-box"><div class="tier-label">分層狀態</div><div class="tier-value">--</div><div class="tier-sub">目前沒有持倉可展示</div></div>`;return}
-  container.innerHTML=entries.map(([k,v])=>`<div class="tier-box"><div class="tier-label">${k}</div><div class="tier-value">${v}</div><div class="tier-sub">此分層目前有 ${v} 檔持倉</div></div>`).join("");
-}
-
-function renderActionSummary(tradeRows,positionRows){
-  const buys=tradeRows.filter(r=>(r.action||"").toUpperCase()==="BUY");
-  const positionActions=positionRows.filter(r=>["ADD","REDUCE","SELL","STOP_LOSS","SYNCING"].includes((r.action||"").toUpperCase()));
-  let headline="觀察",desc="今天沒有新的買進動作";
-  if(buys.length>0){headline="偏多";desc=`今天有 ${buys.length} 檔新進場候選`}
-  else if(positionActions.length>0){headline="調整";desc=`今天有 ${positionActions.length} 筆持倉調整或同步`}
-  const totalBuyAmount=buys.reduce((acc,r)=>acc+toNum(r.suggested_amount),0);
-  const stopLossCount=positionRows.filter(r=>(r.action||"").toUpperCase()==="STOP_LOSS").length;
-  text("headlineAction",headline);text("headlineDesc",desc);text("buyCount",String(buys.length));text("buyAmount",`建議金額：${moneyDisplay(totalBuyAmount)}`);
-  text("positionActionCount",String(positionActions.length));text("positionActionDesc",positionActions.length?"請優先查看持倉監控區":"目前無加減碼");
-  text("riskLevel",stopLossCount>0?"偏高":buys.length>8?"中等":"正常");text("riskDesc",stopLossCount>0?`有 ${stopLossCount} 筆停損訊號`:"目前沒有明顯停損警示");
-}
-
-
-// ================================
-// v3.8.4b Decision Only Patch
-// 原則：不改策略、不改 CSV、不改寫回。
-// 只做：今日操作「動作欄」決策純化；拿掉籌碼狀態欄；保留備註欄。
-// ================================
-
-function restoreV384bHeaders(){
-  // 今日操作固定恢復 7 欄：動作 / 股票 / 價格分層 / 參考價格 / 目標權重 / 建議金額 / 備註
-  const tradeBody=document.getElementById("tradePlanBody");
-  const tradeTable=tradeBody?tradeBody.closest("table"):null;
-  const tradeHead=tradeTable?tradeTable.querySelector("thead tr"):null;
-  if(tradeHead){
-    const names=["動作","股票","價格分層","參考價格","目標權重","建議金額","備註"];
-    tradeHead.innerHTML=names.map(n=>`<th>${n}</th>`).join("");
+  function parseNumber(s) {
+    const n = Number(String(s || "").replace(/,/g, "").replace(/[^\d.\-]/g, ""));
+    return Number.isFinite(n) ? n : 0;
   }
 
-  // 持倉監控固定恢復原本 10 欄，不新增籌碼狀態
-  const posBody=document.getElementById("positionBody");
-  const posTable=posBody?posBody.closest("table"):null;
-  const posHead=posTable?posTable.querySelector("thead tr"):null;
-  if(posHead){
-    const names=["股票","價格分層","參考價格","股數","成本","損益%","目標權重","動作","備註","移除"];
-    posHead.innerHTML=names.map(n=>`<th>${n}</th>`).join("");
-  }
-}
-
-function buildChipMapV384b(chipRows){
-  const map={};
-  (chipRows||[]).forEach(r=>{
-    const sid=normalizeStockIdV384b(r.stock_id||r.stock||r.symbol||r.code);
-    if(!sid)return;
-    map[sid]={
-      chip_score:r.chip_score||"",
-      chip_label:r.chip_label||"",
-      vol_ratio_5:r.vol_ratio_5||"",
-      mom5:r.mom5||"",
-      mom20:r.mom20||"",
-      near_high_20:r.near_high_20||""
-    };
-  });
-  return map;
-}
-
-function mergeChipIntoRowsV384b(rows,chipMap){
-  return (rows||[]).map(r=>{
-    const sid=normalizeStockIdV384b(r.stock_id||r.stock||r.symbol||r.code);
-    const chip=chipMap[sid]||{};
-    return {...r,...chip};
-  });
-}
-
-function normalizeStockIdV384b(v){
-  return String(v??"").replace(/^\uFEFF/,"").replace(/[^\dA-Za-z]/g,"").trim();
-}
-
-function getEntryDecisionV384b(r){
-  const action=(r.action||"").toUpperCase();
-  const near=toNum(r.near_high_20);
-  const mom5=toNum(r.mom5);
-  const mom20=toNum(r.mom20);
-  const hasSignal=Number.isFinite(near)||Number.isFinite(mom5)||Number.isFinite(mom20);
-
-  if(action!=="BUY"){
-    return {display:action,label:null};
+  function getTradeTable() {
+    const body = document.getElementById("tradePlanBody");
+    if (!body) return null;
+    return body.closest("table");
   }
 
-  if(!hasSignal){
-    return {display:"WAIT",label:"買進<br>等回檔"};
+  function getTradeSection() {
+    const table = getTradeTable();
+    if (!table) return null;
+    return table.closest("section") || table.closest(".card");
   }
 
-  if(mom20>0&&mom5<0){
-    return {display:"WAIT",label:"買進<br>等止跌"};
+  function getHeaders(table) {
+    return Array.from(table.querySelectorAll("thead th")).map(th => normText(th.textContent));
   }
 
-  if((near>=0.97&&mom5>=0.03)||(near>=0.985)||(mom5>=0.08)){
-    return {display:"SKIP",label:"買進<br>尾段不追"};
+  function indexOfHeader(headers, candidates) {
+    for (const c of candidates) {
+      const i = headers.findIndex(h => h.includes(c));
+      if (i >= 0) return i;
+    }
+    return -1;
   }
 
-  if(near>=0.93||mom5>=0.05){
-    return {display:"WAIT",label:"買進<br>等回檔"};
+  function ensureFilterPanel() {
+    const section = getTradeSection();
+    if (!section) return;
+
+    if (document.getElementById("tradeplan-inline-filter-panel")) return;
+
+    const panel = document.createElement("div");
+    panel.id = "tradeplan-inline-filter-panel";
+    panel.style.cssText = [
+      "margin:12px 0 16px",
+      "padding:14px",
+      "border-radius:18px",
+      "background:#f7f8fa",
+      "border:1px solid rgba(16,24,40,.08)"
+    ].join(";");
+
+    panel.innerHTML = `
+      <div style="font-weight:900;font-size:18px;margin-bottom:10px;">🔎 價位快速篩選</div>
+      <select id="tradeplanTierFilter" style="width:100%;padding:14px;border-radius:14px;border:1px solid #d0d5dd;font-size:16px;background:#fff;">
+        <option value="ALL">全部價位</option>
+      </select>
+      <div id="tradeplanFilterHint" style="font-size:14px;color:#667085;margin-top:8px;">可依價位分層快速找股票，並在名單右側直接加入持股。</div>
+    `;
+
+    const wrap = section.querySelector(".table-wrap");
+    if (wrap) section.insertBefore(panel, wrap);
+    else section.appendChild(panel);
+
+    const sel = panel.querySelector("#tradeplanTierFilter");
+    sel.addEventListener("change", applyTierFilter);
   }
 
-  if(mom20>0&&mom5>=0&&mom5<0.05&&near<0.93){
-    return {display:"BUY",label:"買進<br>可進場"};
+  function ensureAddColumn() {
+    const table = getTradeTable();
+    if (!table) return;
+
+    const theadRow = table.querySelector("thead tr");
+    if (!theadRow) return;
+
+    const headers = getHeaders(table);
+    const hasAdd = headers.some(h => h.includes("加入持倉"));
+    if (!hasAdd) {
+      const th = document.createElement("th");
+      th.textContent = "加入持倉";
+      theadRow.appendChild(th);
+    }
   }
 
-  return {display:"WAIT",label:"買進<br>等回檔"};
-}
+  function fillTierOptions() {
+    const table = getTradeTable();
+    const sel = document.getElementById("tradeplanTierFilter");
+    if (!table || !sel) return;
 
-function actionDecisionBadgeV384b(r){
-  const action=(r.action||"").toUpperCase();
-  if(action!=="BUY")return badgeForAction(r.action);
+    const headers = getHeaders(table);
+    const tierIdx = indexOfHeader(headers, ["價格分層", "分層"]);
+    if (tierIdx < 0) return;
 
-  const d=getEntryDecisionV384b(r);
-  if(d.display==="SKIP")return `<span class="entry-display-action entry-skip">${d.label}</span>`;
-  if(d.display==="WAIT")return `<span class="entry-display-action entry-wait">${d.label}</span>`;
-  return `<span class="entry-display-action entry-buy">${d.label}</span>`;
-}
+    const rows = Array.from(document.querySelectorAll("#tradePlanBody tr"))
+      .filter(tr => !tr.querySelector(".empty"));
 
+    const tiers = Array.from(new Set(rows.map(tr => {
+      const cells = Array.from(tr.children);
+      return (cells[tierIdx] && cells[tierIdx].textContent.trim()) || "未分類";
+    }))).filter(Boolean);
 
-function badgeForAction(actionRaw){
-  const action=(actionRaw||"").toUpperCase();
-  const map={BUY:["badge-buy","買進"],HOLD:["badge-hold","持有"],SELL:["badge-sell","賣出"],ADD:["badge-add","加碼"],REDUCE:["badge-reduce","減碼"],STOP_LOSS:["badge-stop","停損"],SYNCING:["badge-watch","同步中"]};
-  const pair=map[action]||["badge-hold",safe(actionRaw)];
-  return`<span class="badge ${pair[0]}">${pair[1]}</span>`;
-}
+    const current = sel.value || "ALL";
+    sel.innerHTML = `<option value="ALL">全部價位（${rows.length}檔）</option>` +
+      tiers.map(t => {
+        const count = rows.filter(tr => {
+          const cells = Array.from(tr.children);
+          return ((cells[tierIdx] && cells[tierIdx].textContent.trim()) || "未分類") === t;
+        }).length;
+        return `<option value="${t}">${t}（${count}檔）</option>`;
+      }).join("");
 
-function upsertByStockId(rows,row){const sid=String(row.stock_id).trim();const out=rows.filter(r=>String(r.stock_id).trim()!==sid);out.push(row);return out}
-function deepClone(obj){return JSON.parse(JSON.stringify(obj||[]))}
-function priceTierFromPrice(v){const n=toNum(v);if(Number.isNaN(n))return"unknown";if(n<50)return"lt_50";if(n<100)return"p50_100";if(n<300)return"p100_300";if(n<500)return"p300_500";if(n<1000)return"p500_1000";return"gt_1000"}
+    if (Array.from(sel.options).some(o => o.value === current)) sel.value = current;
+  }
 
-function prettyTier(tier){const map={lt_50:"50以下",p50_100:"50-100",p100_300:"100-300",p300_500:"300-500",p500_1000:"500-1000",gt_1000:"1000以上",unknown:"未分類"};return map[tier]||tier||"未分類"}
-function prettyDataState(state){const map={fresh:"✅ 最新資料",ok:"✅ 正常",stale:"⚠️ 舊資料",loading:"⌛ 讀取中",idle:"待命"};return map[state]||state||"--"}
-function prettyWriteback(state){const map={idle:"待命",submitted:"已送出",syncing:"同步中",success:"已完成",failed:"失敗"};return map[state]||state||"--"}
-function pctDisplay(v){const n=toNum(v);if(Number.isNaN(n))return"--";return`${(n*100).toFixed(2)}%`}
-function safePct(v){const n=toNum(v);if(Number.isNaN(n))return"--";return`${(n*100).toFixed(2)}%`}
-function moneyDisplay(v){const n=Number(v||0);if(!Number.isFinite(n))return"0";return n.toLocaleString("zh-TW",{maximumFractionDigits:0})}
-function safeMoney(v){const n=Number(String(v||"").replace(/,/g,""));if(!Number.isFinite(n))return"--";return n.toLocaleString("zh-TW",{maximumFractionDigits:0})}
-function safeInt(v){const n=Number(String(v||"").replace(/,/g,""));if(!Number.isFinite(n))return"--";return n.toLocaleString("zh-TW",{maximumFractionDigits:0})}
-function blankDash(v){return v===undefined||v===null||v===""?"--":String(v)}
-function safe(v){return blankDash(v)}
-function toNum(v){const n=Number(String(v??"").replace(/,/g,""));return Number.isFinite(n)?n:NaN}
-function text(id,value){const el=document.getElementById(id);if(el)el.textContent=value}
-function val(id,setValue){const el=document.getElementById(id);if(!el)return"";if(typeof setValue!=="undefined")el.value=setValue;return el.value||""}
-function setBanner(text,color="#2f7d32"){const el=document.getElementById("syncBanner");if(el){el.textContent=text;el.style.color=color}}
+  function computeShares(amount, refPrice) {
+    if (!amount || !refPrice) return 1000;
+    const raw = Math.floor(amount / refPrice);
+    const lot = Math.floor(raw / 1000) * 1000;
+    return Math.max(lot, 1000);
+  }
+
+  function ensureRowButtons() {
+    const table = getTradeTable();
+    if (!table) return;
+
+    const headers = getHeaders(table);
+    const stockIdx = indexOfHeader(headers, ["股票", "stock"]);
+    const tierIdx = indexOfHeader(headers, ["價格分層", "分層"]);
+    const refIdx = indexOfHeader(headers, ["參考價格", "價格"]);
+    const amountIdx = indexOfHeader(headers, ["建議金額", "金額"]);
+
+    if (stockIdx < 0) return;
+
+    const rows = Array.from(document.querySelectorAll("#tradePlanBody tr"))
+      .filter(tr => !tr.querySelector(".empty"));
+
+    rows.forEach(tr => {
+      if (tr.dataset.v353Ready === "1") return;
+      tr.dataset.v353Ready = "1";
+
+      const cells = Array.from(tr.children);
+      const stockId = cells[stockIdx]?.textContent.trim() || "";
+      const tier = tierIdx >= 0 ? (cells[tierIdx]?.textContent.trim() || "") : "";
+      const refPrice = refIdx >= 0 ? parseNumber(cells[refIdx]?.textContent) : 0;
+      const amount = amountIdx >= 0 ? parseNumber(cells[amountIdx]?.textContent) : 0;
+      const shares = computeShares(amount, refPrice);
+
+      const td = document.createElement("td");
+      const btn = document.createElement("button");
+      btn.textContent = "加入持倉";
+      btn.style.cssText = [
+        "padding:10px 14px",
+        "border-radius:14px",
+        "border:0",
+        "background:#087443",
+        "color:#fff",
+        "font-weight:900",
+        "font-size:15px",
+        "white-space:nowrap"
+      ].join(";");
+
+      btn.addEventListener("click", function () {
+        quickFillAndSubmit({ stockId, tier, refPrice, shares });
+      });
+
+      td.appendChild(btn);
+      tr.appendChild(td);
+    });
+  }
+
+  function quickFillAndSubmit({ stockId, refPrice, shares }) {
+    const stockInput = document.getElementById("positionStockInput");
+    const sharesInput = document.getElementById("positionSharesInput");
+    const costInput = document.getElementById("positionCostInput");
+    const addBtn = document.getElementById("addPositionBtn");
+
+    if (!stockInput || !sharesInput || !costInput || !addBtn) {
+      alert("找不到持倉輸入區，請確認目前是 v3.4 版 index.html。");
+      return;
+    }
+
+    if (!stockId) {
+      alert("股票代號空白，無法加入持股。");
+      return;
+    }
+
+    if (!refPrice || refPrice <= 0) {
+      alert(`${stockId} 參考價格無效，無法自動帶入成本。`);
+      return;
+    }
+
+    stockInput.value = stockId;
+    sharesInput.value = String(shares || 1000);
+    costInput.value = String(refPrice);
+
+    const msg = `已帶入 ${stockId}｜股數 ${shares || 1000}｜成本 ${refPrice}，準備寫回持倉。`;
+    const sync = document.getElementById("syncBanner");
+    if (sync) {
+      sync.textContent = msg;
+      sync.style.color = "#2f6b2f";
+    }
+
+    addBtn.click();
+  }
+
+  function applyTierFilter() {
+    const table = getTradeTable();
+    const sel = document.getElementById("tradeplanTierFilter");
+    const hint = document.getElementById("tradeplanFilterHint");
+    if (!table || !sel) return;
+
+    const headers = getHeaders(table);
+    const tierIdx = indexOfHeader(headers, ["價格分層", "分層"]);
+    if (tierIdx < 0) return;
+
+    const want = sel.value || "ALL";
+    const rows = Array.from(document.querySelectorAll("#tradePlanBody tr"))
+      .filter(tr => !tr.querySelector(".empty"));
+
+    let shown = 0;
+    rows.forEach(tr => {
+      const cells = Array.from(tr.children);
+      const tier = (cells[tierIdx] && cells[tierIdx].textContent.trim()) || "未分類";
+      const show = want === "ALL" || tier === want;
+      tr.style.display = show ? "" : "none";
+      if (show) shown++;
+    });
+
+    if (hint) {
+      hint.textContent = want === "ALL"
+        ? `目前顯示全部 ${shown} 檔，可直接按右側「加入持倉」。`
+        : `目前顯示 ${want}：${shown} 檔，可直接按右側「加入持倉」。`;
+    }
+  }
+
+  function removeOldPanelIfExists() {
+    const old = document.getElementById("tradeplan-quick-add-panel");
+    if (old) old.remove();
+  }
+
+  function refresh() {
+    removeOldPanelIfExists();
+    ensureFilterPanel();
+    ensureAddColumn();
+    fillTierOptions();
+    ensureRowButtons();
+    applyTierFilter();
+  }
+
+  function boot() {
+    refresh();
+    new MutationObserver(() => {
+      clearTimeout(window.__v353TradeTimer);
+      window.__v353TradeTimer = setTimeout(refresh, 250);
+    }).observe(document.body, { childList: true, subtree: true });
+    console.log(`${VERSION} loaded`);
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
