@@ -1,6 +1,6 @@
 """
 decision_modules.py
-v1.0 modular decision layer
+v1.1 relaxed adaptive decision layer
 
 用途：
 - 給 v1_stable_pipeline.py 呼叫
@@ -131,10 +131,10 @@ def trend_score(row) -> tuple[int, str]:
     ma20 = safe_num(row.get("ma20"))
 
     if has_value(close) and has_value(ma20) and close > ma20:
-        score += 12
+        score += 15
         reasons.append("收盤站上MA20")
     if all(has_value(x) for x in [ma5, ma10, ma20]) and ma5 > ma10 > ma20:
-        score += 13
+        score += 15
         reasons.append("MA5>MA10>MA20")
 
     return score, "；".join(reasons) if reasons else "趨勢未確認"
@@ -152,16 +152,16 @@ def momentum_score(row) -> tuple[int, str]:
     mom20 = safe_num(row.get("mom20"))
 
     if has_value(mom5) and mom5 > 0:
-        score += 5
+        score += 8
         reasons.append("5日動能為正")
     if has_value(mom20) and mom20 > 0:
-        score += 5
+        score += 7
         reasons.append("20日動能為正")
     if all(has_value(x) for x in [kd_k, kd_d]) and kd_k > kd_d and kd_k < 85:
-        score += 5
+        score += 8
         reasons.append("KD偏多且未過熱")
     if all(has_value(x) for x in [macd_diff, macd_hist]) and macd_diff > 0 and macd_hist > 0:
-        score += 5
+        score += 7
         reasons.append("MACD偏多")
 
     return score, "；".join(reasons) if reasons else "動能不足"
@@ -221,17 +221,17 @@ def risk_penalty(row) -> tuple[int, str]:
     kd_k = safe_num(row.get("kd_k"))
     volume_ratio = safe_num(row.get("volume_ratio"))
 
-    if has_value(r5) and r5 > 0.15:
-        penalty -= 20
-        reasons.append("5日漲幅過熱")
-    if has_value(r10) and r10 > 0.25:
-        penalty -= 20
-        reasons.append("10日漲幅過熱")
-    if has_value(kd_k) and kd_k > 90:
-        penalty -= 10
-        reasons.append("KD過熱")
-    if has_value(volume_ratio) and volume_ratio > 4:
-        penalty -= 10
+    if has_value(r5) and r5 > 0.20:
+        penalty -= 15
+        reasons.append("5日漲幅偏熱")
+    if has_value(r10) and r10 > 0.30:
+        penalty -= 15
+        reasons.append("10日漲幅偏熱")
+    if has_value(kd_k) and kd_k > 92:
+        penalty -= 8
+        reasons.append("KD偏熱")
+    if has_value(volume_ratio) and volume_ratio > 5:
+        penalty -= 8
         reasons.append("爆量風險")
 
     return penalty, "；".join(reasons) if reasons else "無明顯過熱"
@@ -255,9 +255,9 @@ def entry_score(row, market_row=None) -> dict:
 
     total = ms + ts + mos + cs + rp
 
-    if total >= 80:
+    if total >= 70:
         action = "BUY"
-    elif total >= 60:
+    elif total >= 50:
         action = "WATCH"
     else:
         action = "SKIP"
