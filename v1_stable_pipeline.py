@@ -19,7 +19,7 @@ except Exception:
 
 # =========================================================
 # v1_stable_pipeline.py
-# v3.7 module decision version
+# v1.4 signal/trade date + history version
 #
 # 核心修正：
 # 1. current_positions.csv 是唯一持倉來源。
@@ -53,6 +53,10 @@ DASHBOARD_DATA_DIR = DASHBOARD_DIR / "data"
 POSITIONS_FILE = "current_positions.csv"
 WATCHLIST_FILE = "watchlist.csv"
 
+PREV_TRADE_PLAN_FILE = "prev_trade_plan.csv"
+TRADE_PLAN_HISTORY_DIR = Path("trade_plan_history")
+DASHBOARD_TRADE_PLAN_HISTORY_DIR = DASHBOARD_DATA_DIR / "trade_plan_history"
+
 
 # ---------- basic utilities ----------
 
@@ -74,6 +78,86 @@ def read_csv_auto(path):
 def write_csv(path, df):
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(path, index=False, encoding="utf-8-sig")
+
+
+def read_csv_optional(path, default_columns=None):
+    path = Path(path)
+    default_columns = default_columns or []
+    if not path.exists():
+        return pd.DataFrame(columns=default_columns)
+    try:
+        return read_csv_auto(path)
+    except Exception:
+        return pd.DataFrame(columns=default_columns)
+
+
+def load_previous_trade_plan():
+    """
+    交易節奏定義：
+    T日盤後產生 trade_plan.csv，T+1 交易。
+    pipeline 每次重跑前，先把目前已存在的 trade_plan.csv 視為「前一份交易計畫」。
+    如果根目錄 trade_plan.csv 不存在，才讀 prev_trade_plan.csv。
+    """
+    cols = [
+        "signal_date", "trade_date", "action", "stock_id", "price_tier",
+        "target_weight", "ref_price", "suggested_amount", "entry_score", "stage", "note"
+    ]
+    current = read_csv_optional("trade_plan.csv", cols)
+    if len(current):
+        return current
+    return read_csv_optional(PREV_TRADE_PLAN_FILE, cols)
+
+
+def normalize_trade_plan_for_state(prev_df):
+    if prev_df is None or prev_df.empty:
+        return pd.DataFrame(columns=[
+            "signal_date", "trade_date", "action", "stock_id", "price_tier",
+            "target_weight", "ref_price", "suggested_amount", "entry_score", "stage", "note"
+        ])
+    out = prev_df.copy()
+    out.columns = [str(c).strip().lower() for c in out.columns]
+    if "stock_id" not in out.columns:
+        if "stock" in out.columns:
+            out = out.rename(columns={"stock": "stock_id"})
+        elif "code" in out.columns:
+            out = out.rename(columns={"code": "stock_id"})
+        elif "symbol" in out.columns:
+            out = out.rename(columns={"symbol": "stock_id"})
+    if "stock_id" not in out.columns:
+        out["stock_id"] = ""
+    out["stock_id"] = out["stock_id"].apply(normalize_stock_id)
+    if "action" not in out.columns:
+        out["action"] = ""
+    out["action"] = out["action"].astype(str).str.upper().str.strip()
+    return out[out["stock_id"] != ""].drop_duplicates(subset=["stock_id"], keep="last").reset_index(drop=True)
+
+
+def save_trade_plan_state(prev_trade_df, new_trade_df, signal_date, trade_date):
+    """
+    產生三層狀態：
+    1. prev_trade_plan.csv：前一份交易計畫，給下一次策略比對。
+    2. trade_plan_history/YYYY-MM-DD.csv：以 trade_date 存檔，方便隔天直接呼叫交易清單。
+    3. dashboard/data 同步鏡像。
+    """
+    prev_norm = normalize_trade_plan_for_state(prev_trade_df)
+    if len(prev_norm):
+        write_csv(PREV_TRADE_PLAN_FILE, prev_norm)
+        write_csv(DASHBOARD_DATA_DIR / PREV_TRADE_PLAN_FILE, prev_norm)
+
+    TRADE_PLAN_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+    DASHBOARD_TRADE_PLAN_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+
+    trade_key = str(pd.Timestamp(trade_date).date())
+    signal_key = str(pd.Timestamp(signal_date).date())
+
+    # 主要用 trade_date 取檔：今天盤後產生，隔天交易。
+    write_csv(TRADE_PLAN_HISTORY_DIR / f"{trade_key}.csv", new_trade_df)
+    write_csv(DASHBOARD_TRADE_PLAN_HISTORY_DIR / f"{trade_key}.csv", new_trade_df)
+
+    # 額外保留 signal_date，方便排查當天盤後產生的訊號。
+    write_csv(TRADE_PLAN_HISTORY_DIR / f"signal_{signal_key}.csv", new_trade_df)
+    write_csv(DASHBOARD_TRADE_PLAN_HISTORY_DIR / f"signal_{signal_key}.csv", new_trade_df)
+
 
 
 def normalize_stock_id(s):
@@ -117,6 +201,8 @@ def next_business_day(ts: pd.Timestamp) -> pd.Timestamp:
 
 def ensure_dashboard_files():
     DASHBOARD_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    TRADE_PLAN_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+    DASHBOARD_TRADE_PLAN_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
 
     templates = {
         POSITIONS_FILE: ["stock_id", "shares", "avg_cost", "last_action_date", "note"],
@@ -436,12 +522,18 @@ def build_position_monitor(positions, price_map, target, signal_date, trade_date
     return pd.DataFrame(rows, columns=cols)
 
 
-def build_trade_plan(positions, price_map, target, signal_date, trade_date, signal_row_map=None):
+def build_trade_plan(positions, price_map, target, signal_date, trade_date, signal_row_map=None, prev_trade_plan=None):
     """
     trade_plan 可以出現策略新選股，但不會寫入 current_positions.csv。
     v3.7：原本策略只給候選池，是否 BUY / WATCH 改由 decision_modules.entry_score 判斷。
     """
     signal_row_map = signal_row_map or {}
+    prev_trade_plan = normalize_trade_plan_for_state(prev_trade_plan)
+    prev_map = {
+        normalize_stock_id(r.get("stock_id", "")): r
+        for _, r in prev_trade_plan.iterrows()
+        if normalize_stock_id(r.get("stock_id", ""))
+    }
     held = set(positions["stock_id"].apply(normalize_stock_id)) if len(positions) else set()
     rows = []
     for stock_id in sorted(target.keys()):
@@ -455,9 +547,30 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
         tier = price_tier_key(ref_price)
         row = signal_row_map.get(stock_id, {})
         score_info = entry_score(row, market_row=None)
-        action = score_info.get("entry_action", "SKIP")
+        raw_action = score_info.get("entry_action", "SKIP")
+        action = raw_action
         score = score_info.get("entry_score", 0)
         stage = position_stage(row)
+
+        prev_row = prev_map.get(stock_id)
+        prev_action = ""
+        prev_score = ""
+        prev_trade_date = ""
+        state_note = ""
+        if prev_row is not None:
+            prev_action = str(prev_row.get("action", "")).upper().strip()
+            prev_score = prev_row.get("entry_score", "")
+            prev_trade_date = prev_row.get("trade_date", "")
+            if prev_action == "WATCH" and score >= 80:
+                action = "BUY"
+                state_note = "昨日觀察轉今日買進"
+            elif prev_action == "BUY" and score >= 60 and raw_action != "BUY":
+                action = "WATCH"
+                state_note = "前次買進後仍在觀察區"
+            elif prev_action in ["WATCH", "BUY"] and score < 60:
+                action = "SKIP"
+                state_note = "前次名單轉弱"
+
         if action == "SKIP":
             continue
         suggested_amount = INITIAL_CAPITAL * target_weight if action == "BUY" else 0
@@ -473,9 +586,12 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
             "suggested_amount": round(suggested_amount, 2),
             "entry_score": score,
             "stage": stage,
-            "note": score_info.get("entry_reason", "模組化進場判斷"),
+            "prev_action": prev_action,
+            "prev_entry_score": prev_score,
+            "prev_trade_date": prev_trade_date,
+            "note": (state_note + "；" if state_note else "") + score_info.get("entry_reason", "模組化進場判斷"),
         })
-    cols = ["signal_date", "trade_date", "action", "stock_id", "price_tier", "target_weight", "ref_price", "suggested_amount", "entry_score", "stage", "note"]
+    cols = ["signal_date", "trade_date", "action", "stock_id", "price_tier", "target_weight", "ref_price", "suggested_amount", "entry_score", "stage", "prev_action", "prev_entry_score", "prev_trade_date", "note"]
     return pd.DataFrame(rows, columns=cols)
 
 def build_watchlist_monitor(watchlist, positions, price_map, core, alpha, signal_date, trade_date):
@@ -528,7 +644,7 @@ def build_watchlist_monitor(watchlist, positions, price_map, core, alpha, signal
     return pd.DataFrame(rows, columns=cols)
 
 
-def build_outputs(df):
+def build_outputs(df, prev_trade_plan=None):
     signal_date = latest_signal_date(df)
     trade_date = next_business_day(signal_date)
     price_panel_latest_date = signal_date
@@ -550,7 +666,7 @@ def build_outputs(df):
     target = build_target_weights(core, alpha)
     signal_row_map = {normalize_stock_id(r["stock_id"]): r for _, r in signal_df.iterrows()}
 
-    trade_df = build_trade_plan(positions, price_map, target, signal_date, trade_date, signal_row_map)
+    trade_df = build_trade_plan(positions, price_map, target, signal_date, trade_date, signal_row_map, prev_trade_plan)
     pos_df = build_position_monitor(positions, price_map, target, signal_date, trade_date, signal_row_map)
     watch_df = build_watchlist_monitor(watchlist, positions, price_map, core, alpha, signal_date, trade_date)
 
@@ -568,7 +684,10 @@ def build_outputs(df):
         "trade_date": str(trade_date.date()),
         "price_panel_latest_date": str(price_panel_latest_date.date()),
         "data_state": "fresh",
-        "source": "v3.7_module_decision",
+        "source": "v1.4_signal_trade_history",
+        "execution_rule": "T日盤後產生訊號，T+1交易",
+        "prev_trade_plan_file": PREV_TRADE_PLAN_FILE,
+        "trade_plan_history_file": f"trade_plan_history/{str(trade_date.date())}.csv",
         "trade_plan_batch": now_str,
         "position_writeback_state": "idle",
         "position_source": POSITIONS_FILE,
@@ -589,8 +708,16 @@ def write_csv_both(df, filename, write_root=True):
 def main():
     ensure_dashboard_files()
 
+    # 在覆蓋今天新 trade_plan 前，先讀取目前存在的清單作為「前一份交易計畫」。
+    prev_trade_df = load_previous_trade_plan()
+
     df = build_features(load_price())
-    trade_df, pos_df, watch_df, summary_df, debug_df, positions_df, meta = build_outputs(df)
+    trade_df, pos_df, watch_df, summary_df, debug_df, positions_df, meta = build_outputs(df, prev_trade_df)
+
+    # 保存狀態與歷史：讓系統可以呼叫前一份名單，也可以用 trade_date 找回隔天要交易的清單。
+    signal_date = pd.Timestamp(meta.get("signal_date"))
+    trade_date = pd.Timestamp(meta.get("trade_date"))
+    save_trade_plan_state(prev_trade_df, trade_df, signal_date, trade_date)
 
     # 輸出策略與監控檔
     write_csv_both(trade_df, "trade_plan.csv", write_root=True)
