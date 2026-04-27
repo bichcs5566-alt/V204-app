@@ -49,6 +49,8 @@ jobs:
 
           git add \
             trade_plan.csv \
+            prev_trade_plan.csv \
+            trade_plan_history \
             position_monitor.csv \
             watchlist_monitor.csv \
             full_summary.csv \
@@ -56,6 +58,8 @@ jobs:
             current_positions.csv \
             watchlist.csv \
             mobile_dashboard_v1/data/trade_plan.csv \
+            mobile_dashboard_v1/data/prev_trade_plan.csv \
+            mobile_dashboard_v1/data/trade_plan_history \
             mobile_dashboard_v1/data/position_monitor.csv \
             mobile_dashboard_v1/data/watchlist_monitor.csv \
             mobile_dashboard_v1/data/full_summary.csv \
