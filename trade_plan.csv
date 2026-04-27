@@ -1,1 +1,1 @@
-﻿signal_date,trade_date,action,stock_id,price_tier,target_weight,ref_price,suggested_amount,note
+﻿signal_date,trade_date,action,stock_id,price_tier,target_weight,ref_price,suggested_amount,entry_score,stage,note
