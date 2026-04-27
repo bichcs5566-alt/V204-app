@@ -109,6 +109,4 @@
 <script src="./v3_5_4_position_duplicate_guard.js"></script>
 <script src="./v3_5_5_position_writeback_preserve_guard.js"></script>
 <script src="./v3_5_6_safe_inline_add_override.js"></script>
-<script src="./v3_7_1g_chip_light_ui_patch_path_fixed.js"></script>
-<script src="./v3_7_2_chip_light_csv_position_patch.js"></script>
 </html>
