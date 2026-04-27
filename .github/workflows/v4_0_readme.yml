@@ -3,34 +3,45 @@ name: v4_auto_update
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 10 * * 1-5"   # 台灣 18:00
+    - cron: "0 10 * * 1-5"   # 台灣 18:00（UTC+8）
+
+permissions:
+  contents: write   # 🔥 關鍵：允許 push
 
 jobs:
   run-v4:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ 抓 repo
       - name: checkout repo
         uses: actions/checkout@v3
 
+      # 2️⃣ 設定 Python
       - name: setup python
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
+      # 3️⃣ 安裝套件
       - name: install packages
         run: |
           pip install pandas numpy
 
+      # 4️⃣ 執行 v4 核心策略
       - name: run v4 strategy
         run: |
           python v4_0_core_logic.py
 
+      # 5️⃣ commit & push（已修權限）
       - name: commit result
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "actions@github.com"
+
           git add mobile_dashboard_v1/data/trade_plan.csv
           git add mobile_dashboard_v1/data/selection_debug.csv
+
           git commit -m "v4 update" || echo "no changes"
+
           git push
