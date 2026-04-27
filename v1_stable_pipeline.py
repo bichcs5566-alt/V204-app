@@ -1,6 +1,7 @@
 import json
 import subprocess
 import sys
+import re
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
@@ -164,6 +165,19 @@ def normalize_stock_id(s):
     if pd.isna(s):
         return ""
     return str(s).strip().replace(".0", "")
+
+
+def is_common_stock_id(stock_id):
+    """
+    台股普通股保護濾網：
+    只保留 4 碼純數字普通股，例如 1101 / 2330 / 3037。
+    排除：
+    - 00 開頭 ETF
+    - 01 / 02 / 03 開頭權證、牛熊、槓反商品
+    - 含英文字母代號，例如 01004T / 02001L / 03003T
+    """
+    sid = normalize_stock_id(stock_id)
+    return bool(re.fullmatch(r"[1-9]\d{3}", sid))
 
 
 def to_num(v, default=np.nan):
@@ -373,7 +387,7 @@ def build_features(df):
 
 def select_stocks(day_df):
     """
-    v1.9 策略修復：三層進場 + 非ETF保底候選池
+    v1.9.1 策略修復：普通股宇宙濾網 + 三層進場
     目標：
     1. 不讓 trade_plan 完全空白。
     2. 同時保留三種入口：
@@ -399,9 +413,9 @@ def select_stocks(day_df):
     # 基礎有效資料：只要求價格與短中均線，不要過早砍掉全部
     valid = valid.dropna(subset=["close", "ma5", "ma10", "ma20"]).copy()
 
-    # v1.9：排除常見 ETF / 權證型代號，避免保底名單都是 0050 / 0062xx
-    valid["stock_id"] = valid["stock_id"].astype(str).str.strip()
-    valid = valid[~valid["stock_id"].str.match(r"^00")]
+    # v1.9.1：只保留 4 碼普通股，排除 ETF / 權證 / 槓反 / 含字母代號
+    valid["stock_id"] = valid["stock_id"].apply(normalize_stock_id)
+    valid = valid[valid["stock_id"].apply(is_common_stock_id)].copy()
     valid_count = len(valid)
 
     if valid_count == 0:
@@ -843,6 +857,8 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
 
     # ========= 正常三層進場 =========
     for stock_id in sorted(target.keys()):
+        if not is_common_stock_id(stock_id):
+            continue
         if stock_id in held:
             continue
 
@@ -906,7 +922,7 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
         fallback_items = []
         for stock_id, row in signal_row_map.items():
             stock_id = normalize_stock_id(stock_id)
-            if not stock_id or stock_id in held or stock_id.startswith("00"):
+            if not stock_id or stock_id in held or not is_common_stock_id(stock_id):
                 continue
 
             score_info = entry_score(row, market_row=None)
@@ -926,8 +942,8 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
 
         # 如果 signal_row_map 也沒有資料，最後用 price_map 補，避免完全空
         if len(fallback_items) == 0:
-            for stock_id, px in list(price_map.items())[:10]:
-                if stock_id in held:
+            for stock_id, px in [(sid, px) for sid, px in price_map.items() if is_common_stock_id(sid)][:10]:
+                if stock_id in held or not is_common_stock_id(stock_id):
                     continue
                 fallback_items.append((0, stock_id, {"close": px}, 40))
 
@@ -1039,7 +1055,7 @@ def build_outputs(df, prev_trade_plan=None):
         "trade_date": str(trade_date.date()),
         "price_panel_latest_date": str(price_panel_latest_date.date()),
         "data_state": "fresh",
-        "source": "v1.9_strategy_repair",
+        "source": "v1.9.1_common_stock_filter",
         "execution_rule": "T日盤後產生訊號，T+1交易",
         "prev_trade_plan_file": PREV_TRADE_PLAN_FILE,
         "trade_plan_history_file": f"trade_plan_history/{str(trade_date.date())}.csv",
