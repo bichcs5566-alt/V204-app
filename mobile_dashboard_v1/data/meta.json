@@ -1,14 +1,14 @@
 {
-  "generated_at": "2026-04-27 16:55:29",
-  "now_time": "2026-04-27 16:55:29",
+  "generated_at": "2026-04-27 17:02:09",
+  "now_time": "2026-04-27 17:02:09",
   "signal_date": "2026-04-27",
   "trade_date": "2026-04-28",
   "price_panel_latest_date": "2026-04-27",
   "data_state": "fresh",
   "source": "v3.6_clean_position_source",
-  "trade_plan_batch": "2026-04-27 16:55:29",
+  "trade_plan_batch": "2026-04-27 17:02:09",
   "position_writeback_state": "idle",
   "position_source": "current_positions.csv",
-  "position_count": 1,
+  "position_count": 0,
   "trade_plan_count": 0
 }
