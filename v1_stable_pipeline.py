@@ -7,9 +7,19 @@ from datetime import datetime, timezone, timedelta
 import numpy as np
 import pandas as pd
 
+try:
+    from decision_modules import add_decision_features, entry_score, position_stage
+    DECISION_MODULES_AVAILABLE = True
+except Exception:
+    DECISION_MODULES_AVAILABLE = False
+    def add_decision_features(df): return df
+    def entry_score(row, market_row=None):
+        return {"entry_score":0,"entry_action":"SKIP","market_score":0,"trend_score":0,"momentum_score":0,"chip_score":0,"risk_penalty":0,"entry_reason":"decision_modules.py 未載入"}
+    def position_stage(row): return "未載入"
+
 # =========================================================
 # v1_stable_pipeline.py
-# v3.6 clean position-source version
+# v3.7 module decision version
 #
 # 核心修正：
 # 1. current_positions.csv 是唯一持倉來源。
@@ -119,7 +129,7 @@ def ensure_dashboard_files():
         "position_monitor.csv": [
             "signal_date", "trade_date", "stock_id", "price_tier", "ref_price",
             "shares", "avg_cost", "pnl_pct", "target_weight",
-            "current_weight_est", "action", "note"
+            "current_weight_est", "stage", "action", "note"
         ],
         "watchlist_monitor.csv": [
             "signal_date", "trade_date", "stock_id", "price_tier", "ref_price",
@@ -127,7 +137,7 @@ def ensure_dashboard_files():
         ],
         "trade_plan.csv": [
             "signal_date", "trade_date", "action", "stock_id", "price_tier",
-            "target_weight", "ref_price", "suggested_amount", "note"
+            "target_weight", "ref_price", "suggested_amount", "entry_score", "stage", "note"
         ],
         "full_summary.csv": ["return", "mdd", "sharpe_daily"],
     }
@@ -266,6 +276,7 @@ def build_features(df):
     df["mom20"] = g["close"].pct_change(20)
     df["mom60"] = g["close"].pct_change(60)
     df["vol20"] = g["ret1"].rolling(20).std().reset_index(level=0, drop=True)
+    df = add_decision_features(df)
     return df
 
 
@@ -350,10 +361,11 @@ def latest_signal_date(df):
 
 # ---------- outputs ----------
 
-def build_position_monitor(positions, price_map, target, signal_date, trade_date):
+def build_position_monitor(positions, price_map, target, signal_date, trade_date, signal_row_map=None):
     """
     鐵規則：position_monitor.csv 只能包含 current_positions.csv 裡存在的股票。
     """
+    signal_row_map = signal_row_map or {}
     rows = []
 
     for _, current in positions.iterrows():
@@ -375,6 +387,9 @@ def build_position_monitor(positions, price_map, target, signal_date, trade_date
 
         current_value = shares * px_raw if pd.notna(shares) and pd.notna(px_raw) else np.nan
         current_weight_est = current_value / INITIAL_CAPITAL if pd.notna(current_value) else np.nan
+
+        row = signal_row_map.get(stock_id, {})
+        stage = position_stage(row)
 
         if pd.notna(pnl_pct) and pnl_pct <= STOP_LOSS_2:
             action = "STOP_LOSS"
@@ -408,6 +423,7 @@ def build_position_monitor(positions, price_map, target, signal_date, trade_date
             "pnl_pct": round(pnl_pct, 4) if pd.notna(pnl_pct) else "",
             "target_weight": round(target_weight, 4),
             "current_weight_est": round(current_weight_est, 4) if pd.notna(current_weight_est) else "",
+            "stage": stage,
             "action": action,
             "note": note,
         })
@@ -415,48 +431,52 @@ def build_position_monitor(positions, price_map, target, signal_date, trade_date
     cols = [
         "signal_date", "trade_date", "stock_id", "price_tier", "ref_price",
         "shares", "avg_cost", "pnl_pct", "target_weight",
-        "current_weight_est", "action", "note"
+        "current_weight_est", "stage", "action", "note"
     ]
     return pd.DataFrame(rows, columns=cols)
 
 
-def build_trade_plan(positions, price_map, target, signal_date, trade_date):
+def build_trade_plan(positions, price_map, target, signal_date, trade_date, signal_row_map=None):
     """
     trade_plan 可以出現策略新選股，但不會寫入 current_positions.csv。
+    v3.7：原本策略只給候選池，是否 BUY / WATCH 改由 decision_modules.entry_score 判斷。
     """
+    signal_row_map = signal_row_map or {}
     held = set(positions["stock_id"].apply(normalize_stock_id)) if len(positions) else set()
     rows = []
-
     for stock_id in sorted(target.keys()):
         if stock_id in held:
             continue
-
         target_weight = float(target.get(stock_id, 0))
         if target_weight <= 0:
             continue
-
         px_raw = price_map.get(stock_id, np.nan)
         ref_price = px_raw * (1 + SLIPPAGE) if pd.notna(px_raw) else np.nan
         tier = price_tier_key(ref_price)
-
+        row = signal_row_map.get(stock_id, {})
+        score_info = entry_score(row, market_row=None)
+        action = score_info.get("entry_action", "SKIP")
+        score = score_info.get("entry_score", 0)
+        stage = position_stage(row)
+        if action == "SKIP":
+            continue
+        suggested_amount = INITIAL_CAPITAL * target_weight if action == "BUY" else 0
+        final_weight = target_weight if action == "BUY" else 0
         rows.append({
             "signal_date": str(signal_date.date()),
             "trade_date": str(trade_date.date()),
-            "action": "BUY",
+            "action": action,
             "stock_id": stock_id,
             "price_tier": tier,
-            "target_weight": round(target_weight, 4),
+            "target_weight": round(final_weight, 4),
             "ref_price": round(ref_price, 4) if pd.notna(ref_price) else "",
-            "suggested_amount": round(INITIAL_CAPITAL * target_weight, 2),
-            "note": "新進場候選；需人工確認後下單",
+            "suggested_amount": round(suggested_amount, 2),
+            "entry_score": score,
+            "stage": stage,
+            "note": score_info.get("entry_reason", "模組化進場判斷"),
         })
-
-    cols = [
-        "signal_date", "trade_date", "action", "stock_id", "price_tier",
-        "target_weight", "ref_price", "suggested_amount", "note"
-    ]
+    cols = ["signal_date", "trade_date", "action", "stock_id", "price_tier", "target_weight", "ref_price", "suggested_amount", "entry_score", "stage", "note"]
     return pd.DataFrame(rows, columns=cols)
-
 
 def build_watchlist_monitor(watchlist, positions, price_map, core, alpha, signal_date, trade_date):
     held = set(positions["stock_id"].apply(normalize_stock_id)) if len(positions) else set()
@@ -528,9 +548,10 @@ def build_outputs(df):
 
     core, alpha, debug = select_stocks(signal_df)
     target = build_target_weights(core, alpha)
+    signal_row_map = {normalize_stock_id(r["stock_id"]): r for _, r in signal_df.iterrows()}
 
-    trade_df = build_trade_plan(positions, price_map, target, signal_date, trade_date)
-    pos_df = build_position_monitor(positions, price_map, target, signal_date, trade_date)
+    trade_df = build_trade_plan(positions, price_map, target, signal_date, trade_date, signal_row_map)
+    pos_df = build_position_monitor(positions, price_map, target, signal_date, trade_date, signal_row_map)
     watch_df = build_watchlist_monitor(watchlist, positions, price_map, core, alpha, signal_date, trade_date)
 
     summary = pd.DataFrame([{
@@ -547,12 +568,13 @@ def build_outputs(df):
         "trade_date": str(trade_date.date()),
         "price_panel_latest_date": str(price_panel_latest_date.date()),
         "data_state": "fresh",
-        "source": "v3.6_clean_position_source",
+        "source": "v3.7_module_decision",
         "trade_plan_batch": now_str,
         "position_writeback_state": "idle",
         "position_source": POSITIONS_FILE,
         "position_count": int(len(positions)),
         "trade_plan_count": int(len(trade_df)),
+        "decision_modules_available": bool(DECISION_MODULES_AVAILABLE),
     }
 
     return trade_df, pos_df, watch_df, summary, debug, positions, meta
@@ -594,7 +616,7 @@ def main():
     (DASHBOARD_DATA_DIR / "meta.json").write_text(meta_text, encoding="utf-8")
     Path("meta.json").write_text(meta_text, encoding="utf-8")
 
-    print("完成 v3.6 clean position-source pipeline")
+    print("完成 v3.7 module decision pipeline")
     print(meta_text)
 
 
