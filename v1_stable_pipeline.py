@@ -7,10 +7,18 @@ from datetime import datetime, timezone, timedelta
 import numpy as np
 import pandas as pd
 
-# ==========================================
+# =========================================================
 # v1_stable_pipeline.py
-# 完整改修可覆蓋版（整合目前修正）
-# ==========================================
+# v3.6 clean position-source version
+#
+# 核心修正：
+# 1. current_positions.csv 是唯一持倉來源。
+# 2. position_monitor.csv 只能由 current_positions.csv 產生。
+# 3. 策略可以產生 trade_plan.csv，但不能自動復活持倉。
+# 4. dashboard/data/current_positions.csv 只做同步鏡像，不再優先讀取。
+#
+# 可直接覆蓋 repo 根目錄的 v1_stable_pipeline.py
+# =========================================================
 
 CORE_WEIGHT = 0.75
 ALPHA_WEIGHT = 0.25
@@ -36,18 +44,39 @@ POSITIONS_FILE = "current_positions.csv"
 WATCHLIST_FILE = "watchlist.csv"
 
 
+# ---------- basic utilities ----------
+
 def now_taipei():
     tz = timezone(timedelta(hours=8))
     return datetime.now(tz)
 
 
 def read_csv_auto(path):
+    path = Path(path)
     for enc in ["utf-8-sig", "utf-8", "cp950", "big5"]:
         try:
             return pd.read_csv(path, encoding=enc)
         except Exception:
             continue
     return pd.read_csv(path)
+
+
+def write_csv(path, df):
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(path, index=False, encoding="utf-8-sig")
+
+
+def normalize_stock_id(s):
+    if pd.isna(s):
+        return ""
+    return str(s).strip().replace(".0", "")
+
+
+def to_num(v, default=np.nan):
+    n = pd.to_numeric(v, errors="coerce")
+    if pd.isna(n):
+        return default
+    return n
 
 
 def price_tier_key(price):
@@ -74,12 +103,14 @@ def next_business_day(ts: pd.Timestamp) -> pd.Timestamp:
     return d
 
 
+# ---------- file bootstrap ----------
+
 def ensure_dashboard_files():
     DASHBOARD_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     templates = {
-        "current_positions.csv": ["stock_id", "shares", "avg_cost", "last_action_date", "note"],
-        "watchlist.csv": ["stock_id"],
+        POSITIONS_FILE: ["stock_id", "shares", "avg_cost", "last_action_date", "note"],
+        WATCHLIST_FILE: ["stock_id"],
         "selection_debug.csv": [
             "date", "total_input", "valid_after_na",
             "core_primary_count", "alpha_primary_count",
@@ -102,9 +133,20 @@ def ensure_dashboard_files():
     }
 
     for name, cols in templates.items():
-        path = DASHBOARD_DATA_DIR / name
-        if not path.exists():
-            pd.DataFrame(columns=cols).to_csv(path, index=False, encoding="utf-8-sig")
+        root_path = Path(name)
+        dash_path = DASHBOARD_DATA_DIR / name
+
+        # root current_positions.csv / watchlist.csv 是主要來源；如果沒有才建立空檔。
+        if name in [POSITIONS_FILE, WATCHLIST_FILE]:
+            if not root_path.exists():
+                write_csv(root_path, pd.DataFrame(columns=cols))
+            if not dash_path.exists():
+                write_csv(dash_path, pd.DataFrame(columns=cols))
+        else:
+            if not root_path.exists():
+                write_csv(root_path, pd.DataFrame(columns=cols))
+            if not dash_path.exists():
+                write_csv(dash_path, pd.DataFrame(columns=cols))
 
     meta = DASHBOARD_DATA_DIR / "meta.json"
     if not meta.exists():
@@ -127,6 +169,8 @@ def ensure_price_panel():
         raise FileNotFoundError(f"執行 {MERGE_SCRIPT} 後仍找不到 {PRICE_PANEL_FILE}")
 
 
+# ---------- data loading ----------
+
 def load_price():
     ensure_price_panel()
     df = read_csv_auto(PRICE_PANEL_FILE)
@@ -146,22 +190,74 @@ def load_price():
 
     if "stock_id" not in df.columns:
         raise ValueError("price_panel_daily.csv 缺少 stock_id 欄位")
-
     if "close" not in df.columns:
         raise ValueError("price_panel_daily.csv 缺少 close 欄位")
-
     if "volume" not in df.columns:
         df["volume"] = np.nan
 
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     df["close"] = pd.to_numeric(df["close"], errors="coerce")
     df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
-    df["stock_id"] = df["stock_id"].astype(str).str.strip()
+    df["stock_id"] = df["stock_id"].apply(normalize_stock_id)
 
     df = df.dropna(subset=["date", "stock_id", "close"]).copy()
-    df = df[df["close"] > 0].sort_values(["stock_id", "date"]).reset_index(drop=True)
+    df = df[(df["stock_id"] != "") & (df["close"] > 0)]
+    df = df.sort_values(["stock_id", "date"]).reset_index(drop=True)
     return df
 
+
+def load_positions():
+    """
+    v3.6 關鍵修正：
+    root/current_positions.csv 是唯一真實來源。
+    mobile_dashboard_v1/data/current_positions.csv 只能當顯示鏡像，不能優先讀。
+    """
+    root_path = Path(POSITIONS_FILE)
+
+    if not root_path.exists():
+        return pd.DataFrame(columns=["stock_id", "shares", "avg_cost", "last_action_date", "note"])
+
+    pos = read_csv_auto(root_path)
+    pos.columns = [str(c).lower().strip() for c in pos.columns]
+
+    if "stock_id" not in pos.columns:
+        return pd.DataFrame(columns=["stock_id", "shares", "avg_cost", "last_action_date", "note"])
+
+    for col in ["shares", "avg_cost", "last_action_date", "note"]:
+        if col not in pos.columns:
+            pos[col] = ""
+
+    pos["stock_id"] = pos["stock_id"].apply(normalize_stock_id)
+    pos = pos[pos["stock_id"] != ""].copy()
+
+    pos["shares"] = pd.to_numeric(pos["shares"], errors="coerce").fillna(DEFAULT_SHARES)
+    pos["avg_cost"] = pd.to_numeric(pos["avg_cost"], errors="coerce")
+
+    # 同一股票只保留最後一筆，避免重複列造成前端看似刪不掉。
+    pos = pos.drop_duplicates(subset=["stock_id"], keep="last")
+
+    return pos[["stock_id", "shares", "avg_cost", "last_action_date", "note"]].reset_index(drop=True)
+
+
+def load_watchlist():
+    root_path = Path(WATCHLIST_FILE)
+    dash_path = DASHBOARD_DATA_DIR / WATCHLIST_FILE
+    path = root_path if root_path.exists() else dash_path
+
+    if not path.exists():
+        return set()
+
+    try:
+        df = read_csv_auto(path)
+        df.columns = [str(c).lower().strip() for c in df.columns]
+        if "stock_id" not in df.columns:
+            return set()
+        return set(df["stock_id"].apply(normalize_stock_id).replace("", np.nan).dropna())
+    except Exception:
+        return set()
+
+
+# ---------- strategy ----------
 
 def build_features(df):
     g = df.groupby("stock_id")
@@ -240,48 +336,9 @@ def build_target_weights(core, alpha):
         target[r["stock_id"]] = target.get(r["stock_id"], 0) + ALPHA_WEIGHT / alpha_n
 
     for k in list(target.keys()):
-        target[k] = min(target[k], MAX_POSITION_WEIGHT)
+        target[k] = min(float(target[k]), MAX_POSITION_WEIGHT)
 
     return target
-
-
-def load_positions():
-    preferred = DASHBOARD_DATA_DIR / "current_positions.csv"
-    root_path = Path(POSITIONS_FILE)
-    src = preferred if preferred.exists() else root_path
-
-    if not src.exists():
-        return pd.DataFrame(columns=["stock_id", "shares", "avg_cost", "last_action_date", "note"])
-
-    pos = read_csv_auto(src)
-    pos.columns = [str(c).lower().strip() for c in pos.columns]
-
-    for col in ["shares", "avg_cost", "last_action_date", "note"]:
-        if col not in pos.columns:
-            pos[col] = ""
-
-    pos["stock_id"] = pos["stock_id"].astype(str).str.strip()
-    pos["shares"] = pd.to_numeric(pos["shares"], errors="coerce").fillna(DEFAULT_SHARES)
-    pos["avg_cost"] = pd.to_numeric(pos["avg_cost"], errors="coerce")
-
-    return pos[["stock_id", "shares", "avg_cost", "last_action_date", "note"]]
-
-
-def load_watchlist():
-    path = DASHBOARD_DATA_DIR / "watchlist.csv"
-    if not path.exists():
-        path = Path(WATCHLIST_FILE)
-
-    if not path.exists():
-        return set()
-
-    try:
-        df = read_csv_auto(path)
-        if "stock_id" not in df.columns:
-            return set()
-        return set(df["stock_id"].astype(str).str.strip())
-    except Exception:
-        return set()
 
 
 def latest_signal_date(df):
@@ -289,6 +346,166 @@ def latest_signal_date(df):
     if not dates:
         raise ValueError("交易日不足，無法產生訊號")
     return pd.Timestamp(dates[-1]).normalize()
+
+
+# ---------- outputs ----------
+
+def build_position_monitor(positions, price_map, target, signal_date, trade_date):
+    """
+    鐵規則：position_monitor.csv 只能包含 current_positions.csv 裡存在的股票。
+    """
+    rows = []
+
+    for _, current in positions.iterrows():
+        stock_id = normalize_stock_id(current.get("stock_id", ""))
+        if not stock_id:
+            continue
+
+        px_raw = price_map.get(stock_id, np.nan)
+        ref_price = px_raw * (1 + SLIPPAGE) if pd.notna(px_raw) else np.nan
+        tier = price_tier_key(ref_price)
+
+        shares = to_num(current.get("shares"), DEFAULT_SHARES)
+        avg_cost = to_num(current.get("avg_cost"), np.nan)
+        target_weight = float(target.get(stock_id, 0))
+
+        pnl_pct = np.nan
+        if pd.notna(px_raw) and pd.notna(avg_cost) and float(avg_cost) > 0:
+            pnl_pct = px_raw / avg_cost - 1.0
+
+        current_value = shares * px_raw if pd.notna(shares) and pd.notna(px_raw) else np.nan
+        current_weight_est = current_value / INITIAL_CAPITAL if pd.notna(current_value) else np.nan
+
+        if pd.notna(pnl_pct) and pnl_pct <= STOP_LOSS_2:
+            action = "STOP_LOSS"
+            note = "達停損條件"
+        elif target_weight <= 0:
+            action = "SELL"
+            note = "不在目標池"
+        elif pd.notna(current_weight_est):
+            diff = target_weight - current_weight_est
+            if diff > BUY_BAND:
+                action = "ADD"
+                note = "低於目標權重"
+            elif diff < REDUCE_BAND:
+                action = "REDUCE"
+                note = "高於目標權重"
+            else:
+                action = "HOLD"
+                note = "權重在容許範圍"
+        else:
+            action = "HOLD"
+            note = "缺少目前權重"
+
+        rows.append({
+            "signal_date": str(signal_date.date()),
+            "trade_date": str(trade_date.date()),
+            "stock_id": stock_id,
+            "price_tier": tier,
+            "ref_price": round(ref_price, 4) if pd.notna(ref_price) else "",
+            "shares": int(shares) if pd.notna(shares) else DEFAULT_SHARES,
+            "avg_cost": round(avg_cost, 4) if pd.notna(avg_cost) else "",
+            "pnl_pct": round(pnl_pct, 4) if pd.notna(pnl_pct) else "",
+            "target_weight": round(target_weight, 4),
+            "current_weight_est": round(current_weight_est, 4) if pd.notna(current_weight_est) else "",
+            "action": action,
+            "note": note,
+        })
+
+    cols = [
+        "signal_date", "trade_date", "stock_id", "price_tier", "ref_price",
+        "shares", "avg_cost", "pnl_pct", "target_weight",
+        "current_weight_est", "action", "note"
+    ]
+    return pd.DataFrame(rows, columns=cols)
+
+
+def build_trade_plan(positions, price_map, target, signal_date, trade_date):
+    """
+    trade_plan 可以出現策略新選股，但不會寫入 current_positions.csv。
+    """
+    held = set(positions["stock_id"].apply(normalize_stock_id)) if len(positions) else set()
+    rows = []
+
+    for stock_id in sorted(target.keys()):
+        if stock_id in held:
+            continue
+
+        target_weight = float(target.get(stock_id, 0))
+        if target_weight <= 0:
+            continue
+
+        px_raw = price_map.get(stock_id, np.nan)
+        ref_price = px_raw * (1 + SLIPPAGE) if pd.notna(px_raw) else np.nan
+        tier = price_tier_key(ref_price)
+
+        rows.append({
+            "signal_date": str(signal_date.date()),
+            "trade_date": str(trade_date.date()),
+            "action": "BUY",
+            "stock_id": stock_id,
+            "price_tier": tier,
+            "target_weight": round(target_weight, 4),
+            "ref_price": round(ref_price, 4) if pd.notna(ref_price) else "",
+            "suggested_amount": round(INITIAL_CAPITAL * target_weight, 2),
+            "note": "新進場候選；需人工確認後下單",
+        })
+
+    cols = [
+        "signal_date", "trade_date", "action", "stock_id", "price_tier",
+        "target_weight", "ref_price", "suggested_amount", "note"
+    ]
+    return pd.DataFrame(rows, columns=cols)
+
+
+def build_watchlist_monitor(watchlist, positions, price_map, core, alpha, signal_date, trade_date):
+    held = set(positions["stock_id"].apply(normalize_stock_id)) if len(positions) else set()
+    core_set = set(core["stock_id"].apply(normalize_stock_id)) if len(core) else set()
+    alpha_set = set(alpha["stock_id"].apply(normalize_stock_id)) if len(alpha) else set()
+    avg_cost_map = positions.set_index("stock_id")["avg_cost"].to_dict() if len(positions) else {}
+
+    rows = []
+    for stock_id in sorted(watchlist):
+        px_raw = price_map.get(stock_id, np.nan)
+        ref_price = px_raw * (1 + SLIPPAGE) if pd.notna(px_raw) else np.nan
+        tier = price_tier_key(ref_price)
+
+        bucket = "NONE"
+        if stock_id in alpha_set:
+            bucket = "BUY_READY"
+        elif stock_id in core_set:
+            bucket = "CANDIDATE"
+
+        action = "WATCH"
+        if stock_id in held:
+            action = "HOLD_MONITOR"
+        elif stock_id in alpha_set:
+            action = "BUY_READY"
+        elif stock_id in core_set:
+            action = "CANDIDATE"
+
+        pnl_pct = np.nan
+        avg_cost = avg_cost_map.get(stock_id, np.nan)
+        if pd.notna(px_raw) and pd.notna(avg_cost) and float(avg_cost) > 0:
+            pnl_pct = px_raw / avg_cost - 1.0
+
+        rows.append({
+            "signal_date": str(signal_date.date()),
+            "trade_date": str(trade_date.date()),
+            "stock_id": stock_id,
+            "price_tier": tier,
+            "ref_price": round(ref_price, 4) if pd.notna(ref_price) else "",
+            "holding_status": "已持有" if stock_id in held else "未持有",
+            "strategy_bucket": bucket,
+            "action": action,
+            "pnl_pct": round(pnl_pct, 4) if pd.notna(pnl_pct) else "",
+        })
+
+    cols = [
+        "signal_date", "trade_date", "stock_id", "price_tier", "ref_price",
+        "holding_status", "strategy_bucket", "action", "pnl_pct"
+    ]
+    return pd.DataFrame(rows, columns=cols)
 
 
 def build_outputs(df):
@@ -304,121 +521,22 @@ def build_outputs(df):
         .tail(1)
         .copy()
     )
-    price_map = {r["stock_id"]: r["close"] for _, r in latest_close_df.iterrows()}
+    price_map = {normalize_stock_id(r["stock_id"]): r["close"] for _, r in latest_close_df.iterrows()}
 
     positions = load_positions()
-    pos_map = positions.set_index("stock_id").to_dict("index") if len(positions) else {}
     watchlist = load_watchlist()
 
     core, alpha, debug = select_stocks(signal_df)
     target = build_target_weights(core, alpha)
 
-    core_set = set(core["stock_id"])
-    alpha_set = set(alpha["stock_id"])
-    all_symbols = sorted(set(target.keys()) | set(pos_map.keys()) | watchlist)
-
-    trade_rows = []
-    pos_rows = []
-    watch_rows = []
-
-    for stock_id in all_symbols:
-        px_raw = price_map.get(stock_id, np.nan)
-        ref_price = px_raw * (1 + SLIPPAGE) if pd.notna(px_raw) else np.nan
-        tier = price_tier_key(ref_price)
-
-        target_weight = float(target.get(stock_id, 0))
-        current = pos_map.get(stock_id, {})
-        shares = current.get("shares", DEFAULT_SHARES)
-        avg_cost = current.get("avg_cost", np.nan)
-
-        pnl_pct = np.nan
-        if pd.notna(px_raw) and pd.notna(avg_cost) and float(avg_cost) > 0:
-            pnl_pct = px_raw / avg_cost - 1.0
-
-        current_value = shares * px_raw if pd.notna(shares) and pd.notna(px_raw) else np.nan
-        current_weight_est = current_value / INITIAL_CAPITAL if pd.notna(current_value) else np.nan
-
-        if stock_id in pos_map:
-            if pd.notna(pnl_pct) and pnl_pct <= STOP_LOSS_2:
-                action = "STOP_LOSS"
-                note = "達停損條件"
-            elif target_weight <= 0:
-                action = "SELL"
-                note = "不在目標池"
-            elif pd.notna(current_weight_est):
-                diff = target_weight - current_weight_est
-                if diff > BUY_BAND:
-                    action = "ADD"
-                    note = "低於目標權重"
-                elif diff < REDUCE_BAND:
-                    action = "REDUCE"
-                    note = "高於目標權重"
-                else:
-                    action = "HOLD"
-                    note = "權重在容許範圍"
-            else:
-                action = "HOLD"
-                note = "缺少目前權重"
-
-            pos_rows.append({
-                "signal_date": str(signal_date.date()),
-                "trade_date": str(trade_date.date()),
-                "stock_id": stock_id,
-                "price_tier": tier,
-                "ref_price": round(ref_price, 4) if pd.notna(ref_price) else "",
-                "shares": int(shares) if pd.notna(shares) else DEFAULT_SHARES,
-                "avg_cost": round(avg_cost, 4) if pd.notna(avg_cost) else "",
-                "pnl_pct": round(pnl_pct, 4) if pd.notna(pnl_pct) else "",
-                "target_weight": round(target_weight, 4),
-                "current_weight_est": round(current_weight_est, 4) if pd.notna(current_weight_est) else "",
-                "action": action,
-                "note": note
-            })
-
-        elif target_weight > 0:
-            trade_rows.append({
-                "signal_date": str(signal_date.date()),
-                "trade_date": str(trade_date.date()),
-                "action": "BUY",
-                "stock_id": stock_id,
-                "price_tier": tier,
-                "target_weight": round(target_weight, 4),
-                "ref_price": round(ref_price, 4) if pd.notna(ref_price) else "",
-                "suggested_amount": round(INITIAL_CAPITAL * target_weight, 2),
-                "note": "新進場"
-            })
-
-        if stock_id in watchlist:
-            bucket = "NONE"
-            if stock_id in core_set:
-                bucket = "CANDIDATE"
-            elif stock_id in alpha_set:
-                bucket = "BUY_READY"
-
-            watch_action = "WATCH"
-            if stock_id in pos_map:
-                watch_action = "HOLD_MONITOR"
-            elif stock_id in alpha_set:
-                watch_action = "BUY_READY"
-            elif stock_id in core_set:
-                watch_action = "CANDIDATE"
-
-            watch_rows.append({
-                "signal_date": str(signal_date.date()),
-                "trade_date": str(trade_date.date()),
-                "stock_id": stock_id,
-                "price_tier": tier,
-                "ref_price": round(ref_price, 4) if pd.notna(ref_price) else "",
-                "holding_status": "已持有" if stock_id in pos_map else "未持有",
-                "strategy_bucket": bucket,
-                "action": watch_action,
-                "pnl_pct": round(pnl_pct, 4) if pd.notna(pnl_pct) else ""
-            })
+    trade_df = build_trade_plan(positions, price_map, target, signal_date, trade_date)
+    pos_df = build_position_monitor(positions, price_map, target, signal_date, trade_date)
+    watch_df = build_watchlist_monitor(watchlist, positions, price_map, core, alpha, signal_date, trade_date)
 
     summary = pd.DataFrame([{
         "return": 0,
         "mdd": 0,
-        "sharpe_daily": 0
+        "sharpe_daily": 0,
     }])
 
     now_str = now_taipei().strftime("%Y-%m-%d %H:%M:%S")
@@ -429,56 +547,54 @@ def build_outputs(df):
         "trade_date": str(trade_date.date()),
         "price_panel_latest_date": str(price_panel_latest_date.date()),
         "data_state": "fresh",
-        "source": "v2.8_real_market_auto",
+        "source": "v3.6_clean_position_source",
         "trade_plan_batch": now_str,
-        "position_writeback_state": "idle"
+        "position_writeback_state": "idle",
+        "position_source": POSITIONS_FILE,
+        "position_count": int(len(positions)),
+        "trade_plan_count": int(len(trade_df)),
     }
 
-    return (
-        pd.DataFrame(trade_rows),
-        pd.DataFrame(pos_rows),
-        pd.DataFrame(watch_rows),
-        summary,
-        debug,
-        positions,
-        meta,
-    )
+    return trade_df, pos_df, watch_df, summary, debug, positions, meta
 
 
-def write_csv_both(df, filename, write_root=False):
-    dashboard_path = DASHBOARD_DATA_DIR / filename
-    df.to_csv(dashboard_path, index=False, encoding="utf-8-sig")
-
+def write_csv_both(df, filename, write_root=True):
     if write_root:
-        df.to_csv(filename, index=False, encoding="utf-8-sig")
+        write_csv(filename, df)
+    write_csv(DASHBOARD_DATA_DIR / filename, df)
 
 
 def main():
     ensure_dashboard_files()
 
     df = build_features(load_price())
-    (
-        trade_df,
-        pos_df,
-        watch_df,
-        summary_df,
-        debug_df,
-        positions_df,
-        meta
-    ) = build_outputs(df)
+    trade_df, pos_df, watch_df, summary_df, debug_df, positions_df, meta = build_outputs(df)
 
+    # 輸出策略與監控檔
     write_csv_both(trade_df, "trade_plan.csv", write_root=True)
     write_csv_both(pos_df, "position_monitor.csv", write_root=True)
     write_csv_both(watch_df, "watchlist_monitor.csv", write_root=True)
     write_csv_both(summary_df, "full_summary.csv", write_root=True)
     write_csv_both(debug_df, "selection_debug.csv", write_root=True)
-    write_csv_both(positions_df, "current_positions.csv", write_root=True)
+
+    # v3.6：root current_positions.csv 是唯一來源；這裡只做鏡像同步，不讓 dashboard 舊檔反寫回 root。
+    write_csv(POSITIONS_FILE, positions_df)
+    write_csv(DASHBOARD_DATA_DIR / POSITIONS_FILE, positions_df)
+
+    # watchlist 也同步鏡像，避免 dashboard 顯示舊資料。
+    watch_root = Path(WATCHLIST_FILE)
+    if watch_root.exists():
+        try:
+            watch_df_raw = read_csv_auto(watch_root)
+            write_csv(DASHBOARD_DATA_DIR / WATCHLIST_FILE, watch_df_raw)
+        except Exception:
+            pass
 
     meta_text = json.dumps(meta, ensure_ascii=False, indent=2)
     (DASHBOARD_DATA_DIR / "meta.json").write_text(meta_text, encoding="utf-8")
     Path("meta.json").write_text(meta_text, encoding="utf-8")
 
-    print("完成 v1_stable_pipeline 完整改修版")
+    print("完成 v3.6 clean position-source pipeline")
     print(meta_text)
 
 
