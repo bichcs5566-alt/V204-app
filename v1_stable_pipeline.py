@@ -758,8 +758,10 @@ def normalize_watch_grade(action, score):
 
 def build_trade_plan(positions, price_map, target, signal_date, trade_date, signal_row_map=None, prev_trade_plan=None):
     """
-    trade_plan 可以出現策略新選股，但不會寫入 current_positions.csv。
-    v3.7：原本策略只給候選池，是否 BUY / WATCH 改由 decision_modules.entry_score 判斷。
+    v1.8.1 永不空名單版：
+    - 先照 v1.8 三層進場邏輯產生 BUY / TEST / READY。
+    - 如果全部被 entry_score 擋掉，啟動 fallback，至少保留 10 檔 READY。
+    - trade_plan.csv 不再只剩 header。
     """
     signal_row_map = signal_row_map or {}
     prev_trade_plan = normalize_trade_plan_for_state(prev_trade_plan)
@@ -768,75 +770,44 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
         for _, r in prev_trade_plan.iterrows()
         if normalize_stock_id(r.get("stock_id", ""))
     }
+
     held = set(positions["stock_id"].apply(normalize_stock_id)) if len(positions) else set()
     rows = []
-    for stock_id in sorted(target.keys()):
-        if stock_id in held:
-            continue
-        target_weight = float(target.get(stock_id, 0))
-        if target_weight <= 0:
-            continue
+
+    cols = [
+        "signal_date", "trade_date", "action", "action_label", "action_sub", "raw_action",
+        "stock_id", "price_tier", "target_weight", "ref_price", "suggested_amount",
+        "entry_score", "stage", "prev_action", "prev_entry_score", "prev_trade_date",
+        "note", "detail_note"
+    ]
+
+    def append_trade_row(stock_id, action, score, row, target_weight, state_note="", prev_action="", prev_score="", prev_trade_date="", fallback=False):
         px_raw = price_map.get(stock_id, np.nan)
         ref_price = px_raw * (1 + SLIPPAGE) if pd.notna(px_raw) else np.nan
         tier = price_tier_key(ref_price)
-        row = signal_row_map.get(stock_id, {})
-        score_info = entry_score(row, market_row=None)
-        raw_action = score_info.get("entry_action", "SKIP")
-        action = raw_action
-        score = score_info.get("entry_score", 0)
         stage = position_stage(row)
 
-        prev_row = prev_map.get(stock_id)
-        prev_action = ""
-        prev_score = ""
-        prev_trade_date = ""
-        state_note = ""
-        if prev_row is not None:
-            prev_action = str(prev_row.get("action", "")).upper().strip()
-            prev_score = prev_row.get("entry_score", "")
-            prev_trade_date = prev_row.get("trade_date", "")
-            if prev_action == "WATCH" and score >= 70:
-                action = "BUY"
-                state_note = "昨日觀察轉今日買進"
-            elif prev_action == "BUY" and score >= 60 and raw_action != "BUY":
-                action = "WATCH"
-                state_note = "前次買進後仍在觀察區"
-            elif prev_action in ["WATCH", "BUY"] and score < 60:
-                action = "SKIP"
-                state_note = "前次名單轉弱"
-
-        if action == "SKIP" and score >= 45:
-            action = "WATCH"
-            state_note = (state_note + "；" if state_note else "") + "放寬版保留觀察"
-        elif action == "SKIP":
-            continue
-
-        # v1.8：三層進場判斷
-        bucket = str(row.get("candidate_bucket", "")).lower() if hasattr(row, "get") else ""
-        breakout_ok, breakout_reason = is_breakout_signal(row, score)
-
-        if breakout_ok or bucket == "breakout":
-            action = "BUY"
-            state_note = (state_note + "；" if state_note else "") + (breakout_reason or "突破型候選")
-        elif action == "WATCH" and (score >= 58 or bucket == "pullback"):
-            action = "TEST"
-            state_note = (state_note + "；" if state_note else "") + "試單型候選"
-        elif action == "WATCH" or bucket in ["squeeze", "fallback"]:
+        action = str(action or "READY").upper().strip()
+        if action not in ["BUY", "TEST", "READY", "WATCH", "WATCH_A", "WATCH_B"]:
             action = "READY"
-            state_note = (state_note + "；" if state_note else "") + "準備型候選"
 
         action_display = normalize_watch_grade(action, score)
         if action in ["TEST", "READY"]:
             action_display = action
 
         action_label, action_sub = action_split_fields(action_display, score)
-
         multiplier = action_weight_multiplier(action, score)
-        final_weight = target_weight * multiplier
+        final_weight = float(target_weight or 0) * multiplier
         suggested_amount = INITIAL_CAPITAL * final_weight
 
-        raw_reason = (state_note + "；" if state_note else "") + score_info.get("entry_reason", "模組化進場判斷")
-        simple_note = human_action_note(action, score, stage, raw_reason, prev_action)
+        if fallback:
+            raw_reason = "保底候選｜避免今日清單空白"
+            simple_note = f"準備觀察｜分數{int(to_num(score, 0))}｜保底候選，不追高"
+        else:
+            score_info = entry_score(row, market_row=None)
+            raw_reason = (state_note + "；" if state_note else "") + score_info.get("entry_reason", "模組化進場判斷")
+            simple_note = human_action_note(action, score, stage, raw_reason, prev_action)
+
         if action_display == "WATCH_A":
             simple_note = simple_note.replace("接近突破", "接近突破A級")
         elif action_display == "WATCH_B":
@@ -854,7 +825,7 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
             "target_weight": round(final_weight, 4),
             "ref_price": round(ref_price, 4) if pd.notna(ref_price) else "",
             "suggested_amount": round(suggested_amount, 2),
-            "entry_score": score,
+            "entry_score": int(round(to_num(score, 0))),
             "stage": stage,
             "prev_action": prev_action,
             "prev_entry_score": prev_score,
@@ -862,8 +833,112 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
             "note": simple_note,
             "detail_note": raw_reason,
         })
-    cols = ["signal_date", "trade_date", "action", "action_label", "action_sub", "raw_action", "stock_id", "price_tier", "target_weight", "ref_price", "suggested_amount", "entry_score", "stage", "prev_action", "prev_entry_score", "prev_trade_date", "note", "detail_note"]
+
+    # ========= 正常三層進場 =========
+    for stock_id in sorted(target.keys()):
+        if stock_id in held:
+            continue
+
+        target_weight = float(target.get(stock_id, 0))
+        if target_weight <= 0:
+            continue
+
+        row = signal_row_map.get(stock_id, {})
+        score_info = entry_score(row, market_row=None)
+        raw_action = score_info.get("entry_action", "SKIP")
+        action = raw_action
+        score = score_info.get("entry_score", 0)
+
+        prev_row = prev_map.get(stock_id)
+        prev_action = ""
+        prev_score = ""
+        prev_trade_date = ""
+        state_note = ""
+
+        if prev_row is not None:
+            prev_action = str(prev_row.get("action", "")).upper().strip()
+            prev_score = prev_row.get("entry_score", "")
+            prev_trade_date = prev_row.get("trade_date", "")
+
+            if prev_action in ["WATCH", "WATCH_A", "TEST", "READY"] and to_num(score, 0) >= 70:
+                action = "BUY"
+                state_note = "前次觀察轉今日買進"
+            elif prev_action == "BUY" and to_num(score, 0) >= 60 and raw_action != "BUY":
+                action = "TEST"
+                state_note = "前次買進後仍在試單區"
+            elif prev_action in ["WATCH", "WATCH_A", "WATCH_B", "TEST", "READY", "BUY"] and to_num(score, 0) < 45:
+                action = "READY"
+                state_note = "前次名單轉弱，降為準備觀察"
+
+        # 分數過低不直接丟掉，先讓三層候選邏輯接手
+        if action == "SKIP" and to_num(score, 0) >= 40:
+            action = "WATCH"
+            state_note = (state_note + "；" if state_note else "") + "放寬保留觀察"
+        elif action == "SKIP":
+            # 不 continue；後面 bucket 仍可能把它變 READY
+            action = "READY"
+            state_note = (state_note + "；" if state_note else "") + "分數不足，保留準備"
+
+        bucket = str(row.get("candidate_bucket", "")).lower() if hasattr(row, "get") else ""
+        breakout_ok, breakout_reason = is_breakout_signal(row, score)
+
+        if breakout_ok or bucket == "breakout":
+            action = "BUY"
+            state_note = (state_note + "；" if state_note else "") + (breakout_reason or "突破型候選")
+        elif action in ["WATCH", "READY"] and (to_num(score, 0) >= 58 or bucket == "pullback"):
+            action = "TEST"
+            state_note = (state_note + "；" if state_note else "") + "試單型候選"
+        elif action in ["WATCH", "READY"] or bucket in ["squeeze", "fallback"]:
+            action = "READY"
+            state_note = (state_note + "；" if state_note else "") + "準備型候選"
+
+        append_trade_row(stock_id, action, score, row, target_weight, state_note, prev_action, prev_score, prev_trade_date)
+
+    # ========= 強制保底：不可能空名單 =========
+    if len(rows) == 0:
+        fallback_items = []
+        for stock_id, row in signal_row_map.items():
+            stock_id = normalize_stock_id(stock_id)
+            if not stock_id or stock_id in held:
+                continue
+
+            score_info = entry_score(row, market_row=None)
+            score = to_num(score_info.get("entry_score", 0), 0)
+
+            # 綜合分數：entry_score + 動能/趨勢資料，避免全為 0 也可以排序
+            mom5 = to_num(row.get("mom5"), 0) if hasattr(row, "get") else 0
+            mom20 = to_num(row.get("mom20"), 0) if hasattr(row, "get") else 0
+            close = to_num(row.get("close"), np.nan) if hasattr(row, "get") else np.nan
+            ma20 = to_num(row.get("ma20"), np.nan) if hasattr(row, "get") else np.nan
+            trend_bonus = 10 if pd.notna(close) and pd.notna(ma20) and close >= ma20 * 0.98 else 0
+            fallback_score = score + trend_bonus + max(mom5, 0) * 100 + max(mom20, 0) * 50
+
+            fallback_items.append((fallback_score, stock_id, row, score))
+
+        fallback_items = sorted(fallback_items, key=lambda x: x[0], reverse=True)[:10]
+
+        # 如果 signal_row_map 也沒有資料，最後用 price_map 補，避免完全空
+        if len(fallback_items) == 0:
+            for stock_id, px in list(price_map.items())[:10]:
+                if stock_id in held:
+                    continue
+                fallback_items.append((0, stock_id, {"close": px}, 40))
+
+        for _, stock_id, row, score in fallback_items:
+            # 保底只做 READY，不給錢，避免亂買
+            tw = float(target.get(stock_id, 0.03))
+            append_trade_row(
+                stock_id=stock_id,
+                action="READY",
+                score=max(score, 40),
+                row=row,
+                target_weight=tw,
+                state_note="保底候選",
+                fallback=True
+            )
+
     return pd.DataFrame(rows, columns=cols)
+
 
 def build_watchlist_monitor(watchlist, positions, price_map, core, alpha, signal_date, trade_date):
     held = set(positions["stock_id"].apply(normalize_stock_id)) if len(positions) else set()
@@ -955,7 +1030,7 @@ def build_outputs(df, prev_trade_plan=None):
         "trade_date": str(trade_date.date()),
         "price_panel_latest_date": str(price_panel_latest_date.date()),
         "data_state": "fresh",
-        "source": "v1.8_three_entry_fallback",
+        "source": "v1.8.1_never_empty_trade_plan",
         "execution_rule": "T日盤後產生訊號，T+1交易",
         "prev_trade_plan_file": PREV_TRADE_PLAN_FILE,
         "trade_plan_history_file": f"trade_plan_history/{str(trade_date.date())}.csv",
