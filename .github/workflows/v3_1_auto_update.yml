@@ -32,7 +32,14 @@ jobs:
 
       - name: Update market data
         run: |
+          set +e
           python update_market_data.py
+          UPDATE_EXIT=$?
+          if [ "$UPDATE_EXIT" -ne 0 ]; then
+            echo "⚠️ update_market_data.py failed with exit code $UPDATE_EXIT"
+            echo "⚠️ Continue with existing price_panel_daily.csv to avoid blocking pipeline."
+          fi
+          exit 0
 
       - name: Run main pipeline
         run: |
@@ -83,6 +90,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "no changes to commit"
           else
-            git commit -m "v1.4 auto update with signal trade history"
+            git commit -m "v2.0 auto update tolerate market data source errors"
             git push origin HEAD:main
           fi
