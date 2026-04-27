@@ -1,4 +1,3 @@
-stock_id,shares,avg_cost,last_action_date,note
-2383,1000,4479.475,2026-04-25,safe_inline_add_from_trade_plan
-3037,1000,790.79,2026-04-25,manual_writeback
-3581,1000,163.6635,2026-04-25,manual_writeback
+﻿stock_id,shares,avg_cost
+3037,1000,790.79
+3581,1000,163.6635
