@@ -1,2 +1,3 @@
 ﻿stock_id,price_tier,ref_price,shares,avg_cost,pnl_pct,target_weight,action,note
+2330,gt_1000,2267.265,1000,950.0,1.3842,0.0,SELL,不在目標池
 3037,p500_1000,839.839,1000,790.79,0.061,0.0,SELL,不在目標池
