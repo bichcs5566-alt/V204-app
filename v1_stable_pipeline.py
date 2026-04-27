@@ -180,6 +180,126 @@ def is_common_stock_id(stock_id):
     return bool(re.fullmatch(r"[1-9]\d{3}", sid))
 
 
+def score_bridge(row):
+    """
+    v1.9.2 分數接線修復：
+    不完全依賴 decision_modules.entry_score。
+    只要 row 裡有 close / ma / momentum，就在 pipeline 端直接補一個可用分數。
+    """
+    if row is None:
+        row = {}
+
+    try:
+        score_info = score_bridge(row)
+    except Exception:
+        score_info = {"entry_score": 0, "entry_action": "SKIP", "entry_reason": "entry_score失敗，使用bridge"}
+
+    base_score = to_num(score_info.get("entry_score", 0), 0)
+
+    close = to_num(row.get("close"), np.nan) if hasattr(row, "get") else np.nan
+    ma5 = to_num(row.get("ma5"), np.nan) if hasattr(row, "get") else np.nan
+    ma10 = to_num(row.get("ma10"), np.nan) if hasattr(row, "get") else np.nan
+    ma20 = to_num(row.get("ma20"), np.nan) if hasattr(row, "get") else np.nan
+    ma60 = to_num(row.get("ma60"), np.nan) if hasattr(row, "get") else np.nan
+    mom5 = to_num(row.get("mom5"), np.nan) if hasattr(row, "get") else np.nan
+    mom20 = to_num(row.get("mom20"), np.nan) if hasattr(row, "get") else np.nan
+    kd_k = to_num(row.get("kd_k"), np.nan) if hasattr(row, "get") else np.nan
+    kd_d = to_num(row.get("kd_d"), np.nan) if hasattr(row, "get") else np.nan
+    macd_diff = to_num(row.get("macd_diff"), np.nan) if hasattr(row, "get") else np.nan
+    volume_ratio = to_num(row.get("volume_ratio"), np.nan) if hasattr(row, "get") else np.nan
+    prev_high_20 = to_num(row.get("prev_high_20"), np.nan) if hasattr(row, "get") else np.nan
+    candidate_score = to_num(row.get("score"), np.nan) if hasattr(row, "get") else np.nan
+
+    bridge_score = 0
+    reasons = []
+
+    if pd.notna(close) and pd.notna(ma20):
+        if close > ma20:
+            bridge_score += 18
+            reasons.append("站上MA20")
+        elif close >= ma20 * 0.98:
+            bridge_score += 10
+            reasons.append("貼近MA20")
+
+    if pd.notna(ma5) and pd.notna(ma10) and pd.notna(ma20):
+        if ma5 > ma10 > ma20:
+            bridge_score += 18
+            reasons.append("短均多排")
+        elif ma5 >= ma10 * 0.995 and ma10 >= ma20 * 0.995:
+            bridge_score += 10
+            reasons.append("均線靠攏")
+
+    if pd.notna(close) and pd.notna(ma60) and close > ma60:
+        bridge_score += 6
+        reasons.append("站上MA60")
+
+    if pd.notna(mom5):
+        if mom5 > 0:
+            bridge_score += 10
+            reasons.append("5日動能正")
+        elif mom5 > -0.02:
+            bridge_score += 5
+            reasons.append("5日動能未破壞")
+
+    if pd.notna(mom20):
+        if mom20 > 0:
+            bridge_score += 10
+            reasons.append("20日動能正")
+        elif mom20 > -0.03:
+            bridge_score += 4
+            reasons.append("20日動能中性")
+
+    if pd.notna(kd_k) and pd.notna(kd_d):
+        if kd_k > kd_d and kd_k < 88:
+            bridge_score += 8
+            reasons.append("KD偏多")
+        elif 35 <= kd_k <= 75:
+            bridge_score += 4
+            reasons.append("KD中性")
+
+    if pd.notna(macd_diff):
+        if macd_diff > 0:
+            bridge_score += 8
+            reasons.append("MACD偏多")
+
+    if pd.notna(volume_ratio):
+        if 1.0 <= volume_ratio <= 3.5:
+            bridge_score += 6
+            reasons.append("量能配合")
+        elif volume_ratio > 0.7:
+            bridge_score += 3
+            reasons.append("量能尚可")
+
+    if pd.notna(close) and pd.notna(prev_high_20) and close >= prev_high_20 * 0.98:
+        bridge_score += 8
+        reasons.append("接近20日高")
+
+    if pd.notna(candidate_score):
+        # select_stocks 的 score 通常是 0~1，轉成 0~12 補分
+        bridge_score += max(0, min(12, candidate_score * 12))
+        reasons.append("候選池排序加分")
+
+    final_score = int(round(max(base_score, bridge_score)))
+
+    if final_score >= 70:
+        action = "BUY"
+    elif final_score >= 55:
+        action = "TEST"
+    elif final_score >= 40:
+        action = "READY"
+    else:
+        action = "SKIP"
+
+    reason = "；".join(reasons) if reasons else score_info.get("entry_reason", "分數資料不足")
+    return {
+        "entry_score": final_score,
+        "entry_action": action,
+        "entry_reason": reason,
+        "base_score": base_score,
+        "bridge_score": bridge_score,
+    }
+
+
 def to_num(v, default=np.nan):
     n = pd.to_numeric(v, errors="coerce")
     if pd.isna(n):
@@ -825,7 +945,7 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
             else:
                 simple_note = f"準備觀察｜分數{int(to_num(score, 0))}｜保底候選，不追高"
         else:
-            score_info = entry_score(row, market_row=None)
+            score_info = score_bridge(row)
             raw_reason = (state_note + "；" if state_note else "") + score_info.get("entry_reason", "模組化進場判斷")
             simple_note = human_action_note(action, score, stage, raw_reason, prev_action)
 
@@ -867,7 +987,7 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
             continue
 
         row = signal_row_map.get(stock_id, {})
-        score_info = entry_score(row, market_row=None)
+        score_info = score_bridge(row)
         raw_action = score_info.get("entry_action", "SKIP")
         action = raw_action
         score = score_info.get("entry_score", 0)
@@ -925,7 +1045,7 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
             if not stock_id or stock_id in held or not is_common_stock_id(stock_id):
                 continue
 
-            score_info = entry_score(row, market_row=None)
+            score_info = score_bridge(row)
             score = to_num(score_info.get("entry_score", 0), 0)
 
             # 綜合分數：entry_score + 動能/趨勢資料，避免全為 0 也可以排序
@@ -936,7 +1056,8 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
             trend_bonus = 10 if pd.notna(close) and pd.notna(ma20) and close >= ma20 * 0.98 else 0
             fallback_score = score + trend_bonus + max(mom5, 0) * 100 + max(mom20, 0) * 50
 
-            fallback_items.append((fallback_score, stock_id, row, score))
+            visible_score = max(score, fallback_score)
+            fallback_items.append((fallback_score, stock_id, row, visible_score))
 
         fallback_items = sorted(fallback_items, key=lambda x: x[0], reverse=True)[:10]
 
@@ -950,7 +1071,7 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
         for _, stock_id, row, score in fallback_items:
             # v1.9：保底也依分數分級，但不硬給 BUY
             tw = float(target.get(stock_id, 0.03))
-            fixed_score = max(score, 40)
+            fixed_score = int(round(max(score, 40)))
             fallback_action = "TEST" if fixed_score >= 55 else "READY"
             append_trade_row(
                 stock_id=stock_id,
@@ -1055,7 +1176,7 @@ def build_outputs(df, prev_trade_plan=None):
         "trade_date": str(trade_date.date()),
         "price_panel_latest_date": str(price_panel_latest_date.date()),
         "data_state": "fresh",
-        "source": "v1.9.1_common_stock_filter",
+        "source": "v1.9.2_score_bridge",
         "execution_rule": "T日盤後產生訊號，T+1交易",
         "prev_trade_plan_file": PREV_TRADE_PLAN_FILE,
         "trade_plan_history_file": f"trade_plan_history/{str(trade_date.date())}.csv",
