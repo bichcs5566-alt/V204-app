@@ -1,3 +1,4 @@
+/* v3.5.6_STABLE_REPAIR_FULL_COVER: no UI/table changes; crash guard only */
 const DATA_DIR="./data";const GH_CONFIG_KEY="v3_github_config";let POSITION_CACHE=[];
 
 document.addEventListener("DOMContentLoaded",async()=>{bindUI();loadSavedConfig();await loadAll();});
@@ -8,7 +9,7 @@ function bindUI(){
   bind("saveConfigBtn","click",saveConfig);
   bind("clearConfigBtn","click",clearConfig);
   bind("addPositionBtn","click",submitAddPositionInstant);
-  document.addEventListener("click",async e=>{const b=e.target.closest("[data-remove-position]");if(b)await submitRemovePositionInstant(b.getAttribute("data-remove-position"));});
+  document.addEventListener("click",async e=>{const b=e.target&&e.target.closest?e.target.closest("[data-remove-position]"):null;if(b)await submitRemovePositionInstant(b.getAttribute("data-remove-position"));});
 }
 
 function bind(id,event,handler){const el=document.getElementById(id);if(!el)return;el.addEventListener(event,async e=>{try{await handler(e)}catch(err){console.error(err);setBanner(`操作失敗：${err.message}`,"#b42318")}})}
@@ -100,39 +101,68 @@ async function submitRemovePositionInstant(stockId){
 }
 
 async function loadAll(force=false){
+  const errors=[];
   try{
-    const[meta,tradePlan,position,summary,debug]=await Promise.all([
-      fetchJSON(`${DATA_DIR}/meta.json`,force),
-      fetchCSV(`${DATA_DIR}/trade_plan.csv`,force),
-      fetchCSV(`${DATA_DIR}/position_monitor.csv`,force),
-      fetchCSV(`${DATA_DIR}/full_summary.csv`,force),
-      fetchCSV(`${DATA_DIR}/selection_debug.csv`,force)
-    ]);
-POSITION_CACHE = position;
-    renderMeta(meta);renderTradePlan(tradePlan);renderPosition(position);renderSummary(summary);renderDebug(debug);renderTierSummary(position);renderActionSummary(tradePlan,position);
-    if(!document.getElementById("syncBanner").textContent.includes("已送出"))setBanner("頁面資料已同步","#2f7d32");
-  }catch(err){console.error(err);setBanner(`讀取失敗：${err.message}`,"#b42318")}
+    const meta=await safeFetchJSON(`${DATA_DIR}/meta.json`,force,{},errors,"meta.json");
+    const tradePlan=await safeFetchCSV(`${DATA_DIR}/trade_plan.csv`,force,[],errors,"trade_plan.csv");
+    const position=await safeFetchCSV(`${DATA_DIR}/position_monitor.csv`,force,[],errors,"position_monitor.csv");
+    const summary=await safeFetchCSV(`${DATA_DIR}/full_summary.csv`,force,[],errors,"full_summary.csv");
+    const debug=await safeFetchCSV(`${DATA_DIR}/selection_debug.csv`,force,[],errors,"selection_debug.csv");
+
+    POSITION_CACHE = position;
+    renderMeta(meta);
+    renderTradePlan(tradePlan);
+    renderPosition(position);
+    renderSummary(summary);
+    renderDebug(debug);
+    renderTierSummary(position);
+    renderActionSummary(tradePlan,position);
+
+    const banner=document.getElementById("syncBanner");
+    if(banner && !banner.textContent.includes("已送出")){
+      if(errors.length){
+        setBanner(`部分資料讀取失敗：${errors.join("、")}，其餘畫面已保留`, "#92400e");
+      }else{
+        setBanner("頁面資料已同步","#2f7d32");
+      }
+    }
+  }catch(err){
+    console.error(err);
+    setBanner(`讀取失敗：${err.message}`,"#b42318");
+  }
 }
 
 async function fetchJSON(url,force=false){const finalUrl=force?`${url}?t=${Date.now()}`:url;const res=await fetch(finalUrl,{cache:"no-store"});if(!res.ok)throw new Error(`JSON 讀取失敗：${url}`);return await res.json()}
 async function fetchCSV(url,force=false){const finalUrl=force?`${url}?t=${Date.now()}`:url;const res=await fetch(finalUrl,{cache:"no-store"});if(!res.ok)throw new Error(`CSV 讀取失敗：${url}`);return parseCSV(await res.text())}
 
-function parseCSV(text){const cleaned=text.replace(/^\uFEFF/,"").trim();if(!cleaned)return[];const lines=cleaned.split(/\r?\n/);const headers=splitCSVLine(lines[0]).map(h=>h.trim());return lines.slice(1).filter(Boolean).map(line=>{const values=splitCSVLine(line),row={};headers.forEach((h,i)=>row[h]=(values[i]??"").trim());return row})}
+async function safeFetchJSON(url,force=false,fallback={},errors=[],label="JSON"){
+  try{return await fetchJSON(url,force)}
+  catch(err){console.error(err);errors.push(label);return fallback}
+}
+async function safeFetchCSV(url,force=false,fallback=[],errors=[],label="CSV"){
+  try{return await fetchCSV(url,force)}
+  catch(err){console.error(err);errors.push(label);return fallback}
+}
+
+function parseCSV(text){const cleaned=String(text||"").replace(/^\uFEFF/,"").trim();if(!cleaned)return[];const lines=cleaned.split(/\r?\n/);const headers=splitCSVLine(lines[0]).map(h=>h.trim());return lines.slice(1).filter(Boolean).map(line=>{const values=splitCSVLine(line),row={};headers.forEach((h,i)=>row[h]=(values[i]??"").trim());return row})}
 function splitCSVLine(line){const result=[];let current="",inQuotes=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){if(inQuotes&&line[i+1]==='"'){current+='"';i++}else inQuotes=!inQuotes}else if(ch===","&&!inQuotes){result.push(current);current=""}else current+=ch}result.push(current);return result}
 
 function renderMeta(meta){text("nowTime",meta.now_time||meta.generated_at||"--");text("generatedAt",meta.generated_at||"--");text("signalDate",meta.signal_date||"--");text("tradeDate",meta.trade_date||"--");text("panelDate",meta.price_panel_latest_date||"--");text("dataState",prettyDataState(meta.data_state));text("sourceName",meta.source||"--");text("writebackState",prettyWriteback(meta.position_writeback_state))}
-function renderTradePlan(rows){const body=document.getElementById("tradePlanBody");if(!rows.length){body.innerHTML=`<tr><td colspan="7" class="empty">目前沒有資料</td></tr>`;return}body.innerHTML=rows.map(r=>`<tr><td>${badgeForAction(r.action)}</td><td>${safe(r.stock_id)}</td><td>${prettyTier(r.price_tier)}</td><td>${safe(r.ref_price)}</td><td>${safe(r.target_weight)}</td><td>${safeMoney(r.suggested_amount)}</td><td>${safe(r.note)}</td></tr>`).join("")}
+function renderTradePlan(rows){rows=Array.isArray(rows)?rows:[];const body=document.getElementById("tradePlanBody");if(!body)return;if(!rows.length){body.innerHTML=`<tr><td colspan="7" class="empty">目前沒有資料</td></tr>`;return}body.innerHTML=rows.map(r=>`<tr><td>${badgeForAction(r.action)}</td><td>${safe(r.stock_id)}</td><td>${prettyTier(r.price_tier)}</td><td>${safe(r.ref_price)}</td><td>${safe(r.target_weight)}</td><td>${safeMoney(r.suggested_amount)}</td><td>${safe(r.note)}</td></tr>`).join("")}
 
 function renderPosition(rows){
+  rows=Array.isArray(rows)?rows:[];
   const body=document.getElementById("positionBody");
+  if(!body)return;
   if(!rows.length){body.innerHTML=`<tr><td colspan="10" class="empty">目前沒有持倉資料</td></tr>`;return}
   body.innerHTML=rows.map(r=>`<tr><td>${safe(r.stock_id)}</td><td>${prettyTier(r.price_tier)}</td><td>${safe(r.ref_price)}</td><td>${safeInt(r.shares)}</td><td>${safe(r.avg_cost)}</td><td>${safePct(r.pnl_pct)}</td><td>${safe(r.target_weight)}</td><td>${badgeForAction(r.action)}</td><td>${safe(r.note)}</td><td><button class="btn-remove" data-remove-position="${safe(r.stock_id)}">移除</button></td></tr>`).join("");
 }
 
-function renderSummary(rows){const row=rows[0]||{};text("returnVal",pctDisplay(row["return"]));text("mddVal",pctDisplay(row["mdd"]));text("sharpeVal",blankDash(row["sharpe_daily"]))}
-function renderDebug(rows){const row=rows[0]||{};text("dbgTotal",blankDash(row.total_input));text("dbgValid",blankDash(row.valid_after_na));text("dbgCorePrimary",blankDash(row.core_primary_count));text("dbgAlphaPrimary",blankDash(row.alpha_primary_count));text("dbgCoreFinal",blankDash(row.core_final_count));text("dbgAlphaFinal",blankDash(row.alpha_final_count))}
+function renderSummary(rows){rows=Array.isArray(rows)?rows:[];const row=rows[0]||{};text("returnVal",pctDisplay(row["return"]));text("mddVal",pctDisplay(row["mdd"]));text("sharpeVal",blankDash(row["sharpe_daily"]))}
+function renderDebug(rows){rows=Array.isArray(rows)?rows:[];const row=rows[0]||{};text("dbgTotal",blankDash(row.total_input));text("dbgValid",blankDash(row.valid_after_na));text("dbgCorePrimary",blankDash(row.core_primary_count));text("dbgAlphaPrimary",blankDash(row.alpha_primary_count));text("dbgCoreFinal",blankDash(row.core_final_count));text("dbgAlphaFinal",blankDash(row.alpha_final_count))}
 
 function renderTierSummary(positionRows){
+  positionRows=Array.isArray(positionRows)?positionRows:[];
   const tiers={};positionRows.forEach(r=>{const key=prettyTier(r.price_tier||priceTierFromPrice(r.avg_cost)||"unknown");tiers[key]=(tiers[key]||0)+1});
   const container=document.getElementById("tierSummary"),entries=Object.entries(tiers);
   if(!entries.length){container.innerHTML=`<div class="tier-box"><div class="tier-label">分層狀態</div><div class="tier-value">--</div><div class="tier-sub">目前沒有持倉可展示</div></div>`;return}
@@ -140,6 +170,7 @@ function renderTierSummary(positionRows){
 }
 
 function renderActionSummary(tradeRows,positionRows){
+  tradeRows=Array.isArray(tradeRows)?tradeRows:[];positionRows=Array.isArray(positionRows)?positionRows:[];
   const buys=tradeRows.filter(r=>(r.action||"").toUpperCase()==="BUY");
   const positionActions=positionRows.filter(r=>["ADD","REDUCE","SELL","STOP_LOSS","SYNCING"].includes((r.action||"").toUpperCase()));
   let headline="觀察",desc="今天沒有新的買進動作";
