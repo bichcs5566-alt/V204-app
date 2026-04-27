@@ -20,7 +20,7 @@ except Exception:
 
 # =========================================================
 # v1_stable_pipeline.py
-# v1.4.1 relaxed entry + history version
+# v2.0 full data layer + score wiring version
 #
 # 核心修正：
 # 1. current_positions.csv 是唯一持倉來源。
@@ -190,7 +190,7 @@ def score_bridge(row):
         row = {}
 
     try:
-        score_info = score_bridge(row)
+        score_info = entry_score(row, market_row=None)
     except Exception:
         score_info = {"entry_score": 0, "entry_action": "SKIP", "entry_reason": "entry_score失敗，使用bridge"}
 
@@ -490,17 +490,66 @@ def load_watchlist():
 # ---------- strategy ----------
 
 def build_features(df):
-    g = df.groupby("stock_id")
+    """
+    v2.0 完整資料層：
+    不依賴 price_panel_daily.csv 事先有指標欄位。
+    每次 pipeline 會自行補齊：
+    - MA5 / MA10 / MA20 / MA60
+    - MOM5 / MOM20 / MOM60
+    - VOL20 / volume_ma20 / volume_ratio
+    - KD
+    - MACD
+    - 前10/20日高點
+    """
+    df = df.copy()
+    df.columns = [str(c).lower().strip() for c in df.columns]
+
+    if "high" not in df.columns:
+        df["high"] = df["close"]
+    if "low" not in df.columns:
+        df["low"] = df["close"]
+    if "volume" not in df.columns:
+        df["volume"] = np.nan
+
+    for c in ["close", "high", "low", "volume"]:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    df["stock_id"] = df["stock_id"].apply(normalize_stock_id)
+    df = df[df["stock_id"].apply(is_common_stock_id)].copy()
+    df = df.sort_values(["stock_id", "date"]).reset_index(drop=True)
+
+    g = df.groupby("stock_id", group_keys=False)
+
     df["ret1"] = g["close"].pct_change()
     df["mom5"] = g["close"].pct_change(5)
     df["mom20"] = g["close"].pct_change(20)
     df["mom60"] = g["close"].pct_change(60)
+
+    for n in [5, 10, 20, 60]:
+        df[f"ma{n}"] = g["close"].rolling(n).mean().reset_index(level=0, drop=True)
+
     df["vol20"] = g["ret1"].rolling(20).std().reset_index(level=0, drop=True)
+    df["volume_ma20"] = g["volume"].rolling(20).mean().reset_index(level=0, drop=True)
+    df["volume_ratio"] = df["volume"] / (df["volume_ma20"] + 1e-9)
 
-    # 突破判斷用：前20日高點 / 前10日高點，不含今日，避免偷看
-    df["prev_high_20"] = g["close"].shift(1).rolling(20).max().reset_index(level=0, drop=True)
     df["prev_high_10"] = g["close"].shift(1).rolling(10).max().reset_index(level=0, drop=True)
+    df["prev_high_20"] = g["close"].shift(1).rolling(20).max().reset_index(level=0, drop=True)
 
+    # KD
+    low9 = g["low"].rolling(9).min().reset_index(level=0, drop=True)
+    high9 = g["high"].rolling(9).max().reset_index(level=0, drop=True)
+    rsv = (df["close"] - low9) / (high9 - low9 + 1e-9) * 100
+    df["kd_k"] = rsv.groupby(df["stock_id"]).ewm(com=2, adjust=False).mean().reset_index(level=0, drop=True)
+    df["kd_d"] = df["kd_k"].groupby(df["stock_id"]).ewm(com=2, adjust=False).mean().reset_index(level=0, drop=True)
+
+    # MACD
+    ema12 = g["close"].transform(lambda s: s.ewm(span=12, adjust=False).mean())
+    ema26 = g["close"].transform(lambda s: s.ewm(span=26, adjust=False).mean())
+    df["macd_diff"] = ema12 - ema26
+    df["macd_signal"] = df.groupby("stock_id")["macd_diff"].transform(lambda s: s.ewm(span=9, adjust=False).mean())
+    df["macd_hist"] = df["macd_diff"] - df["macd_signal"]
+
+    # 給 decision_modules 額外補欄，若模組存在會再補一次也沒關係
     df = add_decision_features(df)
     return df
 
@@ -1156,7 +1205,12 @@ def build_outputs(df, prev_trade_plan=None):
 
     core, alpha, debug = select_stocks(signal_df)
     target = build_target_weights(core, alpha)
-    signal_row_map = {normalize_stock_id(r["stock_id"]): r for _, r in signal_df.iterrows()}
+
+    # v2.0：score / candidate_bucket 來自 select_stocks，因此 signal_row_map 必須用候選池資料，
+    # 不能只用原始 signal_df，否則 action / score 會斷線。
+    candidate_rows = pd.concat([core, alpha], ignore_index=True) if (len(core) or len(alpha)) else signal_df.copy()
+    candidate_rows = candidate_rows.drop_duplicates(subset=["stock_id"], keep="first")
+    signal_row_map = {normalize_stock_id(r["stock_id"]): r for _, r in candidate_rows.iterrows()}
 
     trade_df = build_trade_plan(positions, price_map, target, signal_date, trade_date, signal_row_map, prev_trade_plan)
     pos_df = build_position_monitor(positions, price_map, target, signal_date, trade_date, signal_row_map)
@@ -1176,7 +1230,7 @@ def build_outputs(df, prev_trade_plan=None):
         "trade_date": str(trade_date.date()),
         "price_panel_latest_date": str(price_panel_latest_date.date()),
         "data_state": "fresh",
-        "source": "v1.9.2_score_bridge",
+        "source": "v2.0_full_data_layer_score",
         "execution_rule": "T日盤後產生訊號，T+1交易",
         "prev_trade_plan_file": PREV_TRADE_PLAN_FILE,
         "trade_plan_history_file": f"trade_plan_history/{str(trade_date.date())}.csv",
@@ -1204,6 +1258,8 @@ def main():
     prev_trade_df = load_previous_trade_plan()
 
     df = build_features(load_price())
+    # v2.0：輸出最新技術指標快照，方便檢查分數來源
+    latest_feature_df = df.sort_values(["stock_id", "date"]).groupby("stock_id", as_index=False).tail(1).copy()
     trade_df, pos_df, watch_df, summary_df, debug_df, positions_df, meta = build_outputs(df, prev_trade_df)
 
     # 保存狀態與歷史：讓系統可以呼叫前一份名單，也可以用 trade_date 找回隔天要交易的清單。
