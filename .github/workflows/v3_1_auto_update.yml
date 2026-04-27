@@ -44,33 +44,43 @@ jobs:
 
       - name: Commit results
         run: |
+          set -e
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add \
-            trade_plan.csv \
-            prev_trade_plan.csv \
-            trade_plan_history \
-            position_monitor.csv \
-            watchlist_monitor.csv \
-            full_summary.csv \
-            selection_debug.csv \
-            current_positions.csv \
-            watchlist.csv \
-            mobile_dashboard_v1/data/trade_plan.csv \
-            mobile_dashboard_v1/data/prev_trade_plan.csv \
-            mobile_dashboard_v1/data/trade_plan_history \
-            mobile_dashboard_v1/data/position_monitor.csv \
-            mobile_dashboard_v1/data/watchlist_monitor.csv \
-            mobile_dashboard_v1/data/full_summary.csv \
-            mobile_dashboard_v1/data/selection_debug.csv \
-            mobile_dashboard_v1/data/current_positions.csv \
-            mobile_dashboard_v1/data/watchlist.csv \
-            mobile_dashboard_v1/data/meta.json
+          add_if_exists () {
+            if [ -e "$1" ]; then
+              git add "$1"
+            else
+              echo "skip missing: $1"
+            fi
+          }
+
+          add_if_exists trade_plan.csv
+          add_if_exists prev_trade_plan.csv
+          add_if_exists trade_plan_history
+          add_if_exists position_monitor.csv
+          add_if_exists watchlist_monitor.csv
+          add_if_exists full_summary.csv
+          add_if_exists selection_debug.csv
+          add_if_exists current_positions.csv
+          add_if_exists watchlist.csv
+
+          add_if_exists mobile_dashboard_v1/data/trade_plan.csv
+          add_if_exists mobile_dashboard_v1/data/prev_trade_plan.csv
+          add_if_exists mobile_dashboard_v1/data/trade_plan_history
+          add_if_exists mobile_dashboard_v1/data/position_monitor.csv
+          add_if_exists mobile_dashboard_v1/data/watchlist_monitor.csv
+          add_if_exists mobile_dashboard_v1/data/full_summary.csv
+          add_if_exists mobile_dashboard_v1/data/selection_debug.csv
+          add_if_exists mobile_dashboard_v1/data/current_positions.csv
+          add_if_exists mobile_dashboard_v1/data/watchlist.csv
+          add_if_exists mobile_dashboard_v1/data/meta.json
 
           if git diff --cached --quiet; then
             echo "no changes to commit"
           else
-            git commit -m "v3.1 auto update"
+            git commit -m "v1.4 auto update with signal trade history"
             git push origin HEAD:main
           fi
