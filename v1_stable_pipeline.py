@@ -373,7 +373,7 @@ def build_features(df):
 
 def select_stocks(day_df):
     """
-    v1.8 三層進場 + 保底候選池
+    v1.9 策略修復：三層進場 + 非ETF保底候選池
     目標：
     1. 不讓 trade_plan 完全空白。
     2. 同時保留三種入口：
@@ -398,6 +398,10 @@ def select_stocks(day_df):
 
     # 基礎有效資料：只要求價格與短中均線，不要過早砍掉全部
     valid = valid.dropna(subset=["close", "ma5", "ma10", "ma20"]).copy()
+
+    # v1.9：排除常見 ETF / 權證型代號，避免保底名單都是 0050 / 0062xx
+    valid["stock_id"] = valid["stock_id"].astype(str).str.strip()
+    valid = valid[~valid["stock_id"].str.match(r"^00")]
     valid_count = len(valid)
 
     if valid_count == 0:
@@ -802,7 +806,10 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
 
         if fallback:
             raw_reason = "保底候選｜避免今日清單空白"
-            simple_note = f"準備觀察｜分數{int(to_num(score, 0))}｜保底候選，不追高"
+            if action == "TEST":
+                simple_note = f"試單觀察｜分數{int(to_num(score, 0))}｜保底候選，先小倉"
+            else:
+                simple_note = f"準備觀察｜分數{int(to_num(score, 0))}｜保底候選，不追高"
         else:
             score_info = entry_score(row, market_row=None)
             raw_reason = (state_note + "；" if state_note else "") + score_info.get("entry_reason", "模組化進場判斷")
@@ -899,7 +906,7 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
         fallback_items = []
         for stock_id, row in signal_row_map.items():
             stock_id = normalize_stock_id(stock_id)
-            if not stock_id or stock_id in held:
+            if not stock_id or stock_id in held or stock_id.startswith("00"):
                 continue
 
             score_info = entry_score(row, market_row=None)
@@ -925,12 +932,14 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
                 fallback_items.append((0, stock_id, {"close": px}, 40))
 
         for _, stock_id, row, score in fallback_items:
-            # 保底只做 READY，不給錢，避免亂買
+            # v1.9：保底也依分數分級，但不硬給 BUY
             tw = float(target.get(stock_id, 0.03))
+            fixed_score = max(score, 40)
+            fallback_action = "TEST" if fixed_score >= 55 else "READY"
             append_trade_row(
                 stock_id=stock_id,
-                action="READY",
-                score=max(score, 40),
+                action=fallback_action,
+                score=fixed_score,
                 row=row,
                 target_weight=tw,
                 state_note="保底候選",
@@ -1030,7 +1039,7 @@ def build_outputs(df, prev_trade_plan=None):
         "trade_date": str(trade_date.date()),
         "price_panel_latest_date": str(price_panel_latest_date.date()),
         "data_state": "fresh",
-        "source": "v1.8.1_never_empty_trade_plan",
+        "source": "v1.9_strategy_repair",
         "execution_rule": "T日盤後產生訊號，T+1交易",
         "prev_trade_plan_file": PREV_TRADE_PLAN_FILE,
         "trade_plan_history_file": f"trade_plan_history/{str(trade_date.date())}.csv",
