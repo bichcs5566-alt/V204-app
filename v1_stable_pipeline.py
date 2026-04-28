@@ -20,7 +20,7 @@ except Exception:
 
 # =========================================================
 # v1_stable_pipeline.py
-# v2.1 strategy logic no hard fallback version
+# v2.2 main force behavior version
 #
 # 核心修正：
 # 1. current_positions.csv 是唯一持倉來源。
@@ -532,6 +532,7 @@ def build_features(df):
     df["volume_ma20"] = g["volume"].rolling(20).mean().reset_index(level=0, drop=True)
     df["volume_ratio"] = df["volume"] / (df["volume_ma20"] + 1e-9)
 
+    df["prev_low_20"] = g["close"].shift(1).rolling(20).min().reset_index(level=0, drop=True)
     df["prev_high_10"] = g["close"].shift(1).rolling(10).max().reset_index(level=0, drop=True)
     df["prev_high_20"] = g["close"].shift(1).rolling(20).max().reset_index(level=0, drop=True)
 
@@ -852,13 +853,13 @@ def action_split_fields(action_display, score):
     score_num = to_num(score, 0)
 
     if action_display == "BUY":
-        return "🟢 買進", "突破確認"
+        return "🟢 買進", "正式發動"
     if action_display in ["TEST", "BUY_SMALL", "WATCH_A"]:
-        return "🔵 試單", "接近突破"
+        return "🟠 試盤", "動能啟動"
     if action_display in ["READY", "WATCH_B"]:
         if score_num >= 50:
-            return "🟡 準備", "等待突破"
-        return "🟡 準備", "等待方向"
+            return "🟡 佈局", "主力吸籌"
+        return "🟡 佈局", "低波整理"
     if action_display == "WATCH":
         return "🟣 觀察", "等待確認"
     return "⚪ 不碰", "條件不足"
@@ -1166,7 +1167,7 @@ def build_outputs(df, prev_trade_plan=None):
         "trade_date": str(trade_date.date()),
         "price_panel_latest_date": str(price_panel_latest_date.date()),
         "data_state": "fresh",
-        "source": "v2.1_strategy_logic_no_hard_fallback",
+        "source": "v2.2_main_force_behavior",
         "execution_rule": "T日盤後產生訊號，T+1交易",
         "prev_trade_plan_file": PREV_TRADE_PLAN_FILE,
         "trade_plan_history_file": f"trade_plan_history/{str(trade_date.date())}.csv",
