@@ -1,24 +1,21 @@
 """
 v3_0_core_engine.py
-v3.0 主力行為核心引擎｜嚴格版
+v3.2 主力感知版｜3 / 5 / 10 多尺度吸籌偵測
 
-定位：
-這不是傳統動能選股器。
-這是「主力行為偵測核心」。
+這版不是再用單日條件猜主力，而是加入「連續性 / 趨勢性」：
+- 3 日：剛開始吸籌
+- 5 日：穩定吸籌
+- 10 日：長期控盤吸籌
 
-核心概念：
-1. 不用單日 KD / MACD 猜主力
-2. 用 20~60 日行為判斷：
-   - 吸籌 accumulation
-   - 控盤 control
-   - 試單 test_move
-   - 發動前 pre_breakout
-3. 動能只做確認，不做第一層篩選
-
-嚴格版特色：
-- 股票會比較少
-- 排除死股、假收斂、無資金容量標的
-- 適合波段 / 主力同步
+重點：
+1. 只要 3 / 5 / 10 任一尺度符合，就給主力感知分
+2. 取最高分，不重複灌分
+3. 沒有真實籌碼欄位時，用 price-volume proxy 代理：
+   - OBV-like flow
+   - 量縮不跌
+   - 低點守住
+   - 收斂控盤
+4. 動能仍只作確認，不當第一層篩選
 """
 
 import numpy as np
@@ -42,24 +39,24 @@ def is_common_stock_id(stock_id):
         return False
     if len(s) != 4:
         return False
-    # 排除 ETF / 權證 / 特殊商品常見區
     if s.startswith(("00", "03", "04", "05", "06", "07", "08", "09")):
         return False
     return True
 
 
-def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    輸入：歷史日資料
-    必要欄位：
-    - date
-    - stock_id
-    - open/high/low/close
-    - volume
+def _rolling_up_count(series: pd.Series, window: int) -> pd.Series:
+    diff = series.diff()
+    up = (diff > 0).astype(float)
+    return up.rolling(window, min_periods=max(2, window // 2)).sum()
 
-    輸出：
-    - 加上 v3 主力行為需要的所有欄位
-    """
+
+def _rolling_non_down_count(series: pd.Series, window: int) -> pd.Series:
+    diff = series.diff()
+    ok = (diff >= 0).astype(float)
+    return ok.rolling(window, min_periods=max(2, window // 2)).sum()
+
+
+def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
     if df is None or df.empty:
         return pd.DataFrame()
 
@@ -76,10 +73,7 @@ def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
 
     for col in ["open", "high", "low", "close", "volume"]:
         if col not in out.columns:
-            if col in ["open", "high", "low"]:
-                out[col] = out["close"]
-            else:
-                out[col] = np.nan
+            out[col] = out["close"] if col in ["open", "high", "low"] else np.nan
         out[col] = _num(out[col])
 
     out["stock_id"] = out["stock_id"].apply(normalize_stock_id)
@@ -95,7 +89,9 @@ def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
         out[f"ma{n}"] = g["close"].rolling(n, min_periods=max(5, min(n, 20))).mean().reset_index(level=0, drop=True)
 
     out["ret_1d"] = g["close"].pct_change(1)
+    out["ret_3d"] = g["close"].pct_change(3)
     out["ret_5d"] = g["close"].pct_change(5)
+    out["ret_10d"] = g["close"].pct_change(10)
     out["ret_20d"] = g["close"].pct_change(20)
 
     out["vol_ma20"] = g["volume"].rolling(20, min_periods=10).mean().reset_index(level=0, drop=True)
@@ -117,7 +113,6 @@ def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
     out["ma20_slope_5d"] = g["ma20"].diff(5) / (g["ma20"].shift(5) + 1e-9)
     out["ma60_slope_10d"] = g["ma60"].diff(10) / (g["ma60"].shift(10) + 1e-9)
 
-    # ATR-like 波動
     prev_close = g["close"].shift(1)
     tr1 = out["high"] - out["low"]
     tr2 = (out["high"] - prev_close).abs()
@@ -126,17 +121,28 @@ def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
     out["atr20"] = out.groupby("stock_id")["tr"].rolling(20, min_periods=10).mean().reset_index(level=0, drop=True)
     out["atr_pct"] = out["atr20"] / (out["close"] + 1e-9)
 
-    # K線實體與影線：控盤偵測
     out["body_pct"] = (out["close"] - out["open"]).abs() / (out["close"] + 1e-9)
     out["upper_shadow_pct"] = (out["high"] - out[["open", "close"]].max(axis=1)) / (out["close"] + 1e-9)
     out["lower_shadow_pct"] = (out[["open", "close"]].min(axis=1) - out["low"]) / (out["close"] + 1e-9)
+    out["shadow_sum"] = out["upper_shadow_pct"].fillna(0) + out["lower_shadow_pct"].fillna(0)
 
     out["body20"] = out.groupby("stock_id")["body_pct"].rolling(20, min_periods=10).mean().reset_index(level=0, drop=True)
-    out["shadow20"] = out.groupby("stock_id")[["upper_shadow_pct", "lower_shadow_pct"]].sum(axis=1) if False else np.nan
-    out["shadow_sum"] = out["upper_shadow_pct"].fillna(0) + out["lower_shadow_pct"].fillna(0)
     out["shadow20"] = out.groupby("stock_id")["shadow_sum"].rolling(20, min_periods=10).mean().reset_index(level=0, drop=True)
 
-    # KD / MACD 僅作確認
+    # v3.2 主力感知 proxy：沒有真實籌碼欄位時，用 OBV-like flow 代理
+    price_diff = g["close"].diff()
+    signed_volume = np.where(price_diff > 0, out["volume"], np.where(price_diff < 0, -out["volume"], 0))
+    out["signed_volume"] = signed_volume
+    out["obv_proxy"] = out.groupby("stock_id")["signed_volume"].cumsum()
+
+    # 多尺度連續性
+    for w in [3, 5, 10]:
+        out[f"obv_up_count_{w}"] = out.groupby("stock_id")["obv_proxy"].transform(lambda s, ww=w: _rolling_up_count(s, ww))
+        out[f"close_non_down_count_{w}"] = out.groupby("stock_id")["close"].transform(lambda s, ww=w: _rolling_non_down_count(s, ww))
+        out[f"low_non_down_count_{w}"] = out.groupby("stock_id")["low"].transform(lambda s, ww=w: _rolling_non_down_count(s, ww))
+        out[f"vol_ratio_mean_{w}"] = out.groupby("stock_id")["volume_ratio"].rolling(w, min_periods=max(2, w//2)).mean().reset_index(level=0, drop=True)
+
+    # KD / MACD 確認
     low9 = g["low"].rolling(9, min_periods=5).min().reset_index(level=0, drop=True)
     high9 = g["high"].rolling(9, min_periods=5).max().reset_index(level=0, drop=True)
     rsv = (out["close"] - low9) / (high9 - low9 + 1e-9) * 100
@@ -155,24 +161,19 @@ def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def strict_market_filter(latest: pd.DataFrame) -> pd.DataFrame:
-    """
-    嚴格版第一層：
-    先確保這檔股票有主力能進出。
-    """
     if latest.empty:
         return latest
 
     x = latest.copy()
-
     for col in ["close", "volume", "turnover_value"]:
         x[col] = _num(x[col])
 
-    # 嚴格版硬條件
+    # v3.2：仍保留基本容量，但比 v3.0 稍微合理，避免潛伏股被硬砍
     x = x[
         (x["close"] >= 10) &
         (
-            (x["volume"] >= 1000) |
-            (x["turnover_value"] >= 30000)
+            (x["volume"] >= 500) |
+            (x["turnover_value"] >= 20000)
         )
     ].copy()
 
@@ -186,11 +187,68 @@ def _score_clip(v, low=0, high=100):
         return 0.0
 
 
+def accumulation_multi_scale_score(row) -> tuple[float, str]:
+    """
+    v3.2 核心：3 / 5 / 10 多尺度主力感知。
+    任一尺度符合就給分，取最高，不重複灌分。
+    """
+    scale_scores = []
+    reasons = []
+
+    # 3日：剛開始吸籌
+    s3 = 0
+    if row.get("obv_up_count_3", 0) >= 2:
+        s3 += 16
+    if row.get("close_non_down_count_3", 0) >= 2:
+        s3 += 10
+    if row.get("low_non_down_count_3", 0) >= 2:
+        s3 += 10
+    vr3 = row.get("vol_ratio_mean_3")
+    if pd.notna(vr3) and 0.75 <= vr3 <= 2.8:
+        s3 += 8
+    if s3 >= 30:
+        scale_scores.append(("3日感知", min(s3, 40)))
+        reasons.append("3日資金/價格轉穩")
+
+    # 5日：穩定吸籌
+    s5 = 0
+    if row.get("obv_up_count_5", 0) >= 3:
+        s5 += 22
+    if row.get("close_non_down_count_5", 0) >= 3:
+        s5 += 12
+    if row.get("low_non_down_count_5", 0) >= 3:
+        s5 += 12
+    vr5 = row.get("vol_ratio_mean_5")
+    if pd.notna(vr5) and 0.75 <= vr5 <= 2.5:
+        s5 += 10
+    if s5 >= 38:
+        scale_scores.append(("5日感知", min(s5, 55)))
+        reasons.append("5日穩定吸籌")
+
+    # 10日：長期控盤吸籌
+    s10 = 0
+    if row.get("obv_up_count_10", 0) >= 6:
+        s10 += 30
+    if row.get("close_non_down_count_10", 0) >= 6:
+        s10 += 15
+    if row.get("low_non_down_count_10", 0) >= 6:
+        s10 += 15
+    vr10 = row.get("vol_ratio_mean_10")
+    if pd.notna(vr10) and 0.65 <= vr10 <= 2.3:
+        s10 += 12
+    if s10 >= 48:
+        scale_scores.append(("10日感知", min(s10, 70)))
+        reasons.append("10日控盤吸籌")
+
+    if not scale_scores:
+        return 0.0, "無連續感知"
+
+    best_name, best_score = max(scale_scores, key=lambda x: x[1])
+    return _score_clip(best_score), f"{best_name}｜" + "、".join(reasons)
+
+
 def accumulation_score(row) -> tuple[float, str]:
-    """
-    吸籌分數：不是看一天，而是看 20~60 日是否有承接。
-    """
-    score = 0
+    base = 0
     reasons = []
 
     low20 = row.get("low_20")
@@ -202,43 +260,36 @@ def accumulation_score(row) -> tuple[float, str]:
     close = row.get("close")
     ma60 = row.get("ma60")
 
-    # 低點不破 / 抬高
     if pd.notna(low20) and pd.notna(low60) and low20 >= low60 * 0.97:
-        score += 25
+        base += 18
         reasons.append("低點守住")
-
-    # 下跌不再擴大
-    if pd.notna(ret20) and ret20 >= -0.08:
-        score += 15
+    if pd.notna(ret20) and ret20 >= -0.10:
+        base += 12
         reasons.append("20日跌幅受控")
-
-    # 量能穩定，不是死量也不是爆量
-    if pd.notna(vr) and 0.75 <= vr <= 2.5:
-        score += 20
+    if pd.notna(vr) and 0.65 <= vr <= 2.8:
+        base += 14
         reasons.append("量能穩定")
-
-    # 波動收縮
-    if pd.notna(atr) and atr <= 0.045:
-        score += 20
+    if pd.notna(atr) and atr <= 0.055:
+        base += 14
         reasons.append("波動收縮")
-
-    # MA20 走平
-    if pd.notna(ma20_slope) and ma20_slope >= -0.004:
-        score += 10
+    if pd.notna(ma20_slope) and ma20_slope >= -0.006:
+        base += 8
         reasons.append("MA20走平")
-
-    # 不離中期線太遠，避免破底股
-    if pd.notna(close) and pd.notna(ma60) and close >= ma60 * 0.88:
-        score += 10
+    if pd.notna(close) and pd.notna(ma60) and close >= ma60 * 0.86:
+        base += 8
         reasons.append("未遠離MA60")
+
+    continuity, c_reason = accumulation_multi_scale_score(row)
+
+    # v3.2：連續感知是加分核心，但總分封頂
+    score = min(100, base + continuity)
+    if continuity > 0:
+        reasons.append(c_reason)
 
     return _score_clip(score), "、".join(reasons) if reasons else "無吸籌"
 
 
 def control_score(row) -> tuple[float, str]:
-    """
-    控盤分數：K線乾淨、波動小、均線收斂。
-    """
     score = 0
     reasons = []
 
@@ -248,23 +299,19 @@ def control_score(row) -> tuple[float, str]:
     shadow20 = row.get("shadow20")
     atr = row.get("atr_pct")
 
-    if pd.notna(ma_conv) and ma_conv <= 0.07:
+    if pd.notna(ma_conv) and ma_conv <= 0.085:
         score += 30
         reasons.append("均線收斂")
-
-    if pd.notna(range20) and range20 <= 0.22:
+    if pd.notna(range20) and range20 <= 0.26:
         score += 25
         reasons.append("區間收斂")
-
-    if pd.notna(body20) and body20 <= 0.025:
+    if pd.notna(body20) and body20 <= 0.032:
         score += 15
         reasons.append("K線實體小")
-
-    if pd.notna(shadow20) and shadow20 <= 0.06:
+    if pd.notna(shadow20) and shadow20 <= 0.075:
         score += 15
         reasons.append("影線干擾低")
-
-    if pd.notna(atr) and atr <= 0.045:
+    if pd.notna(atr) and atr <= 0.055:
         score += 15
         reasons.append("ATR低波動")
 
@@ -272,47 +319,41 @@ def control_score(row) -> tuple[float, str]:
 
 
 def test_move_score(row) -> tuple[float, str]:
-    """
-    試單分數：主力開始測市場反應，但不一定主升。
-    """
     score = 0
     reasons = []
 
     vr = row.get("volume_ratio")
     ret1 = row.get("ret_1d")
+    ret3 = row.get("ret_3d")
     ret5 = row.get("ret_5d")
     close = row.get("close")
     ma20 = row.get("ma20")
     kd = row.get("kd_cross")
     macd = row.get("macd_cross")
 
-    if pd.notna(vr) and 1.15 <= vr <= 4.0:
-        score += 25
+    if pd.notna(vr) and 1.03 <= vr <= 4.0:
+        score += 22
         reasons.append("量能試單")
-
-    if pd.notna(ret1) and 0.005 <= ret1 <= 0.05:
-        score += 20
+    if pd.notna(ret1) and 0.003 <= ret1 <= 0.06:
+        score += 18
         reasons.append("單日推升")
-
-    if pd.notna(ret5) and ret5 > 0:
-        score += 15
-        reasons.append("短線轉正")
-
-    if pd.notna(close) and pd.notna(ma20) and close >= ma20 * 0.98:
-        score += 15
+    if pd.notna(ret3) and ret3 > 0:
+        score += 12
+        reasons.append("3日轉正")
+    if pd.notna(ret5) and ret5 > -0.005:
+        score += 12
+        reasons.append("5日未弱")
+    if pd.notna(close) and pd.notna(ma20) and close >= ma20 * 0.97:
+        score += 14
         reasons.append("靠近MA20")
-
     if kd == 1 or macd == 1:
-        score += 25
+        score += 22
         reasons.append("KD/MACD確認")
 
     return _score_clip(score), "、".join(reasons) if reasons else "無試單"
 
 
 def pre_breakout_score(row) -> tuple[float, str]:
-    """
-    發動前兆：均線收斂後接近突破。
-    """
     score = 0
     reasons = []
 
@@ -324,29 +365,24 @@ def pre_breakout_score(row) -> tuple[float, str]:
     vr = row.get("volume_ratio")
     ret5 = row.get("ret_5d")
 
-    if pd.notna(close) and pd.notna(ma20) and close >= ma20:
+    if pd.notna(close) and pd.notna(ma20) and close >= ma20 * 0.985:
         score += 20
-        reasons.append("站上MA20")
-
-    if pd.notna(high20) and pd.notna(close) and close >= high20 * 0.96:
+        reasons.append("貼近/站上MA20")
+    if pd.notna(high20) and pd.notna(close) and close >= high20 * 0.94:
         score += 20
         reasons.append("接近20日高")
-
-    if pd.notna(ma_conv) and ma_conv <= 0.08:
+    if pd.notna(ma_conv) and ma_conv <= 0.09:
         score += 20
         reasons.append("均線糾結")
-
-    if pd.notna(ma20_slope) and ma20_slope >= -0.002:
+    if pd.notna(ma20_slope) and ma20_slope >= -0.004:
         score += 15
         reasons.append("MA20不弱")
-
-    if pd.notna(vr) and vr >= 1.0:
+    if pd.notna(vr) and vr >= 0.85:
         score += 10
-        reasons.append("量能回溫")
-
-    if pd.notna(ret5) and ret5 > 0:
+        reasons.append("量能未死")
+    if pd.notna(ret5) and ret5 > -0.005:
         score += 15
-        reasons.append("5日動能正")
+        reasons.append("5日不弱")
 
     return _score_clip(score), "、".join(reasons) if reasons else "無發動前兆"
 
@@ -358,15 +394,16 @@ def classify_stage(row, scores):
     pre = scores["pre_breakout_score"]
     final = scores["main_force_score"]
 
-    if final >= 72 and pre >= 60 and test >= 45:
+    # v3.2：主力感知版，允許「強吸籌 + 控盤」進入強潛伏
+    if final >= 70 and pre >= 58 and test >= 42:
         return "BREAKOUT_READY", "🟢 發動前", "可小倉分批，等突破確認"
-    if acc >= 65 and ctrl >= 65 and pre >= 45:
-        return "LATENT_STRONG", "🟡 強潛伏", "主力潛伏末期，優先追蹤"
-    if acc >= 55 and ctrl >= 55:
+    if acc >= 70 and ctrl >= 58:
+        return "LATENT_STRONG", "🟡 強潛伏", "多尺度吸籌成立，優先卡位"
+    if acc >= 58 and ctrl >= 48:
         return "LATENT", "🟡 潛伏", "有吸籌控盤，等待試單"
-    if test >= 55 and pre >= 45:
+    if test >= 50 and pre >= 42:
         return "TEST", "🟠 試單", "主力試盤，隔日確認"
-    if final >= 50:
+    if final >= 48:
         return "WATCH", "⚪ 觀察", "條件未完整，僅追蹤"
     return "SKIP", "❌ 排除", "無主力行為"
 
@@ -384,10 +421,10 @@ def score_latest(latest: pd.DataFrame) -> pd.DataFrame:
         pre, pre_reason = pre_breakout_score(row)
 
         final = (
-            acc * 0.40 +
-            ctrl * 0.30 +
-            test * 0.20 +
-            pre * 0.10
+            acc * 0.42 +
+            ctrl * 0.28 +
+            test * 0.18 +
+            pre * 0.12
         )
 
         stage, action_label, action_note = classify_stage(row, {
@@ -417,11 +454,8 @@ def score_latest(latest: pd.DataFrame) -> pd.DataFrame:
         rows.append(r)
 
     out = pd.DataFrame(rows)
-
-    # 嚴格版：只留下有主力行為的標的
     out = out[out["stage"].isin(["BREAKOUT_READY", "LATENT_STRONG", "LATENT", "TEST", "WATCH"])].copy()
 
-    # 排序：強潛伏 / 發動前優先
     stage_rank = {
         "BREAKOUT_READY": 0,
         "LATENT_STRONG": 1,
@@ -439,14 +473,7 @@ def score_latest(latest: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def run_v3_core_engine(price_panel: pd.DataFrame, latest_date=None, top_n=30):
-    """
-    主入口：
-    1. 準備特徵
-    2. 取最新日
-    3. 嚴格市場過濾
-    4. 主力行為打分
-    """
+def run_v3_core_engine(price_panel: pd.DataFrame, latest_date=None, top_n=40):
     feat = prepare_features(price_panel)
     if feat.empty:
         return pd.DataFrame(), pd.DataFrame([{
@@ -470,7 +497,7 @@ def run_v3_core_engine(price_panel: pd.DataFrame, latest_date=None, top_n=30):
     scored = score_latest(filtered).head(top_n).copy()
 
     debug = pd.DataFrame([{
-        "state": "v3_0_core_engine_strict",
+        "state": "v3_2_main_force_sensing",
         "latest_date": str(latest_date.date()) if pd.notna(latest_date) else "",
         "input_count": int(input_count),
         "filtered_count": int(filtered_count),
@@ -479,14 +506,13 @@ def run_v3_core_engine(price_panel: pd.DataFrame, latest_date=None, top_n=30):
         "latent_strong_count": int((scored["stage"] == "LATENT_STRONG").sum()) if len(scored) else 0,
         "latent_count": int((scored["stage"] == "LATENT").sum()) if len(scored) else 0,
         "test_count": int((scored["stage"] == "TEST").sum()) if len(scored) else 0,
+        "watch_count": int((scored["stage"] == "WATCH").sum()) if len(scored) else 0,
     }])
 
     return scored, debug
 
 
 if __name__ == "__main__":
-    # standalone 測試：
-    # python v3_0_core_engine.py
     import os
 
     candidates = [
@@ -505,8 +531,11 @@ if __name__ == "__main__":
         print("找不到 price_panel_daily.csv")
     else:
         df = pd.read_csv(src)
-        result, debug = run_v3_core_engine(df, top_n=30)
+        result, debug = run_v3_core_engine(df, top_n=40)
         result.to_csv("v3_core_candidates.csv", index=False, encoding="utf-8-sig")
         debug.to_csv("v3_core_debug.csv", index=False, encoding="utf-8-sig")
         print(debug.to_string(index=False))
-        print(result[["stock_id", "close", "stage", "main_force_score", "note"]].head(30).to_string(index=False))
+        if len(result):
+            print(result[["stock_id", "close", "stage", "main_force_score", "note"]].head(40).to_string(index=False))
+        else:
+            print("no v3.2 candidates")
