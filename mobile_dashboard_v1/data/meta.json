@@ -1,18 +1,14 @@
 {
-  "generated_at": "2026-04-28 10:16:34",
-  "now_time": "2026-04-28 10:16:34",
+  "generated_at": "2026-04-28 02:40:15",
+  "now_time": "2026-04-28 02:40:15",
   "signal_date": "2026-04-24",
-  "trade_date": "2026-04-27",
+  "trade_date": "2026-04-25",
   "price_panel_latest_date": "2026-04-24",
   "data_state": "fresh",
-  "source": "v2.7_three_layer_main_force",
+  "source": "v3_0_core_engine_strict",
   "execution_rule": "T日盤後產生訊號，T+1交易",
-  "prev_trade_plan_file": "prev_trade_plan.csv",
-  "trade_plan_history_file": "trade_plan_history/2026-04-27.csv",
-  "trade_plan_batch": "2026-04-28 10:16:34",
+  "trade_plan_count": 0,
+  "v3_selected_count": 0,
   "position_writeback_state": "idle",
-  "position_source": "current_positions.csv",
-  "position_count": 0,
-  "trade_plan_count": 25,
-  "decision_modules_available": true
+  "position_source": "current_positions.csv"
 }
