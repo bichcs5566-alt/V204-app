@@ -20,7 +20,7 @@ except Exception:
 
 # =========================================================
 # v1_stable_pipeline.py
-# v2.2 main force behavior version
+# v2.3 main force sync version
 #
 # 核心修正：
 # 1. current_positions.csv 是唯一持倉來源。
@@ -525,16 +525,20 @@ def build_features(df):
     df["mom20"] = g["close"].pct_change(20)
     df["mom60"] = g["close"].pct_change(60)
 
-    for n in [5, 10, 20, 60]:
+    for n in [5, 10, 20, 60, 120]:
         df[f"ma{n}"] = g["close"].rolling(n).mean().reset_index(level=0, drop=True)
 
     df["vol20"] = g["ret1"].rolling(20).std().reset_index(level=0, drop=True)
     df["volume_ma20"] = g["volume"].rolling(20).mean().reset_index(level=0, drop=True)
     df["volume_ratio"] = df["volume"] / (df["volume_ma20"] + 1e-9)
 
+    df["low_20d"] = g["low"].rolling(20, min_periods=5).min().reset_index(level=0, drop=True)
+    df["low_60d"] = g["low"].rolling(60, min_periods=10).min().reset_index(level=0, drop=True)
     df["prev_low_20"] = g["close"].shift(1).rolling(20).min().reset_index(level=0, drop=True)
     df["prev_high_10"] = g["close"].shift(1).rolling(10).max().reset_index(level=0, drop=True)
     df["prev_high_20"] = g["close"].shift(1).rolling(20).max().reset_index(level=0, drop=True)
+
+    df["ma20_slope"] = g["ma20"].diff(3) / (g["ma20"].shift(3) + 1e-9)
 
     # KD
     low9 = g["low"].rolling(9).min().reset_index(level=0, drop=True)
@@ -544,6 +548,7 @@ def build_features(df):
     df["kd_d"] = df["kd_k"].groupby(df["stock_id"]).ewm(com=2, adjust=False).mean().reset_index(level=0, drop=True)
     df["kd_k_prev"] = g["kd_k"].shift(1)
     df["kd_d_prev"] = g["kd_d"].shift(1)
+    df["kd_cross_up"] = ((df["kd_k"] > df["kd_d"]) & (df["kd_k_prev"] <= df["kd_d_prev"])).astype(int)
 
     # MACD
     ema12 = g["close"].transform(lambda s: s.ewm(span=12, adjust=False).mean())
@@ -553,6 +558,7 @@ def build_features(df):
     df["macd_hist"] = df["macd_diff"] - df["macd_signal"]
     df["macd_diff_prev"] = g["macd_diff"].shift(1)
     df["macd_signal_prev"] = g["macd_signal"].shift(1)
+    df["macd_cross_up"] = ((df["macd_diff"] > df["macd_signal"]) & (df["macd_diff_prev"] <= df["macd_signal_prev"])).astype(int)
 
     # 給 decision_modules 額外補欄，若模組存在會再補一次也沒關係
     df = add_decision_features(df)
@@ -853,13 +859,13 @@ def action_split_fields(action_display, score):
     score_num = to_num(score, 0)
 
     if action_display == "BUY":
-        return "🟢 買進", "正式發動"
+        return "🟢 買進", "主升啟動"
     if action_display in ["TEST", "BUY_SMALL", "WATCH_A"]:
-        return "🟠 試盤", "動能啟動"
+        return "🟠 試盤", "可能準備拉"
     if action_display in ["READY", "WATCH_B"]:
         if score_num >= 50:
-            return "🟡 佈局", "主力吸籌"
-        return "🟡 佈局", "低波整理"
+            return "🟡 佈局", "低檔吸籌"
+        return "🟡 佈局", "等待轉強"
     if action_display == "WATCH":
         return "🟣 觀察", "等待確認"
     return "⚪ 不碰", "條件不足"
@@ -1167,7 +1173,7 @@ def build_outputs(df, prev_trade_plan=None):
         "trade_date": str(trade_date.date()),
         "price_panel_latest_date": str(price_panel_latest_date.date()),
         "data_state": "fresh",
-        "source": "v2.2_main_force_behavior",
+        "source": "v2.3_main_force_sync",
         "execution_rule": "T日盤後產生訊號，T+1交易",
         "prev_trade_plan_file": PREV_TRADE_PLAN_FILE,
         "trade_plan_history_file": f"trade_plan_history/{str(trade_date.date())}.csv",
