@@ -31,10 +31,28 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def read_first(paths):
+    """
+    安全讀 CSV：
+    - 檔案不存在：回傳空表
+    - 檔案 0 byte：回傳空表
+    - CSV 空內容 / EmptyDataError：回傳空表
+    - 其他錯誤：也不中斷 sidecar，回傳空表
+    """
     for p in paths:
         p = Path(p)
-        if p.exists():
+        if not p.exists():
+            continue
+
+        try:
+            if p.stat().st_size == 0:
+                return pd.DataFrame(), p
             return pd.read_csv(p), p
+        except pd.errors.EmptyDataError:
+            return pd.DataFrame(), p
+        except Exception as e:
+            print(f"[sidecar warning] failed to read {p}: {e}")
+            return pd.DataFrame(), p
+
     return pd.DataFrame(), None
 
 
