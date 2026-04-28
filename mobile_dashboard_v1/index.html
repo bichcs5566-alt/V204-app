@@ -1,108 +1,147 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-Hant">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>每日操作介面 v3.4</title>
-<link rel="stylesheet" href="./styles.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>每日操作介面</title>
+  <style>
+    :root{
+      --bg:#f4f1ec;
+      --card:#ffffff;
+      --text:#121827;
+      --muted:#667085;
+      --line:#e6e8ee;
+      --blue:#253b68;
+      --green:#dff7e5;
+      --orange:#fff0d6;
+      --yellow:#fff8d6;
+      --gray:#f1f3f6;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC","PingFang TC",Arial,sans-serif;
+      padding:18px 14px 40px;
+    }
+    .wrap{max-width:760px;margin:0 auto}
+    section{
+      background:var(--card);
+      border-radius:26px;
+      padding:20px;
+      margin:16px 0;
+      box-shadow:0 2px 14px rgba(16,24,40,.06);
+    }
+    h1{font-size:30px;margin:0 0 18px;font-weight:900}
+    h2{font-size:24px;margin:0 0 14px;font-weight:900}
+    .meta-grid,.stat-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+    }
+    .meta-grid div,.stat-grid div{
+      background:#f8fafc;
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:12px;
+      min-height:62px;
+    }
+    b{display:block;color:var(--muted);font-size:13px;margin-bottom:6px}
+    span{font-size:16px;font-weight:700}
+    .table-head{
+      display:grid;
+      grid-template-columns:92px 76px 86px 86px 70px 96px;
+      gap:8px;
+      padding:12px 10px;
+      background:#f8fafc;
+      border-radius:18px;
+      font-weight:900;
+      color:#1d2939;
+      min-width:620px;
+    }
+    .scroll{overflow-x:auto}
+    .trade-row{
+      display:grid;
+      grid-template-columns:92px 76px 86px 86px 70px 96px;
+      gap:8px;
+      align-items:center;
+      min-width:620px;
+      padding:14px 10px;
+      border-bottom:1px solid var(--line);
+    }
+    .action-pill{
+      border-radius:999px;
+      padding:8px 10px;
+      text-align:center;
+      font-weight:900;
+      white-space:nowrap;
+    }
+    .buy .action-pill{background:var(--green);color:#097a2a}
+    .test .action-pill{background:var(--orange);color:#9a5a00}
+    .watch .action-pill{background:var(--yellow);color:#7a6500}
+    .none .action-pill,.skip .action-pill{background:var(--gray);color:#667085}
+    .stock-id{font-size:20px;font-weight:900}
+    .price-tier,.ref-price,.score,.amount{font-size:17px;font-weight:700}
+    .sub,.note{
+      grid-column:1 / -1;
+      color:var(--muted);
+      font-size:15px;
+      line-height:1.45;
+      padding-left:4px;
+    }
+    .note{color:#344054}
+    .empty{
+      padding:24px;
+      background:#f8fafc;
+      border-radius:18px;
+      color:var(--muted);
+      font-size:18px;
+      line-height:1.5;
+    }
+    .empty-title{font-size:28px;font-weight:900;color:var(--text);margin-bottom:6px}
+    .small{font-size:15px;padding:14px}
+    .candidate-row{
+      display:grid;
+      grid-template-columns:1fr 1fr 1fr;
+      gap:8px;
+      padding:12px 0;
+      border-bottom:1px solid var(--line);
+    }
+    .candidate-row span{font-size:15px}
+    @media (max-width:520px){
+      body{padding:12px 10px 32px}
+      section{padding:18px;margin:14px 0;border-radius:24px}
+      h1{font-size:28px}
+      h2{font-size:23px}
+      .meta-grid,.stat-grid{grid-template-columns:1fr}
+    }
+  </style>
 </head>
 <body>
-<div class="page">
-<section class="card">
-<div class="title">📊 每日操作介面</div>
-<div class="action-row">
-<button id="refreshBtn" class="btn">🔄 重新整理頁面</button>
-<button id="updateBtn" class="btn">🚀 更新資料與策略</button>
-</div>
-<div id="syncBanner" class="sync-banner">頁面載入中…</div>
-<div class="meta-list">
-<div><span class="label">現在時間：</span><span id="nowTime">--</span></div>
-<div><span class="label">最後更新：</span><span id="generatedAt">--</span></div>
-<div><span class="label">訊號日：</span><span id="signalDate">--</span></div>
-<div><span class="label">交易日：</span><span id="tradeDate">--</span></div>
-<div><span class="label">主資料日期：</span><span id="panelDate">--</span></div>
-<div><span class="label">資料狀態：</span><span id="dataState">--</span></div>
-<div><span class="label">來源版本：</span><span id="sourceName">--</span></div>
-<div><span class="label">持倉寫回：</span><span id="writebackState">--</span></div>
-</div>
-</section>
+  <div class="wrap">
+    <section id="meta-card"></section>
 
-<section class="card">
-<div class="section-title">📍 今日應做</div>
-<div class="summary-grid">
-<div class="summary-box"><div class="summary-label">主要動作</div><div id="headlineAction" class="summary-value">--</div><div id="headlineDesc" class="summary-sub">--</div></div>
-<div class="summary-box"><div class="summary-label">買進檔數</div><div id="buyCount" class="summary-value">0</div><div id="buyAmount" class="summary-sub">建議金額：0</div></div>
-<div class="summary-box"><div class="summary-label">持倉動作</div><div id="positionActionCount" class="summary-value">0</div><div id="positionActionDesc" class="summary-sub">目前無加減碼</div></div>
-<div class="summary-box"><div class="summary-label">風險提示</div><div id="riskLevel" class="summary-value">--</div><div id="riskDesc" class="summary-sub">--</div></div>
-</div>
-</section>
+    <section>
+      <h2>📌 今日操作</h2>
+      <div class="scroll">
+        <div class="table-head">
+          <div>動作</div>
+          <div>股票</div>
+          <div>價格分層</div>
+          <div>參考價</div>
+          <div>分數</div>
+          <div>建議金額</div>
+        </div>
+        <div id="today-action"></div>
+      </div>
+    </section>
 
-<section class="card">
-<div class="section-title">💰 價位分層</div>
-<div class="note">v3.4：只統計持倉清單，讓系統回到每日操作核心。</div>
-<div id="tierSummary" class="tier-grid"></div>
-</section>
+    <section id="stats"></section>
+    <section id="core-list"></section>
+    <section id="alpha-list"></section>
+  </div>
 
-<section class="card">
-<div class="section-title">📌 今日操作</div>
-<div class="table-wrap"><table>
-<thead><tr><th>動作</th><th>股票</th><th>價格分層</th><th>參考價格</th><th>目標權重</th><th>建議金額</th><th>備註</th></tr></thead>
-<tbody id="tradePlanBody"><tr><td colspan="7" class="empty">載入中…</td></tr></tbody>
-</table></div>
-</section>
-
-<section class="card">
-<div class="section-title">📦 持倉監控</div>
-<div class="note">持倉就是主要監控清單。輸入股票代號、股數、成本後，寫回 current_positions.csv 並重跑策略。</div>
-<div class="form-grid">
-<input id="positionStockInput" class="input" placeholder="股票代號，例如 2330" />
-<input id="positionSharesInput" class="input" placeholder="股數，例如 1000" inputmode="numeric" />
-<input id="positionCostInput" class="input" placeholder="成本，例如 950" inputmode="decimal" />
-<button id="addPositionBtn" class="btn btn-full">加入 / 更新持倉</button>
-</div>
-<div class="table-wrap"><table>
-<thead><tr><th>股票</th><th>價格分層</th><th>參考價格</th><th>股數</th><th>成本</th><th>損益%</th><th>目標權重</th><th>動作</th><th>備註</th><th>移除</th></tr></thead>
-<tbody id="positionBody"><tr><td colspan="10" class="empty">載入中…</td></tr></tbody>
-</table></div>
-</section>
-
-<section class="card">
-<div class="section-title">📈 績效摘要</div>
-<div class="perf-grid">
-<div class="perf-box"><div class="perf-label">報酬</div><div id="returnVal" class="perf-value">--</div></div>
-<div class="perf-box"><div class="perf-label">MDD</div><div id="mddVal" class="perf-value">--</div></div>
-<div class="perf-box"><div class="perf-label">Sharpe</div><div id="sharpeVal" class="perf-value">--</div></div>
-</div>
-</section>
-
-<section class="card">
-<div class="section-title">🧪 篩選除錯</div>
-<div class="meta-list">
-<div><span class="label">輸入檔數：</span><span id="dbgTotal">--</span></div>
-<div><span class="label">有效檔數：</span><span id="dbgValid">--</span></div>
-<div><span class="label">Core 初選：</span><span id="dbgCorePrimary">--</span></div>
-<div><span class="label">Alpha 初選：</span><span id="dbgAlphaPrimary">--</span></div>
-<div><span class="label">Core 最終：</span><span id="dbgCoreFinal">--</span></div>
-<div><span class="label">Alpha 最終：</span><span id="dbgAlphaFinal">--</span></div>
-</div>
-</section>
-
-<section class="card">
-<div class="section-title">🔐 GitHub 本機設定</div>
-<div class="note">token 只存在這台裝置的瀏覽器，不會寫進 repo。持倉新增/移除需要這組設定。</div>
-<div class="form-grid config-grid">
-<input id="ghOwner" class="input" placeholder="owner，例如 bichcs5566-alt" />
-<input id="ghRepo" class="input" placeholder="repo，例如 V204-app" />
-<input id="ghBranch" class="input" placeholder="branch，例如 main" />
-<input id="ghToken" class="input" placeholder="GitHub token" />
-</div>
-<div class="action-row">
-<button id="saveConfigBtn" class="btn">儲存設定</button>
-<button id="clearConfigBtn" class="btn btn-danger">清除設定</button>
-</div>
-<div class="meta-list"><div><span class="label">設定狀態：</span><span id="configStatus">未檢查</span></div></div>
-</section>
-</div>
-<script src="./app.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
