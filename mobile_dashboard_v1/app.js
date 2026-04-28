@@ -613,31 +613,31 @@ function actionMeta(row) {
     BUY: {
       cls: "badge-buy",
       label: row.action_label || "🟢 買進",
-      sub: subFromRow || "正式發動",
+      sub: subFromRow || "主升啟動",
       note: "直接買"
     },
     TEST: {
       cls: "badge-add",
       label: row.action_label || "🟠 試盤",
-      sub: subFromRow || "動能啟動",
+      sub: subFromRow || "可能準備拉",
       note: "先小倉"
     },
     BUY_SMALL: {
       cls: "badge-add",
       label: row.action_label || "🟠 試盤",
-      sub: subFromRow || "動能啟動",
+      sub: subFromRow || "可能準備拉",
       note: "先小倉"
     },
     WATCH_A: {
       cls: "badge-watch",
       label: row.action_label || "🟠 試盤",
-      sub: subFromRow || "動能啟動",
+      sub: subFromRow || "可能準備拉",
       note: "可小倉"
     },
     READY: {
       cls: "badge-hold",
       label: row.action_label || "🟡 佈局",
-      sub: subFromRow || "主力吸籌",
+      sub: subFromRow || "低檔吸籌",
       note: "盯盤"
     },
     WATCH_B: {
