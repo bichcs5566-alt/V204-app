@@ -1,0 +1,51 @@
+name: v3_sidecar_overlay_only
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install pandas numpy requests
+          fi
+
+      - name: Run sidecar overlay only
+        run: |
+          python v3_sidecar_1_overlay_only.py
+
+      - name: Commit sidecar outputs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add trade_plan_enriched.csv sidecar_candidates.csv missed_opportunities.csv sidecar_debug.csv mobile_dashboard_v1/data/trade_plan_enriched.csv mobile_dashboard_v1/data/sidecar_candidates.csv mobile_dashboard_v1/data/missed_opportunities.csv mobile_dashboard_v1/data/sidecar_debug.csv mobile_dashboard_v1/data/sidecar_meta.json || true
+
+          if git diff --cached --quiet; then
+            echo "no sidecar changes to commit"
+          else
+            git commit -m "v3 sidecar overlay only"
+            git push origin HEAD:main
+          fi
