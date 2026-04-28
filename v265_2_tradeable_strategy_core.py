@@ -1,12 +1,8 @@
 """
-v265_2_tradeable_strategy_core.py
-v265.2 可實戰版
+v265_3_dual_engine_core.py
+v265.3 雙引擎可交易版
 
-重點：
-- 分數不再全部卡 59
-- BUY / TEST / WATCH 依分數產生
-- CSV 使用 utf-8，避免 iPhone Safari 亂碼
-- 不接 sidecar、不接 v3_core
+Market Regime → Core 強勢引擎 / Alpha 反轉引擎 → Router → trade_plan
 """
 
 from pathlib import Path
@@ -20,12 +16,13 @@ DATA_DIR = ROOT / "mobile_dashboard_v1" / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 INITIAL_CAPITAL = 1_000_000
-BUY_TOP_N = 8
-TEST_TOP_N = 10
-WATCH_TOP_N = 14
-CORE_TOP_N = 25
-ALPHA_TOP_N = 8
-MAX_TRADE_PLAN_N = 32
+CORE_BUY_TOP_N = 8
+CORE_TEST_TOP_N = 8
+ALPHA_TEST_TOP_N = 8
+ALPHA_WATCH_TOP_N = 12
+MAX_TRADE_PLAN_N = 36
+CORE_CANDIDATE_N = 30
+ALPHA_CANDIDATE_N = 30
 FEE = 0.0015
 SLIPPAGE = 0.001
 
@@ -45,7 +42,10 @@ def is_common_stock_id(x):
 
 
 def price_tier(price):
-    p = float(price)
+    try:
+        p = float(price)
+    except Exception:
+        return ""
     if p < 50:
         return "50以下"
     if p < 100:
@@ -74,16 +74,8 @@ def write_both(df, filename):
 
 
 def load_price():
-    paths = [
-        ROOT / "price_panel_daily.csv",
-        ROOT / "data" / "price_panel_daily.csv",
-        DATA_DIR / "price_panel_daily.csv",
-    ]
-    src = None
-    for p in paths:
-        if p.exists() and p.stat().st_size > 0:
-            src = p
-            break
+    paths = [ROOT / "price_panel_daily.csv", ROOT / "data" / "price_panel_daily.csv", DATA_DIR / "price_panel_daily.csv"]
+    src = next((p for p in paths if p.exists() and p.stat().st_size > 0), None)
     if src is None:
         raise FileNotFoundError("price_panel_daily.csv not found")
 
@@ -136,7 +128,9 @@ def build_features(df):
         out[f"mom{n}"] = g["close"].pct_change(n)
 
     for n in [5, 10, 20, 60]:
-        out[f"ma{n}"] = g["close"].rolling(n, min_periods=max(3, min(n, 20))).mean().reset_index(level=0, drop=True)
+        out[f"ma{n}"] = (
+            g["close"].rolling(n, min_periods=max(3, min(n, 20))).mean().reset_index(level=0, drop=True)
+        )
 
     out["vol20"] = g["ret1"].rolling(20, min_periods=5).std().reset_index(level=0, drop=True)
     out["vol_ma5"] = g["volume"].rolling(5, min_periods=3).mean().reset_index(level=0, drop=True)
@@ -172,6 +166,7 @@ def build_features(df):
     close_diff = g["close"].diff()
     signed_volume = np.where(close_diff > 0, out["volume"], np.where(close_diff < 0, -out["volume"], 0))
     out["obv_proxy"] = pd.Series(signed_volume, index=out.index).groupby(out["stock_id"]).cumsum()
+    out["obv_mom5"] = g["obv_proxy"].pct_change(5).replace([np.inf, -np.inf], np.nan).fillna(0)
 
     for w in [3, 5, 10]:
         out[f"obv_up_count_{w}"] = out.groupby("stock_id")["obv_proxy"].transform(
@@ -180,6 +175,7 @@ def build_features(df):
         out[f"low_non_down_count_{w}"] = out.groupby("stock_id")["low"].transform(
             lambda s, ww=w: (s.diff() >= 0).astype(float).rolling(ww, min_periods=max(2, ww // 2)).sum()
         )
+
     return out
 
 
@@ -187,174 +183,277 @@ def latest_frame(feat):
     signal_date = pd.to_datetime(feat["date"].max())
     d = feat[feat["date"] == signal_date].dropna(subset=["close"]).copy()
 
-    zero_cols = ["ret1", "mom3", "mom5", "mom10", "mom20", "mom60", "ma20_slope", "macd_diff", "macd_hist",
-                 "obv_up_count_3", "obv_up_count_5", "obv_up_count_10",
-                 "low_non_down_count_3", "low_non_down_count_5", "low_non_down_count_10"]
+    zero_cols = [
+        "ret1", "mom3", "mom5", "mom10", "mom20", "mom60",
+        "ma20_slope", "macd_diff", "macd_hist", "obv_mom5",
+        "obv_up_count_3", "obv_up_count_5", "obv_up_count_10",
+        "low_non_down_count_3", "low_non_down_count_5", "low_non_down_count_10",
+    ]
     for c in zero_cols:
-        d[c] = pd.to_numeric(d.get(c, 0), errors="coerce").fillna(0)
+        if c not in d.columns:
+            d[c] = 0
+        d[c] = pd.to_numeric(d[c], errors="coerce").fillna(0)
 
-    d["vol20"] = pd.to_numeric(d.get("vol20", 0.03), errors="coerce").fillna(0.03)
-    d["volume_ratio"] = pd.to_numeric(d.get("volume_ratio", 1.0), errors="coerce").fillna(1.0)
-    d["vol_dry_ratio"] = pd.to_numeric(d.get("vol_dry_ratio", 1.0), errors="coerce").fillna(1.0)
+    defaults = {
+        "vol20": 0.03, "volume_ratio": 1.0, "vol_dry_ratio": 1.0,
+        "range_20": 0.2, "ma_converge_pct": 0.1, "kd_cross": 0, "macd_cross": 0,
+    }
+    for c, default in defaults.items():
+        if c not in d.columns:
+            d[c] = default
+        d[c] = pd.to_numeric(d[c], errors="coerce").fillna(default)
 
     for c in ["ma5", "ma10", "ma20", "ma60", "high_20", "low_20", "high_60", "low_60"]:
-        d[c] = pd.to_numeric(d.get(c, d["close"]), errors="coerce").fillna(d["close"])
+        if c not in d.columns:
+            d[c] = d["close"]
+        d[c] = pd.to_numeric(d[c], errors="coerce").fillna(d["close"])
 
-    d["range_20"] = pd.to_numeric(d.get("range_20", 0.2), errors="coerce").fillna(0.2)
-    d["ma_converge_pct"] = pd.to_numeric(d.get("ma_converge_pct", 0.1), errors="coerce").fillna(0.1)
-    d["kd_cross"] = pd.to_numeric(d.get("kd_cross", 0), errors="coerce").fillna(0)
-    d["macd_cross"] = pd.to_numeric(d.get("macd_cross", 0), errors="coerce").fillna(0)
+    d["price_tier"] = d["close"].apply(price_tier)
     return signal_date, d
 
 
-def score_stocks(d):
-    x = d.copy()
+def detect_market_regime(latest):
+    valid = latest[latest["close"] > 0].copy()
+    if valid.empty:
+        return "RANGE", {}
 
-    x["momentum_score"] = 0.0
-    x.loc[x["mom3"] > 0, "momentum_score"] += 6
-    x.loc[x["mom5"] > 0, "momentum_score"] += 8
-    x.loc[x["mom10"] > -0.015, "momentum_score"] += 5
-    x.loc[x["mom10"] > 0, "momentum_score"] += 5
-    x.loc[x["mom20"] > -0.03, "momentum_score"] += 5
-    x.loc[x["mom20"] > 0, "momentum_score"] += 4
-    x.loc[x["mom60"] > 0, "momentum_score"] += 2
+    pct_above_ma20 = float((valid["close"] >= valid["ma20"]).mean())
+    pct_above_ma60 = float((valid["close"] >= valid["ma60"]).mean())
+    pct_mom20_pos = float((valid["mom20"] > 0).mean())
+    pct_strong = float(((valid["mom20"] > 0.08) & (valid["close"] >= valid["high_60"] * 0.92)).mean())
+    median_mom20 = float(valid["mom20"].median())
+    avg_volume_ratio = float(valid["volume_ratio"].replace([np.inf, -np.inf], np.nan).fillna(1).median())
 
-    x["trend_score"] = 0.0
-    x.loc[x["close"] >= x["ma5"] * 0.98, "trend_score"] += 5
-    x.loc[x["close"] >= x["ma10"] * 0.98, "trend_score"] += 5
-    x.loc[x["close"] >= x["ma20"] * 0.97, "trend_score"] += 6
-    x.loc[x["close"] >= x["ma20"], "trend_score"] += 5
-    x.loc[x["ma20_slope"] >= -0.005, "trend_score"] += 4
+    regime_score = 0
+    regime_score += int(pct_above_ma20 >= 0.55)
+    regime_score += int(pct_above_ma60 >= 0.50)
+    regime_score += int(pct_mom20_pos >= 0.50)
+    regime_score += int(pct_strong >= 0.08)
+    regime_score += int(median_mom20 > 0.015)
 
-    x["volume_score"] = 0.0
-    x.loc[(x["volume_ratio"] >= 0.75) & (x["volume_ratio"] <= 4.5), "volume_score"] += 6
-    x.loc[(x["volume_ratio"] >= 1.00) & (x["volume_ratio"] <= 4.0), "volume_score"] += 6
-    x.loc[(x["vol_dry_ratio"] >= 0.45) & (x["vol_dry_ratio"] <= 1.25), "volume_score"] += 4
-    x.loc[x["volume"] > 500, "volume_score"] += 4
+    if pct_above_ma60 < 0.35 and pct_mom20_pos < 0.35:
+        regime = "BEAR"
+    elif regime_score >= 4:
+        regime = "TREND"
+    else:
+        regime = "RANGE"
 
-    x["structure_score"] = 0.0
-    x.loc[x["ma_converge_pct"] <= 0.10, "structure_score"] += 6
-    x.loc[x["range_20"] <= 0.30, "structure_score"] += 5
-    x.loc[x["close"] >= x["low_20"] * 1.02, "structure_score"] += 3
-    x.loc[x["close"] >= x["high_20"] * 0.92, "structure_score"] += 4
-    x.loc[(x["close"] / (x["high_60"] + 1e-9)).between(0.65, 1.02), "structure_score"] += 2
+    info = {
+        "pct_above_ma20": round(pct_above_ma20, 4),
+        "pct_above_ma60": round(pct_above_ma60, 4),
+        "pct_mom20_pos": round(pct_mom20_pos, 4),
+        "pct_strong": round(pct_strong, 4),
+        "median_mom20": round(median_mom20, 4),
+        "avg_volume_ratio": round(avg_volume_ratio, 4),
+        "regime_score": regime_score,
+    }
+    return regime, info
 
-    x["confirm_score"] = 0.0
-    x.loc[x["kd_cross"] == 1, "confirm_score"] += 5
-    x.loc[x["macd_cross"] == 1, "confirm_score"] += 5
-    x.loc[x["macd_diff"] > 0, "confirm_score"] += 3
-    x.loc[x["obv_up_count_3"] >= 2, "confirm_score"] += 2
-    x.loc[x["obv_up_count_5"] >= 3, "confirm_score"] += 2
-    x.loc[x["low_non_down_count_5"] >= 3, "confirm_score"] += 3
 
-    x["raw_score"] = x["momentum_score"] + x["trend_score"] + x["volume_score"] + x["structure_score"] + x["confirm_score"]
+def score_core_engine(latest):
+    x = latest.copy()
 
-    x["risk_penalty"] = 0.0
-    x.loc[x["close"] < 8, "risk_penalty"] += 12
-    x.loc[x["mom20"] > 0.35, "risk_penalty"] += 10
-    x.loc[x["volume_ratio"] > 6.0, "risk_penalty"] += 8
-    x.loc[x["vol20"] > 0.13, "risk_penalty"] += 5
+    x["core_momentum_score"] = 0.0
+    x.loc[x["mom5"] > 0.02, "core_momentum_score"] += 6
+    x.loc[x["mom10"] > 0.04, "core_momentum_score"] += 8
+    x.loc[x["mom20"] > 0.08, "core_momentum_score"] += 10
+    x.loc[x["mom60"] > 0.10, "core_momentum_score"] += 6
+    x.loc[x["close"] >= x["high_60"] * 0.90, "core_momentum_score"] += 5
 
-    x["entry_score"] = x["raw_score"] - x["risk_penalty"]
+    x["core_trend_score"] = 0.0
+    x.loc[x["close"] > x["ma20"], "core_trend_score"] += 8
+    x.loc[x["ma20"] > x["ma60"], "core_trend_score"] += 8
+    x.loc[x["ma20_slope"] > 0, "core_trend_score"] += 5
+    x.loc[x["close"] > x["ma5"], "core_trend_score"] += 4
 
-    buy_cond = (x["entry_score"] >= 72) & (x["momentum_score"] >= 18) & (x["trend_score"] >= 14)
-    test_cond = (x["entry_score"] >= 58) & ~buy_cond & ((x["mom5"] > 0) | (x["mom10"] > 0) | (x["kd_cross"] == 1) | (x["macd_cross"] == 1))
-    watch_cond = (x["entry_score"] >= 42) & ~buy_cond & ~test_cond
+    x["core_volume_score"] = 0.0
+    x.loc[x["volume_ratio"].between(1.05, 5.0), "core_volume_score"] += 8
+    x.loc[x["volume_ratio"].between(1.30, 4.5), "core_volume_score"] += 7
+    x.loc[x["volume"] > 1000, "core_volume_score"] += 5
 
-    x["action"] = "SKIP"
-    x.loc[watch_cond, "action"] = "WATCH"
-    x.loc[test_cond, "action"] = "TEST"
-    x.loc[buy_cond, "action"] = "BUY"
+    x["core_quality_score"] = 0.0
+    x.loc[x["close"] >= 30, "core_quality_score"] += 6
+    x.loc[x["close"] >= 50, "core_quality_score"] += 4
+    x.loc[x["vol20"] <= 0.08, "core_quality_score"] += 4
+    x.loc[x["macd_diff"] > 0, "core_quality_score"] += 3
+    x.loc[x["obv_up_count_5"] >= 3, "core_quality_score"] += 3
 
-    x["action_label"] = "排除"
-    x.loc[x["action"] == "WATCH", "action_label"] = "觀察"
-    x.loc[x["action"] == "TEST", "action_label"] = "試單"
-    x.loc[x["action"] == "BUY", "action_label"] = "買進"
+    x["core_raw_score"] = x["core_momentum_score"] + x["core_trend_score"] + x["core_volume_score"] + x["core_quality_score"]
 
-    x["action_sub"] = "條件不足"
-    x.loc[x["action"] == "WATCH", "action_sub"] = "觀察等待確認"
-    x.loc[x["action"] == "TEST", "action_sub"] = "小倉測試"
-    x.loc[x["action"] == "BUY", "action_sub"] = "可分批進場"
+    x["core_penalty"] = 0.0
+    x.loc[x["close"] < 20, "core_penalty"] += 12
+    x.loc[x["mom20"] > 0.45, "core_penalty"] += 10
+    x.loc[x["volume_ratio"] > 6, "core_penalty"] += 8
+    x.loc[x["vol20"] > 0.14, "core_penalty"] += 5
 
-    def make_note(r):
+    x["entry_score"] = x["core_raw_score"] - x["core_penalty"]
+    x["strategy_type"] = "CORE"
+
+    buy_cond = (x["entry_score"] >= 42) & (x["mom20"] > 0.06) & (x["close"] > x["ma20"]) & (x["close"] >= 30)
+    test_cond = (x["entry_score"] >= 34) & ~buy_cond & (x["mom10"] > 0.015) & (x["close"] > x["ma20"] * 0.98)
+    watch_cond = (x["entry_score"] >= 26) & ~buy_cond & ~test_cond
+
+    set_action_cols(x, buy_cond, test_cond, watch_cond, "強勢主攻", "強勢試單", "強勢觀察")
+
+    def note(r):
         parts = []
-        if r["momentum_score"] >= 22: parts.append("動能轉強")
-        elif r["momentum_score"] >= 14: parts.append("動能修復")
-        if r["trend_score"] >= 16: parts.append("站回均線")
-        elif r["trend_score"] >= 10: parts.append("趨勢修復")
-        if r["volume_score"] >= 14: parts.append("量能回溫")
-        elif r["volume_score"] >= 8: parts.append("量能正常")
-        if r["structure_score"] >= 14: parts.append("結構收斂")
-        elif r["structure_score"] >= 8: parts.append("結構尚可")
-        if r["confirm_score"] >= 10: parts.append("指標確認")
-        elif r["confirm_score"] >= 5: parts.append("指標初轉強")
-        if r["risk_penalty"] > 0: parts.append(f"風險扣分{int(r['risk_penalty'])}")
-        return "｜".join(parts) if parts else "條件不足"
+        if r["mom20"] > 0.10: parts.append("20日強勢")
+        if r["close"] >= r["high_60"] * 0.90: parts.append("接近60日高")
+        if r["ma20"] > r["ma60"]: parts.append("中期多頭")
+        if r["volume_ratio"] >= 1.3: parts.append("量能放大")
+        if r["close"] >= 50: parts.append("避開低價")
+        if r["core_penalty"] > 0: parts.append(f"風險扣分{int(r['core_penalty'])}")
+        return "｜".join(parts) if parts else "強勢條件不足"
 
-    x["note"] = x.apply(make_note, axis=1)
-    return x.sort_values(["entry_score", "momentum_score", "trend_score"], ascending=False)
+    x["note"] = x.apply(note, axis=1)
+    return x.sort_values(["entry_score", "core_momentum_score", "core_trend_score"], ascending=False)
 
 
-def build_candidates(scored):
-    core = scored.sort_values(["entry_score", "trend_score", "structure_score"], ascending=False).head(CORE_TOP_N).copy()
-    alpha = scored.sort_values(["momentum_score", "confirm_score", "entry_score"], ascending=False).head(ALPHA_TOP_N).copy()
-    return core, alpha
+def score_alpha_engine(latest):
+    x = latest.copy()
+
+    x["alpha_reversal_score"] = 0.0
+    x.loc[x["mom3"] > 0, "alpha_reversal_score"] += 5
+    x.loc[x["mom5"] > 0, "alpha_reversal_score"] += 6
+    x.loc[x["mom10"] > -0.03, "alpha_reversal_score"] += 5
+    x.loc[x["mom20"].between(-0.08, 0.08), "alpha_reversal_score"] += 5
+    x.loc[x["close"] >= x["ma20"] * 0.97, "alpha_reversal_score"] += 6
+    x.loc[x["close"] >= x["ma20"], "alpha_reversal_score"] += 4
+
+    x["alpha_structure_score"] = 0.0
+    x.loc[x["ma_converge_pct"] <= 0.10, "alpha_structure_score"] += 7
+    x.loc[x["range_20"] <= 0.28, "alpha_structure_score"] += 6
+    x.loc[x["low_non_down_count_5"] >= 3, "alpha_structure_score"] += 5
+    x.loc[x["close"] >= x["low_20"] * 1.02, "alpha_structure_score"] += 4
+
+    x["alpha_volume_score"] = 0.0
+    x.loc[x["volume_ratio"].between(0.80, 4.0), "alpha_volume_score"] += 6
+    x.loc[x["volume_ratio"].between(1.00, 3.5), "alpha_volume_score"] += 6
+    x.loc[x["vol_dry_ratio"].between(0.45, 1.30), "alpha_volume_score"] += 4
+    x.loc[x["obv_up_count_5"] >= 3, "alpha_volume_score"] += 4
+
+    x["alpha_confirm_score"] = 0.0
+    x.loc[x["kd_cross"] == 1, "alpha_confirm_score"] += 5
+    x.loc[x["macd_cross"] == 1, "alpha_confirm_score"] += 5
+    x.loc[x["macd_diff"] > 0, "alpha_confirm_score"] += 3
+    x.loc[x["obv_mom5"] > 0, "alpha_confirm_score"] += 3
+
+    x["alpha_raw_score"] = x["alpha_reversal_score"] + x["alpha_structure_score"] + x["alpha_volume_score"] + x["alpha_confirm_score"]
+
+    x["alpha_penalty"] = 0.0
+    x.loc[x["close"] < 8, "alpha_penalty"] += 10
+    x.loc[x["mom20"] > 0.25, "alpha_penalty"] += 8
+    x.loc[x["volume_ratio"] > 5.5, "alpha_penalty"] += 6
+    x.loc[x["vol20"] > 0.14, "alpha_penalty"] += 5
+
+    x["entry_score"] = x["alpha_raw_score"] - x["alpha_penalty"]
+    x["strategy_type"] = "ALPHA"
+
+    buy_cond = (x["entry_score"] >= 44) & (x["close"] > x["ma20"]) & (x["mom5"] > 0.025) & (x["volume_ratio"] >= 1.3)
+    test_cond = (x["entry_score"] >= 34) & ~buy_cond & ((x["mom5"] > 0) | (x["kd_cross"] == 1) | (x["macd_cross"] == 1))
+    watch_cond = (x["entry_score"] >= 26) & ~buy_cond & ~test_cond
+
+    set_action_cols(x, buy_cond, test_cond, watch_cond, "反轉確認", "小倉試單", "反轉觀察")
+
+    def note(r):
+        parts = []
+        if r["mom5"] > 0: parts.append("短線轉強")
+        if r["close"] >= r["ma20"] * 0.97: parts.append("靠近MA20")
+        if r["ma_converge_pct"] <= 0.10: parts.append("均線收斂")
+        if r["volume_ratio"] >= 1.0: parts.append("量能回溫")
+        if r["low_non_down_count_5"] >= 3: parts.append("低點不破")
+        if r["alpha_penalty"] > 0: parts.append(f"風險扣分{int(r['alpha_penalty'])}")
+        return "｜".join(parts) if parts else "反轉條件不足"
+
+    x["note"] = x.apply(note, axis=1)
+    return x.sort_values(["entry_score", "alpha_reversal_score", "alpha_structure_score"], ascending=False)
 
 
-def target_weight(action, score):
-    score = float(score)
-    if action == "BUY":
-        return 0.02 if score >= 82 else 0.01
-    if action == "TEST":
-        return 0.005
-    return 0.0
+def set_action_cols(df, buy_cond, test_cond, watch_cond, buy_sub, test_sub, watch_sub):
+    df["action"] = "SKIP"
+    df.loc[watch_cond, "action"] = "WATCH"
+    df.loc[test_cond, "action"] = "TEST"
+    df.loc[buy_cond, "action"] = "BUY"
+    df["action_label"] = "排除"
+    df.loc[df["action"] == "WATCH", "action_label"] = "觀察"
+    df.loc[df["action"] == "TEST", "action_label"] = "試單"
+    df.loc[df["action"] == "BUY", "action_label"] = "買進"
+    df["action_sub"] = "條件不足"
+    df.loc[df["action"] == "WATCH", "action_sub"] = watch_sub
+    df.loc[df["action"] == "TEST", "action_sub"] = test_sub
+    df.loc[df["action"] == "BUY", "action_sub"] = buy_sub
 
 
-def build_trade_plan(scored, signal_date):
+def route_trade_plan(core, alpha, regime, signal_date):
     trade_date = next_trade_date(signal_date)
-    buy = scored[scored["action"] == "BUY"].head(BUY_TOP_N)
-    test = scored[scored["action"] == "TEST"].head(TEST_TOP_N)
-    watch = scored[scored["action"] == "WATCH"].head(WATCH_TOP_N)
 
-    selected = pd.concat([buy, test, watch], ignore_index=True).drop_duplicates(subset=["stock_id"]).head(MAX_TRADE_PLAN_N)
+    if regime == "TREND":
+        core_buy_n, core_test_n, alpha_test_n, alpha_watch_n = 8, 8, 3, 5
+    elif regime == "BEAR":
+        core_buy_n, core_test_n, alpha_test_n, alpha_watch_n = 0, 3, 8, 12
+    else:
+        core_buy_n, core_test_n, alpha_test_n, alpha_watch_n = 5, 6, 8, 10
 
-    if selected.empty:
-        selected = scored.head(WATCH_TOP_N).copy()
+    selected = pd.concat([
+        core[core["action"] == "BUY"].head(core_buy_n),
+        core[core["action"] == "TEST"].head(core_test_n),
+        alpha[alpha["action"].isin(["BUY", "TEST"])].head(alpha_test_n),
+        alpha[alpha["action"] == "WATCH"].head(alpha_watch_n),
+    ], ignore_index=True)
+
+    if not selected.empty:
+        selected["strategy_priority"] = np.where(selected["strategy_type"] == "CORE", 1, 2)
+        selected = selected.sort_values(["strategy_priority", "entry_score"], ascending=[True, False])
+        selected = selected.drop_duplicates(subset=["stock_id"], keep="first")
+    else:
+        selected = alpha.head(ALPHA_WATCH_TOP_N).copy()
         selected["action"] = "WATCH"
         selected["action_label"] = "觀察"
         selected["action_sub"] = "低分觀察，不進場"
         selected["note"] = selected["note"].astype(str) + "｜保底觀察"
 
+    selected = selected.head(MAX_TRADE_PLAN_N).copy()
+
     rows = []
     for _, r in selected.iterrows():
+        action = str(r["action"])
+        strategy_type = str(r["strategy_type"])
+        score = float(r["entry_score"])
         px = float(r["close"]) * (1 + SLIPPAGE)
-        w = target_weight(r["action"], r["entry_score"])
-        amount = INITIAL_CAPITAL * w
+
+        if action == "BUY" and strategy_type == "CORE":
+            weight = 0.02 if score >= 50 else 0.01
+        elif action == "BUY" and strategy_type == "ALPHA":
+            weight = 0.008
+        elif action == "TEST":
+            weight = 0.005
+        else:
+            weight = 0.0
+
+        amount = INITIAL_CAPITAL * weight
         shares = amount / px if px > 0 else 0
         total_cost = shares * px * (1 + FEE)
 
         rows.append({
             "signal_date": str(pd.to_datetime(signal_date).date()),
             "trade_date": str(pd.to_datetime(trade_date).date()),
-            "action": r["action"],
+            "market_regime": regime,
+            "strategy_type": strategy_type,
+            "action": action,
             "action_label": r["action_label"],
             "action_sub": r["action_sub"],
             "stock_id": r["stock_id"],
             "price_tier": price_tier(px),
             "ref_price": round(px, 4),
-            "target_weight": round(w, 4),
+            "target_weight": round(weight, 4),
             "suggested_amount": round(amount, 2),
             "suggested_shares": round(shares, 2),
             "estimated_total_cost": round(total_cost, 2),
-            "entry_score": round(float(r["entry_score"]), 2),
-            "momentum_score": round(float(r["momentum_score"]), 2),
-            "trend_score": round(float(r["trend_score"]), 2),
-            "volume_score": round(float(r["volume_score"]), 2),
-            "structure_score": round(float(r["structure_score"]), 2),
-            "confirm_score": round(float(r["confirm_score"]), 2),
-            "source": "V265_2",
+            "entry_score": round(score, 2),
+            "source": "V265_3_DUAL",
             "note": r["note"],
         })
+
     return pd.DataFrame(rows)
 
 
@@ -367,35 +466,40 @@ def ensure_support_files():
         "daily_nav.csv": ["date", "nav", "ret"],
     }
     for name, cols in support.items():
-        root_p = ROOT / name
-        data_p = DATA_DIR / name
-        if not root_p.exists():
-            pd.DataFrame(columns=cols).to_csv(root_p, index=False, encoding="utf-8")
-        if not data_p.exists():
-            pd.DataFrame(columns=cols).to_csv(data_p, index=False, encoding="utf-8")
+        for p in [ROOT / name, DATA_DIR / name]:
+            if not p.exists():
+                pd.DataFrame(columns=cols).to_csv(p, index=False, encoding="utf-8")
 
 
-def build_debug(raw, latest, scored, core, alpha, trade_plan, signal_date, src):
+def build_debug(raw, latest, core, alpha, trade_plan, signal_date, src, regime, regime_info):
     return pd.DataFrame([{
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "price_source": src,
         "signal_date": str(pd.to_datetime(signal_date).date()),
+        "market_regime": regime,
+        "regime_score": regime_info.get("regime_score", ""),
+        "pct_above_ma20": regime_info.get("pct_above_ma20", ""),
+        "pct_above_ma60": regime_info.get("pct_above_ma60", ""),
+        "pct_mom20_pos": regime_info.get("pct_mom20_pos", ""),
+        "pct_strong": regime_info.get("pct_strong", ""),
+        "median_mom20": regime_info.get("median_mom20", ""),
         "total_input_rows": int(len(raw)),
         "latest_stock_count": int(len(latest)),
-        "scored_count": int(len(scored)),
-        "buy_count": int((scored["action"] == "BUY").sum()),
-        "test_count": int((scored["action"] == "TEST").sum()),
-        "watch_count": int((scored["action"] == "WATCH").sum()),
-        "skip_count": int((scored["action"] == "SKIP").sum()),
-        "core_count": int(len(core)),
-        "alpha_count": int(len(alpha)),
-        "trade_plan_count": int(len(trade_plan)),
+        "core_buy_count": int((core["action"] == "BUY").sum()),
+        "core_test_count": int((core["action"] == "TEST").sum()),
+        "core_watch_count": int((core["action"] == "WATCH").sum()),
+        "alpha_buy_count": int((alpha["action"] == "BUY").sum()),
+        "alpha_test_count": int((alpha["action"] == "TEST").sum()),
+        "alpha_watch_count": int((alpha["action"] == "WATCH").sum()),
         "trade_buy_count": int((trade_plan["action"] == "BUY").sum()),
         "trade_test_count": int((trade_plan["action"] == "TEST").sum()),
         "trade_watch_count": int((trade_plan["action"] == "WATCH").sum()),
-        "avg_score": round(float(scored["entry_score"].mean()), 2) if len(scored) else 0,
-        "max_score": round(float(scored["entry_score"].max()), 2) if len(scored) else 0,
-        "note": "v265.2 tradeable scoring"
+        "core_count": int(len(core)),
+        "alpha_count": int(len(alpha)),
+        "trade_plan_count": int(len(trade_plan)),
+        "core_max_score": round(float(core["entry_score"].max()), 2) if len(core) else 0,
+        "alpha_max_score": round(float(alpha["entry_score"].max()), 2) if len(alpha) else 0,
+        "note": "v265.3 dual engine"
     }])
 
 
@@ -403,39 +507,51 @@ def main():
     raw, src = load_price()
     feat = build_features(raw)
     signal_date, latest = latest_frame(feat)
-    scored = score_stocks(latest)
-    core, alpha = build_candidates(scored)
-    trade_plan = build_trade_plan(scored, signal_date)
-    debug = build_debug(raw, latest, scored, core, alpha, trade_plan, signal_date, src)
+    regime, regime_info = detect_market_regime(latest)
+
+    core_all = score_core_engine(latest)
+    alpha_all = score_alpha_engine(latest)
+    core_candidates = core_all.head(CORE_CANDIDATE_N).copy()
+    alpha_candidates = alpha_all.head(ALPHA_CANDIDATE_N).copy()
+
+    trade_plan = route_trade_plan(core_candidates, alpha_candidates, regime, signal_date)
+    candidates = pd.concat([core_candidates.assign(engine="CORE"), alpha_candidates.assign(engine="ALPHA")], ignore_index=True)
+    debug = build_debug(raw, latest, core_candidates, alpha_candidates, trade_plan, signal_date, src, regime, regime_info)
 
     write_both(trade_plan, "trade_plan.csv")
-    write_both(scored, "candidates.csv")
-    write_both(core, "core_candidates.csv")
-    write_both(alpha, "alpha_candidates.csv")
+    write_both(core_candidates, "core_candidates.csv")
+    write_both(alpha_candidates, "alpha_candidates.csv")
+    write_both(candidates, "candidates.csv")
     write_both(debug, "selection_debug.csv")
     raw.to_csv(DATA_DIR / "price_panel_daily.csv", index=False, encoding="utf-8")
     ensure_support_files()
 
     meta = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "source": "v265_2_tradeable_strategy_core",
+        "source": "v265_3_dual_engine_core",
         "price_source": src,
         "signal_date": str(pd.to_datetime(signal_date).date()),
         "trade_date": str(next_trade_date(signal_date).date()),
         "data_state": "fresh",
+        "market_regime": regime,
+        "regime_info": regime_info,
         "trade_plan_count": int(len(trade_plan)),
         "buy_count": int((trade_plan["action"] == "BUY").sum()),
         "test_count": int((trade_plan["action"] == "TEST").sum()),
         "watch_count": int((trade_plan["action"] == "WATCH").sum()),
-        "execution_rule": "T日產生訊號，下一交易日人工下單",
+        "core_trade_count": int((trade_plan["strategy_type"] == "CORE").sum()) if "strategy_type" in trade_plan.columns else 0,
+        "alpha_trade_count": int((trade_plan["strategy_type"] == "ALPHA").sum()) if "strategy_type" in trade_plan.columns else 0,
+        "execution_rule": "Market Regime → Core/Alpha Router → T+1人工下單",
     }
+
     for p in [ROOT / "meta.json", DATA_DIR / "meta.json"]:
         with open(p, "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
 
-    print("v265.2 tradeable strategy core completed")
+    print("v265.3 dual engine completed")
+    print("market_regime:", regime, regime_info)
     print(debug.to_string(index=False))
-    print(trade_plan.head(20).to_string(index=False))
+    print(trade_plan.head(30).to_string(index=False))
 
 
 if __name__ == "__main__":
