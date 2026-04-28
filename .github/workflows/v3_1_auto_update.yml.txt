@@ -1,0 +1,72 @@
+name: v3_1_auto_update
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 11 * * 1-5'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Update market data
+        run: |
+          python update_market_data.py
+
+      - name: Run main pipeline
+        run: |
+          python v1_stable_pipeline.py
+
+      - name: Run dashboard bridge
+        run: |
+          python v3_1_dashboard_bridge.py
+
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            trade_plan.csv \
+            position_monitor.csv \
+            watchlist_monitor.csv \
+            full_summary.csv \
+            selection_debug.csv \
+            current_positions.csv \
+            watchlist.csv \
+            mobile_dashboard_v1/data/trade_plan.csv \
+            mobile_dashboard_v1/data/position_monitor.csv \
+            mobile_dashboard_v1/data/watchlist_monitor.csv \
+            mobile_dashboard_v1/data/full_summary.csv \
+            mobile_dashboard_v1/data/selection_debug.csv \
+            mobile_dashboard_v1/data/current_positions.csv \
+            mobile_dashboard_v1/data/watchlist.csv \
+            mobile_dashboard_v1/data/meta.json
+
+          if git diff --cached --quiet; then
+            echo "no changes to commit"
+          else
+            git commit -m "v3.1 auto update"
+            git push origin HEAD:main
+          fi
