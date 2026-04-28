@@ -20,7 +20,7 @@ except Exception:
 
 # =========================================================
 # v1_stable_pipeline.py
-# v2.6 behavior validation version
+# v2.7 three layer main force version
 #
 # 核心修正：
 # 1. current_positions.csv 是唯一持倉來源。
@@ -539,6 +539,7 @@ def build_features(df):
     df["prev_high_20"] = g["close"].shift(1).rolling(20).max().reset_index(level=0, drop=True)
 
     df["ma20_slope"] = g["ma20"].diff(3) / (g["ma20"].shift(3) + 1e-9)
+    df["range_20"] = (g["high"].rolling(20, min_periods=5).max().reset_index(level=0, drop=True) - g["low"].rolling(20, min_periods=5).min().reset_index(level=0, drop=True)) / (df["close"] + 1e-9)
 
     # KD
     low9 = g["low"].rolling(9).min().reset_index(level=0, drop=True)
@@ -581,7 +582,7 @@ def select_stocks(day_df):
         "mom5", "mom20", "mom60", "vol20", "volume_ratio",
         "prev_high_10", "prev_high_20", "prev_low_20",
         "low_20d", "low_60d", "ma20_slope",
-        "kd_cross_up", "macd_cross_up", "macd_diff", "macd_hist"
+        "kd_cross_up", "macd_cross_up", "range_20", "macd_diff", "macd_hist"
     ]
 
     valid = day_df.copy()
@@ -615,11 +616,12 @@ def select_stocks(day_df):
     valid["macd_diff"] = valid["macd_diff"].fillna(0)
     valid["macd_hist"] = valid["macd_hist"].fillna(0)
     valid["ma20_slope"] = valid["ma20_slope"].fillna(0)
+    valid["range_20"] = pd.to_numeric(valid["range_20"], errors="coerce").fillna(0.18)
 
     for col in ["prev_high_10", "prev_high_20", "prev_low_20", "low_20d", "low_60d"]:
         valid[col] = pd.to_numeric(valid[col], errors="coerce").fillna(valid["close"])
 
-    for col in ["kd_cross_up", "macd_cross_up"]:
+    for col in ["kd_cross_up", "macd_cross_up", "range_20"]:
         valid[col] = pd.to_numeric(valid[col], errors="coerce").fillna(0)
 
     valid_count = len(valid)
@@ -702,30 +704,49 @@ def select_stocks(day_df):
         (x["macd_cross_up"] == 1)
     ).astype(int)
 
-    # v2.6：死股排除 + 佈局雙條件
+    # v2.7：三層主力模型
+    x["converging"] = (
+        (x["ma_converge_pct"] <= 0.075) &
+        (x["range_20"] <= 0.22)
+    ).astype(int)
+
     x["dead_stock"] = (
-        ((x["volume_ratio"] < 0.85) & (x["mom5"].abs() < 0.018) & (x["mom20"] <= 0.015)) |
-        ((x["volume"] < 300) & (x["mom5"].abs() < 0.018))
+        ((x["volume_ratio"] < 0.75) & (x["mom5"].abs() < 0.018) & (x["mom20"] <= 0.015) & (x["converging"] == 0)) |
+        ((x["volume"] < 250) & (x["mom5"].abs() < 0.018) & (x["converging"] == 0))
     ).astype(int)
 
-    x["structure_improving"] = (
-        (x["low_20d"] >= x["low_60d"] * 0.97) |
-        (x["ma20_slope"] > -0.002) |
-        (x["close"] >= x["ma20"] * 0.96)
-    ).astype(int)
-
-    x["behavior_evidence"] = (
-        (x["volume_ratio"] > 1.08) |
-        ((x["mom5"] > 0) & (x["volume_ratio"] > 0.9)) |
-        (x["kd_cross_up"] == 1) |
-        (x["macd_cross_up"] == 1)
-    ).astype(int)
-
-    x["main_force_setup"] = (
-        (x["structure_improving"] == 1) &
-        (x["behavior_evidence"] == 1) &
+    x["latent_layer"] = (
+        (x["converging"] == 1) &
+        (x["low_20d"] >= x["low_60d"] * 0.96) &
+        (x["ma20_slope"] > -0.004) &
+        (x["close"] >= x["ma20"] * 0.94) &
+        (x["close"] >= x["ma60"] * 0.88) &
+        (x["mom5"].abs() <= 0.075) &
+        (x["mom20"] >= -0.08) &
+        (x["volume_ratio"] >= 0.65) &
+        (x["volume_ratio"] <= 2.8) &
         (x["dead_stock"] == 0)
     ).astype(int)
+
+    x["testing_layer"] = (
+        (((x["kd_cross_up"] == 1) | (x["macd_cross_up"] == 1) | (x["mom5"] > 0.025))) &
+        (x["volume_ratio"] >= 0.95) &
+        (x["close"] >= x["ma20"] * 0.97) &
+        (x["dead_stock"] == 0)
+    ).astype(int)
+
+    x["breakout_layer"] = (
+        (x["close"] > x["ma20"]) &
+        (x["ma20_slope"] >= -0.003) &
+        (x["mom5"] > 0) &
+        (x["volume_ratio"] >= 1.03) &
+        (((x["close"] >= x["prev_high_20"] * 0.985) | (x["volume_ratio"] >= 1.12))) &
+        (x["dead_stock"] == 0)
+    ).astype(int)
+
+    x["main_force_setup"] = ((x["latent_layer"] == 1) | (x["testing_layer"] == 1) | (x["breakout_layer"] == 1)).astype(int)
+    x["structure_improving"] = ((x["latent_layer"] == 1) | (x["testing_layer"] == 1)).astype(int)
+    x["behavior_evidence"] = ((x["testing_layer"] == 1) | (x["breakout_layer"] == 1)).astype(int)
 
     # ========= STEP 3 分數：結構 + 動能 + 主力階段 =========
     x["momentum_score"] = (
@@ -740,11 +761,11 @@ def select_stocks(day_df):
     )
 
     x["main_force_score"] = (
-        x["main_force_setup"] * 0.22
-        + x["structure_improving"] * 0.06
-        + x["behavior_evidence"] * 0.08
-        + ((x["volume_ratio"] >= 1.05) & (x["volume_ratio"] <= 4.5)).astype(int) * 0.05
-        + (1 - x["ma_converge_pct"].clip(0, 0.25)) * 0.05
+        x["latent_layer"] * 0.20
+        + x["testing_layer"] * 0.24
+        + x["breakout_layer"] * 0.30
+        + ((x["volume_ratio"] >= 0.85) & (x["volume_ratio"] <= 4.5)).astype(int) * 0.04
+        + (1 - x["ma_converge_pct"].clip(0, 0.25)) * 0.06
         - x["dead_stock"] * 0.30
     )
 
@@ -805,9 +826,9 @@ def select_stocks(day_df):
 
     # candidate bucket
     selected["candidate_bucket"] = "structure_momentum"
-    selected.loc[selected["breakout_20"] == 1, "candidate_bucket"] = "breakout"
-    selected.loc[(selected["momentum_ok"] == 1) & (selected["breakout_20"] == 0), "candidate_bucket"] = "pullback"
-    selected.loc[selected["main_force_setup"] == 1, "candidate_bucket"] = "setup"
+    selected.loc[selected.get("latent_layer", 0) == 1, "candidate_bucket"] = "latent"
+    selected.loc[selected.get("testing_layer", 0) == 1, "candidate_bucket"] = "pullback"
+    selected.loc[(selected.get("breakout_layer", 0) == 1) | (selected["breakout_20"] == 1), "candidate_bucket"] = "breakout"
 
     core = selected.head(CORE_TOP_N).copy()
 
@@ -831,7 +852,10 @@ def select_stocks(day_df):
         "core_final_count": int(len(core)),
         "alpha_final_count": int(len(alpha)),
         "dead_stock_count": int(x["dead_stock"].sum()) if "dead_stock" in x.columns else 0,
-        "data_layer_state": "v2_6_behavior_validation",
+        "latent_count": int(x["latent_layer"].sum()) if "latent_layer" in x.columns else 0,
+        "testing_count": int(x["testing_layer"].sum()) if "testing_layer" in x.columns else 0,
+        "breakout_count": int(x["breakout_layer"].sum()) if "breakout_layer" in x.columns else 0,
+        "data_layer_state": "v2_7_three_layer_main_force",
     }])
 
     return core, alpha, debug
@@ -1169,9 +1193,9 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
         elif action == "TEST" or bucket == "pullback" or score >= 50:
             action = "TEST"
             state_note = (state_note + "；" if state_note else "") + "試盤候選"
-        elif action == "READY" or bucket in ["squeeze", "fallback"] or score >= 28:
+        elif action == "READY" or bucket in ["squeeze", "fallback", "setup", "latent"] or score >= 26:
             action = "READY"
-            state_note = (state_note + "；" if state_note else "") + "佈局候選"
+            state_note = (state_note + "；" if state_note else "") + "潛伏候選"
         else:
             # 不丟掉，放入弱觀察池；只從策略候選池補，不從全市場補
             observe_pool.append((score, stock_id, row, target_weight))
@@ -1302,7 +1326,7 @@ def build_outputs(df, prev_trade_plan=None):
         "trade_date": str(trade_date.date()),
         "price_panel_latest_date": str(price_panel_latest_date.date()),
         "data_state": "fresh",
-        "source": "v2.6_behavior_validation",
+        "source": "v2.7_three_layer_main_force",
         "execution_rule": "T日盤後產生訊號，T+1交易",
         "prev_trade_plan_file": PREV_TRADE_PLAN_FILE,
         "trade_plan_history_file": f"trade_plan_history/{str(trade_date.date())}.csv",
