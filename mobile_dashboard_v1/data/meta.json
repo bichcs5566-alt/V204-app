@@ -1,14 +1,17 @@
 {
-  "generated_at": "2026-04-28 02:42:23",
-  "now_time": "2026-04-28 02:42:23",
+  "generated_at": "2026-04-28 03:20:41",
+  "now_time": "2026-04-28 03:20:41",
   "signal_date": "2026-04-24",
-  "trade_date": "2026-04-25",
+  "trade_date": "2026-04-27",
   "price_panel_latest_date": "2026-04-24",
   "data_state": "fresh",
-  "source": "v3_0_core_engine_strict",
+  "source": "v3_1_tradeable_main_force",
   "execution_rule": "T日盤後產生訊號，T+1交易",
   "trade_plan_count": 0,
   "v3_selected_count": 0,
+  "breakout_ready_count": 0,
+  "latent_strong_count": 0,
+  "test_count": 0,
   "position_writeback_state": "idle",
   "position_source": "current_positions.csv"
 }
