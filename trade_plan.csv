@@ -1,1 +1,1 @@
-﻿signal_date,trade_date,action,action_label,action_sub,raw_action,stock_id,price_tier,target_weight,ref_price,suggested_amount,entry_score,stage,accumulation_score,control_score,test_move_score,pre_breakout_score,note,detail_note
+﻿signal_date,trade_date,action,action_label,action_sub,raw_action,stock_id,price_tier,target_weight,ref_price,suggested_amount,entry_score,stage,accumulation_score,control_score,structure_score,test_move_score,pre_breakout_score,note,detail_note
