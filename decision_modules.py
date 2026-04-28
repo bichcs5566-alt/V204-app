@@ -1,14 +1,19 @@
 """
 decision_modules.py
-v2.6 主力行為驗證版
+v2.7 三層主力模型
 
-目的：
-- 修正 v2.5 把「沒人理的死股」誤判成佈局。
-- 佈局必須同時有：
-  1. 結構改善：低點抬高 / MA20走平
-  2. 行為證據：量能微增 / 小動能轉正 / KD或MACD轉強
-- 加入死股排除：
-  量縮 + 幾乎不動 = 不是佈局，是死股
+核心修正：
+v2.6 會把「還沒放量、還沒 KD/MACD 轉強，但線型已收斂」的潛伏股誤殺。
+v2.7 補回 Layer 1：
+
+Layer 1 潛伏：均線收斂、波動縮小、低點抬高、量穩定不爆，不要求放量/黃金交叉
+Layer 2 試盤：KD 或 MACD 任一轉強 + 微量能 / 小動能
+Layer 3 主升：站上 MA20 + 動能 + 放量
+
+輸出：
+READY = 潛伏 / 佈局
+TEST  = 試盤
+BUY   = 主升
 """
 
 import numpy as np
@@ -81,6 +86,13 @@ def add_decision_features(df: pd.DataFrame) -> pd.DataFrame:
     out["prev_high_20"] = g["close"].shift(1).rolling(20, min_periods=5).max().reset_index(level=0, drop=True)
     out["ma20_slope"] = g["ma20"].diff(3) / (g["ma20"].shift(3) + 1e-9)
 
+    out["ma_max"] = out[["ma5", "ma10", "ma20"]].max(axis=1)
+    out["ma_min"] = out[["ma5", "ma10", "ma20"]].min(axis=1)
+    out["ma_converge_pct"] = (out["ma_max"] - out["ma_min"]) / (out["close"] + 1e-9)
+
+    out["range_20"] = (g["high"].rolling(20, min_periods=5).max().reset_index(level=0, drop=True) -
+                       g["low"].rolling(20, min_periods=5).min().reset_index(level=0, drop=True)) / (out["close"] + 1e-9)
+
     low9 = g["low"].rolling(9, min_periods=5).min().reset_index(level=0, drop=True)
     high9 = g["high"].rolling(9, min_periods=5).max().reset_index(level=0, drop=True)
     rsv = (out["close"] - low9) / (high9 - low9 + 1e-9) * 100
@@ -108,22 +120,96 @@ def is_dead_stock(row):
     mom20 = safe_num(row.get("mom20"))
     volume = safe_num(row.get("volume"))
     turnover = safe_num(row.get("turnover_value"))
-    close = safe_num(row.get("close"))
+    ma_converge = safe_num(row.get("ma_converge_pct"))
+    range20 = safe_num(row.get("range_20"))
+
+    # v2.7：不能把收斂潛伏誤判成死股
+    is_converging = (
+        has_value(ma_converge) and ma_converge <= 0.055
+        and has_value(range20) and range20 <= 0.18
+    )
 
     quiet = has_value(mom5) and abs(mom5) < 0.018
     weak20 = (not has_value(mom20)) or mom20 <= 0.015
-    no_volume_push = has_value(vr) and vr < 0.85
+    no_volume_push = has_value(vr) and vr < 0.75
+    low_liquidity = (has_value(volume) and volume < 250) or (has_value(turnover) and turnover < 15000)
 
-    # 低成交值 + 幾乎不動 + 無量，視為死股
-    low_liquidity = False
-    if has_value(volume) and volume < 300:
-        low_liquidity = True
-    if has_value(turnover) and turnover < 20000:
-        low_liquidity = True
-    if has_value(close) and close < 15 and low_liquidity:
-        low_liquidity = True
+    if is_converging and not low_liquidity:
+        return False
 
     return bool((quiet and weak20 and no_volume_push) or (quiet and low_liquidity))
+
+
+def layer_latent(row):
+    """Layer 1 潛伏：收斂、止跌、低點不破、量穩，不要求放量或黃金交叉。"""
+    close = safe_num(row.get("close"))
+    ma20 = safe_num(row.get("ma20"))
+    ma60 = safe_num(row.get("ma60"))
+    ma20_slope = safe_num(row.get("ma20_slope"))
+    low20 = safe_num(row.get("low_20d"))
+    low60 = safe_num(row.get("low_60d"))
+    mom5 = safe_num(row.get("mom5"))
+    mom20 = safe_num(row.get("mom20"))
+    vr = safe_num(row.get("volume_ratio"))
+    ma_converge = safe_num(row.get("ma_converge_pct"))
+    range20 = safe_num(row.get("range_20"))
+
+    ma_squeeze = has_value(ma_converge) and ma_converge <= 0.075
+    range_squeeze = has_value(range20) and range20 <= 0.22
+    low_not_break = has_value(low20) and has_value(low60) and low20 >= low60 * 0.96
+    ma_flat = has_value(ma20_slope) and ma20_slope > -0.004
+    price_near_ma = has_value(close) and has_value(ma20) and close >= ma20 * 0.94
+    not_far_under_60 = (not has_value(ma60)) or (has_value(close) and close >= ma60 * 0.88)
+    momentum_quiet = has_value(mom5) and abs(mom5) <= 0.075 and (not has_value(mom20) or mom20 >= -0.08)
+    volume_stable = has_value(vr) and 0.65 <= vr <= 2.8
+
+    return bool(
+        ma_squeeze
+        and range_squeeze
+        and low_not_break
+        and ma_flat
+        and price_near_ma
+        and not_far_under_60
+        and momentum_quiet
+        and volume_stable
+        and not is_dead_stock(row)
+    )
+
+
+def layer_testing(row):
+    close = safe_num(row.get("close"))
+    ma20 = safe_num(row.get("ma20"))
+    mom5 = safe_num(row.get("mom5"))
+    vr = safe_num(row.get("volume_ratio"))
+    kd_cross = safe_num(row.get("kd_cross_up"), 0) == 1
+    macd_cross = safe_num(row.get("macd_cross_up"), 0) == 1
+
+    return bool(
+        (kd_cross or macd_cross or (has_value(mom5) and mom5 > 0.025))
+        and has_value(vr) and vr >= 0.95
+        and has_value(close) and has_value(ma20) and close >= ma20 * 0.97
+        and not is_dead_stock(row)
+    )
+
+
+def layer_breakout(row):
+    close = safe_num(row.get("close"))
+    ma20 = safe_num(row.get("ma20"))
+    ma20_slope = safe_num(row.get("ma20_slope"))
+    mom5 = safe_num(row.get("mom5"))
+    vr = safe_num(row.get("volume_ratio"))
+    prev_high_20 = safe_num(row.get("prev_high_20"))
+
+    breakout_price = has_value(close) and has_value(prev_high_20) and close >= prev_high_20 * 0.985
+
+    return bool(
+        has_value(close) and has_value(ma20) and close > ma20
+        and has_value(ma20_slope) and ma20_slope >= -0.003
+        and has_value(mom5) and mom5 > 0
+        and has_value(vr) and vr >= 1.03
+        and (breakout_price or vr >= 1.12)
+        and not is_dead_stock(row)
+    )
 
 
 def structure_score(row):
@@ -137,54 +223,40 @@ def structure_score(row):
 
     if has_value(close):
         if close >= 50:
-            score += 18
-            reasons.append("價格結構健康")
+            score += 18; reasons.append("價格結構健康")
         elif close >= 20:
-            score += 12
-            reasons.append("中低價可接受")
+            score += 12; reasons.append("中低價可接受")
         elif close >= 10:
-            score += 4
-            reasons.append("低價降權")
+            score += 4; reasons.append("低價降權")
         else:
-            score -= 14
-            reasons.append("過低價風險")
+            score -= 14; reasons.append("過低價風險")
 
     if has_value(volume):
         if volume >= 3000:
-            score += 16
-            reasons.append("成交量足")
+            score += 16; reasons.append("成交量足")
         elif volume >= 1000:
-            score += 10
-            reasons.append("成交量可")
+            score += 10; reasons.append("成交量可")
         elif volume >= 300:
-            score += 3
-            reasons.append("成交量偏低")
+            score += 3; reasons.append("成交量偏低")
         else:
-            score -= 12
-            reasons.append("流動性不足")
+            score -= 12; reasons.append("流動性不足")
 
     if has_value(turnover_value):
         if turnover_value >= 200000:
-            score += 12
-            reasons.append("成交值佳")
+            score += 12; reasons.append("成交值佳")
         elif turnover_value >= 50000:
-            score += 6
-            reasons.append("成交值可")
+            score += 6; reasons.append("成交值可")
         elif turnover_value < 20000:
-            score -= 6
-            reasons.append("成交值不足")
+            score -= 6; reasons.append("成交值不足")
 
     if has_value(vol_ratio):
-        if 0.95 <= vol_ratio <= 4.0:
-            score += 6
-            reasons.append("量能健康")
-        elif vol_ratio < 0.75:
-            score -= 6
-            reasons.append("量能不足")
+        if 0.65 <= vol_ratio <= 4.0:
+            score += 6; reasons.append("量能可用")
+        elif vol_ratio < 0.55:
+            score -= 6; reasons.append("量能不足")
 
     if is_dead_stock(row):
-        score -= 18
-        reasons.append("死股排除")
+        score -= 18; reasons.append("死股排除")
 
     return score, "；".join(reasons) if reasons else "結構不足"
 
@@ -204,109 +276,58 @@ def momentum_score(row):
 
     if has_value(mom5):
         if mom5 > 0.03:
-            score += 16
-            reasons.append("5日動能強")
+            score += 16; reasons.append("5日動能強")
         elif mom5 > 0:
-            score += 10
-            reasons.append("5日動能正")
+            score += 10; reasons.append("5日動能正")
         elif mom5 > -0.03:
-            score += 4
-            reasons.append("5日未破壞")
+            score += 4; reasons.append("5日未破壞")
 
     if has_value(mom20):
         if mom20 > 0.08:
-            score += 16
-            reasons.append("20日動能強")
+            score += 16; reasons.append("20日動能強")
         elif mom20 > 0:
-            score += 10
-            reasons.append("20日動能正")
-        elif mom20 > -0.05:
-            score += 3
-            reasons.append("20日中性")
+            score += 10; reasons.append("20日動能正")
+        elif mom20 > -0.08:
+            score += 4; reasons.append("20日未破壞")
 
     if has_value(close) and has_value(prev_high_20) and close >= prev_high_20 * 0.98:
-        score += 10
-        reasons.append("接近20日高")
+        score += 10; reasons.append("接近20日高")
 
-    if has_value(close) and has_value(ma20) and close >= ma20 * 0.98:
-        score += 8
-        reasons.append("靠近MA20")
+    if has_value(close) and has_value(ma20) and close >= ma20 * 0.97:
+        score += 8; reasons.append("靠近MA20")
 
     if kd_cross or macd_cross:
-        score += 16
-        reasons.append("KD或MACD轉強")
+        score += 16; reasons.append("KD或MACD轉強")
 
     if has_value(macd_diff) and macd_diff > 0:
-        score += 6
-        reasons.append("MACD偏多")
+        score += 6; reasons.append("MACD偏多")
 
-    return score, "；".join(reasons) if reasons else "動能不足"
+    return score, "；".join(reasons) if reasons else "動能尚未啟動"
 
 
 def main_force_stage_score(row):
+    latent = layer_latent(row)
+    testing = layer_testing(row)
+    breakout = layer_breakout(row)
+
     score = 0
     reasons = []
 
-    close = safe_num(row.get("close"))
-    ma20 = safe_num(row.get("ma20"))
-    ma20_slope = safe_num(row.get("ma20_slope"))
-    mom5 = safe_num(row.get("mom5"))
-    mom20 = safe_num(row.get("mom20"))
-    vol_ratio = safe_num(row.get("volume_ratio"))
-    low20 = safe_num(row.get("low_20d"))
-    low60 = safe_num(row.get("low_60d"))
-    kd_cross = safe_num(row.get("kd_cross_up"), 0) == 1
-    macd_cross = safe_num(row.get("macd_cross_up"), 0) == 1
-
-    structure_improving = (
-        (has_value(low20) and has_value(low60) and low20 >= low60 * 0.97)
-        or (has_value(ma20_slope) and ma20_slope > -0.002)
-        or (has_value(close) and has_value(ma20) and close >= ma20 * 0.96)
-    )
-
-    behavior_evidence = (
-        (has_value(vol_ratio) and vol_ratio > 1.08)
-        or (has_value(mom5) and mom5 > 0 and has_value(vol_ratio) and vol_ratio > 0.9)
-        or kd_cross
-        or macd_cross
-    )
-
-    accumulation = (
-        structure_improving
-        and behavior_evidence
-        and not is_dead_stock(row)
-    )
-
-    testing = (
-        (kd_cross or macd_cross or (has_value(mom5) and mom5 > 0.025))
-        and has_value(vol_ratio) and vol_ratio >= 1.0
-        and has_value(close) and has_value(ma20) and close >= ma20 * 0.97
-        and not is_dead_stock(row)
-    )
-
-    breakout = (
-        has_value(close) and has_value(ma20) and close > ma20
-        and has_value(ma20_slope) and ma20_slope >= -0.003
-        and has_value(mom5) and mom5 > 0
-        and has_value(vol_ratio) and vol_ratio >= 1.08
-        and not is_dead_stock(row)
-    )
-
-    if accumulation:
-        score += 16
-        reasons.append("佈局驗證")
+    if latent:
+        score += 18
+        reasons.append("潛伏收斂")
     if testing:
-        score += 20
-        reasons.append("試盤驗證")
+        score += 22
+        reasons.append("試盤轉強")
     if breakout:
-        score += 24
-        reasons.append("主升驗證")
+        score += 28
+        reasons.append("主升發動")
     if is_dead_stock(row):
         score -= 20
         reasons.append("死股排除")
 
-    stage = "發動" if breakout else "試盤" if testing else "佈局" if accumulation else "觀察"
-    return score, stage, "；".join(reasons) if reasons else "主力行為不足"
+    stage = "發動" if breakout else "試盤" if testing else "潛伏" if latent else "觀察"
+    return score, stage, "；".join(reasons) if reasons else "主力階段未明"
 
 
 def entry_score(row, market_row=None):
@@ -314,7 +335,7 @@ def entry_score(row, market_row=None):
     ms, mr = momentum_score(row)
     fs, stage, fr = main_force_stage_score(row)
 
-    score = ss * 0.35 + ms * 0.40 + fs * 0.25
+    score = ss * 0.32 + ms * 0.36 + fs * 0.32
 
     r5 = safe_num(row.get("return_5d"))
     close = safe_num(row.get("close"))
@@ -326,11 +347,11 @@ def entry_score(row, market_row=None):
     if is_dead_stock(row):
         score -= 16
 
-    if stage == "發動" and score >= 45:
+    if stage == "發動" and score >= 44:
         action = "BUY"
-    elif stage == "試盤" and score >= 36:
+    elif stage == "試盤" and score >= 34:
         action = "TEST"
-    elif stage == "佈局" and score >= 28:
+    elif stage == "潛伏" and score >= 26:
         action = "READY"
     else:
         action = "OBSERVE"
@@ -342,6 +363,9 @@ def entry_score(row, market_row=None):
         "structure_score": round(ss, 2),
         "momentum_score": round(ms, 2),
         "main_force_score": round(fs, 2),
+        "latent_layer": latent,
+        "testing_layer": testing,
+        "breakout_layer": breakout,
         "is_dead_stock": is_dead_stock(row),
         "entry_reason": f"結構:{sr}｜動能:{mr}｜階段:{fr}",
     }
