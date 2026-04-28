@@ -598,7 +598,7 @@ def run_v3_core_engine(price_panel: pd.DataFrame, latest_date=None, top_n=40):
         "latent_count": int((scored["stage"] == "LATENT").sum()) if len(scored) else 0,
         "test_count": int((scored["stage"] == "TEST").sum()) if len(scored) else 0,
         "watch_count": int((scored["stage"] == "WATCH").sum()) if len(scored) else 0,
-    }])
+    }]）
     return scored, debug
 
 
