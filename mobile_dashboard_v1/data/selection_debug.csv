@@ -1,2 +1,2 @@
-﻿date,total_input,valid_after_na,structure_pool_count,core_primary_count,alpha_primary_count,core_final_count,alpha_final_count,dead_stock_count,latent_count,testing_count,breakout_count,data_layer_state
-2026-04-24,1073,1073,697,25,25,25,6,0,697,0,0,v2_7_three_layer_main_force
+﻿total_input,valid_after_na,core_primary_count,alpha_primary_count,core_final_count,alpha_final_count
+1073,1073,25,25,25,6
