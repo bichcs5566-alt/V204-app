@@ -1,0 +1,61 @@
+name: v266_real_data_mainline
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 台灣時間 19:00 = UTC 11:00
+    - cron: "0 11 * * 1-5"
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy requests
+
+      - name: Optional legacy market update
+        run: |
+          if [ -f update_market_data.py ]; then
+            python update_market_data.py
+          else
+            echo "no legacy updater"
+          fi
+
+      - name: Build v266 market data
+        run: python v266_build_market_data.py
+
+      - name: Build v266 features
+        run: python v266_build_features.py
+
+      - name: Guard v266 data
+        run: python v266_data_guard.py
+
+      - name: Run v266 strategy
+        run: python v266_strategy_engine.py
+
+      - name: Commit v266 outputs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add raw_market_daily.csv price_panel_daily.csv feature_panel_daily.csv data_meta.json feature_meta.json data_guard_report.json trade_plan.csv core_candidates.csv alpha_candidates.csv candidates.csv selection_debug.csv meta.json mobile_dashboard_v1/data/ || true
+          if git diff --cached --quiet; then
+            echo "no changes"
+          else
+            git commit -m "v266 real data mainline update"
+            git push
+          fi
