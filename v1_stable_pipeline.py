@@ -224,7 +224,7 @@ def main():
         "trade_date": str(next_trade_date(signal_date).date()),
         "price_panel_latest_date": str(pd.to_datetime(df["date"].max()).date()) if "date" in df.columns else "",
         "data_state": "fresh",
-        "source": "v3_1_tradeable_main_force",
+        "source": "v3_2_main_force_sensing",
         "execution_rule": "T日盤後產生訊號，T+1交易",
         "trade_plan_count": int(len(trade_plan)),
         "v3_selected_count": int(len(scored)),
@@ -238,7 +238,7 @@ def main():
     with open(DATA_DIR / "meta.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
-    print("v3.1 tradeable completed")
+    print("v3.2 sensing tradeable completed")
     print(debug.to_string(index=False))
     if len(trade_plan):
         print(trade_plan[["action_label", "stock_id", "entry_score", "target_weight", "suggested_amount", "note"]].head(40).to_string(index=False))
