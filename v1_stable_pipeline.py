@@ -20,7 +20,7 @@ except Exception:
 
 # =========================================================
 # v1_stable_pipeline.py
-# v2.5 structure momentum version
+# v2.6 behavior validation version
 #
 # 核心修正：
 # 1. current_positions.csv 是唯一持倉來源。
@@ -702,10 +702,29 @@ def select_stocks(day_df):
         (x["macd_cross_up"] == 1)
     ).astype(int)
 
+    # v2.6：死股排除 + 佈局雙條件
+    x["dead_stock"] = (
+        ((x["volume_ratio"] < 0.85) & (x["mom5"].abs() < 0.018) & (x["mom20"] <= 0.015)) |
+        ((x["volume"] < 300) & (x["mom5"].abs() < 0.018))
+    ).astype(int)
+
+    x["structure_improving"] = (
+        (x["low_20d"] >= x["low_60d"] * 0.97) |
+        (x["ma20_slope"] > -0.002) |
+        (x["close"] >= x["ma20"] * 0.96)
+    ).astype(int)
+
+    x["behavior_evidence"] = (
+        (x["volume_ratio"] > 1.08) |
+        ((x["mom5"] > 0) & (x["volume_ratio"] > 0.9)) |
+        (x["kd_cross_up"] == 1) |
+        (x["macd_cross_up"] == 1)
+    ).astype(int)
+
     x["main_force_setup"] = (
-        (x["volume_ratio"] >= 0.8) &
-        (x["mom5"].abs() <= 0.08) &
-        (x["close"] >= x["prev_low_20"] * 0.98)
+        (x["structure_improving"] == 1) &
+        (x["behavior_evidence"] == 1) &
+        (x["dead_stock"] == 0)
     ).astype(int)
 
     # ========= STEP 3 分數：結構 + 動能 + 主力階段 =========
@@ -721,9 +740,12 @@ def select_stocks(day_df):
     )
 
     x["main_force_score"] = (
-        x["main_force_setup"] * 0.18
-        + ((x["volume_ratio"] >= 1.05) & (x["volume_ratio"] <= 4.5)).astype(int) * 0.08
-        + (1 - x["ma_converge_pct"].clip(0, 0.25)) * 0.08
+        x["main_force_setup"] * 0.22
+        + x["structure_improving"] * 0.06
+        + x["behavior_evidence"] * 0.08
+        + ((x["volume_ratio"] >= 1.05) & (x["volume_ratio"] <= 4.5)).astype(int) * 0.05
+        + (1 - x["ma_converge_pct"].clip(0, 0.25)) * 0.05
+        - x["dead_stock"] * 0.30
     )
 
     x["score"] = (
@@ -766,8 +788,17 @@ def select_stocks(day_df):
 
     selected = pd.concat(selected_parts, ignore_index=True) if selected_parts else pd.DataFrame()
 
+    # v2.6：優先排除死股。若太少，再允許低分觀察補位。
+    if "dead_stock" in selected.columns:
+        selected = selected[selected["dead_stock"] == 0].copy()
+
     if len(selected) < CORE_TOP_N:
-        extra = x[~x["stock_id"].isin(selected["stock_id"])].sort_values(["score", "structure_score"], ascending=False).head(CORE_TOP_N - len(selected))
+        pool_extra = x[x["dead_stock"] == 0] if "dead_stock" in x.columns else x
+        extra = pool_extra[~pool_extra["stock_id"].isin(selected["stock_id"])].sort_values(["score", "structure_score"], ascending=False).head(CORE_TOP_N - len(selected))
+        selected = pd.concat([selected, extra], ignore_index=True)
+
+    if len(selected) < 8:
+        extra = x[~x["stock_id"].isin(selected["stock_id"])].sort_values(["score", "structure_score"], ascending=False).head(8 - len(selected))
         selected = pd.concat([selected, extra], ignore_index=True)
 
     selected = selected.drop_duplicates(subset=["stock_id"]).sort_values(["score", "structure_score", "momentum_score"], ascending=False)
@@ -799,7 +830,8 @@ def select_stocks(day_df):
         "alpha_primary_count": int(len(alpha_source)) if 'alpha_source' in locals() else 0,
         "core_final_count": int(len(core)),
         "alpha_final_count": int(len(alpha)),
-        "data_layer_state": "v2_5_structure_first",
+        "dead_stock_count": int(x["dead_stock"].sum()) if "dead_stock" in x.columns else 0,
+        "data_layer_state": "v2_6_behavior_validation",
     }])
 
     return core, alpha, debug
@@ -1270,7 +1302,7 @@ def build_outputs(df, prev_trade_plan=None):
         "trade_date": str(trade_date.date()),
         "price_panel_latest_date": str(price_panel_latest_date.date()),
         "data_state": "fresh",
-        "source": "v2.5_structure_momentum",
+        "source": "v2.6_behavior_validation",
         "execution_rule": "T日盤後產生訊號，T+1交易",
         "prev_trade_plan_file": PREV_TRADE_PLAN_FILE,
         "trade_plan_history_file": f"trade_plan_history/{str(trade_date.date())}.csv",
