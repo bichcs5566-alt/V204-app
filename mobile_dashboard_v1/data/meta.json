@@ -1,36 +1,48 @@
 {
-  "generated_at": "2026-04-28 11:24:49",
-  "source": "v265_2_tradeable_strategy_core",
+  "generated_at": "2026-04-28 13:25:39",
+  "source": "v265_3_dual_engine_core",
   "price_source": "price_panel_daily.csv",
   "signal_date": "2026-04-28",
   "trade_date": "2026-04-29",
   "data_state": "fresh",
-  "trade_plan_count": 24,
+  "market_regime": "RANGE",
+  "regime_info": {
+    "pct_above_ma20": 1.0,
+    "pct_above_ma60": 1.0,
+    "pct_mom20_pos": 0.0,
+    "pct_strong": 0.0,
+    "median_mom20": 0.0,
+    "avg_volume_ratio": 1.0,
+    "regime_score": 2
+  },
+  "trade_plan_count": 8,
   "buy_count": 0,
-  "test_count": 10,
-  "watch_count": 14,
-  "execution_rule": "T日產生訊號，下一交易日人工下單",
-  "bridge_source": "v265_2_utf8_dashboard_bridge",
-  "bridge_generated_at": "2026-04-28 11:24:50",
+  "test_count": 8,
+  "watch_count": 0,
+  "core_trade_count": 0,
+  "alpha_trade_count": 8,
+  "execution_rule": "Market Regime → Core/Alpha Router → T+1人工下單",
+  "bridge_source": "v265_3_dashboard_bridge",
+  "bridge_generated_at": "2026-04-28 13:25:40",
   "bridge_files": [
     {
       "file": "trade_plan.csv",
-      "rows": 24,
-      "state": "ok"
-    },
-    {
-      "file": "candidates.csv",
-      "rows": 1072,
+      "rows": 8,
       "state": "ok"
     },
     {
       "file": "core_candidates.csv",
-      "rows": 25,
+      "rows": 30,
       "state": "ok"
     },
     {
       "file": "alpha_candidates.csv",
-      "rows": 8,
+      "rows": 30,
+      "state": "ok"
+    },
+    {
+      "file": "candidates.csv",
+      "rows": 60,
       "state": "ok"
     },
     {
