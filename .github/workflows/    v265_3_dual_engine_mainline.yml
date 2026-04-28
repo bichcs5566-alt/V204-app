@@ -1,8 +1,9 @@
-name: v265_2_tradeable_mainline
+name: v265_3_dual_engine_mainline
 
 on:
   workflow_dispatch:
   schedule:
+    # 台灣時間 19:00 = UTC 11:00
     - cron: "0 11 * * 1-5"
 
 permissions:
@@ -11,6 +12,7 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -39,9 +41,9 @@ jobs:
             echo "update_market_data.py not found, using existing price_panel_daily.csv"
           fi
 
-      - name: Run v265.2 tradeable strategy core
+      - name: Run v265.3 dual engine core
         run: |
-          python v265_2_tradeable_strategy_core.py
+          python v265_3_dual_engine_core.py
 
       - name: Sync dashboard data
         run: |
@@ -51,10 +53,26 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add price_panel_daily.csv trade_plan.csv candidates.csv core_candidates.csv alpha_candidates.csv selection_debug.csv full_summary.csv daily_nav.csv meta.json bridge_debug.csv current_positions.csv position_monitor.csv watchlist_monitor.csv mobile_dashboard_v1/data/ || true
+
+          git add \
+            price_panel_daily.csv \
+            trade_plan.csv \
+            candidates.csv \
+            core_candidates.csv \
+            alpha_candidates.csv \
+            selection_debug.csv \
+            full_summary.csv \
+            daily_nav.csv \
+            meta.json \
+            bridge_debug.csv \
+            current_positions.csv \
+            position_monitor.csv \
+            watchlist_monitor.csv \
+            mobile_dashboard_v1/data/ || true
+
           if git diff --cached --quiet; then
             echo "no changes to commit"
           else
-            git commit -m "v265.2 tradeable mainline update"
+            git commit -m "v265.3 dual engine mainline update"
             git push
           fi
