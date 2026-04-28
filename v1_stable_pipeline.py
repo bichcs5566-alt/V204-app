@@ -98,6 +98,9 @@ def action_from_stage(stage, score):
     if stage == "TEST":
         return "TEST", "🟠 試單", "主力試單，輕倉測試", WEIGHT_TEST
 
+    if stage == "STRUCTURE_READY":
+        return "STRUCTURE", "🔵 結構", "結構待發，極小倉觀察", 0.003
+
     if stage == "LATENT":
         return "READY", "🟡 追蹤", "潛伏中，等試單", 0.0
 
@@ -126,6 +129,8 @@ def build_trade_plan(scored, signal_date):
             note = f"強潛伏卡位｜{note}"
         elif raw_action == "TEST":
             note = f"試單輕倉｜{note}"
+        elif raw_action == "STRUCTURE":
+            note = f"結構待發｜{note}"
         elif raw_action == "BUY":
             note = f"發動前進場｜{note}"
 
@@ -145,16 +150,18 @@ def build_trade_plan(scored, signal_date):
             "stage": r.get("stage", ""),
             "accumulation_score": r.get("accumulation_score", ""),
             "control_score": r.get("control_score", ""),
+            "structure_score": r.get("structure_score", ""),
             "test_move_score": r.get("test_move_score", ""),
             "pre_breakout_score": r.get("pre_breakout_score", ""),
             "note": note,
             "detail_note": (
                 f"吸籌:{r.get('accumulation_score','')}｜"
                 f"控盤:{r.get('control_score','')}｜"
+                f"結構:{r.get('structure_score','')}｜"
                 f"試單:{r.get('test_move_score','')}｜"
                 f"前兆:{r.get('pre_breakout_score','')}｜"
                 f"{r.get('accumulation_reason','')} / {r.get('control_reason','')} / "
-                f"{r.get('test_move_reason','')} / {r.get('pre_breakout_reason','')}"
+                f"{r.get('structure_reason','')} / {r.get('test_move_reason','')} / {r.get('pre_breakout_reason','')}"
             )
         })
 
@@ -162,7 +169,7 @@ def build_trade_plan(scored, signal_date):
         "signal_date", "trade_date", "action", "action_label", "action_sub",
         "raw_action", "stock_id", "price_tier", "target_weight", "ref_price",
         "suggested_amount", "entry_score", "stage",
-        "accumulation_score", "control_score", "test_move_score", "pre_breakout_score",
+        "accumulation_score", "control_score", "structure_score", "test_move_score", "pre_breakout_score",
         "note", "detail_note"
     ]
     return pd.DataFrame(rows, columns=cols)
@@ -224,12 +231,13 @@ def main():
         "trade_date": str(next_trade_date(signal_date).date()),
         "price_panel_latest_date": str(pd.to_datetime(df["date"].max()).date()) if "date" in df.columns else "",
         "data_state": "fresh",
-        "source": "v3_2_main_force_sensing",
+        "source": "v3_3_behavior_structure_engine",
         "execution_rule": "T日盤後產生訊號，T+1交易",
         "trade_plan_count": int(len(trade_plan)),
         "v3_selected_count": int(len(scored)),
         "breakout_ready_count": int((scored["stage"] == "BREAKOUT_READY").sum()) if len(scored) else 0,
         "latent_strong_count": int((scored["stage"] == "LATENT_STRONG").sum()) if len(scored) else 0,
+        "structure_ready_count": int((scored["stage"] == "STRUCTURE_READY").sum()) if len(scored) else 0,
         "test_count": int((scored["stage"] == "TEST").sum()) if len(scored) else 0,
         "position_writeback_state": "idle",
         "position_source": "current_positions.csv"
@@ -238,7 +246,7 @@ def main():
     with open(DATA_DIR / "meta.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
-    print("v3.2 sensing tradeable completed")
+    print("v3.3 behavior structure completed")
     print(debug.to_string(index=False))
     if len(trade_plan):
         print(trade_plan[["action_label", "stock_id", "entry_score", "target_weight", "suggested_amount", "note"]].head(40).to_string(index=False))
