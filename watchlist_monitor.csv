@@ -1,3 +1,0 @@
-﻿signal_date,trade_date,stock_id,price_tier,ref_price,holding_status,strategy_bucket,action,pnl_pct
-2026-04-28,2026-04-29,2330,gt_1000,2217.215,未持有,NONE,WATCH,
-2026-04-28,2026-04-29,2409,lt_50,17.2172,未持有,NONE,WATCH,
