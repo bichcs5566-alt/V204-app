@@ -1,71 +1,67 @@
 {
-  "generated_at": "2026-04-28 10:56:06",
-  "source": "v265_clean_strategy_core",
+  "generated_at": "2026-04-28 11:24:49",
+  "source": "v265_2_tradeable_strategy_core",
   "price_source": "price_panel_daily.csv",
   "signal_date": "2026-04-28",
   "trade_date": "2026-04-29",
   "data_state": "fresh",
-  "trade_plan_count": 14,
+  "trade_plan_count": 24,
   "buy_count": 0,
-  "test_count": 0,
+  "test_count": 10,
   "watch_count": 14,
   "execution_rule": "T日產生訊號，下一交易日人工下單",
-  "bridge_source": "v265_1_unified_dashboard_bridge",
-  "bridge_generated_at": "2026-04-28 10:56:06",
+  "bridge_source": "v265_2_utf8_dashboard_bridge",
+  "bridge_generated_at": "2026-04-28 11:24:50",
   "bridge_files": [
     {
       "file": "trade_plan.csv",
-      "state": "copied",
-      "rows": 14
+      "rows": 24,
+      "state": "ok"
     },
     {
       "file": "candidates.csv",
-      "state": "copied",
-      "rows": 1072
+      "rows": 1072,
+      "state": "ok"
     },
     {
       "file": "core_candidates.csv",
-      "state": "copied",
-      "rows": 25
+      "rows": 25,
+      "state": "ok"
     },
     {
       "file": "alpha_candidates.csv",
-      "state": "copied",
-      "rows": 6
+      "rows": 8,
+      "state": "ok"
     },
     {
       "file": "selection_debug.csv",
-      "state": "copied",
-      "rows": 1
+      "rows": 1,
+      "state": "ok"
     },
     {
       "file": "full_summary.csv",
-      "state": "copied",
-      "rows": 1
+      "rows": 1,
+      "state": "ok"
     },
     {
       "file": "daily_nav.csv",
-      "state": "copied",
-      "rows": 1
+      "rows": 1,
+      "state": "ok"
     },
     {
       "file": "current_positions.csv",
-      "state": "copied",
-      "rows": 0
+      "rows": 0,
+      "state": "ok"
     },
     {
       "file": "position_monitor.csv",
-      "state": "copied",
-      "rows": 0
+      "rows": 0,
+      "state": "ok"
     },
     {
       "file": "watchlist_monitor.csv",
-      "state": "copied",
-      "rows": 0
-    },
-    {
-      "file": "price_panel_daily.csv",
-      "state": "copied_raw"
+      "rows": 0,
+      "state": "ok"
     }
   ]
 }
