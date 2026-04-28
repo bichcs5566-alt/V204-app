@@ -1,0 +1,10 @@
+{
+  "price_panel_path": "price_panel_daily.csv",
+  "trade_plan_path": "trade_plan.csv",
+  "price_panel_rows": 15976,
+  "latest_rows": 1073,
+  "original_trade_plan_rows": 0,
+  "sidecar_candidates_count": 0,
+  "missed_opportunities_count": 0,
+  "mode": "overlay_only_no_main_change"
+}
