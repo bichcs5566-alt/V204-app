@@ -613,37 +613,37 @@ function actionMeta(row) {
     BUY: {
       cls: "badge-buy",
       label: row.action_label || "🟢 買進",
-      sub: subFromRow || "突破確認",
+      sub: subFromRow || "正式發動",
       note: "直接買"
     },
     TEST: {
       cls: "badge-add",
-      label: row.action_label || "🔵 試單",
-      sub: subFromRow || "接近突破",
+      label: row.action_label || "🟠 試盤",
+      sub: subFromRow || "動能啟動",
       note: "先小倉"
     },
     BUY_SMALL: {
       cls: "badge-add",
-      label: row.action_label || "🔵 試單",
-      sub: subFromRow || "接近突破",
+      label: row.action_label || "🟠 試盤",
+      sub: subFromRow || "動能啟動",
       note: "先小倉"
     },
     WATCH_A: {
       cls: "badge-watch",
-      label: row.action_label || "🔵 試單",
-      sub: subFromRow || "接近突破",
+      label: row.action_label || "🟠 試盤",
+      sub: subFromRow || "動能啟動",
       note: "可小倉"
     },
     READY: {
       cls: "badge-hold",
-      label: row.action_label || "🟡 準備",
-      sub: subFromRow || "等待突破",
+      label: row.action_label || "🟡 佈局",
+      sub: subFromRow || "主力吸籌",
       note: "盯盤"
     },
     WATCH_B: {
       cls: "badge-hold",
-      label: row.action_label || "🟡 準備",
-      sub: subFromRow || "等待方向",
+      label: row.action_label || "🟡 佈局",
+      sub: subFromRow || "低波整理",
       note: "不追高"
     },
     WATCH: {
