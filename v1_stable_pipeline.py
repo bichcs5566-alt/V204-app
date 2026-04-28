@@ -20,7 +20,7 @@ except Exception:
 
 # =========================================================
 # v1_stable_pipeline.py
-# v2.3 main force sync version
+# v2.4 main force not empty version
 #
 # 核心修正：
 # 1. current_positions.csv 是唯一持倉來源。
@@ -868,6 +868,8 @@ def action_split_fields(action_display, score):
         return "🟡 佈局", "等待轉強"
     if action_display == "WATCH":
         return "🟣 觀察", "等待確認"
+    if action_display == "OBSERVE":
+        return "⚪ 觀察", "弱訊號"
     return "⚪ 不碰", "條件不足"
 
 
@@ -917,6 +919,8 @@ def action_weight_multiplier(action, score):
         return 0.3
     if action == "READY":
         return 0.0
+    if action == "OBSERVE":
+        return 0.0
     return 0.0
 
 
@@ -956,8 +960,11 @@ def normalize_watch_grade(action, score):
 
 def build_trade_plan(positions, price_map, target, signal_date, trade_date, signal_row_map=None, prev_trade_plan=None):
     """
-    v2.1：無硬保底版本。
-    名單只能來自策略候選池 target/signal_row_map，不再從 price_map 或代號順序亂補。
+    v2.4：主力同步 + 不空單保護。
+    原則：
+    1. 優先輸出策略正式訊號 BUY / TEST / READY。
+    2. 若正式訊號太少，不從全市場亂補，只從 select_stocks 推出的候選池中補 OBSERVE。
+    3. OBSERVE 不給建議金額，只作為弱訊號觀察，不等於買進。
     """
     signal_row_map = signal_row_map or {}
     prev_trade_plan = normalize_trade_plan_for_state(prev_trade_plan)
@@ -969,6 +976,7 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
 
     held = set(positions["stock_id"].apply(normalize_stock_id)) if len(positions) else set()
     rows = []
+    observe_pool = []
 
     cols = [
         "signal_date", "trade_date", "action", "action_label", "action_sub", "raw_action",
@@ -983,12 +991,12 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
         tier = price_tier_key(ref_price)
         stage = position_stage(row)
 
-        action = str(action or "READY").upper().strip()
-        if action not in ["BUY", "TEST", "READY", "WATCH", "WATCH_A", "WATCH_B"]:
-            action = "READY"
+        action = str(action or "OBSERVE").upper().strip()
+        if action not in ["BUY", "TEST", "READY", "WATCH", "WATCH_A", "WATCH_B", "OBSERVE"]:
+            action = "OBSERVE"
 
         action_display = normalize_watch_grade(action, score)
-        if action in ["TEST", "READY"]:
+        if action in ["TEST", "READY", "OBSERVE"]:
             action_display = action
 
         action_label, action_sub = action_split_fields(action_display, score)
@@ -997,8 +1005,12 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
         suggested_amount = INITIAL_CAPITAL * final_weight
 
         score_info = score_bridge(row)
-        raw_reason = (state_note + "；" if state_note else "") + score_info.get("entry_reason", "模組化進場判斷")
-        simple_note = human_action_note(action, score, stage, raw_reason, prev_action)
+        raw_reason = (state_note + "；" if state_note else "") + score_info.get("entry_reason", "主力同步判斷")
+
+        if action == "OBSERVE":
+            simple_note = f"弱觀察｜分數{int(to_num(score, 0))}｜候選池前排，不追高"
+        else:
+            simple_note = human_action_note(action, score, stage, raw_reason, prev_action)
 
         rows.append({
             "signal_date": str(signal_date.date()),
@@ -1034,9 +1046,9 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
 
         row = signal_row_map.get(stock_id, {})
         score_info = score_bridge(row)
-        raw_action = score_info.get("entry_action", "SKIP")
+        raw_action = str(score_info.get("entry_action", "OBSERVE")).upper()
         action = raw_action
-        score = score_info.get("entry_score", 0)
+        score = to_num(score_info.get("entry_score", 0), 0)
 
         prev_row = prev_map.get(stock_id)
         prev_action = ""
@@ -1049,31 +1061,56 @@ def build_trade_plan(positions, price_map, target, signal_date, trade_date, sign
             prev_score = prev_row.get("entry_score", "")
             prev_trade_date = prev_row.get("trade_date", "")
 
-            if prev_action in ["WATCH", "WATCH_A", "TEST", "READY"] and to_num(score, 0) >= 65:
+            if prev_action in ["WATCH", "WATCH_A", "TEST", "READY", "OBSERVE"] and score >= 60:
                 action = "BUY"
-                state_note = "前次觀察轉今日買進"
-            elif prev_action == "BUY" and to_num(score, 0) >= 50 and raw_action != "BUY":
+                state_note = "前次觀察轉強"
+            elif prev_action == "BUY" and score >= 48 and raw_action != "BUY":
                 action = "TEST"
-                state_note = "前次買進後仍在試單區"
+                state_note = "前次買進後仍在試盤區"
 
         bucket = str(row.get("candidate_bucket", "")).lower() if hasattr(row, "get") else ""
         breakout_ok, breakout_reason = is_breakout_signal(row, score)
 
-        # 只根據策略候選池做分級，不做外部保底
         if breakout_ok or bucket == "breakout" or action == "BUY":
             action = "BUY"
-            state_note = (state_note + "；" if state_note else "") + (breakout_reason or "突破型候選")
-        elif action == "TEST" or bucket == "pullback" or to_num(score, 0) >= 50:
+            state_note = (state_note + "；" if state_note else "") + (breakout_reason or "主升發動")
+        elif action == "TEST" or bucket == "pullback" or score >= 50:
             action = "TEST"
-            state_note = (state_note + "；" if state_note else "") + "試單型候選"
-        elif action == "READY" or bucket in ["squeeze", "fallback"] or to_num(score, 0) >= 35:
+            state_note = (state_note + "；" if state_note else "") + "試盤候選"
+        elif action == "READY" or bucket in ["squeeze", "fallback"] or score >= 28:
             action = "READY"
-            state_note = (state_note + "；" if state_note else "") + "準備型候選"
+            state_note = (state_note + "；" if state_note else "") + "佈局候選"
         else:
-            # 分數太低且不是策略分層候選，不輸出
+            # 不丟掉，放入弱觀察池；只從策略候選池補，不從全市場補
+            observe_pool.append((score, stock_id, row, target_weight))
             continue
 
         append_trade_row(stock_id, action, score, row, target_weight, state_note, prev_action, prev_score, prev_trade_date)
+
+    # v2.4 最低輸出保護：不是硬保底，只補候選池前排 OBSERVE
+    MIN_OUTPUT = 8
+    MAX_OBSERVE = 12
+
+    existing = set([r["stock_id"] for r in rows])
+    if len(rows) < MIN_OUTPUT:
+        observe_pool = sorted(observe_pool, key=lambda x: x[0], reverse=True)
+        need = min(MAX_OBSERVE, MIN_OUTPUT - len(rows))
+        added = 0
+        for score, stock_id, row, target_weight in observe_pool:
+            if stock_id in existing:
+                continue
+            append_trade_row(
+                stock_id=stock_id,
+                action="OBSERVE",
+                score=max(score, 10),
+                row=row,
+                target_weight=0.0,
+                state_note="策略候選池弱訊號補位"
+            )
+            existing.add(stock_id)
+            added += 1
+            if added >= need:
+                break
 
     return pd.DataFrame(rows, columns=cols)
 
@@ -1173,7 +1210,7 @@ def build_outputs(df, prev_trade_plan=None):
         "trade_date": str(trade_date.date()),
         "price_panel_latest_date": str(price_panel_latest_date.date()),
         "data_state": "fresh",
-        "source": "v2.3_main_force_sync",
+        "source": "v2.4_main_force_not_empty",
         "execution_rule": "T日盤後產生訊號，T+1交易",
         "prev_trade_plan_file": PREV_TRADE_PLAN_FILE,
         "trade_plan_history_file": f"trade_plan_history/{str(trade_date.date())}.csv",
