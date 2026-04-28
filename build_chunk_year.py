@@ -1,15 +1,11 @@
 """
-v266_2_build_chunk_year.py
-v266.2 分段資料層：單一年份 chunk 建置
+build_chunk_year.py
 
-用途：
-- 每次只抓一個年份
+分年資料建置器：
+- 每次只抓一年
 - 輸出 data_chunks/price_panel_YYYY.csv
-- 避免 GitHub Actions 一次抓 10 年卡死
-- chunk 檔可長期保存，再由 merge 合併成完整 price_panel_daily.csv
-
-執行：
-python v266_2_build_chunk_year.py 2015
+- 不會合併、不會覆蓋完整母檔
+- 搭配 build_chunk_year.yml 可自動從 start_year 跑到 end_year
 """
 
 from pathlib import Path
@@ -75,15 +71,10 @@ def is_common_stock_id(x):
     return s.isdigit() and len(s) == 4 and not s.startswith(("00", "03", "04", "05", "06", "07", "08", "09"))
 
 
-def normalize_columns(cols):
-    return [str(c).strip() for c in cols]
-
-
 def candidate_tables(payload):
     out = []
-
     for t in payload.get("tables", []):
-        fields = normalize_columns(t.get("fields", []))
+        fields = [str(c).strip() for c in t.get("fields", [])]
         data = t.get("data", [])
         if fields and data:
             out.append((fields, data, "tables"))
@@ -92,17 +83,8 @@ def candidate_tables(payload):
         data = payload.get(key)
         fields = payload.get(f"fields{key[-1]}")
         if isinstance(data, list) and data and isinstance(fields, list) and fields:
-            out.append((normalize_columns(fields), data, key))
-
+            out.append(([str(c).strip() for c in fields], data, key))
     return out
-
-
-def match_table(fields):
-    joined = " | ".join(fields)
-    has_stock = any(k in joined for k in ["證券代號", "股票代號", "代號"])
-    has_close = any(k in joined for k in ["收盤價", "收盤"])
-    has_volume = any(k in joined for k in ["成交股數", "成交量"])
-    return has_stock and has_close and has_volume
 
 
 def field_index(fields, keywords):
@@ -115,7 +97,8 @@ def field_index(fields, keywords):
 
 def parse_rows(payload, date_str, market):
     for fields, rows, source_key in candidate_tables(payload):
-        if not match_table(fields):
+        joined = " | ".join(fields)
+        if not ("收盤" in joined and ("證券代號" in joined or "股票代號" in joined or "代號" in joined)):
             continue
 
         idx_stock = field_index(fields, ["證券代號", "股票代號", "代號"])
@@ -126,7 +109,7 @@ def parse_rows(payload, date_str, market):
         idx_high = field_index(fields, ["最高價", "最高"])
         idx_low = field_index(fields, ["最低價", "最低"])
 
-        if idx_stock is None or idx_close is None or idx_volume is None:
+        if idx_stock is None or idx_close is None:
             continue
 
         records = []
@@ -134,22 +117,18 @@ def parse_rows(payload, date_str, market):
             try:
                 stock_id = normalize_stock_id(r[idx_stock])
                 close = to_number(r[idx_close])
-                volume = to_int(r[idx_volume])
-
-                if not is_common_stock_id(stock_id):
-                    continue
-                if close is None or close <= 0:
+                if not is_common_stock_id(stock_id) or close is None or close <= 0:
                     continue
 
                 open_p = to_number(r[idx_open]) if idx_open is not None and idx_open < len(r) else close
                 high_p = to_number(r[idx_high]) if idx_high is not None and idx_high < len(r) else close
                 low_p = to_number(r[idx_low]) if idx_low is not None and idx_low < len(r) else close
-                name = clean_text(r[idx_name]) if idx_name is not None and idx_name < len(r) else ""
+                volume = to_int(r[idx_volume]) if idx_volume is not None and idx_volume < len(r) else 0
 
                 records.append({
                     "date": date_str,
                     "stock_id": stock_id,
-                    "name": name,
+                    "name": clean_text(r[idx_name]) if idx_name is not None and idx_name < len(r) else "",
                     "market": market,
                     "open": open_p if open_p is not None else close,
                     "high": high_p if high_p is not None else close,
@@ -172,8 +151,7 @@ def fetch_twse_day(dt):
     params = {"response": "json", "date": dt.strftime("%Y%m%d"), "type": "ALL"}
     resp = requests.get(url, params=params, headers=HEADERS, timeout=30)
     resp.raise_for_status()
-    payload = resp.json()
-    return parse_rows(payload, dt.strftime("%Y-%m-%d"), "TWSE")
+    return parse_rows(resp.json(), dt.strftime("%Y-%m-%d"), "TWSE")
 
 
 def fetch_tpex_day(dt):
@@ -224,7 +202,7 @@ def fetch_tpex_day(dt):
                         "volume": to_int(r[7]) or 0,
                     })
                 if records:
-                    print(f"{date_str} TPEX parsed fallback rows={len(records)}")
+                    print(f"{date_str} TPEX fallback rows={len(records)}")
                     return pd.DataFrame(records)
         except Exception as e:
             print("TPEX failed:", date_str, str(e)[:120])
@@ -233,9 +211,6 @@ def fetch_tpex_day(dt):
 
 
 def finalize(df):
-    if df.empty:
-        return df
-
     out = df.copy()
     out["date"] = pd.to_datetime(out["date"], errors="coerce")
     out["stock_id"] = out["stock_id"].apply(normalize_stock_id)
@@ -254,7 +229,6 @@ def finalize(df):
     out = out.drop_duplicates(["date", "stock_id"], keep="last")
     out = out.sort_values(["stock_id", "date"]).reset_index(drop=True)
     out["date"] = out["date"].dt.strftime("%Y-%m-%d")
-
     return out[["date", "stock_id", "name", "market", "open", "high", "low", "close", "volume"]]
 
 
@@ -262,7 +236,6 @@ def build_year(year):
     start = datetime(year, 1, 1)
     end = datetime(year, 12, 31)
 
-    # 當年只抓到今天
     today = datetime.now()
     if year == today.year:
         end = min(end, today)
@@ -278,14 +251,14 @@ def build_year(year):
                 if not twse.empty:
                     parts.append(twse)
             except Exception as e:
-                print("TWSE failed:", cur.strftime("%Y-%m-%d"), str(e)[:150])
+                print("TWSE failed:", cur.strftime("%Y-%m-%d"), str(e)[:160])
 
             try:
                 tpex = fetch_tpex_day(cur)
                 if not tpex.empty:
                     parts.append(tpex)
             except Exception as e:
-                print("TPEX hard failed:", cur.strftime("%Y-%m-%d"), str(e)[:150])
+                print("TPEX hard failed:", cur.strftime("%Y-%m-%d"), str(e)[:160])
 
             time.sleep(SLEEP_SECONDS)
 
@@ -299,14 +272,13 @@ def build_year(year):
 
 def main():
     if len(sys.argv) < 2:
-        raise SystemExit("usage: python v266_2_build_chunk_year.py 2015")
+        raise SystemExit("usage: python build_chunk_year.py 2015")
 
     year = int(sys.argv[1])
     if year < 2010 or year > datetime.now().year:
         raise ValueError(f"invalid year: {year}")
 
-    print(f"v266.2 build chunk year start: {year}")
-
+    print(f"build chunk year start: {year}")
     panel = build_year(year)
 
     if len(panel) < MIN_YEAR_ROWS:
@@ -317,7 +289,7 @@ def main():
 
     meta = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "source": "v266_2_build_chunk_year",
+        "source": "build_chunk_year",
         "year": year,
         "file": str(out),
         "rows": int(len(panel)),
@@ -328,11 +300,10 @@ def main():
         "file_size_mb": round(out.stat().st_size / 1024 / 1024, 2),
     }
 
-    meta_path = CHUNK_DIR / f"price_panel_{year}_meta.json"
-    with open(meta_path, "w", encoding="utf-8") as f:
+    with open(CHUNK_DIR / f"price_panel_{year}_meta.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
 
-    print("v266.2 build chunk completed")
+    print("build chunk completed")
     print(json.dumps(meta, ensure_ascii=False, indent=2))
 
 
