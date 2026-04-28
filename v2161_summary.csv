@@ -1,2 +1,0 @@
-﻿start_date,end_date,initial_capital,final_nav,total_return,trading_days,nonzero_ret_days,avg_holdings,avg_exposure,cash_days,sharpe,mdd,trade_rows,engines,windows_tested,windows_pass_sharpe,windows_pass_mdd
-2026-01-19,2026-04-09,100000.0,112003.01712063409,0.12003017120634096,48,48,9.604166666666666,0.6124999999999994,20,2.049734100573615,-0.0688705027527523,576,"A,B",2,2,2
