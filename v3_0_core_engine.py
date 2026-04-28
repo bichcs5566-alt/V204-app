@@ -1,21 +1,29 @@
 """
 v3_0_core_engine.py
-v3.2 主力感知版｜3 / 5 / 10 多尺度吸籌偵測
+v3.3 行為 × 結構 引擎
 
-這版不是再用單日條件猜主力，而是加入「連續性 / 趨勢性」：
-- 3 日：剛開始吸籌
-- 5 日：穩定吸籌
-- 10 日：長期控盤吸籌
+核心目的：
+v3.2 已經能偵測「主力有沒有動」。
+v3.3 加入「主力在哪個型態位置動」。
 
-重點：
-1. 只要 3 / 5 / 10 任一尺度符合，就給主力感知分
-2. 取最高分，不重複灌分
-3. 沒有真實籌碼欄位時，用 price-volume proxy 代理：
-   - OBV-like flow
-   - 量縮不跌
-   - 低點守住
-   - 收斂控盤
-4. 動能仍只作確認，不當第一層篩選
+新增 structure_score：
+1. 波動壓縮：近10日波動 < 近30/60日波動
+2. 均線糾結：MA5 / MA10 / MA20 貼近
+3. 量縮整理：近5日量 < 近20日量，但不是死量
+4. 低位準備：距離60日高點仍有空間，避免追高
+5. 試突破/洗盤：接近高點但還沒正式噴
+
+總分：
+main_force_score =
+  0.34 * accumulation_score
++ 0.24 * control_score
++ 0.22 * structure_score
++ 0.12 * test_move_score
++ 0.08 * pre_breakout_score
+
+這版目標：
+不是抓「已經漲的股票」，
+而是抓「主力正在準備拉的股票」。
 """
 
 import numpy as np
@@ -85,7 +93,7 @@ def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
 
     out["turnover_value"] = out["close"] * out["volume"]
 
-    for n in [5, 10, 20, 60]:
+    for n in [5, 10, 20, 30, 60]:
         out[f"ma{n}"] = g["close"].rolling(n, min_periods=max(5, min(n, 20))).mean().reset_index(level=0, drop=True)
 
     out["ret_1d"] = g["close"].pct_change(1)
@@ -94,17 +102,17 @@ def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
     out["ret_10d"] = g["close"].pct_change(10)
     out["ret_20d"] = g["close"].pct_change(20)
 
+    out["vol_ma5"] = g["volume"].rolling(5, min_periods=3).mean().reset_index(level=0, drop=True)
+    out["vol_ma10"] = g["volume"].rolling(10, min_periods=5).mean().reset_index(level=0, drop=True)
     out["vol_ma20"] = g["volume"].rolling(20, min_periods=10).mean().reset_index(level=0, drop=True)
     out["vol_ma60"] = g["volume"].rolling(60, min_periods=20).mean().reset_index(level=0, drop=True)
     out["volume_ratio"] = out["volume"] / (out["vol_ma20"] + 1e-9)
+    out["vol_dry_ratio"] = out["vol_ma5"] / (out["vol_ma20"] + 1e-9)
 
-    out["high_20"] = g["high"].rolling(20, min_periods=10).max().reset_index(level=0, drop=True)
-    out["low_20"] = g["low"].rolling(20, min_periods=10).min().reset_index(level=0, drop=True)
-    out["high_60"] = g["high"].rolling(60, min_periods=20).max().reset_index(level=0, drop=True)
-    out["low_60"] = g["low"].rolling(60, min_periods=20).min().reset_index(level=0, drop=True)
-
-    out["range_20"] = (out["high_20"] - out["low_20"]) / (out["close"] + 1e-9)
-    out["range_60"] = (out["high_60"] - out["low_60"]) / (out["close"] + 1e-9)
+    for w in [10, 20, 30, 60]:
+        out[f"high_{w}"] = g["high"].rolling(w, min_periods=max(5, w // 2)).max().reset_index(level=0, drop=True)
+        out[f"low_{w}"] = g["low"].rolling(w, min_periods=max(5, w // 2)).min().reset_index(level=0, drop=True)
+        out[f"range_{w}"] = (out[f"high_{w}"] - out[f"low_{w}"]) / (out["close"] + 1e-9)
 
     out["ma_max_5_20"] = out[["ma5", "ma10", "ma20"]].max(axis=1)
     out["ma_min_5_20"] = out[["ma5", "ma10", "ma20"]].min(axis=1)
@@ -118,8 +126,9 @@ def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
     tr2 = (out["high"] - prev_close).abs()
     tr3 = (out["low"] - prev_close).abs()
     out["tr"] = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-    out["atr20"] = out.groupby("stock_id")["tr"].rolling(20, min_periods=10).mean().reset_index(level=0, drop=True)
-    out["atr_pct"] = out["atr20"] / (out["close"] + 1e-9)
+    for w in [10, 20, 30]:
+        out[f"atr{w}"] = out.groupby("stock_id")["tr"].rolling(w, min_periods=max(5, w // 2)).mean().reset_index(level=0, drop=True)
+        out[f"atr{w}_pct"] = out[f"atr{w}"] / (out["close"] + 1e-9)
 
     out["body_pct"] = (out["close"] - out["open"]).abs() / (out["close"] + 1e-9)
     out["upper_shadow_pct"] = (out["high"] - out[["open", "close"]].max(axis=1)) / (out["close"] + 1e-9)
@@ -129,20 +138,17 @@ def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
     out["body20"] = out.groupby("stock_id")["body_pct"].rolling(20, min_periods=10).mean().reset_index(level=0, drop=True)
     out["shadow20"] = out.groupby("stock_id")["shadow_sum"].rolling(20, min_periods=10).mean().reset_index(level=0, drop=True)
 
-    # v3.2 主力感知 proxy：沒有真實籌碼欄位時，用 OBV-like flow 代理
     price_diff = g["close"].diff()
     signed_volume = np.where(price_diff > 0, out["volume"], np.where(price_diff < 0, -out["volume"], 0))
     out["signed_volume"] = signed_volume
     out["obv_proxy"] = out.groupby("stock_id")["signed_volume"].cumsum()
 
-    # 多尺度連續性
     for w in [3, 5, 10]:
         out[f"obv_up_count_{w}"] = out.groupby("stock_id")["obv_proxy"].transform(lambda s, ww=w: _rolling_up_count(s, ww))
         out[f"close_non_down_count_{w}"] = out.groupby("stock_id")["close"].transform(lambda s, ww=w: _rolling_non_down_count(s, ww))
         out[f"low_non_down_count_{w}"] = out.groupby("stock_id")["low"].transform(lambda s, ww=w: _rolling_non_down_count(s, ww))
         out[f"vol_ratio_mean_{w}"] = out.groupby("stock_id")["volume_ratio"].rolling(w, min_periods=max(2, w//2)).mean().reset_index(level=0, drop=True)
 
-    # KD / MACD 確認
     low9 = g["low"].rolling(9, min_periods=5).min().reset_index(level=0, drop=True)
     high9 = g["high"].rolling(9, min_periods=5).max().reset_index(level=0, drop=True)
     rsv = (out["close"] - low9) / (high9 - low9 + 1e-9) * 100
@@ -163,12 +169,10 @@ def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
 def strict_market_filter(latest: pd.DataFrame) -> pd.DataFrame:
     if latest.empty:
         return latest
-
     x = latest.copy()
     for col in ["close", "volume", "turnover_value"]:
         x[col] = _num(x[col])
 
-    # v3.2：仍保留基本容量，但比 v3.0 稍微合理，避免潛伏股被硬砍
     x = x[
         (x["close"] >= 10) &
         (
@@ -176,7 +180,6 @@ def strict_market_filter(latest: pd.DataFrame) -> pd.DataFrame:
             (x["turnover_value"] >= 20000)
         )
     ].copy()
-
     return x
 
 
@@ -188,14 +191,9 @@ def _score_clip(v, low=0, high=100):
 
 
 def accumulation_multi_scale_score(row) -> tuple[float, str]:
-    """
-    v3.2 核心：3 / 5 / 10 多尺度主力感知。
-    任一尺度符合就給分，取最高，不重複灌分。
-    """
     scale_scores = []
     reasons = []
 
-    # 3日：剛開始吸籌
     s3 = 0
     if row.get("obv_up_count_3", 0) >= 2:
         s3 += 16
@@ -210,7 +208,6 @@ def accumulation_multi_scale_score(row) -> tuple[float, str]:
         scale_scores.append(("3日感知", min(s3, 40)))
         reasons.append("3日資金/價格轉穩")
 
-    # 5日：穩定吸籌
     s5 = 0
     if row.get("obv_up_count_5", 0) >= 3:
         s5 += 22
@@ -225,7 +222,6 @@ def accumulation_multi_scale_score(row) -> tuple[float, str]:
         scale_scores.append(("5日感知", min(s5, 55)))
         reasons.append("5日穩定吸籌")
 
-    # 10日：長期控盤吸籌
     s10 = 0
     if row.get("obv_up_count_10", 0) >= 6:
         s10 += 30
@@ -255,7 +251,7 @@ def accumulation_score(row) -> tuple[float, str]:
     low60 = row.get("low_60")
     ret20 = row.get("ret_20d")
     vr = row.get("volume_ratio")
-    atr = row.get("atr_pct")
+    atr = row.get("atr20_pct")
     ma20_slope = row.get("ma20_slope_5d")
     close = row.get("close")
     ma60 = row.get("ma60")
@@ -280,8 +276,6 @@ def accumulation_score(row) -> tuple[float, str]:
         reasons.append("未遠離MA60")
 
     continuity, c_reason = accumulation_multi_scale_score(row)
-
-    # v3.2：連續感知是加分核心，但總分封頂
     score = min(100, base + continuity)
     if continuity > 0:
         reasons.append(c_reason)
@@ -297,7 +291,7 @@ def control_score(row) -> tuple[float, str]:
     range20 = row.get("range_20")
     body20 = row.get("body20")
     shadow20 = row.get("shadow20")
-    atr = row.get("atr_pct")
+    atr = row.get("atr20_pct")
 
     if pd.notna(ma_conv) and ma_conv <= 0.085:
         score += 30
@@ -316,6 +310,94 @@ def control_score(row) -> tuple[float, str]:
         reasons.append("ATR低波動")
 
     return _score_clip(score), "、".join(reasons) if reasons else "無控盤"
+
+
+def structure_score(row) -> tuple[float, str]:
+    """
+    v3.3 新增：型態位置層。
+    核心：找「壓縮、量縮、低位、接近突破」。
+    """
+    score = 0
+    reasons = []
+
+    range10 = row.get("range_10")
+    range30 = row.get("range_30")
+    range60 = row.get("range_60")
+    ma_conv = row.get("ma_converge_pct")
+    vol_dry = row.get("vol_dry_ratio")
+    close = row.get("close")
+    high60 = row.get("high_60")
+    high20 = row.get("high_20")
+    ma20 = row.get("ma20")
+    ma60 = row.get("ma60")
+    atr10 = row.get("atr10_pct")
+    atr30 = row.get("atr30_pct")
+    ret20 = row.get("ret_20d")
+
+    # 1. 波動壓縮：近10日比中期更窄
+    if pd.notna(range10) and pd.notna(range30) and range10 < range30 * 0.82:
+        score += 22
+        reasons.append("10日波動壓縮")
+    elif pd.notna(range10) and pd.notna(range60) and range10 < range60 * 0.70:
+        score += 18
+        reasons.append("相對60日壓縮")
+
+    # 2. 均線糾結
+    if pd.notna(ma_conv):
+        if ma_conv <= 0.045:
+            score += 25
+            reasons.append("均線高度糾結")
+        elif ma_conv <= 0.075:
+            score += 18
+            reasons.append("均線收斂")
+
+    # 3. 量縮但不是死量
+    if pd.notna(vol_dry):
+        if 0.45 <= vol_dry <= 0.90:
+            score += 18
+            reasons.append("量縮整理")
+        elif 0.90 < vol_dry <= 1.20:
+            score += 8
+            reasons.append("量能穩定")
+
+    # 4. 還沒過熱：距離60日高點仍有空間
+    if pd.notna(close) and pd.notna(high60) and high60 > 0:
+        dist_from_high60 = close / high60
+        if 0.70 <= dist_from_high60 <= 0.92:
+            score += 16
+            reasons.append("低位未過熱")
+        elif 0.92 < dist_from_high60 <= 0.98:
+            score += 10
+            reasons.append("接近壓力區")
+
+    # 5. 接近突破位，但尚未爆噴
+    if pd.notna(close) and pd.notna(high20) and high20 > 0:
+        if 0.93 <= close / high20 <= 1.01:
+            score += 14
+            reasons.append("接近20日突破位")
+
+    # 6. 站回或貼近MA20
+    if pd.notna(close) and pd.notna(ma20):
+        if close >= ma20 * 0.98:
+            score += 10
+            reasons.append("貼近MA20")
+
+    # 7. 不能是明顯破底弱勢
+    if pd.notna(close) and pd.notna(ma60) and close < ma60 * 0.82:
+        score -= 20
+        reasons.append("遠低MA60扣分")
+
+    # 8. 避免已經噴太多
+    if pd.notna(ret20) and ret20 > 0.28:
+        score -= 18
+        reasons.append("20日過熱扣分")
+
+    # 9. ATR 壓縮
+    if pd.notna(atr10) and pd.notna(atr30) and atr10 < atr30 * 0.88:
+        score += 12
+        reasons.append("ATR壓縮")
+
+    return _score_clip(score), "、".join(reasons) if reasons else "無結構優勢"
 
 
 def test_move_score(row) -> tuple[float, str]:
@@ -390,18 +472,21 @@ def pre_breakout_score(row) -> tuple[float, str]:
 def classify_stage(row, scores):
     acc = scores["accumulation_score"]
     ctrl = scores["control_score"]
+    struct = scores["structure_score"]
     test = scores["test_move_score"]
     pre = scores["pre_breakout_score"]
     final = scores["main_force_score"]
 
-    # v3.2：主力感知版，允許「強吸籌 + 控盤」進入強潛伏
-    if final >= 70 and pre >= 58 and test >= 42:
-        return "BREAKOUT_READY", "🟢 發動前", "可小倉分批，等突破確認"
-    if acc >= 70 and ctrl >= 58:
-        return "LATENT_STRONG", "🟡 強潛伏", "多尺度吸籌成立，優先卡位"
-    if acc >= 58 and ctrl >= 48:
-        return "LATENT", "🟡 潛伏", "有吸籌控盤，等待試單"
-    if test >= 50 and pre >= 42:
+    # v3.3：強調「行為 × 結構」
+    if final >= 70 and struct >= 58 and pre >= 55 and test >= 38:
+        return "BREAKOUT_READY", "🟢 發動前", "結構壓縮後接近突破，可小倉"
+    if acc >= 68 and ctrl >= 55 and struct >= 60:
+        return "LATENT_STRONG", "🟡 強潛伏", "吸籌控盤且結構壓縮，優先卡位"
+    if struct >= 68 and acc >= 55:
+        return "STRUCTURE_READY", "🔵 結構待發", "型態位置漂亮，等待試單"
+    if acc >= 56 and ctrl >= 45 and struct >= 45:
+        return "LATENT", "🟡 潛伏", "有吸籌控盤，等待確認"
+    if test >= 48 and pre >= 40:
         return "TEST", "🟠 試單", "主力試盤，隔日確認"
     if final >= 48:
         return "WATCH", "⚪ 觀察", "條件未完整，僅追蹤"
@@ -413,23 +498,25 @@ def score_latest(latest: pd.DataFrame) -> pd.DataFrame:
         return latest
 
     rows = []
-
     for _, row in latest.iterrows():
         acc, acc_reason = accumulation_score(row)
         ctrl, ctrl_reason = control_score(row)
+        struct, struct_reason = structure_score(row)
         test, test_reason = test_move_score(row)
         pre, pre_reason = pre_breakout_score(row)
 
         final = (
-            acc * 0.42 +
-            ctrl * 0.28 +
-            test * 0.18 +
-            pre * 0.12
+            acc * 0.34 +
+            ctrl * 0.24 +
+            struct * 0.22 +
+            test * 0.12 +
+            pre * 0.08
         )
 
         stage, action_label, action_note = classify_stage(row, {
             "accumulation_score": acc,
             "control_score": ctrl,
+            "structure_score": struct,
             "test_move_score": test,
             "pre_breakout_score": pre,
             "main_force_score": final,
@@ -439,6 +526,7 @@ def score_latest(latest: pd.DataFrame) -> pd.DataFrame:
         r.update({
             "accumulation_score": round(acc, 2),
             "control_score": round(ctrl, 2),
+            "structure_score": round(struct, 2),
             "test_move_score": round(test, 2),
             "pre_breakout_score": round(pre, 2),
             "main_force_score": round(final, 2),
@@ -447,27 +535,29 @@ def score_latest(latest: pd.DataFrame) -> pd.DataFrame:
             "action_note": action_note,
             "accumulation_reason": acc_reason,
             "control_reason": ctrl_reason,
+            "structure_reason": struct_reason,
             "test_move_reason": test_reason,
             "pre_breakout_reason": pre_reason,
-            "note": f"{action_note}｜吸籌{round(acc)} 控盤{round(ctrl)} 試單{round(test)} 前兆{round(pre)}",
+            "note": f"{action_note}｜吸籌{round(acc)} 控盤{round(ctrl)} 結構{round(struct)} 試單{round(test)} 前兆{round(pre)}",
         })
         rows.append(r)
 
     out = pd.DataFrame(rows)
-    out = out[out["stage"].isin(["BREAKOUT_READY", "LATENT_STRONG", "LATENT", "TEST", "WATCH"])].copy()
+    out = out[out["stage"].isin(["BREAKOUT_READY", "LATENT_STRONG", "STRUCTURE_READY", "LATENT", "TEST", "WATCH"])].copy()
 
     stage_rank = {
         "BREAKOUT_READY": 0,
         "LATENT_STRONG": 1,
-        "TEST": 2,
-        "LATENT": 3,
-        "WATCH": 4,
+        "STRUCTURE_READY": 2,
+        "TEST": 3,
+        "LATENT": 4,
+        "WATCH": 5,
     }
     out["stage_rank"] = out["stage"].map(stage_rank).fillna(99)
 
     out = out.sort_values(
-        ["stage_rank", "main_force_score", "accumulation_score", "control_score"],
-        ascending=[True, False, False, False]
+        ["stage_rank", "main_force_score", "structure_score", "accumulation_score", "control_score"],
+        ascending=[True, False, False, False, False]
     )
 
     return out
@@ -497,30 +587,28 @@ def run_v3_core_engine(price_panel: pd.DataFrame, latest_date=None, top_n=40):
     scored = score_latest(filtered).head(top_n).copy()
 
     debug = pd.DataFrame([{
-        "state": "v3_2_main_force_sensing",
+        "state": "v3_3_behavior_structure_engine",
         "latest_date": str(latest_date.date()) if pd.notna(latest_date) else "",
         "input_count": int(input_count),
         "filtered_count": int(filtered_count),
         "selected_count": int(len(scored)),
         "breakout_ready_count": int((scored["stage"] == "BREAKOUT_READY").sum()) if len(scored) else 0,
         "latent_strong_count": int((scored["stage"] == "LATENT_STRONG").sum()) if len(scored) else 0,
+        "structure_ready_count": int((scored["stage"] == "STRUCTURE_READY").sum()) if len(scored) else 0,
         "latent_count": int((scored["stage"] == "LATENT").sum()) if len(scored) else 0,
         "test_count": int((scored["stage"] == "TEST").sum()) if len(scored) else 0,
         "watch_count": int((scored["stage"] == "WATCH").sum()) if len(scored) else 0,
     }])
-
     return scored, debug
 
 
 if __name__ == "__main__":
     import os
-
     candidates = [
         "price_panel_daily.csv",
         "data/price_panel_daily.csv",
         "mobile_dashboard_v1/data/price_panel_daily.csv",
     ]
-
     src = None
     for p in candidates:
         if os.path.exists(p):
@@ -538,4 +626,4 @@ if __name__ == "__main__":
         if len(result):
             print(result[["stock_id", "close", "stage", "main_force_score", "note"]].head(40).to_string(index=False))
         else:
-            print("no v3.2 candidates")
+            print("no v3.3 candidates")
