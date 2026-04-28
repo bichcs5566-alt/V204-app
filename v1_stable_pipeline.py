@@ -20,7 +20,7 @@ except Exception:
 
 # =========================================================
 # v1_stable_pipeline.py
-# v2.4 main force not empty version
+# v2.4.1 data safe version
 #
 # 核心修正：
 # 1. current_positions.csv 是唯一持倉來源。
@@ -567,14 +567,10 @@ def build_features(df):
 
 def select_stocks(day_df):
     """
-    v1.9.1 策略修復：普通股宇宙濾網 + 三層進場
-    目標：
-    1. 不讓 trade_plan 完全空白。
-    2. 同時保留三種入口：
-       - breakout：突破型
-       - pullback：回檔型
-       - squeeze：均線收斂型
-    3. 先建立候選池，再交給 action 決策層分 BUY / TEST / READY。
+    v2.4.1 資料層防空修正版：
+    - 不再因 ma5/ma10/ma20 缺失直接把有效檔數清成 0。
+    - 有均線用均線，沒均線用 close / mom / volume 先建立弱候選。
+    - 先救 valid_count，讓策略層有資料可以判斷。
     """
     total_input = len(day_df)
 
@@ -582,7 +578,9 @@ def select_stocks(day_df):
         "close", "ma5", "ma10", "ma20", "ma60",
         "mom5", "mom20", "mom60", "vol20",
         "prev_high_10", "prev_high_20", "volume_ratio",
-        "kd_k", "kd_d", "macd_diff", "macd_hist"
+        "kd_k", "kd_d", "macd_diff", "macd_hist",
+        "low_20d", "low_60d", "prev_low_20", "ma20_slope",
+        "kd_cross_up", "macd_cross_up"
     ]
 
     valid = day_df.copy()
@@ -590,12 +588,39 @@ def select_stocks(day_df):
         if col not in valid.columns:
             valid[col] = np.nan
 
-    # 基礎有效資料：只要求價格與短中均線，不要過早砍掉全部
-    valid = valid.dropna(subset=["close", "ma5", "ma10", "ma20"]).copy()
-
-    # v1.9.1：只保留 4 碼普通股，排除 ETF / 權證 / 槓反 / 含字母代號
     valid["stock_id"] = valid["stock_id"].apply(normalize_stock_id)
     valid = valid[valid["stock_id"].apply(is_common_stock_id)].copy()
+
+    # 核心修正：只要求 close 有值，不要求 MA 全部存在
+    valid["close"] = pd.to_numeric(valid["close"], errors="coerce")
+    valid = valid.dropna(subset=["close"]).copy()
+
+    # 若缺均線，用 close 暫代，避免策略前段全死
+    for col in ["ma5", "ma10", "ma20", "ma60"]:
+        valid[col] = pd.to_numeric(valid[col], errors="coerce")
+        valid[col] = valid[col].fillna(valid["close"])
+
+    # 若缺 momentum，用 0 暫代；不是加分，只是避免 NaN 斷線
+    for col in ["mom5", "mom20", "mom60", "vol20", "volume_ratio", "macd_diff", "macd_hist", "ma20_slope"]:
+        valid[col] = pd.to_numeric(valid[col], errors="coerce")
+    valid["mom5"] = valid["mom5"].fillna(0)
+    valid["mom20"] = valid["mom20"].fillna(0)
+    valid["mom60"] = valid["mom60"].fillna(0)
+    valid["vol20"] = valid["vol20"].fillna(0.03)
+    valid["volume_ratio"] = valid["volume_ratio"].fillna(1.0)
+    valid["macd_diff"] = valid["macd_diff"].fillna(0)
+    valid["macd_hist"] = valid["macd_hist"].fillna(0)
+    valid["ma20_slope"] = valid["ma20_slope"].fillna(0)
+
+    # 高低點缺值就用 close 暫代，避免 near/breakout 全失效
+    for col in ["prev_high_10", "prev_high_20", "low_20d", "low_60d", "prev_low_20"]:
+        valid[col] = pd.to_numeric(valid[col], errors="coerce")
+        valid[col] = valid[col].fillna(valid["close"])
+
+    # KD/MACD crossover 缺值以 0，不強制訊號
+    for col in ["kd_cross_up", "macd_cross_up"]:
+        valid[col] = pd.to_numeric(valid[col], errors="coerce").fillna(0)
+
     valid_count = len(valid)
 
     if valid_count == 0:
@@ -607,57 +632,55 @@ def select_stocks(day_df):
             "alpha_primary_count": 0,
             "core_final_count": 0,
             "alpha_final_count": 0,
+            "data_layer_state": "no_close_data",
         }])
         return pd.DataFrame(), pd.DataFrame(), debug
 
     # ========= 共用特徵 =========
     valid["ma_max"] = valid[["ma5", "ma10", "ma20"]].max(axis=1)
     valid["ma_min"] = valid[["ma5", "ma10", "ma20"]].min(axis=1)
-    valid["ma_converge_pct"] = (valid["ma_max"] - valid["ma_min"]) / valid["close"]
+    valid["ma_converge_pct"] = ((valid["ma_max"] - valid["ma_min"]) / valid["close"]).replace([np.inf, -np.inf], np.nan).fillna(0)
 
     valid["trend_ok"] = (
-        (valid["close"] >= valid["ma20"] * 0.98) &
-        (valid["mom5"].fillna(-9) > -0.04)
+        (valid["close"] >= valid["ma20"] * 0.97) &
+        (valid["mom5"] > -0.06)
     ).astype(int)
 
     valid["ma_bull"] = (
-        (valid["ma5"] >= valid["ma10"]) &
-        (valid["ma10"] >= valid["ma20"])
+        (valid["ma5"] >= valid["ma10"] * 0.995) &
+        (valid["ma10"] >= valid["ma20"] * 0.995)
     ).astype(int)
 
-    valid["breakout_20"] = (
-        valid["prev_high_20"].notna() &
-        (valid["close"] > valid["prev_high_20"] * 1.003)
-    ).astype(int)
-
-    valid["breakout_10"] = (
-        valid["prev_high_10"].notna() &
-        (valid["close"] > valid["prev_high_10"] * 1.003)
-    ).astype(int)
-
-    valid["near_high_20"] = (
-        valid["prev_high_20"].notna() &
-        (valid["close"] >= valid["prev_high_20"] * 0.98)
-    ).astype(int)
+    valid["breakout_20"] = (valid["close"] > valid["prev_high_20"] * 1.003).astype(int)
+    valid["breakout_10"] = (valid["close"] > valid["prev_high_10"] * 1.003).astype(int)
+    valid["near_high_20"] = (valid["close"] >= valid["prev_high_20"] * 0.97).astype(int)
 
     valid["pullback_ma20"] = (
-        (valid["close"] >= valid["ma20"] * 0.98) &
-        (valid["close"] <= valid["ma20"] * 1.05) &
-        (valid["mom20"].fillna(0) >= -0.03)
+        (valid["close"] >= valid["ma20"] * 0.97) &
+        (valid["close"] <= valid["ma20"] * 1.06) &
+        (valid["mom20"] >= -0.05)
     ).astype(int)
 
     valid["squeeze"] = (
-        (valid["ma_converge_pct"] <= 0.08) &
+        (valid["ma_converge_pct"] <= 0.10) &
         (valid["trend_ok"] == 1)
     ).astype(int)
 
     valid["momentum_ok"] = (
-        (valid["mom5"].fillna(-9) > -0.01) |
-        (valid["mom20"].fillna(-9) > 0) |
-        (valid["macd_diff"].fillna(-9) > 0)
+        (valid["mom5"] > -0.01) |
+        (valid["mom20"] > 0) |
+        (valid["macd_diff"] > 0) |
+        (valid["kd_cross_up"] == 1) |
+        (valid["macd_cross_up"] == 1)
     ).astype(int)
 
-    # ========= 三層入口 =========
+    # 主力佈局弱訊號：不是保底，是從有效股票中找低波動、量能未死、未破底
+    valid["main_force_setup"] = (
+        (valid["volume_ratio"] >= 0.9) &
+        (valid["mom5"].abs() <= 0.08) &
+        (valid["close"] >= valid["prev_low_20"] * 0.98)
+    ).astype(int)
+
     breakout_pool = valid[
         ((valid["breakout_20"] == 1) | (valid["breakout_10"] == 1) | (valid["near_high_20"] == 1)) &
         (valid["trend_ok"] == 1)
@@ -672,64 +695,65 @@ def select_stocks(day_df):
         (valid["squeeze"] == 1)
     ].copy()
 
-    # ========= 分數：讓不同入口都有機會進候選池 =========
+    setup_pool = valid[
+        (valid["main_force_setup"] == 1)
+    ].copy()
+
     def add_common_score(df, bucket_name):
         if df is None or df.empty:
             return pd.DataFrame(columns=list(valid.columns) + ["candidate_bucket", "score", "quality"])
+
         x = df.copy()
         x["candidate_bucket"] = bucket_name
-        vol = x["vol20"].fillna(x["vol20"].median()).fillna(0.03).clip(lower=0.005)
+        vol = x["vol20"].fillna(0.03).clip(lower=0.005)
 
         x["score"] = (
-            x["breakout_20"] * 0.28
-            + x["breakout_10"] * 0.18
-            + x["near_high_20"] * 0.12
-            + x["ma_bull"] * 0.15
+            x["breakout_20"] * 0.25
+            + x["breakout_10"] * 0.15
+            + x["near_high_20"] * 0.10
+            + x["ma_bull"] * 0.12
             + x["trend_ok"] * 0.12
-            + x["momentum_ok"] * 0.10
-            + (1 - x["ma_converge_pct"].clip(0, 0.25)) * 0.05
-            + x["mom5"].fillna(0).clip(-0.1, 0.2) * 0.10
+            + x["momentum_ok"] * 0.14
+            + x["main_force_setup"] * 0.18
+            + (1 - x["ma_converge_pct"].clip(0, 0.25)) * 0.06
+            + x["mom5"].clip(-0.1, 0.2) * 0.08
+            + x["mom20"].clip(-0.1, 0.3) * 0.08
         )
+
         if bucket_name == "pullback":
-            x["score"] += x["pullback_ma20"] * 0.16
+            x["score"] += x["pullback_ma20"] * 0.14
         if bucket_name == "squeeze":
-            x["score"] += (1 - x["ma_converge_pct"].clip(0, 0.20)) * 0.18
+            x["score"] += (1 - x["ma_converge_pct"].clip(0, 0.20)) * 0.16
+        if bucket_name == "setup":
+            x["score"] += x["main_force_setup"] * 0.20
 
         x["quality"] = x["score"] / (vol + 1e-6)
         return x.sort_values(["score", "quality"], ascending=False)
 
-    b1 = add_common_score(breakout_pool, "breakout").head(12)
-    b2 = add_common_score(pullback_pool, "pullback").head(12)
-    b3 = add_common_score(squeeze_pool, "squeeze").head(18)
+    b1 = add_common_score(breakout_pool, "breakout").head(10)
+    b2 = add_common_score(pullback_pool, "pullback").head(10)
+    b3 = add_common_score(squeeze_pool, "squeeze").head(14)
+    b4 = add_common_score(setup_pool, "setup").head(20)
 
-    core_candidates = pd.concat([b1, b2, b3], ignore_index=True)
+    core_candidates = pd.concat([b1, b2, b3, b4], ignore_index=True)
     core_candidates = core_candidates.drop_duplicates(subset=["stock_id"], keep="first")
 
-    # ========= 保底機制：如果三層入口太少，回到廣義強度排序 =========
-    fallback = valid.copy()
-    fallback["candidate_bucket"] = "fallback"
-    fallback["score"] = (
-        fallback["trend_ok"] * 0.25
-        + fallback["ma_bull"] * 0.20
-        + fallback["momentum_ok"] * 0.20
-        + fallback["near_high_20"] * 0.10
-        + (1 - fallback["ma_converge_pct"].clip(0, 0.25)) * 0.15
-        + fallback["mom20"].fillna(0).clip(-0.1, 0.3) * 0.10
-    )
-    fallback = fallback.sort_values("score", ascending=False)
-
+    # 若四層候選仍不足，用 score 前排補，但仍來自 valid 內，不從代號排序
+    ranked_all = add_common_score(valid, "ranked")
     if len(core_candidates) < CORE_TOP_N:
-        extra = fallback[~fallback["stock_id"].isin(core_candidates["stock_id"])].head(CORE_TOP_N - len(core_candidates))
+        extra = ranked_all[~ranked_all["stock_id"].isin(core_candidates["stock_id"])].head(CORE_TOP_N - len(core_candidates))
         core_candidates = pd.concat([core_candidates, extra], ignore_index=True)
 
-    core = core_candidates.drop_duplicates(subset=["stock_id"]).sort_values("score", ascending=False).head(CORE_TOP_N).copy()
+    core = core_candidates.drop_duplicates(subset=["stock_id"]).sort_values(["score", "quality"], ascending=False).head(CORE_TOP_N).copy()
 
-    # Alpha = 優先突破與高分
     alpha_source = core.copy()
-    alpha_source["quality"] = alpha_source["score"] / (alpha_source["vol20"].fillna(alpha_source["vol20"].median()).fillna(0.03) + 1e-6)
-    alpha = alpha_source.sort_values(["breakout_20", "breakout_10", "quality"], ascending=False).head(ALPHA_TOP_N).copy()
+    if len(alpha_source):
+        alpha_source["quality"] = alpha_source["score"] / (alpha_source["vol20"].fillna(0.03).clip(lower=0.005) + 1e-6)
+        alpha = alpha_source.sort_values(["breakout_20", "breakout_10", "momentum_ok", "quality"], ascending=False).head(ALPHA_TOP_N).copy()
+    else:
+        alpha = pd.DataFrame()
 
-    if len(alpha) < MIN_ALPHA_FILL:
+    if len(alpha) < MIN_ALPHA_FILL and len(core):
         extra = core[~core["stock_id"].isin(alpha["stock_id"])].head(MIN_ALPHA_FILL - len(alpha))
         alpha = pd.concat([alpha, extra], ignore_index=True)
 
@@ -738,9 +762,10 @@ def select_stocks(day_df):
         "total_input": total_input,
         "valid_after_na": valid_count,
         "core_primary_count": int(len(core_candidates)),
-        "alpha_primary_count": int(len(alpha_source)),
+        "alpha_primary_count": int(len(alpha_source)) if 'alpha_source' in locals() else 0,
         "core_final_count": int(len(core)),
         "alpha_final_count": int(len(alpha)),
+        "data_layer_state": "safe_valid_close_only",
     }])
     return core, alpha, debug
 
@@ -1210,7 +1235,7 @@ def build_outputs(df, prev_trade_plan=None):
         "trade_date": str(trade_date.date()),
         "price_panel_latest_date": str(price_panel_latest_date.date()),
         "data_state": "fresh",
-        "source": "v2.4_main_force_not_empty",
+        "source": "v2.4.1_data_safe",
         "execution_rule": "T日盤後產生訊號，T+1交易",
         "prev_trade_plan_file": PREV_TRADE_PLAN_FILE,
         "trade_plan_history_file": f"trade_plan_history/{str(trade_date.date())}.csv",
