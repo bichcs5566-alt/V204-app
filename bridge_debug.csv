@@ -1,0 +1,12 @@
+﻿file,state,rows
+trade_plan.csv,copied,14.0
+candidates.csv,copied,1072.0
+core_candidates.csv,copied,25.0
+alpha_candidates.csv,copied,6.0
+selection_debug.csv,copied,1.0
+full_summary.csv,copied,1.0
+daily_nav.csv,copied,1.0
+current_positions.csv,copied,0.0
+position_monitor.csv,copied,0.0
+watchlist_monitor.csv,copied,0.0
+price_panel_daily.csv,copied_raw,

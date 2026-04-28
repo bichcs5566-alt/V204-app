@@ -1,2 +1,2 @@
 ﻿generated_at,price_source,signal_date,total_input_rows,latest_stock_count,scored_count,buy_count,test_count,watch_count,skip_count,core_count,alpha_count,trade_plan_count,trade_buy_count,trade_test_count,trade_watch_count,note
-2026-04-28 10:25:53,price_panel_daily.csv,2026-04-28,2145,1072,1072,0,0,1029,43,25,6,14,0,0,14,v265 clean strategy core
+2026-04-28 10:56:06,price_panel_daily.csv,2026-04-28,2145,1072,1072,0,0,1029,43,25,6,14,0,0,14,v265 clean strategy core
