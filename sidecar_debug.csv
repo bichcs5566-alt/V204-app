@@ -1,2 +1,0 @@
-﻿price_panel_path,trade_plan_path,price_panel_rows,latest_rows,original_trade_plan_rows,sidecar_candidates_count,missed_opportunities_count,mode
-price_panel_daily.csv,trade_plan.csv,15976,1073,0,0,0,overlay_only_no_main_change
