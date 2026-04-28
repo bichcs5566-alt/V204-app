@@ -1,6 +1,6 @@
 """
 decision_modules.py
-v2.3 主力同步版
+v2.4 主力同步 + 不空單版
 
 目標：
 - 不追高，只抓主力行為階段。
@@ -291,24 +291,24 @@ def entry_score(row, market_row=None):
         score -= 10
         reasons.append("10日過熱")
 
-    if brk and score >= 60:
+    if brk and score >= 55:
         action = "BUY"
         stage = "發動"
-    elif test and score >= 48:
+    elif test and score >= 42:
         action = "TEST"
         stage = "試盤"
-    elif acc and score >= 28:
+    elif acc and score >= 24:
         action = "READY"
         stage = "佈局"
-    elif score >= 55:
+    elif score >= 50:
         action = "TEST"
         stage = "試盤"
-    elif score >= 32:
+    elif score >= 28:
         action = "READY"
         stage = "佈局"
     else:
-        action = "SKIP"
-        stage = "無訊號"
+        action = "OBSERVE"
+        stage = "弱觀察"
 
     return {
         "entry_score": int(round(score)),
