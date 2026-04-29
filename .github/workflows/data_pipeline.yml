@@ -43,6 +43,11 @@ jobs:
         run: |
           python v266_build_features.py
 
+      - name: Run pre-move engine
+        run: |
+          python pre_move_engine.py
+          python pre_move_dashboard_patch.py
+
       - name: Run data guard
         run: |
           python v266_data_guard.py
@@ -59,6 +64,10 @@ jobs:
             echo "bridge not found, skip"
           fi
 
+      - name: Keep pre-move dashboard files after bridge
+        run: |
+          python pre_move_dashboard_patch.py
+
       - name: Clean big files
         run: |
           rm -f price_panel_daily.csv
@@ -73,7 +82,32 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
 
-          git add             data_meta.json             feature_meta.json             data_guard_report.json             backfill_report.json             trade_plan.csv             candidates.csv             core_candidates.csv             alpha_candidates.csv             selection_debug.csv             meta.json             mobile_dashboard_v1/data/meta.json             mobile_dashboard_v1/data/trade_plan.csv             mobile_dashboard_v1/data/candidates.csv             mobile_dashboard_v1/data/core_candidates.csv             mobile_dashboard_v1/data/alpha_candidates.csv             mobile_dashboard_v1/data/selection_debug.csv             mobile_dashboard_v1/data/data_guard_report.json             mobile_dashboard_v1/data/backfill_report.json             mobile_dashboard_v1/data/data_meta.json             mobile_dashboard_v1/data/feature_meta.json || true
+          git add \
+            data_meta.json \
+            feature_meta.json \
+            data_guard_report.json \
+            backfill_report.json \
+            trade_plan.csv \
+            candidates.csv \
+            core_candidates.csv \
+            alpha_candidates.csv \
+            selection_debug.csv \
+            meta.json \
+            pre_move_candidates.csv \
+            pre_move_summary.json \
+            mobile_dashboard_v1/data/meta.json \
+            mobile_dashboard_v1/data/trade_plan.csv \
+            mobile_dashboard_v1/data/candidates.csv \
+            mobile_dashboard_v1/data/core_candidates.csv \
+            mobile_dashboard_v1/data/alpha_candidates.csv \
+            mobile_dashboard_v1/data/selection_debug.csv \
+            mobile_dashboard_v1/data/data_guard_report.json \
+            mobile_dashboard_v1/data/backfill_report.json \
+            mobile_dashboard_v1/data/data_meta.json \
+            mobile_dashboard_v1/data/feature_meta.json \
+            mobile_dashboard_v1/data/pre_move_candidates.csv \
+            mobile_dashboard_v1/data/pre_move_summary.json \
+            mobile_dashboard_v1/data/pre_move_cards.json || true
 
           git reset -- price_panel_daily.csv || true
           git reset -- feature_panel_daily.csv || true
@@ -85,6 +119,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "no update"
           else
-            git commit -m "auto update 19:00"
+            git commit -m "add pre-move engine and auto update"
             git push
           fi
