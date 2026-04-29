@@ -43,6 +43,10 @@ jobs:
         run: |
           python v266_build_features.py
 
+      - name: Run market regime
+        run: |
+          python market_regime_engine.py
+
       - name: Run pre-move engine
         run: |
           python pre_move_engine.py
@@ -56,6 +60,10 @@ jobs:
         run: |
           python v266_strategy_engine.py
 
+      - name: Run trading system allocator
+        run: |
+          python trading_system_allocator.py
+
       - name: Sync dashboard
         run: |
           if [ -f v3_1_dashboard_bridge.py ]; then
@@ -64,9 +72,10 @@ jobs:
             echo "bridge not found, skip"
           fi
 
-      - name: Keep pre-move dashboard files after bridge
+      - name: Keep new dashboard files after bridge
         run: |
           python pre_move_dashboard_patch.py
+          python trading_system_allocator.py
 
       - name: Clean big files
         run: |
@@ -95,6 +104,9 @@ jobs:
             meta.json \
             pre_move_candidates.csv \
             pre_move_summary.json \
+            market_regime.json \
+            trading_system_plan.csv \
+            trading_system_summary.json \
             mobile_dashboard_v1/data/meta.json \
             mobile_dashboard_v1/data/trade_plan.csv \
             mobile_dashboard_v1/data/candidates.csv \
@@ -107,7 +119,10 @@ jobs:
             mobile_dashboard_v1/data/feature_meta.json \
             mobile_dashboard_v1/data/pre_move_candidates.csv \
             mobile_dashboard_v1/data/pre_move_summary.json \
-            mobile_dashboard_v1/data/pre_move_cards.json || true
+            mobile_dashboard_v1/data/pre_move_cards.json \
+            mobile_dashboard_v1/data/market_regime.json \
+            mobile_dashboard_v1/data/trading_system_plan.csv \
+            mobile_dashboard_v1/data/trading_system_summary.json || true
 
           git reset -- price_panel_daily.csv || true
           git reset -- feature_panel_daily.csv || true
@@ -119,6 +134,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "no update"
           else
-            git commit -m "add pre-move engine and auto update"
+            git commit -m "add market regime and trading system"
             git push
           fi
