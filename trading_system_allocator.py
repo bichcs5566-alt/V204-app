@@ -1,30 +1,15 @@
 """
 trading_system_allocator.py
 
-交易體系配置器：Top 標註版
+最終整合版交易體系配置器
 
-目的：
-保留完整候選名單，不刪除非 Top 股票。
-但新增：
-- rank：總排名
-- bucket_rank：桶內排名
-- execution_flag：TOP / WATCH / BLOCK
-- allowed：是否允許執行
-- system_note：執行說明
-
-核心：
-1. 名單全部保留。
-2. 只有 TOP 允許下單。
-3. WATCH 可觀察，不建議下單。
-4. BLOCK 不可下單。
-5. 根據市場狀態自動決定每個桶可執行幾檔。
-
-輸入：
-- market_regime.json
-- trade_plan.csv
-- core_candidates.csv
-- alpha_candidates.csv
-- pre_move_candidates.csv
+整合：
+1. 市場狀態 market_regime
+2. PRE / CORE / ALPHA 分流
+3. TOP / WATCH / BLOCK 執行權限
+4. entry_type 進場 timing
+5. allowed 最終可下單判斷
+6. 保留完整名單，不刪除非 TOP
 
 輸出：
 - trading_system_plan.csv
@@ -52,14 +37,17 @@ OUTPUT_COLUMNS = [
     "stock_id",
     "action",
     "score",
+    "timing_score",
+    "entry_type",
+    "execution_flag",
+    "allowed",
     "close",
     "price_tier",
     "target_weight",
     "suggested_amount",
-    "execution_flag",
-    "allowed",
     "execution",
     "reason",
+    "entry_note",
     "risk_note",
     "system_note",
 ]
@@ -144,115 +132,46 @@ def get_tier(row, close):
 
 
 def get_slots(regime_code):
-    """
-    slot 定義：
-    top_slots = 可以執行的檔數
-    watch_slots = 額外觀察檔數
-    """
     if regime_code == "BEAR":
-        return {
-            "CORE": {"top": 2, "watch": 5},
-            "PRE": {"top": 0, "watch": 5},
-            "ALPHA": {"top": 1, "watch": 4},
-        }
+        return {"CORE": {"top": 2, "watch": 5}, "PRE": {"top": 0, "watch": 5}, "ALPHA": {"top": 1, "watch": 4}}
     if regime_code == "RANGE":
-        return {
-            "CORE": {"top": 3, "watch": 6},
-            "PRE": {"top": 2, "watch": 6},
-            "ALPHA": {"top": 1, "watch": 5},
-        }
+        return {"CORE": {"top": 3, "watch": 6}, "PRE": {"top": 2, "watch": 6}, "ALPHA": {"top": 1, "watch": 5}}
     if regime_code == "BULL":
-        return {
-            "CORE": {"top": 5, "watch": 8},
-            "PRE": {"top": 3, "watch": 6},
-            "ALPHA": {"top": 2, "watch": 6},
-        }
+        return {"CORE": {"top": 5, "watch": 8}, "PRE": {"top": 3, "watch": 6}, "ALPHA": {"top": 2, "watch": 6}}
     if regime_code == "EXPLOSIVE":
-        return {
-            "CORE": {"top": 7, "watch": 8},
-            "PRE": {"top": 2, "watch": 6},
-            "ALPHA": {"top": 3, "watch": 6},
-        }
-
-    return {
-        "CORE": {"top": 2, "watch": 5},
-        "PRE": {"top": 0, "watch": 5},
-        "ALPHA": {"top": 1, "watch": 4},
-    }
+        return {"CORE": {"top": 7, "watch": 8}, "PRE": {"top": 2, "watch": 6}, "ALPHA": {"top": 3, "watch": 6}}
+    return {"CORE": {"top": 2, "watch": 5}, "PRE": {"top": 0, "watch": 5}, "ALPHA": {"top": 1, "watch": 4}}
 
 
 def base_amount(bucket, flag, budget, capital, top_count):
-    if flag != "TOP":
+    if flag != "TOP" or top_count <= 0 or budget <= 0:
         return 0
-
-    if top_count <= 0 or budget <= 0:
-        return 0
-
     if bucket == "CORE":
         max_each = min(0.02, budget / top_count)
     elif bucket == "PRE":
         max_each = min(0.01, budget / top_count)
     else:
         max_each = min(0.01, budget / top_count)
-
     return int(round(capital * max_each / 1000) * 1000)
 
 
-def build_core_rows(trade_plan, core_df):
-    source = trade_plan if not trade_plan.empty else core_df
-    if source.empty:
+def build_rows_from_df(df, bucket, priority, fallback_score, default_action, default_reason, risk_note):
+    if df.empty:
         return []
 
-    df = source.copy()
+    df = df.copy()
     df.columns = [str(c).strip() for c in df.columns]
 
     if "stock_id" not in df.columns and "symbol" in df.columns:
         df["stock_id"] = df["symbol"]
-    if "action" not in df.columns:
-        df["action"] = "BUY"
-
     if "stock_id" not in df.columns:
         return []
+    if "action" not in df.columns:
+        df["action"] = default_action
 
     df["stock_id"] = df["stock_id"].apply(normalize_stock_id)
     df["action"] = df["action"].apply(normalize_action)
-    df["score_value"] = df.apply(lambda r: get_score(r, 80), axis=1)
-    df = df[df["action"].isin(["BUY", "TEST", "WATCH"])].copy()
-    df = df.sort_values(["score_value", "stock_id"], ascending=[False, True]).reset_index(drop=True)
-
-    rows = []
-    for i, r in df.iterrows():
-        close = get_close(r)
-        rows.append({
-            "bucket": "CORE",
-            "priority": 1,
-            "stock_id": r["stock_id"],
-            "action": "BUY" if r["action"] == "BUY" else r["action"],
-            "score": float(r["score_value"]),
-            "close": close,
-            "price_tier": get_tier(r, close),
-            "reason": str(r.get("note", r.get("signal_tags", "強勢主攻"))),
-            "risk_note": "CORE 是主倉來源，但仍受市場狀態與 Top slot 限制。",
-        })
-    return rows
-
-
-def build_pre_rows(pre_df):
-    if pre_df.empty:
-        return []
-
-    df = pre_df.copy()
-    df.columns = [str(c).strip() for c in df.columns]
-
-    if "stock_id" not in df.columns:
-        return []
-
-    if "action" not in df.columns:
-        df["action"] = "WATCH"
-
-    df["stock_id"] = df["stock_id"].apply(normalize_stock_id)
-    df["action"] = df["action"].apply(normalize_action)
-    df["score_value"] = df.apply(lambda r: get_score(r, 0), axis=1)
+    df["score_value"] = df.apply(lambda r: get_score(r, fallback_score), axis=1)
     df = df[df["action"].isin(["BUY", "TEST", "WATCH"])].copy()
     df = df.sort_values(["score_value", "stock_id"], ascending=[False, True]).reset_index(drop=True)
 
@@ -260,78 +179,72 @@ def build_pre_rows(pre_df):
     for _, r in df.iterrows():
         close = get_close(r)
         rows.append({
-            "bucket": "PRE",
-            "priority": 2,
+            "bucket": bucket,
+            "priority": priority,
             "stock_id": r["stock_id"],
-            "action": r["action"],
+            "action": default_action if bucket == "ALPHA" else r["action"],
             "score": float(r["score_value"]),
             "close": close,
             "price_tier": get_tier(r, close),
-            "reason": str(r.get("signal_tags", r.get("setup_type", "主力佈局"))),
-            "risk_note": "PRE 是提前佈局，只能小倉，熊市禁止進場。",
+            "reason": str(r.get("note", r.get("signal_tags", r.get("setup_type", default_reason)))),
+            "risk_note": risk_note,
         })
     return rows
 
 
-def build_alpha_rows(alpha_df):
-    if alpha_df.empty:
-        return []
+def apply_timing(out):
+    timing = read_csv_any([ROOT / "timing_candidates.csv", DATA_DIR / "timing_candidates.csv"])
+    if out.empty or timing.empty:
+        out["timing_score"] = 0
+        out["entry_type"] = "WAIT"
+        out["entry_note"] = "未取得 timing 資料"
+        return out
 
-    df = alpha_df.copy()
-    df.columns = [str(c).strip() for c in df.columns]
+    timing.columns = [str(c).strip() for c in timing.columns]
+    timing["stock_id"] = timing["stock_id"].apply(normalize_stock_id)
 
-    if "stock_id" not in df.columns and "symbol" in df.columns:
-        df["stock_id"] = df["symbol"]
-    if "action" not in df.columns:
-        df["action"] = "TEST"
+    tmap = timing.set_index("stock_id").to_dict("index")
 
-    if "stock_id" not in df.columns:
-        return []
+    timing_scores = []
+    entry_types = []
+    entry_notes = []
 
-    df["stock_id"] = df["stock_id"].apply(normalize_stock_id)
-    df["action"] = df["action"].apply(normalize_action)
-    df["score_value"] = df.apply(lambda r: get_score(r, 58), axis=1)
-    df = df[df["action"].isin(["BUY", "TEST", "WATCH"])].copy()
-    df = df.sort_values(["score_value", "stock_id"], ascending=[False, True]).reset_index(drop=True)
+    for _, r in out.iterrows():
+        t = tmap.get(r["stock_id"], {})
+        timing_scores.append(float(t.get("timing_score", 0) or 0))
+        entry_types.append(str(t.get("entry_type", "WAIT")))
+        entry_notes.append(str(t.get("entry_note", "等待")))
 
-    rows = []
-    for _, r in df.iterrows():
-        close = get_close(r)
-        rows.append({
-            "bucket": "ALPHA",
-            "priority": 3,
-            "stock_id": r["stock_id"],
-            "action": "TEST" if r["action"] == "BUY" else r["action"],
-            "score": float(r["score_value"]),
-            "close": close,
-            "price_tier": get_tier(r, close),
-            "reason": str(r.get("note", r.get("signal_tags", "補位機會"))),
-            "risk_note": "ALPHA 是補位，不可優先於 CORE。",
-        })
-    return rows
+    out["timing_score"] = timing_scores
+    out["entry_type"] = entry_types
+    out["entry_note"] = entry_notes
+    return out
 
 
-def apply_execution_flags(out, regime_code, budget, gross_exposure):
+def apply_execution(out, regime_code, budget, gross_exposure):
     if out.empty:
         return out
 
     slots = get_slots(regime_code)
-    out = out.sort_values(["priority", "score", "stock_id"], ascending=[True, False, True]).copy()
 
-    # 同股票多桶重複：保留最高優先權那筆為主要，其他標 BLOCK 但不刪除
+    # 加入 timing 後排序：分數 + timing 綜合
+    out["combined_score"] = out["score"] * 0.75 + out["timing_score"] * 0.25
+    out = out.sort_values(["priority", "combined_score", "score", "stock_id"], ascending=[True, False, False, True]).copy()
+
+    # 同股多桶：高優先桶接管，低優先桶 BLOCK 但保留
     first_seen = set()
-    duplicate_mask = []
+    dup = []
     for sid in out["stock_id"]:
         if sid in first_seen:
-            duplicate_mask.append(True)
+            dup.append(True)
         else:
-            duplicate_mask.append(False)
+            dup.append(False)
             first_seen.add(sid)
-    out["is_duplicate_lower_priority"] = duplicate_mask
+    out["is_duplicate_lower_priority"] = dup
 
-    result_parts = []
+    parts = []
     for bucket, g in out.groupby("bucket", sort=False):
-        g = g.sort_values(["score", "stock_id"], ascending=[False, True]).copy()
+        g = g.sort_values(["combined_score", "score", "stock_id"], ascending=[False, False, True]).copy()
         g["bucket_rank"] = range(1, len(g) + 1)
 
         top_n = slots.get(bucket, {}).get("top", 0)
@@ -347,18 +260,14 @@ def apply_execution_flags(out, regime_code, budget, gross_exposure):
                 flags.append("WATCH")
             else:
                 flags.append("BLOCK")
-
         g["execution_flag"] = flags
-        result_parts.append(g)
+        parts.append(g)
 
-    out = pd.concat(result_parts, ignore_index=True)
+    out = pd.concat(parts, ignore_index=True)
     out = out.sort_values(["priority", "bucket_rank"]).reset_index(drop=True)
     out["rank"] = range(1, len(out) + 1)
 
-    # 先用 slot 產生 allowed，再用總曝險做第二層限制
-    out["allowed"] = out["execution_flag"] == "TOP"
-
-    # amount 只給 TOP
+    # timing gating：TOP 但 entry_type WAIT，仍可保留 TOP，但 allowed False
     out["target_weight"] = 0.0
     out["suggested_amount"] = 0
 
@@ -371,50 +280,61 @@ def apply_execution_flags(out, regime_code, budget, gross_exposure):
             out.at[idx, "suggested_amount"] = amount
             out.at[idx, "target_weight"] = round(amount / DEFAULT_CAPITAL, 4)
 
-    # 總曝險上限
     max_total_amount = int(DEFAULT_CAPITAL * float(gross_exposure))
     running = 0
-    final_allowed = []
-    system_notes = []
+    allowed = []
+    notes = []
     executions = []
 
     for _, r in out.iterrows():
         flag = r["execution_flag"]
+        entry = r["entry_type"]
+        bucket = r["bucket"]
         amount = int(r["suggested_amount"])
 
+        entry_ok = False
+        if bucket == "CORE":
+            entry_ok = entry in ["BREAK", "PULLBACK"]
+        elif bucket == "ALPHA":
+            entry_ok = entry in ["REVERSAL", "PULLBACK"]
+        elif bucket == "PRE":
+            # PRE 只允許小倉觀察，通常不主動重倉；熊市 top_n = 0
+            entry_ok = entry in ["WAIT", "PULLBACK"] and regime_code in ["RANGE", "BULL", "EXPLOSIVE"]
+
         if flag == "TOP":
-            if running + amount <= max_total_amount:
-                final_allowed.append(True)
+            if not entry_ok:
+                allowed.append(False)
+                notes.append(f"TOP 但 entry={entry}，等待更好進場點")
+                executions.append("等待")
+            elif running + amount <= max_total_amount:
+                allowed.append(True)
                 running += amount
-                system_notes.append("TOP：允許執行")
+                notes.append("TOP + timing 合格：允許分批")
                 executions.append("可分批下單")
             else:
-                final_allowed.append(False)
-                system_notes.append("TOP 但超出總曝險，暫緩")
+                allowed.append(False)
+                notes.append("TOP 但超出總曝險，暫緩")
                 executions.append("暫緩")
         elif flag == "WATCH":
-            final_allowed.append(False)
-            system_notes.append("WATCH：保留觀察，不下單")
+            allowed.append(False)
+            notes.append("WATCH：保留觀察，不下單")
             executions.append("只觀察")
         else:
-            final_allowed.append(False)
+            allowed.append(False)
             if bool(r.get("is_duplicate_lower_priority", False)):
-                system_notes.append("BLOCK：同股已由高優先桶接管")
+                notes.append("BLOCK：同股已由高優先桶接管")
             else:
-                system_notes.append("BLOCK：超出本市場狀態可執行名額")
+                notes.append("BLOCK：超出本市場狀態可執行名額")
             executions.append("不可下單")
 
-    out["allowed"] = final_allowed
-    out["system_note"] = system_notes
+    out["allowed"] = allowed
+    out["system_note"] = notes
     out["execution"] = executions
-
     return out
 
 
 def main():
-    regime = load_json(ROOT / "market_regime.json", default={}) or {}
-    if not regime:
-        regime = load_json(DATA_DIR / "market_regime.json", default={}) or {}
+    regime = load_json(ROOT / "market_regime.json", default={}) or load_json(DATA_DIR / "market_regime.json", default={}) or {}
 
     regime_code = regime.get("regime", "UNKNOWN")
     label = regime.get("label", "未知")
@@ -423,19 +343,22 @@ def main():
 
     trade_plan = read_csv_any([ROOT / "trade_plan.csv", DATA_DIR / "trade_plan.csv"])
     core = read_csv_any([ROOT / "core_candidates.csv", DATA_DIR / "core_candidates.csv"])
-    pre = read_csv_any([ROOT / "pre_move_candidates.csv", DATA_DIR / "pre_move_candidates.csv"])
     alpha = read_csv_any([ROOT / "alpha_candidates.csv", DATA_DIR / "alpha_candidates.csv"])
+    pre = read_csv_any([ROOT / "pre_move_candidates.csv", DATA_DIR / "pre_move_candidates.csv"])
+
+    core_source = trade_plan if not trade_plan.empty else core
 
     rows = []
-    rows += build_core_rows(trade_plan, core)
-    rows += build_pre_rows(pre)
-    rows += build_alpha_rows(alpha)
+    rows += build_rows_from_df(core_source, "CORE", 1, 80, "BUY", "強勢主攻", "CORE 是主倉來源，但受市場與 timing 限制。")
+    rows += build_rows_from_df(pre, "PRE", 2, 70, "TEST", "主力佈局", "PRE 是主升段前卡位，只能小倉。")
+    rows += build_rows_from_df(alpha, "ALPHA", 3, 58, "TEST", "短線補位", "ALPHA 是短線/反轉補位，不可重倉。")
 
     out = pd.DataFrame(rows)
     if out.empty:
         out = pd.DataFrame(columns=OUTPUT_COLUMNS)
     else:
-        out = apply_execution_flags(out, regime_code, budget, gross_exposure)
+        out = apply_timing(out)
+        out = apply_execution(out, regime_code, budget, gross_exposure)
         out = out[OUTPUT_COLUMNS]
 
     out.to_csv(ROOT / "trading_system_plan.csv", index=False, encoding="utf-8")
@@ -443,7 +366,7 @@ def main():
 
     summary = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "source": "trading_system_allocator_top_flag",
+        "source": "final_trading_system_allocator",
         "capital_assumption": DEFAULT_CAPITAL,
         "regime": regime_code,
         "label": label,
@@ -455,9 +378,10 @@ def main():
         "watch_rows": int((out["execution_flag"] == "WATCH").sum()) if not out.empty else 0,
         "block_rows": int((out["execution_flag"] == "BLOCK").sum()) if not out.empty else 0,
         "allowed_rows": int(out["allowed"].sum()) if not out.empty else 0,
+        "entry_counts": out["entry_type"].value_counts().to_dict() if not out.empty else {},
         "bucket_counts": out["bucket"].value_counts().to_dict() if not out.empty else {},
         "allowed_amount": int(out.loc[out["allowed"], "suggested_amount"].sum()) if not out.empty else 0,
-        "rule": "保留完整名單；只允許 TOP 下單；WATCH 觀察；BLOCK 禁止。"
+        "rule": "市場狀態 + 策略分流 + TOP標註 + entry timing + 總曝險。只做 allowed=True。"
     }
 
     for p in [ROOT / "trading_system_summary.json", DATA_DIR / "trading_system_summary.json"]:
