@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: data_pipeline_main
+  cancel-in-progress: false
+
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -96,42 +100,7 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
 
-          git add \
-            data_meta.json \
-            feature_meta.json \
-            data_guard_report.json \
-            backfill_report.json \
-            trade_plan.csv \
-            candidates.csv \
-            core_candidates.csv \
-            alpha_candidates.csv \
-            selection_debug.csv \
-            meta.json \
-            pre_move_candidates.csv \
-            pre_move_summary.json \
-            market_regime.json \
-            timing_candidates.csv \
-            timing_summary.json \
-            trading_system_plan.csv \
-            trading_system_summary.json \
-            mobile_dashboard_v1/data/meta.json \
-            mobile_dashboard_v1/data/trade_plan.csv \
-            mobile_dashboard_v1/data/candidates.csv \
-            mobile_dashboard_v1/data/core_candidates.csv \
-            mobile_dashboard_v1/data/alpha_candidates.csv \
-            mobile_dashboard_v1/data/selection_debug.csv \
-            mobile_dashboard_v1/data/data_guard_report.json \
-            mobile_dashboard_v1/data/backfill_report.json \
-            mobile_dashboard_v1/data/data_meta.json \
-            mobile_dashboard_v1/data/feature_meta.json \
-            mobile_dashboard_v1/data/pre_move_candidates.csv \
-            mobile_dashboard_v1/data/pre_move_summary.json \
-            mobile_dashboard_v1/data/pre_move_cards.json \
-            mobile_dashboard_v1/data/market_regime.json \
-            mobile_dashboard_v1/data/timing_candidates.csv \
-            mobile_dashboard_v1/data/timing_summary.json \
-            mobile_dashboard_v1/data/trading_system_plan.csv \
-            mobile_dashboard_v1/data/trading_system_summary.json || true
+          git add             data_meta.json             feature_meta.json             data_guard_report.json             backfill_report.json             trade_plan.csv             candidates.csv             core_candidates.csv             alpha_candidates.csv             selection_debug.csv             meta.json             pre_move_candidates.csv             pre_move_summary.json             market_regime.json             timing_candidates.csv             timing_summary.json             trading_system_plan.csv             trading_system_summary.json             mobile_dashboard_v1/data/meta.json             mobile_dashboard_v1/data/trade_plan.csv             mobile_dashboard_v1/data/candidates.csv             mobile_dashboard_v1/data/core_candidates.csv             mobile_dashboard_v1/data/alpha_candidates.csv             mobile_dashboard_v1/data/selection_debug.csv             mobile_dashboard_v1/data/data_guard_report.json             mobile_dashboard_v1/data/backfill_report.json             mobile_dashboard_v1/data/data_meta.json             mobile_dashboard_v1/data/feature_meta.json             mobile_dashboard_v1/data/pre_move_candidates.csv             mobile_dashboard_v1/data/pre_move_summary.json             mobile_dashboard_v1/data/pre_move_cards.json             mobile_dashboard_v1/data/market_regime.json             mobile_dashboard_v1/data/timing_candidates.csv             mobile_dashboard_v1/data/timing_summary.json             mobile_dashboard_v1/data/trading_system_plan.csv             mobile_dashboard_v1/data/trading_system_summary.json || true
 
           git reset -- price_panel_daily.csv || true
           git reset -- feature_panel_daily.csv || true
@@ -144,5 +113,6 @@ jobs:
             echo "no update"
           else
             git commit -m "final integrated trading system"
-            git push
+            git pull --rebase origin main
+            git push origin main
           fi
