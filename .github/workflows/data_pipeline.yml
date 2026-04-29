@@ -86,7 +86,7 @@ jobs:
           python feature_timing_engine.py
           python trading_system_allocator.py
 
-      - name: Clean big files
+      - name: Clean runtime big files
         run: |
           rm -f price_panel_daily.csv
           rm -f feature_panel_daily.csv
@@ -95,13 +95,22 @@ jobs:
           rm -f mobile_dashboard_v1/data/feature_panel_daily.csv
           rm -f mobile_dashboard_v1/data/raw_market_daily.csv
 
-      - name: Commit small files only
+      - name: Commit and push safely
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
 
+          # 先同步遠端，避免 fetch first
+          git fetch origin main
+          git pull --rebase origin main
+
+          # 加入小檔輸出
           git add             data_meta.json             feature_meta.json             data_guard_report.json             backfill_report.json             trade_plan.csv             candidates.csv             core_candidates.csv             alpha_candidates.csv             selection_debug.csv             meta.json             pre_move_candidates.csv             pre_move_summary.json             market_regime.json             timing_candidates.csv             timing_summary.json             trading_system_plan.csv             trading_system_summary.json             mobile_dashboard_v1/data/meta.json             mobile_dashboard_v1/data/trade_plan.csv             mobile_dashboard_v1/data/candidates.csv             mobile_dashboard_v1/data/core_candidates.csv             mobile_dashboard_v1/data/alpha_candidates.csv             mobile_dashboard_v1/data/selection_debug.csv             mobile_dashboard_v1/data/data_guard_report.json             mobile_dashboard_v1/data/backfill_report.json             mobile_dashboard_v1/data/data_meta.json             mobile_dashboard_v1/data/feature_meta.json             mobile_dashboard_v1/data/pre_move_candidates.csv             mobile_dashboard_v1/data/pre_move_summary.json             mobile_dashboard_v1/data/pre_move_cards.json             mobile_dashboard_v1/data/market_regime.json             mobile_dashboard_v1/data/timing_candidates.csv             mobile_dashboard_v1/data/timing_summary.json             mobile_dashboard_v1/data/trading_system_plan.csv             mobile_dashboard_v1/data/trading_system_summary.json || true
 
+          # debug 小檔如果有變動，一起提交，避免 unstaged 卡住
+          git add bridge_debug.csv mobile_dashboard_v1/data/bridge_debug.csv || true
+
+          # 絕對不加入 runtime 大檔
           git reset -- price_panel_daily.csv || true
           git reset -- feature_panel_daily.csv || true
           git reset -- raw_market_daily.csv || true
@@ -109,10 +118,17 @@ jobs:
           git reset -- mobile_dashboard_v1/data/feature_panel_daily.csv || true
           git reset -- mobile_dashboard_v1/data/raw_market_daily.csv || true
 
+          # 如果大檔刪除造成 unstaged D，恢復，避免工作區不乾淨
+          git restore price_panel_daily.csv || true
+          git restore feature_panel_daily.csv || true
+          git restore raw_market_daily.csv || true
+          git restore mobile_dashboard_v1/data/price_panel_daily.csv || true
+          git restore mobile_dashboard_v1/data/feature_panel_daily.csv || true
+          git restore mobile_dashboard_v1/data/raw_market_daily.csv || true
+
           if git diff --cached --quiet; then
             echo "no update"
           else
             git commit -m "final integrated trading system"
-            git pull --rebase origin main
             git push origin main
           fi
