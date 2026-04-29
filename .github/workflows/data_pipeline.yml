@@ -3,8 +3,8 @@ name: data_pipeline
 on:
   workflow_dispatch:
   schedule:
-    # 台灣時間 18:30 = UTC 10:30
-    - cron: "30 10 * * 1-5"
+    # 台灣時間 19:00（UTC 11:00）
+    - cron: "0 11 * * 1-5"
 
 permissions:
   contents: write
@@ -15,76 +15,72 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install
         run: |
-          python -m pip install --upgrade pip
           pip install pandas numpy requests
 
-      - name: Merge price panel parts into runtime file
+      # 🔥 1. 合併歷史資料（不commit大檔）
+      - name: Merge price panel
         run: |
           python merge_price_panel_parts_runtime.py
 
-      - name: Backfill missing days
+      # 🔥 2. 抓今日資料（核心）
+      - name: Update daily data
         run: |
           python backfill_missing_days.py
 
+      # 🔥 3. 特徵
       - name: Build features
         run: |
           python v266_build_features.py
 
-      - name: Run data guard
+      # 🔥 4. 防呆
+      - name: Data guard
         run: |
           python v266_data_guard.py
 
-      - name: Run strategy
+      # 🔥 5. 策略
+      - name: Strategy
         run: |
           python v266_strategy_engine.py
 
+      # 🔥 6. UI同步
       - name: Sync dashboard
         run: |
-          if [ -f v3_1_dashboard_bridge.py ]; then
-            python v3_1_dashboard_bridge.py
-          else
-            echo "bridge not found, skip"
-          fi
+          python v3_1_dashboard_bridge.py || echo "skip"
 
-      - name: Remove oversized runtime files before commit
+      # ❌ 刪掉超大檔（避免100MB爆炸）
+      - name: Clean big files
         run: |
           rm -f price_panel_daily.csv
           rm -f feature_panel_daily.csv
-          rm -f raw_market_daily.csv
-          rm -f mobile_dashboard_v1/data/price_panel_daily.csv
-          rm -f mobile_dashboard_v1/data/feature_panel_daily.csv
-          rm -f mobile_dashboard_v1/data/raw_market_daily.csv
 
-      - name: Commit small outputs only
+      # 🔥 只commit小檔（UI用）
+      - name: Commit
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
 
-          git add             data_meta.json             feature_meta.json             data_guard_report.json             backfill_report.json             trade_plan.csv             candidates.csv             core_candidates.csv             alpha_candidates.csv             selection_debug.csv             meta.json             mobile_dashboard_v1/data/meta.json             mobile_dashboard_v1/data/trade_plan.csv             mobile_dashboard_v1/data/candidates.csv             mobile_dashboard_v1/data/core_candidates.csv             mobile_dashboard_v1/data/alpha_candidates.csv             mobile_dashboard_v1/data/selection_debug.csv             mobile_dashboard_v1/data/data_guard_report.json             mobile_dashboard_v1/data/backfill_report.json             mobile_dashboard_v1/data/data_meta.json             mobile_dashboard_v1/data/feature_meta.json || true
-
-          git reset -- price_panel_daily.csv || true
-          git reset -- feature_panel_daily.csv || true
-          git reset -- raw_market_daily.csv || true
-          git reset -- mobile_dashboard_v1/data/price_panel_daily.csv || true
-          git reset -- mobile_dashboard_v1/data/feature_panel_daily.csv || true
-          git reset -- mobile_dashboard_v1/data/raw_market_daily.csv || true
+          git add \
+            trade_plan.csv \
+            core_candidates.csv \
+            alpha_candidates.csv \
+            mobile_dashboard_v1/data/*.csv \
+            mobile_dashboard_v1/data/*.json || true
 
           if git diff --cached --quiet; then
-            echo "no small output changes to commit"
+            echo "no update"
           else
-            git commit -m "run data pipeline from price panel parts"
+            git commit -m "auto update 19:00"
             git push
           fi
