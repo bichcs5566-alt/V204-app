@@ -1,0 +1,50 @@
+{
+  "generated_at": "2026-04-29 12:13:34",
+  "source": "merge_price_panel_parts_runtime",
+  "manifest_file": "data/price_panel_parts/manifest.json",
+  "manifest_created_at": "2026-04-25T02:39:36.327712",
+  "manifest_start": "2015-01-01",
+  "manifest_end": "2026-12-31",
+  "manifest_part_count": 6,
+  "manifest_total_rows": 4790773,
+  "manifest_total_symbols": 1960,
+  "loaded_part_count": 6,
+  "loaded_parts": [
+    {
+      "file": "data/price_panel_parts/price_panel_daily_part_001.csv",
+      "rows": 808153,
+      "bytes": 88487230
+    },
+    {
+      "file": "data/price_panel_parts/price_panel_daily_part_002.csv",
+      "rows": 808153,
+      "bytes": 87534513
+    },
+    {
+      "file": "data/price_panel_parts/price_panel_daily_part_003.csv",
+      "rows": 808153,
+      "bytes": 86398628
+    },
+    {
+      "file": "data/price_panel_parts/price_panel_daily_part_004.csv",
+      "rows": 808153,
+      "bytes": 84064600
+    },
+    {
+      "file": "data/price_panel_parts/price_panel_daily_part_005.csv",
+      "rows": 808153,
+      "bytes": 81111271
+    },
+    {
+      "file": "data/price_panel_parts/price_panel_daily_part_006.csv",
+      "rows": 750008,
+      "bytes": 71247295
+    }
+  ],
+  "rows_before_dedup": 4790773,
+  "rows_after_dedup": 4790773,
+  "stock_count": 1960,
+  "unique_dates": 2807,
+  "start_date": "2015-01-02",
+  "end_date": "2026-04-24"
+}
