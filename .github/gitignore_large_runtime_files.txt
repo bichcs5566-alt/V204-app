@@ -1,0 +1,14 @@
+# runtime large files - do not commit
+price_panel_daily.csv
+feature_panel_daily.csv
+raw_market_daily.csv
+
+mobile_dashboard_v1/data/price_panel_daily.csv
+mobile_dashboard_v1/data/feature_panel_daily.csv
+mobile_dashboard_v1/data/raw_market_daily.csv
+
+# keep uploaded split parts
+!data/
+!data/price_panel_parts/
+!data/price_panel_parts/*.csv
+!data/price_panel_parts/*.json
