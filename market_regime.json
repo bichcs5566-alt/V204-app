@@ -1,22 +1,22 @@
 {
-  "generated_at": "2026-04-29 15:22:06",
+  "generated_at": "2026-04-29 15:55:00",
   "source": "market_regime_engine",
   "input_file": "feature_panel_daily.csv",
   "latest_date": "2026-04-29",
-  "regime": "BEAR",
-  "label": "熊市",
-  "risk_mode": "防守",
-  "breadth_score": 37.47,
-  "above_ma20": 0.3891,
-  "above_ma60": 0.367,
-  "mom20_positive": 0.4199,
-  "mom60_positive": 0.3519,
-  "volume_active": 0.1702,
-  "gross_exposure": 0.15,
+  "regime": "RANGE",
+  "label": "盤整",
+  "risk_mode": "控風險",
+  "breadth_score": 46.91,
+  "above_ma20": 0.4813,
+  "above_ma60": 0.4544,
+  "mom20_positive": 0.5544,
+  "mom60_positive": 0.428,
+  "volume_active": 0.1658,
+  "gross_exposure": 0.35,
   "budget": {
-    "PRE": 0.0,
-    "CORE": 0.12,
-    "ALPHA": 0.03
+    "PRE": 0.08,
+    "CORE": 0.22,
+    "ALPHA": 0.05
   },
   "rule": "BEAR 停 PRE；RANGE 小倉 PRE；BULL 正常；EXPLOSIVE 加強 CORE，PRE 仍小倉。"
 }

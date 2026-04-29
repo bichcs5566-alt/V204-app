@@ -1,22 +1,39 @@
 {
-  "generated_at": "2026-04-29 15:23:37",
-  "source": "trading_system_allocator",
+  "generated_at": "2026-04-29 15:56:49",
+  "source": "trading_system_allocator_top_flag",
   "capital_assumption": 1000000,
-  "regime": "BEAR",
-  "label": "熊市",
-  "gross_exposure": 0.15,
+  "regime": "RANGE",
+  "label": "盤整",
+  "gross_exposure": 0.35,
   "budget": {
-    "PRE": 0.0,
-    "CORE": 0.12,
-    "ALPHA": 0.03
+    "PRE": 0.08,
+    "CORE": 0.22,
+    "ALPHA": 0.05
   },
-  "total_rows": 14,
-  "allowed_rows": 14,
-  "blocked_rows": 0,
+  "slot_rule": {
+    "CORE": {
+      "top": 3,
+      "watch": 6
+    },
+    "PRE": {
+      "top": 2,
+      "watch": 6
+    },
+    "ALPHA": {
+      "top": 1,
+      "watch": 5
+    }
+  },
+  "total_rows": 392,
+  "top_rows": 6,
+  "watch_rows": 15,
+  "block_rows": 371,
+  "allowed_rows": 6,
   "bucket_counts": {
-    "CORE": 10,
-    "ALPHA": 4
+    "PRE": 349,
+    "ALPHA": 30,
+    "CORE": 13
   },
-  "allowed_amount": 140000,
-  "rule": "CORE 主倉，PRE 小倉佈局，ALPHA 補位；依市場狀態控制總曝險。"
+  "allowed_amount": 90000,
+  "rule": "保留完整名單；只允許 TOP 下單；WATCH 觀察；BLOCK 禁止。"
 }
