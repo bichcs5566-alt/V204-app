@@ -62,34 +62,28 @@ jobs:
       - name: Remove oversized runtime files before commit
         run: |
           rm -f price_panel_daily.csv
-          rm -f mobile_dashboard_v1/data/price_panel_daily.csv
+          rm -f feature_panel_daily.csv
           rm -f raw_market_daily.csv
+          rm -f mobile_dashboard_v1/data/price_panel_daily.csv
+          rm -f mobile_dashboard_v1/data/feature_panel_daily.csv
           rm -f mobile_dashboard_v1/data/raw_market_daily.csv
 
-      - name: Commit outputs only
+      - name: Commit small outputs only
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add \
-            data_meta.json \
-            feature_meta.json \
-            data_guard_report.json \
-            backfill_report.json \
-            feature_panel_daily.csv \
-            trade_plan.csv \
-            candidates.csv \
-            core_candidates.csv \
-            alpha_candidates.csv \
-            selection_debug.csv \
-            meta.json \
-            mobile_dashboard_v1/data/ || true
+          git add             data_meta.json             feature_meta.json             data_guard_report.json             backfill_report.json             trade_plan.csv             candidates.csv             core_candidates.csv             alpha_candidates.csv             selection_debug.csv             meta.json             mobile_dashboard_v1/data/meta.json             mobile_dashboard_v1/data/trade_plan.csv             mobile_dashboard_v1/data/candidates.csv             mobile_dashboard_v1/data/core_candidates.csv             mobile_dashboard_v1/data/alpha_candidates.csv             mobile_dashboard_v1/data/selection_debug.csv             mobile_dashboard_v1/data/data_guard_report.json             mobile_dashboard_v1/data/backfill_report.json             mobile_dashboard_v1/data/data_meta.json             mobile_dashboard_v1/data/feature_meta.json || true
 
           git reset -- price_panel_daily.csv || true
+          git reset -- feature_panel_daily.csv || true
+          git reset -- raw_market_daily.csv || true
           git reset -- mobile_dashboard_v1/data/price_panel_daily.csv || true
+          git reset -- mobile_dashboard_v1/data/feature_panel_daily.csv || true
+          git reset -- mobile_dashboard_v1/data/raw_market_daily.csv || true
 
           if git diff --cached --quiet; then
-            echo "no changes to commit"
+            echo "no small output changes to commit"
           else
             git commit -m "run data pipeline from price panel parts"
             git push
