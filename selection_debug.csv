@@ -1,2 +1,2 @@
 generated_at,market_regime,pct_above_ma20,pct_above_ma60,pct_mom20_pos,pct_strong,median_mom20,regime_score,latest_stock_count,core_count,alpha_count,trade_plan_count,trade_buy_count,trade_test_count,trade_watch_count,core_max_score,alpha_max_score
-2026-04-29 14:55:55,RANGE,0.4824,0.4545,0.5549,0.1154,0.0095,2,1932,30,30,13,11,2,0,84.0,58.0
+2026-04-29 15:23:31,RANGE,0.3891,0.367,0.4199,0.1818,-0.026,1,1722,30,30,13,11,2,0,84.0,58.0

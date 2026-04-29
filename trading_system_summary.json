@@ -1,0 +1,22 @@
+{
+  "generated_at": "2026-04-29 15:23:37",
+  "source": "trading_system_allocator",
+  "capital_assumption": 1000000,
+  "regime": "BEAR",
+  "label": "熊市",
+  "gross_exposure": 0.15,
+  "budget": {
+    "PRE": 0.0,
+    "CORE": 0.12,
+    "ALPHA": 0.03
+  },
+  "total_rows": 14,
+  "allowed_rows": 14,
+  "blocked_rows": 0,
+  "bucket_counts": {
+    "CORE": 10,
+    "ALPHA": 4
+  },
+  "allowed_amount": 140000,
+  "rule": "CORE 主倉，PRE 小倉佈局，ALPHA 補位；依市場狀態控制總曝險。"
+}

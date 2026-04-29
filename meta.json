@@ -1,24 +1,24 @@
 {
-  "generated_at": "2026-04-29 14:55:55",
+  "generated_at": "2026-04-29 15:23:31",
   "source": "v266_strategy_engine",
   "signal_date": "2026-04-29",
   "trade_date": "2026-04-30",
   "data_state": "fresh",
   "market_regime": "RANGE",
   "regime_info": {
-    "pct_above_ma20": 0.4824,
-    "pct_above_ma60": 0.4545,
-    "pct_mom20_pos": 0.5549,
-    "pct_strong": 0.1154,
-    "median_mom20": 0.0095,
-    "regime_score": 2
+    "pct_above_ma20": 0.3891,
+    "pct_above_ma60": 0.367,
+    "pct_mom20_pos": 0.4199,
+    "pct_strong": 0.1818,
+    "median_mom20": -0.026,
+    "regime_score": 1
   },
   "trade_plan_count": 13,
   "buy_count": 11,
   "test_count": 2,
   "watch_count": 0,
   "bridge_source": "v265_3_dashboard_bridge",
-  "bridge_generated_at": "2026-04-29 14:55:57",
+  "bridge_generated_at": "2026-04-29 15:23:36",
   "core_trade_count": 5,
   "alpha_trade_count": 8,
   "bridge_files": [
