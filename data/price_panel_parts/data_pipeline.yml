@@ -1,0 +1,124 @@
+name: data_pipeline
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 台灣時間 19:00 = UTC 11:00
+    - cron: "0 11 * * 1-5"
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy requests
+
+      - name: Merge price panel parts into runtime file
+        run: |
+          python merge_price_panel_parts_runtime.py
+
+      - name: Backfill missing days
+        run: |
+          python backfill_missing_days.py
+
+      - name: Build features
+        run: |
+          python v266_build_features.py
+
+      - name: Run pre-move engine
+        run: |
+          python pre_move_engine.py
+          python pre_move_dashboard_patch.py
+
+      - name: Run data guard
+        run: |
+          python v266_data_guard.py
+
+      - name: Run strategy
+        run: |
+          python v266_strategy_engine.py
+
+      - name: Sync dashboard
+        run: |
+          if [ -f v3_1_dashboard_bridge.py ]; then
+            python v3_1_dashboard_bridge.py
+          else
+            echo "bridge not found, skip"
+          fi
+
+      - name: Keep pre-move dashboard files after bridge
+        run: |
+          python pre_move_dashboard_patch.py
+
+      - name: Clean big files
+        run: |
+          rm -f price_panel_daily.csv
+          rm -f feature_panel_daily.csv
+          rm -f raw_market_daily.csv
+          rm -f mobile_dashboard_v1/data/price_panel_daily.csv
+          rm -f mobile_dashboard_v1/data/feature_panel_daily.csv
+          rm -f mobile_dashboard_v1/data/raw_market_daily.csv
+
+      - name: Commit small files only
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+          git add \
+            data_meta.json \
+            feature_meta.json \
+            data_guard_report.json \
+            backfill_report.json \
+            trade_plan.csv \
+            candidates.csv \
+            core_candidates.csv \
+            alpha_candidates.csv \
+            selection_debug.csv \
+            meta.json \
+            pre_move_candidates.csv \
+            pre_move_summary.json \
+            mobile_dashboard_v1/data/meta.json \
+            mobile_dashboard_v1/data/trade_plan.csv \
+            mobile_dashboard_v1/data/candidates.csv \
+            mobile_dashboard_v1/data/core_candidates.csv \
+            mobile_dashboard_v1/data/alpha_candidates.csv \
+            mobile_dashboard_v1/data/selection_debug.csv \
+            mobile_dashboard_v1/data/data_guard_report.json \
+            mobile_dashboard_v1/data/backfill_report.json \
+            mobile_dashboard_v1/data/data_meta.json \
+            mobile_dashboard_v1/data/feature_meta.json \
+            mobile_dashboard_v1/data/pre_move_candidates.csv \
+            mobile_dashboard_v1/data/pre_move_summary.json \
+            mobile_dashboard_v1/data/pre_move_cards.json || true
+
+          git reset -- price_panel_daily.csv || true
+          git reset -- feature_panel_daily.csv || true
+          git reset -- raw_market_daily.csv || true
+          git reset -- mobile_dashboard_v1/data/price_panel_daily.csv || true
+          git reset -- mobile_dashboard_v1/data/feature_panel_daily.csv || true
+          git reset -- mobile_dashboard_v1/data/raw_market_daily.csv || true
+
+          if git diff --cached --quiet; then
+            echo "no update"
+          else
+            git commit -m "add pre-move engine and auto update"
+            git push
+          fi
