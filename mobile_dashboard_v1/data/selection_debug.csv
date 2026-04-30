@@ -1,2 +1,2 @@
-﻿date,total_input,valid_after_na,core_primary_count,alpha_primary_count,core_final_count,alpha_final_count
-2026-04-24,1954,1949,1205,938,25,6
+generated_at,market_regime,pct_above_ma20,pct_above_ma60,pct_mom20_pos,pct_strong,median_mom20,regime_score,latest_stock_count,core_count,alpha_count,trade_plan_count,trade_buy_count,trade_test_count,trade_watch_count,core_max_score,alpha_max_score
+2026-04-30 09:19:46,RANGE,0.4325,0.4408,0.6017,0.1242,0.0217,3,1933,30,30,13,11,2,0,84.0,58.0
