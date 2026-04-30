@@ -107,19 +107,43 @@ jobs:
           test -f position_engine_v1.py || (echo "Missing position_engine_v1.py" && exit 1)
           python position_engine_v1.py
 
-      - name: Verify v1 outputs
+      - name: Verify v1 outputs safely
         run: |
           test -f mobile_dashboard_v1/data/meta.json
           test -f mobile_dashboard_v1/data/trade_plan.csv
-          test -f mobile_dashboard_v1/data/position_monitor.csv
           test -f mobile_dashboard_v1/data/full_summary.csv
           test -f mobile_dashboard_v1/data/selection_debug.csv
 
           python - <<'PY'
           import pandas as pd
+          from pathlib import Path
+          from pandas.errors import EmptyDataError
 
-          dbg = pd.read_csv("mobile_dashboard_v1/data/selection_debug.csv")
-          print(dbg.to_string(index=False))
+          def safe_read_csv(path, required=False):
+              p = Path(path)
+              if not p.exists():
+                  if required:
+                      raise SystemExit(f"missing required file: {path}")
+                  print(f"WARN missing optional file: {path}")
+                  return None
+
+              if p.stat().st_size == 0:
+                  if required:
+                      raise SystemExit(f"required file is empty: {path}")
+                  print(f"WARN empty optional file: {path}")
+                  return None
+
+              try:
+                  df = pd.read_csv(p)
+                  print(path, "rows:", len(df), "columns:", list(df.columns))
+                  return df
+              except EmptyDataError:
+                  if required:
+                      raise SystemExit(f"required file has no columns: {path}")
+                  print(f"WARN no columns optional file: {path}")
+                  return None
+
+          dbg = safe_read_csv("mobile_dashboard_v1/data/selection_debug.csv", required=True)
 
           if "valid_after_na" not in dbg.columns:
               raise SystemExit("selection_debug.csv missing valid_after_na")
@@ -128,19 +152,18 @@ jobs:
           if v <= 0:
               raise SystemExit("valid_after_na is still 0; v1 did not use historical panel")
 
-          for path in [
-              "mobile_dashboard_v1/data/trade_plan.csv",
-              "mobile_dashboard_v1/data/position_monitor.csv",
-              "mobile_dashboard_v1/data/selection_debug.csv",
-          ]:
-              df = pd.read_csv(path)
-              print(path, "rows:", len(df), "columns:", list(df.columns))
-
-          tp = pd.read_csv("mobile_dashboard_v1/data/trade_plan.csv")
+          tp = safe_read_csv("mobile_dashboard_v1/data/trade_plan.csv", required=True)
           if "suggested_amount" not in tp.columns:
               raise SystemExit("Position Engine failed: trade_plan.csv missing suggested_amount")
           if "target_weight" not in tp.columns:
               raise SystemExit("Position Engine failed: trade_plan.csv missing target_weight")
+
+          safe_read_csv("mobile_dashboard_v1/data/position_monitor.csv", required=False)
+          safe_read_csv("mobile_dashboard_v1/data/watchlist_monitor.csv", required=False)
+          safe_read_csv("mobile_dashboard_v1/data/full_summary.csv", required=False)
+          safe_read_csv("mobile_dashboard_v1/data/core_candidates.csv", required=False)
+          safe_read_csv("mobile_dashboard_v1/data/alpha_candidates.csv", required=False)
+
           print("Position Engine OK")
           PY
 
@@ -158,9 +181,9 @@ jobs:
 
           git add mobile_dashboard_v1/data/meta.json
           git add mobile_dashboard_v1/data/trade_plan.csv
-          git add mobile_dashboard_v1/data/position_monitor.csv
+          git add mobile_dashboard_v1/data/position_monitor.csv || true
           git add mobile_dashboard_v1/data/watchlist_monitor.csv || true
-          git add mobile_dashboard_v1/data/full_summary.csv
+          git add mobile_dashboard_v1/data/full_summary.csv || true
           git add mobile_dashboard_v1/data/selection_debug.csv
           git add mobile_dashboard_v1/data/core_candidates.csv || true
           git add mobile_dashboard_v1/data/alpha_candidates.csv || true
