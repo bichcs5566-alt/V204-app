@@ -1102,8 +1102,8 @@ function liquiditySortRank(row) {
 
 
 function detailCell(label, value, extraClass = "") {
-  const v = safeText(value, "");
-  if (v === "" || v === "--" || v === "0張" || v === "0" || v === "0.00" || v === "0.00億") return "";
+  let v = safeText(value, "--");
+  if (v === "" || v === "undefined" || v === "null") v = "--";
   return `<div><span>${label}</span><b class="${extraClass}">${v}</b></div>`;
 }
 
