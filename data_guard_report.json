@@ -1,14 +1,14 @@
 {
-  "generated_at": "2026-04-30 00:06:40",
+  "generated_at": "2026-04-30 00:54:19",
   "source": "v266_data_guard",
   "status": "PASS",
   "feature_file": "feature_panel_daily.csv",
-  "unique_dates": 2810,
-  "latest_date": "2026-04-29",
-  "latest_count": 1940,
-  "has_60d_count": 1932,
-  "zero_mom20_ratio": 0.0041,
-  "above_ma20_ratio": 0.4814,
-  "valid_mom20_count": 1936,
+  "unique_dates": 2811,
+  "latest_date": "2026-04-30",
+  "latest_count": 866,
+  "has_60d_count": 864,
+  "zero_mom20_ratio": 0.0035,
+  "above_ma20_ratio": 0.4665,
+  "valid_mom20_count": 865,
   "reason": "data guard passed"
 }

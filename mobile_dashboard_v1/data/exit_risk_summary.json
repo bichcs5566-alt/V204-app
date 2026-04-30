@@ -1,0 +1,12 @@
+{
+  "generated_at": "2026-04-30 00:55:47",
+  "source": "exit_risk_engine",
+  "position_source": "",
+  "market_regime": "RANGE",
+  "positions": 0,
+  "sell_count": 0,
+  "reduce_count": 0,
+  "watch_count": 0,
+  "hold_count": 0,
+  "note": "沒有持倉資料，因此不產生出場動作。"
+}

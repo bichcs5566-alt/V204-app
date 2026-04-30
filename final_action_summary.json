@@ -1,0 +1,12 @@
+{
+  "generated_at": "2026-04-30 00:55:48",
+  "source": "final_decision_engine",
+  "rows": 403,
+  "sell_count": 0,
+  "reduce_count": 0,
+  "buy_count": 3,
+  "test_count": 2,
+  "watch_count": 12,
+  "block_count": 386,
+  "rule": "先處理 SELL/REDUCE，再看 BUY/TEST；只做 allowed=True 的操作。"
+}
