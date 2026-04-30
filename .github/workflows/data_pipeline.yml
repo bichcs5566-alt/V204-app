@@ -182,6 +182,7 @@ jobs:
             mobile_dashboard_v1/data/final_action_summary.json \
             mobile_dashboard_v1/data/bridge_debug.csv || true
 
+          # 大檔只當 runtime 使用，不納入 commit。
           git reset -- price_panel_daily.csv || true
           git reset -- feature_panel_daily.csv || true
           git reset -- raw_market_daily.csv || true
@@ -193,6 +194,5 @@ jobs:
             echo "no update"
           else
             git commit -m "complete trading system with exit risk and manual positions"
-            git pull --rebase origin main
             git push origin main
           fi
