@@ -1,53 +1,36 @@
-// 🔥 掃描列表 + 展開詳情版（精簡高度）
-
-function renderFinalActions(rows) {
-  const container = document.getElementById("finalActionList");
-
-  container.innerHTML = rows.map((row, idx) => {
-    const action = row.final_action || row.action || "WATCH";
-
-    return `
-      <div class="scan-item ${action}" onclick="toggleDetail(${idx})">
-        
-        <div class="scan-main">
-          <div class="scan-action">${action}</div>
-          <div class="scan-stock">${row.stock_id}</div>
-          <div class="scan-score">${row.score}</div>
-          <div class="scan-entry">${row.entry_type || "--"}</div>
-          <div class="scan-price">${row.close || "--"}</div>
-        </div>
-
-        <div class="scan-detail" id="detail-${idx}">
-          <div class="detail-grid">
-            <div><span>來源</span><b>${row.source}</b></div>
-            <div><span>策略層</span><b>${row.bucket}</b></div>
-            <div><span>進場型態</span><b>${row.entry_type}</b></div>
-            <div><span>參考價</span><b>${row.close}</b></div>
-            <div><span>建議金額</span><b>${row.suggested_amount || "--"}</b></div>
-            <div><span>目標權重</span><b>${row.target_weight || "--"}</b></div>
-          </div>
-
-          <div class="detail-text">
-            <b>原因</b>
-            <p>${row.reason || "--"}</p>
-          </div>
-
-          <div class="detail-text">
-            <b>系統提示</b>
-            <p>${row.system_note || "--"}</p>
-          </div>
-        </div>
-
-      </div>
-    `;
-  }).join("");
-}
-
-function toggleDetail(idx) {
-  const el = document.getElementById(`detail-${idx}`);
-  if (el.style.display === "block") {
-    el.style.display = "none";
-  } else {
-    el.style.display = "block";
-  }
-}
+/* app.js - 最終交易版 UI */
+const DATA_DIR = './data/';
+const FILES = {
+  final: DATA_DIR + 'final_action_plan.csv',
+  summary: DATA_DIR + 'final_action_summary.json',
+  regime: DATA_DIR + 'market_regime.json',
+  tradePlan: DATA_DIR + 'trade_plan.csv'
+};
+const ACTION_LABEL = {SELL:'賣出',REDUCE:'減碼',BUY:'買進',TEST:'試單',WATCH:'觀察',BLOCK:'禁止'};
+const ACTION_EMOJI = {SELL:'🔴',REDUCE:'🟠',BUY:'🟢',TEST:'🟡',WATCH:'⚪',BLOCK:'⛔'};
+const ACTION_PRIORITY = {SELL:1,REDUCE:2,BUY:3,TEST:4,WATCH:5,BLOCK:6};
+function qs(id){return document.getElementById(id)}
+function safe(v,f='--'){return (v===undefined||v===null||v==='')?f:String(v)}
+async function fetchText(url){const r=await fetch(url+'?t='+Date.now(),{cache:'no-store'}); if(!r.ok) throw new Error(url); return await r.text()}
+async function fetchJson(url,f={}){try{return JSON.parse(await fetchText(url))}catch(e){return f}}
+function parseCsvLine(line){const out=[];let cur='',q=false;for(let i=0;i<line.length;i++){const ch=line[i];if(ch==='"'){if(q&&line[i+1]==='"'){cur+='"';i++}else q=!q}else if(ch===','&&!q){out.push(cur);cur=''}else cur+=ch}out.push(cur);return out}
+function parseCsv(txt){const lines=txt.replace(/\r/g,'').split('\n').filter(x=>x.trim()); if(lines.length<2)return[]; const h=parseCsvLine(lines[0]).map(x=>x.trim()); return lines.slice(1).map(l=>{const v=parseCsvLine(l),o={};h.forEach((k,i)=>o[k]=v[i]??'');return o})}
+function act(a){const s=String(a||'').trim().toUpperCase(); const map={'賣出':'SELL','減碼':'REDUCE','買進':'BUY','試單':'TEST','觀察':'WATCH','禁止':'BLOCK'}; return map[s]||s||'WATCH'}
+function isTop(r){return String(r.execution_flag||'').toUpperCase()==='TOP'}
+function num(v,d=2){const n=Number(v);return Number.isFinite(n)?n.toFixed(d):'--'}
+function money(v){const n=Number(v);return Number.isFinite(n)?Math.round(n).toLocaleString('en-US'):'--'}
+function pct(v){const n=Number(v);if(!Number.isFinite(n))return'--';return Math.abs(n)<=1?(n*100).toFixed(2)+'%':n.toFixed(2)+'%'}
+function counts(rows){const c={SELL:0,REDUCE:0,BUY:0,TEST:0,WATCH:0,BLOCK:0};rows.forEach(r=>{const a=act(r.final_action||r.action); if(c[a]!==undefined)c[a]++}); return c}
+function sortRows(rows){return rows.slice().sort((a,b)=>{const aa=act(a.final_action||a.action),bb=act(b.final_action||b.action); const pa=ACTION_PRIORITY[aa]||99,pb=ACTION_PRIORITY[bb]||99; if(pa!==pb)return pa-pb; const at=isTop(a)?1:0,bt=isTop(b)?1:0; if(bt!==at)return bt-at; return Number(b.score||0)-Number(a.score||0) || String(a.stock_id||'').localeCompare(String(b.stock_id||''))})}
+function split(rows){const s=sortRows(rows); return {sell:s.filter(r=>act(r.final_action||r.action)==='SELL'),reduce:s.filter(r=>act(r.final_action||r.action)==='REDUCE'),buy:s.filter(r=>act(r.final_action||r.action)==='BUY'),test:s.filter(r=>act(r.final_action||r.action)==='TEST'),watch:s.filter(r=>act(r.final_action||r.action)==='WATCH'),block:s.filter(r=>act(r.final_action||r.action)==='BLOCK')}}
+function shell(){document.body.innerHTML=`<main class="page"><section class="card hero"><h1>📊 每日操作介面</h1><div class="top-buttons"><button onclick="location.reload()">🔄 重新整理</button><button onclick="alert('請到 GitHub Actions 手動 Run data_pipeline，或等待 19:00 自動更新。')">🚀 更新資料</button></div><div id="syncStatus" class="sync">讀取中...</div><div id="metaBox" class="meta-grid"></div></section><section id="decisionBox" class="card decision"></section><section class="card trade-card"><div class="trade-head"><h2>🔥 下單清單</h2><span>SELL → REDUCE → BUY</span></div><div id="tradeList"></div></section><section class="card"><details id="testDetails"><summary>🟡 TEST 試單清單</summary><div id="testList"></div></details></section><section class="card"><details><summary>⚪ WATCH 觀察清單</summary><div id="watchList"></div></details></section><section class="card"><details><summary>⛔ BLOCK 禁止清單</summary><div id="blockList"></div></details></section><section class="card"><h2>🧪 篩選狀態</h2><div id="filterStats" class="meta-grid"></div></section></main>`}
+function decision(rows){const c=counts(rows);let d={cls:'watch',title:'觀察',text:'今日沒有主要操作。'}; if(c.SELL>0)d={cls:'sell',title:'先賣出',text:`今日有 ${c.SELL} 檔賣出訊號，先處理出場，再看買進。`}; else if(c.REDUCE>0)d={cls:'reduce',title:'先減碼',text:`今日有 ${c.REDUCE} 檔減碼訊號，先控制風險。`}; else if(c.BUY>0)d={cls:'buy',title:'可買進',text:`今日有 ${c.BUY} 檔核心買進，照 TOP 順序分批。`}; else if(c.TEST>0)d={cls:'test',title:'只試單',text:`今日只有 ${c.TEST} 檔試單，不做主倉。`}; qs('decisionBox').className='card decision '+d.cls; qs('decisionBox').innerHTML=`<div class="small-title">今日主判斷</div><div class="big-decision">${d.title}</div><p>${d.text}</p><div class="count-grid"><div><b>${c.SELL}</b><span>賣出</span></div><div><b>${c.REDUCE}</b><span>減碼</span></div><div><b>${c.BUY}</b><span>買進</span></div><div><b>${c.TEST}</b><span>試單</span></div><div><b>${c.WATCH}</b><span>觀察</span></div></div>`}
+function meta(regime,summary,rows){qs('metaBox').innerHTML=`<div class="mini"><span>來源版本</span><b>C 完整交易系統</b></div><div class="mini"><span>市場狀態</span><b>${safe(regime.label||regime.regime)}</b></div><div class="mini"><span>風險模式</span><b>${safe(regime.risk_mode)}</b></div><div class="mini"><span>訊號日</span><b>${safe(regime.latest_date)}</b></div><div class="mini"><span>最後更新</span><b>${safe(summary.generated_at||regime.generated_at)}</b></div><div class="mini"><span>操作筆數</span><b>${rows.length}</b></div>`; qs('syncStatus').innerHTML='✅ 最終操作表已同步';qs('syncStatus').className='sync ok'}
+function rowHtml(r,key){const a=act(r.final_action||r.action),cls=a.toLowerCase(),label=ACTION_LABEL[a]||a,emoji=ACTION_EMOJI[a]||'⚪',top=isTop(r)?'🔥TOP':'',stock=safe(r.stock_id),score=safe(r.score),entry=safe(r.entry_type),close=num(r.close),amount=r.suggested_amount?money(r.suggested_amount):'--',weight=r.target_weight?pct(r.target_weight):'--';return `<article class="scan-item ${cls}"><div class="scan-main" data-toggle="${key}"><div class="scan-action ${cls}">${emoji} ${label}</div><div class="scan-stock">${stock}</div><div class="scan-score">${score}</div><div class="scan-top">${top}</div><div class="scan-entry">${entry}</div><div class="scan-close">${close}</div></div><div class="scan-detail" id="${key}"><div class="detail-grid"><div><span>來源</span><b>${safe(r.source)}</b></div><div><span>策略層</span><b>${safe(r.bucket)}</b></div><div><span>進場型態</span><b>${entry}</b></div><div><span>參考價</span><b>${close}</b></div><div><span>建議金額</span><b>${amount}</b></div><div><span>目標權重</span><b>${weight}</b></div></div><div class="detail-text"><b>原因</b><p>${safe(r.reason,'無')}</p></div><div class="detail-text"><b>系統提示</b><p>${safe(r.system_note,'無')}</p></div></div></article>`}
+function bind(){document.querySelectorAll('[data-toggle]').forEach(el=>{if(el.dataset.bound==='1')return;el.dataset.bound='1';el.onclick=()=>{const d=document.getElementById(el.dataset.toggle); if(d)d.classList.toggle('open')}})}
+function renderTrade(g){const rows=[...g.sell,...g.reduce,...g.buy.slice(0,5)];let html=rows.length?rows.map((r,i)=>rowHtml(r,'trade-'+i)).join(''):'<div class="empty">目前沒有 SELL / REDUCE / BUY 主操作</div>'; const more=Math.max(g.buy.length-5,0); if(more>0)html+=`<div class="more-note">還有 ${more} 檔 BUY 已收合，請以 TOP 前 5 為主。</div>`; qs('tradeList').innerHTML=html;bind()}
+function renderList(id,rows,prefix,limit=80){const list=rows.slice(0,limit);qs(id).innerHTML=list.length?list.map((r,i)=>rowHtml(r,prefix+'-'+i)).join(''):'<div class="empty">沒有資料</div>'; if(rows.length>limit)qs(id).innerHTML+=`<div class="more-note">已顯示前 ${limit} 檔，其餘 ${rows.length-limit} 檔省略。</div>`; bind()}
+function stats(rows,summary){const c=counts(rows);qs('filterStats').innerHTML=`<div class="mini"><span>總筆數</span><b>${rows.length}</b></div><div class="mini"><span>SELL</span><b>${c.SELL}</b></div><div class="mini"><span>REDUCE</span><b>${c.REDUCE}</b></div><div class="mini"><span>BUY</span><b>${c.BUY}</b></div><div class="mini"><span>TEST</span><b>${c.TEST}</b></div><div class="mini"><span>WATCH</span><b>${c.WATCH}</b></div><div class="mini"><span>BLOCK</span><b>${c.BLOCK}</b></div><div class="mini"><span>資料來源</span><b>${safe(summary.source)}</b></div>`}
+async function loadRows(){try{const rows=parseCsv(await fetchText(FILES.final));if(rows.length)return rows}catch(e){} try{return parseCsv(await fetchText(FILES.tradePlan)).map(r=>({final_action:act(r.action||'BUY'),stock_id:r.stock_id,source:'ENTRY',bucket:'CORE',score:r.score||r.rank_score||'',entry_type:'',execution_flag:'TOP',allowed:'True',close:r.ref_price||r.close||r.price||'',suggested_amount:r.suggested_amount||'',target_weight:r.target_weight||'',reason:r.reason||r.note||'',system_note:'fallback trade_plan'}))}catch(e){return[]}}
+async function init(){shell();try{const [regime,summary,rows]=await Promise.all([fetchJson(FILES.regime,{}),fetchJson(FILES.summary,{}),loadRows()]);const g=split(rows);meta(regime,summary,rows);decision(rows);renderTrade(g);renderList('testList',g.test,'test',50);renderList('watchList',g.watch,'watch',80);renderList('blockList',g.block,'block',80);stats(rows,summary)}catch(e){qs('syncStatus').innerHTML='❌ 讀取失敗：'+e.message;qs('syncStatus').className='sync error'}}
+document.addEventListener('DOMContentLoaded',init);
