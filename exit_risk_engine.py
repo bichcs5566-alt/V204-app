@@ -1,17 +1,12 @@
 """
 exit_risk_engine.py
+v266.9.1 穩定版
 
-最新 data_pipeline 系統：出場與持倉風控引擎。
-
-新增支援：
-1. 讀取前端「持倉管理」同步出來的 positions_manual.csv
-2. 支援欄位：
-   - stock_id
-   - avg_price / avg_cost / cost / entry_price / buy_price
-   - shares
-   - lots / 張數
-3. 有持倉就產出 SELL / REDUCE / HOLD / WATCH
-4. 沒有持倉檔不會中斷 pipeline
+修正：
+1. 持倉風控原因一律重新產生乾淨中文，不沿用可能壞掉的舊文字。
+2. CSV 以 utf-8-sig 輸出，避免 Safari / GitHub Pages 顯示亂碼。
+3. 支援 positions_manual.csv 欄位：
+   stock_id, avg_price, lots, shares, note, updated_at
 """
 
 from pathlib import Path
@@ -44,28 +39,25 @@ OUTPUT_COLUMNS = [
     "ma20", "ma60", "mom5", "mom20", "risk_level", "market_regime", "generated_at",
 ]
 
-
 def normalize_stock_id(x):
     s = str(x).strip()
     if s.endswith(".0"):
         s = s[:-2]
-    if s.isdigit() and len(s) <= 4:
-        return s.zfill(4)
-    return s
-
+    return s.zfill(4) if s.isdigit() and len(s) <= 4 else s
 
 def read_csv_any(paths):
     for p in paths:
         p = Path(p)
-        if p.exists() and p.stat().st_size > 0:
+        if not p.exists() or p.stat().st_size == 0:
+            continue
+        for enc in ["utf-8-sig", "utf-8", "big5", "cp950"]:
             try:
-                df = pd.read_csv(p)
+                df = pd.read_csv(p, encoding=enc, dtype={"stock_id": str})
                 if not df.empty:
                     return df, p
             except Exception:
-                pass
+                continue
     return pd.DataFrame(), None
-
 
 def load_json_any(paths):
     for p in paths:
@@ -77,6 +69,9 @@ def load_json_any(paths):
                 pass
     return {}
 
+def write_csv_both(df, name):
+    df.to_csv(ROOT / name, index=False, encoding="utf-8-sig")
+    df.to_csv(DATA_DIR / name, index=False, encoding="utf-8-sig")
 
 def normalize_positions(df):
     if df.empty:
@@ -85,7 +80,6 @@ def normalize_positions(df):
     df = df.copy()
     df.columns = [str(c).strip().lower() for c in df.columns]
 
-    # stock_id
     if "stock_id" not in df.columns:
         for alt in ["symbol", "code", "ticker", "股票", "個股"]:
             if alt in df.columns:
@@ -94,25 +88,23 @@ def normalize_positions(df):
         else:
             return pd.DataFrame(columns=["stock_id", "shares", "lots", "avg_cost"])
 
-    # lots / shares
     if "shares" not in df.columns:
-        if "qty" in df.columns:
+        if "lots" in df.columns:
+            df["shares"] = pd.to_numeric(df["lots"], errors="coerce") * 1000
+        elif "張數" in df.columns:
+            df["shares"] = pd.to_numeric(df["張數"], errors="coerce") * 1000
+        elif "qty" in df.columns:
             df["shares"] = df["qty"]
         elif "quantity" in df.columns:
             df["shares"] = df["quantity"]
         elif "股數" in df.columns:
             df["shares"] = df["股數"]
-        elif "lots" in df.columns:
-            df["shares"] = pd.to_numeric(df["lots"], errors="coerce") * 1000
-        elif "張數" in df.columns:
-            df["shares"] = pd.to_numeric(df["張數"], errors="coerce") * 1000
         else:
             df["shares"] = 0
 
     if "lots" not in df.columns:
         df["lots"] = pd.to_numeric(df["shares"], errors="coerce") / 1000
 
-    # avg_cost
     if "avg_cost" not in df.columns:
         for alt in ["avg_price", "cost", "entry_price", "buy_price", "均價", "成本"]:
             if alt in df.columns:
@@ -129,18 +121,12 @@ def normalize_positions(df):
     df = df[df["stock_id"].astype(str).str.match(r"^\d{4}$", na=False)]
     df = df[df["shares"] > 0].copy()
 
-    # 同一個股多筆持倉時加總股數，均價用加權平均
     df["cost_value"] = df["shares"] * df["avg_cost"]
-    grouped = df.groupby("stock_id", as_index=False).agg({
-        "shares": "sum",
-        "cost_value": "sum",
-    })
+    grouped = df.groupby("stock_id", as_index=False).agg({"shares": "sum", "cost_value": "sum"})
     grouped["avg_cost"] = grouped["cost_value"] / grouped["shares"]
     grouped["lots"] = grouped["shares"] / 1000
-    grouped = grouped.drop(columns=["cost_value"])
 
     return grouped[["stock_id", "shares", "lots", "avg_cost"]]
-
 
 def load_price():
     df, _ = read_csv_any(PRICE_FILES)
@@ -152,7 +138,6 @@ def load_price():
 
     if "date" not in df.columns and "trade_date" in df.columns:
         df["date"] = df["trade_date"]
-
     if "stock_id" not in df.columns:
         if "symbol" in df.columns:
             df["stock_id"] = df["symbol"]
@@ -161,24 +146,15 @@ def load_price():
 
     for c in ["open", "high", "low", "close", "volume"]:
         if c not in df.columns:
-            if c in ["open", "high", "low"] and "close" in df.columns:
-                df[c] = df["close"]
-            elif c == "volume":
-                df[c] = 0
-            else:
-                raise ValueError(f"missing price column {c}")
+            df[c] = df["close"] if c != "volume" and "close" in df.columns else 0
+        df[c] = pd.to_numeric(df[c], errors="coerce")
 
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     df["stock_id"] = df["stock_id"].apply(normalize_stock_id)
-
-    for c in ["open", "high", "low", "close", "volume"]:
-        df[c] = pd.to_numeric(df[c], errors="coerce")
-
     df = df.dropna(subset=["date", "stock_id", "close"])
     df = df[df["stock_id"].astype(str).str.match(r"^\d{4}$", na=False)]
     df = df[df["close"] > 0].copy()
     return df.sort_values(["stock_id", "date"]).reset_index(drop=True)
-
 
 def add_features(g):
     g = g.sort_values("date").copy()
@@ -188,31 +164,29 @@ def add_features(g):
     g["mom20"] = g["close"] / g["close"].shift(20) - 1
     return g
 
-
 def decide_exit(row, regime):
-    close = row["close"]
-    avg_cost = row["avg_cost"]
+    close = float(row["close"])
+    avg_cost = float(row["avg_cost"])
     ma20 = row.get("ma20", np.nan)
     ma60 = row.get("ma60", np.nan)
     mom5 = row.get("mom5", np.nan)
     mom20 = row.get("mom20", np.nan)
 
-    unreal = close / avg_cost - 1 if pd.notna(avg_cost) and avg_cost > 0 else np.nan
-
-    reasons = []
-    action = "HOLD"
-    priority = 10
-    risk = "LOW"
+    unreal = close / avg_cost - 1 if avg_cost > 0 else np.nan
     stop_loss_pct = -0.08
-
     if regime == "BEAR":
         stop_loss_pct = -0.05
     elif regime == "RANGE":
         stop_loss_pct = -0.06
 
+    action = "HOLD"
+    priority = 10
+    risk = "LOW"
+    reasons = []
+
     if pd.notna(unreal) and unreal <= stop_loss_pct:
         action, priority, risk = "SELL", 100, "HIGH"
-        reasons.append(f"觸發停損 {round(unreal * 100, 2)}%")
+        reasons.append(f"觸發停損 {unreal * 100:.2f}%")
 
     if pd.notna(ma20) and close < ma20:
         if action != "SELL":
@@ -232,7 +206,7 @@ def decide_exit(row, regime):
             action = "REDUCE"
         priority = max(priority, 60)
         risk = "MEDIUM"
-        reasons.append("5日動能轉弱")
+        reasons.append("短線動能轉弱")
 
     if pd.notna(mom20) and mom20 < -0.08:
         action = "SELL"
@@ -245,24 +219,23 @@ def decide_exit(row, regime):
             action = "WATCH"
             priority = max(priority, 30)
             risk = "MEDIUM"
-            reasons.append("市場熊市，持倉需防守")
+            reasons.append("市場偏弱，持倉防守")
         elif action == "REDUCE":
             priority = max(priority, 80)
-            reasons.append("熊市加強降倉")
+            reasons.append("市場偏弱，減碼優先")
 
     if not reasons:
         reasons.append("持倉狀態正常，續抱觀察")
 
-    return action, priority, " | ".join(reasons), stop_loss_pct, risk, unreal
-
+    return action, priority, "｜".join(reasons), stop_loss_pct, risk, unreal
 
 def write_empty_summary(regime, pos_src, generated_at):
     out = pd.DataFrame(columns=OUTPUT_COLUMNS)
-    out.to_csv(ROOT / "exit_risk_plan.csv", index=False, encoding="utf-8")
-    out.to_csv(DATA_DIR / "exit_risk_plan.csv", index=False, encoding="utf-8")
+    write_csv_both(out, "exit_risk_plan.csv")
+
     summary = {
         "generated_at": generated_at,
-        "source": "exit_risk_engine",
+        "source": "exit_risk_engine_v266_9_1_stable",
         "position_source": str(pos_src) if pos_src else "",
         "market_regime": regime,
         "positions": 0,
@@ -275,7 +248,6 @@ def write_empty_summary(regime, pos_src, generated_at):
     for p in [ROOT / "exit_risk_summary.json", DATA_DIR / "exit_risk_summary.json"]:
         p.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False, indent=2))
-
 
 def main():
     generated_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
@@ -317,7 +289,7 @@ def main():
             "stock_id": r["stock_id"],
             "shares": int(shares),
             "lots": round(float(r["lots"]), 3),
-            "avg_cost": round(float(r["avg_cost"]), 2) if pd.notna(r["avg_cost"]) else "",
+            "avg_cost": round(float(r["avg_cost"]), 2),
             "close": round(close, 2),
             "position_value": round(close * shares, 0),
             "unrealized_pct": round(float(unreal), 4) if pd.notna(unreal) else "",
@@ -338,12 +310,11 @@ def main():
     if not out.empty:
         out = out.sort_values(["exit_priority", "stock_id"], ascending=[False, True])
 
-    out.to_csv(ROOT / "exit_risk_plan.csv", index=False, encoding="utf-8")
-    out.to_csv(DATA_DIR / "exit_risk_plan.csv", index=False, encoding="utf-8")
+    write_csv_both(out, "exit_risk_plan.csv")
 
     summary = {
         "generated_at": generated_at,
-        "source": "exit_risk_engine",
+        "source": "exit_risk_engine_v266_9_1_stable",
         "position_source": str(pos_src) if pos_src else "",
         "market_regime": regime,
         "positions": int(len(out)),
@@ -351,12 +322,12 @@ def main():
         "reduce_count": int((out["exit_action"] == "REDUCE").sum()) if not out.empty else 0,
         "watch_count": int((out["exit_action"] == "WATCH").sum()) if not out.empty else 0,
         "hold_count": int((out["exit_action"] == "HOLD").sum()) if not out.empty else 0,
-        "rule": "SELL 必須處理；REDUCE 降倉；WATCH 觀察；HOLD 續抱。"
+        "encoding": "utf-8-sig"
     }
     for p in [ROOT / "exit_risk_summary.json", DATA_DIR / "exit_risk_summary.json"]:
         p.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
 
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 if __name__ == "__main__":
     main()
