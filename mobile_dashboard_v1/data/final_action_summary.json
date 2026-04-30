@@ -1,16 +1,17 @@
 {
-  "generated_at": "2026-04-30 14:26:09",
-  "source": "final_decision_engine_final_integrated",
-  "rows": 448,
+  "generated_at": "2026-04-30 14:55:57",
+  "source": "final_decision_engine_v266_9_stable",
+  "rows": 413,
   "sell_count": 2,
   "reduce_count": 0,
   "buy_count": 8,
-  "test_count": 133,
-  "watch_count": 281,
-  "block_count": 24,
-  "alpha_count": 41,
-  "core_count": 42,
+  "test_count": 115,
+  "watch_count": 269,
+  "block_count": 19,
+  "alpha_count": 60,
+  "core_count": 16,
   "high_liquidity_count": 83,
   "medium_liquidity_count": 0,
-  "low_liquidity_count": 0
+  "low_liquidity_count": 0,
+  "encoding": "utf-8-sig"
 }

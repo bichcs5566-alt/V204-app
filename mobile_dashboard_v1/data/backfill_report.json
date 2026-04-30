@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-04-30 14:14:37",
+  "generated_at": "2026-04-30 14:45:22",
   "source": "backfill_missing_days",
   "before_last_date": "2026-04-24",
   "after_last_date": "2026-04-30",
-  "rows": 4798534,
-  "stock_count": 1965,
+  "rows": 4796388,
+  "stock_count": 1964,
   "unique_dates": 2811,
   "filled_days": [
     {
@@ -14,8 +14,8 @@
     },
     {
       "date": "2026-04-28",
-      "rows": 1940,
-      "symbols": 1940
+      "rows": 868,
+      "symbols": 868
     },
     {
       "date": "2026-04-29",
@@ -24,8 +24,8 @@
     },
     {
       "date": "2026-04-30",
-      "rows": 1942,
-      "symbols": 1942
+      "rows": 868,
+      "symbols": 868
     }
   ],
   "skipped_days": [
