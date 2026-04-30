@@ -456,6 +456,55 @@ function positionCost(row) {
   return Math.round(avg * shares).toLocaleString("en-US");
 }
 
+
+function getPositionRiskMap() {
+  return window.__positionRiskMap || {};
+}
+
+function setPositionRiskMap(rows) {
+  const map = {};
+  (rows || []).forEach(r => {
+    const source = String(r.source || "").toUpperCase();
+    const bucket = String(r.bucket || "").toUpperCase();
+    if (source === "EXIT" || source === "POSITION" || bucket === "POSITION") {
+      const sid = safeText(r.stock_id, "");
+      if (sid) map[sid] = r;
+    }
+  });
+  window.__positionRiskMap = map;
+}
+
+function renderPositionRiskInsideCard(stock) {
+  const row = getPositionRiskMap()[String(stock)];
+  if (!row) return "";
+
+  const action = normalizeAction(row.final_action || row.action);
+  const cls = ACTION_CLASS[action] || "watch";
+  const label = ACTION_LABEL[action] || action;
+  const close = num(row.close);
+  const entry = safeText(row.entry_type || row.execution_flag, "--");
+  const reason = safeText(row.reason, "無");
+  const note = safeText(row.system_note, "無");
+  const amount = row.suggested_amount ? money(row.suggested_amount) : "--";
+
+  return `
+    <div class="position-inline-risk ${cls}">
+      <div class="position-inline-risk-head">
+        <span class="scan-action ${cls}">${ACTION_EMOJI[action] || "⚪"} ${label}</span>
+        <b>${entry}</b>
+        <strong>${close}</strong>
+      </div>
+      <div class="position-inline-risk-grid">
+        <div><span>參考價</span><b>${close}</b></div>
+        <div><span>部位金額</span><b>${amount}</b></div>
+      </div>
+      <div class="position-inline-risk-text"><b>原因</b><p>${reason}</p></div>
+      <div class="position-inline-risk-text"><b>系統提示</b><p>${note}</p></div>
+    </div>
+  `;
+}
+
+
 function renderPositions() {
   const box = qs("positionList");
   if (!box) return;
@@ -497,6 +546,7 @@ function renderPositions() {
             <div><span>更新時間</span><b>${safeText(row.updated_at)}</b></div>
           </div>
           <div class="detail-text"><b>備註</b><p>${note}</p></div>
+          ${renderPositionRiskInsideCard(stock)}
           <div class="position-row-actions">
             <button type="button" data-edit-position="${stock}">編輯</button>
             <button type="button" class="danger" data-delete-position="${stock}">刪除</button>
@@ -721,7 +771,6 @@ function renderAppShell() {
 
         <div id="positionStatus" class="position-status">持倉狀態讀取中...</div>
         <div id="positionList"></div>
-        <div id="positionRiskHints"></div>
       </section>
 
       <section class="card">
@@ -983,51 +1032,9 @@ function getPositionDecisionRows(rows) {
 }
 
 function renderPositionRiskHints(rows) {
-  const box = qs("positionRiskHints");
-  if (!box) return;
-
-  const list = getPositionDecisionRows(rows);
-
-  if (!list.length) {
-    box.innerHTML = "";
-    return;
-  }
-
-  box.innerHTML = `
-    <div class="position-risk-panel">
-      <div class="position-risk-title">⚠️ 持倉風控提示</div>
-      ${list.map((row, idx) => {
-        const action = normalizeAction(row.final_action || row.action);
-        const cls = ACTION_CLASS[action] || "watch";
-        const label = ACTION_LABEL[action] || action;
-        const stock = safeText(row.stock_id);
-        const close = num(row.close);
-        const reason = safeText(row.reason, "無");
-        const note = safeText(row.system_note, "無");
-        const entry = safeText(row.entry_type || row.execution_flag, "--");
-        const amount = row.suggested_amount ? money(row.suggested_amount) : "--";
-
-        return `
-          <article class="position-risk-item ${cls}">
-            <div class="position-risk-head">
-              <span class="scan-action ${cls}">${ACTION_EMOJI[action] || "⚪"} ${label}</span>
-              <b>${stock}</b>
-              <span>${entry}</span>
-              <strong>${close}</strong>
-            </div>
-            <div class="position-risk-grid">
-              <div><span>參考價</span><b>${close}</b></div>
-              <div><span>部位金額</span><b>${amount}</b></div>
-            </div>
-            <div class="position-risk-text"><b>原因</b><p>${reason}</p></div>
-            <div class="position-risk-text"><b>系統提示</b><p>${note}</p></div>
-          </article>
-        `;
-      }).join("")}
-    </div>
-  `;
+  // 已改為顯示在每一張持倉卡片內，不再產生額外區塊。
+  setPositionRiskMap(rows);
 }
-
 
 function renderScanRow(row, key) {
   const action = normalizeAction(row.final_action || row.action);
@@ -1154,6 +1161,7 @@ async function init() {
 
     renderMeta(regime, summary, rows);
     renderPositionRiskHints(rows);
+    renderPositions();
     renderDecision(rows);
     renderFinalActions(groups.main);
     renderSectionList("testList", groups.test, "test", 80);
