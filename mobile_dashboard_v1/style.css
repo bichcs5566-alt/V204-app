@@ -644,3 +644,104 @@ button:disabled {
 #liveClock {
   white-space: nowrap;
 }
+/* 持倉管理區 */
+.position-card h2 {
+  margin-bottom: 0;
+}
+
+.position-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.position-input {
+  width: 100%;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 13px;
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--text);
+  background: #fff;
+  outline: none;
+}
+
+.position-input::placeholder {
+  color: #9ca3af;
+  font-weight: 700;
+}
+
+.position-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin: 10px 0 14px;
+}
+
+.position-actions button {
+  font-size: 16px;
+  padding: 13px 4px;
+}
+
+.position-actions .secondary,
+.position-row-actions button {
+  background: #eef2ff;
+  color: var(--blue);
+}
+
+.position-actions .danger,
+.position-row-actions .danger {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.scan-item.position {
+  border-color: #c7d2fe;
+  background: #fbfdff;
+}
+
+.scan-action.position {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.position-main {
+  grid-template-columns: 76px 68px 54px 28px 92px 78px;
+}
+
+.position-row-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.position-row-actions button {
+  font-size: 16px;
+  padding: 12px 6px;
+}
+
+#syncStatus {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+#liveClock {
+  white-space: nowrap;
+}
+
+@media (max-width: 430px) {
+  .position-form {
+    grid-template-columns: 1fr;
+  }
+
+  .position-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .position-main {
+    grid-template-columns: 70px 58px 46px 24px 72px 62px;
+  }
+}
