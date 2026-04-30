@@ -1,11 +1,12 @@
 /*
-app.js - 掃描列表 + 展開詳情版
+app.js - 最終穩定版 UI
 
-重點：
-1. 預設一行一檔，降低高度
-2. 保留原本所有資訊
-3. 點擊該列可展開：來源、策略層、目標權重、原因、系統提示
-4. 優先讀 final_action_plan.csv
+設計原則：
+1. 保留卡片質感
+2. SELL / REDUCE / BUY 放在最終操作區
+3. TEST / WATCH / BLOCK 預設收合
+4. 點擊股票列展開詳情
+5. 篩選狀態改成一行摘要
 */
 
 const DATA_DIR = "./data/";
@@ -90,6 +91,7 @@ function parseCsv(text) {
     headers.forEach((h, idx) => obj[h] = values[idx] ?? "");
     rows.push(obj);
   }
+
   return rows;
 }
 
@@ -100,6 +102,7 @@ function parseCsvLine(line) {
 
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
+
     if (ch === '"') {
       if (inQuotes && line[i + 1] === '"') {
         cur += '"';
@@ -127,6 +130,10 @@ function normalizeAction(a) {
   if (s === "觀察") return "WATCH";
   if (s === "禁止") return "BLOCK";
   return s || "WATCH";
+}
+
+function isTop(row) {
+  return String(row.execution_flag || "").toUpperCase() === "TOP";
 }
 
 function money(v) {
@@ -165,6 +172,10 @@ function sortRows(rows) {
     const pb = ACTION_PRIORITY[bb] || 99;
     if (pa !== pb) return pa - pb;
 
+    const at = isTop(a) ? 1 : 0;
+    const bt = isTop(b) ? 1 : 0;
+    if (bt !== at) return bt - at;
+
     const sa = Number(a.score || 0);
     const sb = Number(b.score || 0);
     if (sb !== sa) return sb - sa;
@@ -173,34 +184,52 @@ function sortRows(rows) {
   });
 }
 
+function splitRows(rows) {
+  const sorted = sortRows(rows);
+  return {
+    main: sorted.filter(r => ["SELL", "REDUCE", "BUY"].includes(normalizeAction(r.final_action || r.action))),
+    test: sorted.filter(r => normalizeAction(r.final_action || r.action) === "TEST"),
+    watch: sorted.filter(r => normalizeAction(r.final_action || r.action) === "WATCH"),
+    block: sorted.filter(r => normalizeAction(r.final_action || r.action) === "BLOCK")
+  };
+}
+
 function classifyMainDecision(counts) {
-  if (counts.SELL > 0) return {
-    label: "先賣出",
-    desc: `今日有 ${counts.SELL} 檔賣出訊號，先處理出場`,
-    cls: "sell"
-  };
+  if (counts.SELL > 0) {
+    return {
+      label: "先賣出",
+      desc: `今日有 ${counts.SELL} 檔賣出訊號，先處理出場，再看買進。`,
+      cls: "sell"
+    };
+  }
 
-  if (counts.REDUCE > 0) return {
-    label: "先減碼",
-    desc: `今日有 ${counts.REDUCE} 檔減碼訊號，先控風險`,
-    cls: "reduce"
-  };
+  if (counts.REDUCE > 0) {
+    return {
+      label: "先減碼",
+      desc: `今日有 ${counts.REDUCE} 檔減碼訊號，先控風險。`,
+      cls: "reduce"
+    };
+  }
 
-  if (counts.BUY > 0) return {
-    label: "買進",
-    desc: `今日有 ${counts.BUY} 檔買進候選，請分批執行`,
-    cls: "buy"
-  };
+  if (counts.BUY > 0) {
+    return {
+      label: "買進",
+      desc: `今日有 ${counts.BUY} 檔買進候選，請分批執行。`,
+      cls: "buy"
+    };
+  }
 
-  if (counts.TEST > 0) return {
-    label: "試單",
-    desc: `今日有 ${counts.TEST} 檔可小倉試單`,
-    cls: "test"
-  };
+  if (counts.TEST > 0) {
+    return {
+      label: "試單",
+      desc: `今日有 ${counts.TEST} 檔可小倉試單。`,
+      cls: "test"
+    };
+  }
 
   return {
     label: "觀察",
-    desc: "今日沒有主要操作",
+    desc: "今日沒有主要操作。",
     cls: "watch"
   };
 }
@@ -228,19 +257,30 @@ function renderAppShell() {
         <div id="finalActionList"></div>
       </section>
 
-      <section class="card">
+      <section class="card compact-card">
+        <details>
+          <summary>🟡 TEST 試單清單</summary>
+          <div id="testList"></div>
+        </details>
+      </section>
+
+      <section class="card compact-card">
+        <details>
+          <summary>⚪ WATCH 觀察清單</summary>
+          <div id="watchList"></div>
+        </details>
+      </section>
+
+      <section class="card compact-card">
+        <details>
+          <summary>⛔ BLOCK 禁止清單</summary>
+          <div id="blockList"></div>
+        </details>
+      </section>
+
+      <section class="card compact-stats-card">
         <h2>🧪 篩選狀態</h2>
-        <div id="filterStats" class="meta-grid"></div>
-      </section>
-
-      <section class="card">
-        <h2>Core 候選</h2>
-        <div id="coreList"></div>
-      </section>
-
-      <section class="card">
-        <h2>Alpha 候選</h2>
-        <div id="alphaList"></div>
+        <div id="filterStats"></div>
       </section>
     </main>
   `;
@@ -285,101 +325,107 @@ function renderDecision(rows) {
 }
 
 function renderFinalActions(rows) {
-  const sorted = sortRows(rows);
   const container = qs("finalActionList");
 
-  if (!sorted.length) {
-    container.innerHTML = `<div class="empty">沒有最終操作資料</div>`;
+  if (!rows.length) {
+    container.innerHTML = `<div class="empty">目前沒有 SELL / REDUCE / BUY 主操作</div>`;
     return;
   }
 
-  container.innerHTML = sorted.map((row, idx) => {
-    const action = normalizeAction(row.final_action || row.action);
-    const cls = ACTION_CLASS[action] || "watch";
-    const label = ACTION_LABEL[action] || action;
-    const emoji = ACTION_EMOJI[action] || "⚪";
+  container.innerHTML = rows.map((row, idx) => renderScanRow(row, "main-" + idx)).join("");
+  bindToggle();
+}
 
-    const stock = safeText(row.stock_id);
-    const score = safeText(row.score);
-    const source = safeText(row.source);
-    const bucket = safeText(row.bucket);
-    const entry = safeText(row.entry_type);
-    const close = num(row.close);
-    const amount = row.suggested_amount ? money(row.suggested_amount) : "--";
-    const weight = row.target_weight ? pct(row.target_weight) : "--";
-    const reason = safeText(row.reason, "無");
-    const note = safeText(row.system_note, "無");
+function renderSectionList(targetId, rows, prefix, limit = 80) {
+  const container = qs(targetId);
 
-    return `
-      <article class="scan-item ${cls}" data-row="${idx}">
-        <div class="scan-main">
-          <div class="scan-action ${cls}">${emoji} ${label}</div>
-          <div class="scan-stock">${stock}</div>
-          <div class="scan-score">${score}</div>
-          <div class="scan-entry">${entry}</div>
-          <div class="scan-close">${close}</div>
-          <div class="scan-amount">${amount}</div>
+  if (!rows.length) {
+    container.innerHTML = `<div class="empty">沒有資料</div>`;
+    return;
+  }
+
+  const list = rows.slice(0, limit);
+  let html = list.map((row, idx) => renderScanRow(row, prefix + "-" + idx)).join("");
+
+  if (rows.length > limit) {
+    html += `<div class="more-note">已顯示前 ${limit} 檔，其餘 ${rows.length - limit} 檔省略。</div>`;
+  }
+
+  container.innerHTML = html;
+  bindToggle();
+}
+
+function renderScanRow(row, key) {
+  const action = normalizeAction(row.final_action || row.action);
+  const cls = ACTION_CLASS[action] || "watch";
+  const label = ACTION_LABEL[action] || action;
+  const emoji = ACTION_EMOJI[action] || "⚪";
+  const top = isTop(row) ? "🔥TOP" : "";
+  const stock = safeText(row.stock_id);
+  const score = safeText(row.score);
+  const source = safeText(row.source);
+  const bucket = safeText(row.bucket);
+  const entry = safeText(row.entry_type);
+  const close = num(row.close);
+  const amount = row.suggested_amount ? money(row.suggested_amount) : "--";
+  const weight = row.target_weight ? pct(row.target_weight) : "--";
+  const reason = safeText(row.reason, "無");
+  const note = safeText(row.system_note, "無");
+
+  return `
+    <article class="scan-item ${cls}">
+      <div class="scan-main" data-toggle="${key}">
+        <div class="scan-action ${cls}">${emoji} ${label}</div>
+        <div class="scan-stock">${stock}</div>
+        <div class="scan-score">${score}</div>
+        <div class="scan-top">${top}</div>
+        <div class="scan-entry">${entry}</div>
+        <div class="scan-close">${close}</div>
+      </div>
+
+      <div class="scan-detail" id="${key}">
+        <div class="detail-grid">
+          <div><span>來源</span><b>${source}</b></div>
+          <div><span>策略層</span><b>${bucket}</b></div>
+          <div><span>進場型態</span><b>${entry}</b></div>
+          <div><span>參考價</span><b>${close}</b></div>
+          <div><span>建議金額</span><b>${amount}</b></div>
+          <div><span>目標權重</span><b>${weight}</b></div>
         </div>
+        <div class="detail-text"><b>原因</b><p>${reason}</p></div>
+        <div class="detail-text"><b>系統提示</b><p>${note}</p></div>
+      </div>
+    </article>
+  `;
+}
 
-        <div class="scan-detail">
-          <div class="detail-grid">
-            <div><span>來源</span><b>${source}</b></div>
-            <div><span>策略層</span><b>${bucket}</b></div>
-            <div><span>進場型態</span><b>${entry}</b></div>
-            <div><span>參考價</span><b>${close}</b></div>
-            <div><span>建議金額</span><b>${amount}</b></div>
-            <div><span>目標權重</span><b>${weight}</b></div>
-          </div>
-          <div class="detail-text"><b>原因</b><p>${reason}</p></div>
-          <div class="detail-text"><b>系統提示</b><p>${note}</p></div>
-        </div>
-      </article>
-    `;
-  }).join("");
-
-  document.querySelectorAll(".scan-item").forEach(el => {
+function bindToggle() {
+  document.querySelectorAll("[data-toggle]").forEach(el => {
+    if (el.dataset.bound === "1") return;
+    el.dataset.bound = "1";
     el.addEventListener("click", () => {
-      el.classList.toggle("open");
+      const id = el.getAttribute("data-toggle");
+      const detail = document.getElementById(id);
+      if (!detail) return;
+      detail.classList.toggle("open");
     });
   });
 }
 
 function renderStats(rows, summary) {
-  const counts = groupCounts(rows);
+  const c = groupCounts(rows);
   qs("filterStats").innerHTML = `
-    <div class="mini"><span>總筆數</span><b>${rows.length}</b></div>
-    <div class="mini"><span>SELL</span><b>${counts.SELL}</b></div>
-    <div class="mini"><span>REDUCE</span><b>${counts.REDUCE}</b></div>
-    <div class="mini"><span>BUY</span><b>${counts.BUY}</b></div>
-    <div class="mini"><span>TEST</span><b>${counts.TEST}</b></div>
-    <div class="mini"><span>WATCH</span><b>${counts.WATCH}</b></div>
-    <div class="mini"><span>BLOCK</span><b>${counts.BLOCK}</b></div>
-    <div class="mini"><span>資料來源</span><b>${safeText(summary.source)}</b></div>
+    <div class="stats-line">
+      <span>總筆數 <b>${rows.length}</b></span>
+      <span>SELL <b>${c.SELL}</b></span>
+      <span>REDUCE <b>${c.REDUCE}</b></span>
+      <span>BUY <b>${c.BUY}</b></span>
+      <span>TEST <b>${c.TEST}</b></span>
+      <span>WATCH <b>${c.WATCH}</b></span>
+      <span>BLOCK <b>${c.BLOCK}</b></span>
+    </div>
+    <div class="source-line">資料來源：${safeText(summary.source)}</div>
   `;
-}
-
-function renderCandidateLists(rows) {
-  const core = sortRows(rows).filter(r => String(r.bucket).toUpperCase() === "CORE").slice(0, 30);
-  const alpha = sortRows(rows).filter(r => String(r.bucket).toUpperCase() === "ALPHA").slice(0, 30);
-
-  qs("coreList").innerHTML = renderSimpleRows(core);
-  qs("alphaList").innerHTML = renderSimpleRows(alpha);
-}
-
-function renderSimpleRows(rows) {
-  if (!rows.length) return `<div class="empty">沒有資料</div>`;
-
-  return rows.map(r => {
-    const action = normalizeAction(r.final_action || r.action);
-    const cls = ACTION_CLASS[action] || "watch";
-    return `
-      <div class="simple-row">
-        <b>${safeText(r.stock_id)}</b>
-        <span>${safeText(r.score)}</span>
-        <em class="${cls}">${ACTION_LABEL[action] || action}</em>
-      </div>
-    `;
-  }).join("");
 }
 
 async function loadFinalRows() {
@@ -425,11 +471,15 @@ async function init() {
       loadFinalRows()
     ]);
 
+    const groups = splitRows(rows);
+
     renderMeta(regime, summary, rows);
     renderDecision(rows);
-    renderFinalActions(rows);
+    renderFinalActions(groups.main);
+    renderSectionList("testList", groups.test, "test", 80);
+    renderSectionList("watchList", groups.watch, "watch", 80);
+    renderSectionList("blockList", groups.block, "block", 80);
     renderStats(rows, summary);
-    renderCandidateLists(rows);
   } catch (e) {
     console.error(e);
     qs("syncStatus").innerHTML = "❌ 讀取失敗：" + e.message;
