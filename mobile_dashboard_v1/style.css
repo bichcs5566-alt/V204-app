@@ -1,0 +1,568 @@
+/*
+style.css - 最終穩定版 UI
+
+保留上一版卡片質感：
+- 主操作展開
+- TEST / WATCH / BLOCK 收合
+- 篩選狀態一行化
+*/
+
+:root {
+  --bg: #f5f1e9;
+  --card: #ffffff;
+  --text: #101827;
+  --muted: #667085;
+  --line: #e5e7eb;
+  --blue: #263f6d;
+  --green-bg: #e8f8ee;
+  --red: #dc2626;
+  --red-bg: #fee2e2;
+  --orange: #ea580c;
+  --orange-bg: #ffedd5;
+  --yellow: #a16207;
+  --yellow-bg: #fef3c7;
+  --gray: #475569;
+  --gray-bg: #f1f5f9;
+  --block: #6b7280;
+  --block-bg: #e5e7eb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  font-weight: 700;
+}
+
+.page {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 14px 8px 56px;
+}
+
+.card {
+  background: var(--card);
+  border-radius: 24px;
+  padding: 16px;
+  margin: 14px 0;
+  box-shadow: 0 5px 18px rgba(15, 23, 42, 0.04);
+}
+
+.hero h1 {
+  font-size: 31px;
+  line-height: 1.15;
+  margin: 0 0 14px;
+  letter-spacing: -1px;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+button {
+  border: none;
+  border-radius: 15px;
+  background: var(--blue);
+  color: white;
+  font-size: 18px;
+  font-weight: 900;
+  padding: 14px 6px;
+  line-height: 1.2;
+}
+
+.sync {
+  color: var(--muted);
+  font-size: 19px;
+  margin: 12px 0;
+}
+
+.sync.ok {
+  color: #15803d;
+}
+
+.sync.error {
+  color: var(--red);
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.mini {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 11px 13px;
+}
+
+.mini span {
+  display: block;
+  color: var(--muted);
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.mini b {
+  display: block;
+  font-size: 20px;
+  line-height: 1.25;
+  color: var(--text);
+}
+
+.decision {
+  border: 2.5px solid var(--line);
+}
+
+.decision.sell {
+  background: #fff7f7;
+  border-color: #fca5a5;
+}
+
+.decision.reduce {
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+
+.decision.buy {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.decision.test {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.decision.watch {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.small-title {
+  color: var(--muted);
+  font-size: 21px;
+  margin-bottom: 6px;
+}
+
+.big-decision {
+  font-size: 45px;
+  line-height: 1;
+  margin-bottom: 10px;
+  letter-spacing: -2px;
+}
+
+.decision p {
+  font-size: 21px;
+  line-height: 1.35;
+  color: #475569;
+  margin: 0 0 14px;
+}
+
+.count-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 7px;
+}
+
+.count-grid div {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  text-align: center;
+  padding: 10px 2px;
+}
+
+.count-grid b {
+  display: block;
+  font-size: 25px;
+  line-height: 1;
+}
+
+.count-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 5px;
+}
+
+.section-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+h2 {
+  font-size: 31px;
+  line-height: 1.1;
+  margin: 0 0 12px;
+  letter-spacing: -1px;
+}
+
+.section-head h2 {
+  margin-bottom: 0;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* 主掃描列表 */
+.scan-item {
+  border: 1.8px solid var(--line);
+  border-radius: 15px;
+  margin: 9px 0;
+  overflow: hidden;
+  background: #fff;
+}
+
+.scan-item.sell {
+  border-color: #fca5a5;
+  background: #fff7f7;
+}
+
+.scan-item.reduce {
+  border-color: #fdba74;
+  background: #fff7ed;
+}
+
+.scan-item.buy {
+  border-color: #86efac;
+  background: #f8fffb;
+}
+
+.scan-item.test {
+  border-color: #fde68a;
+  background: #fffdf5;
+}
+
+.scan-item.watch {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.scan-item.block {
+  border-color: #d1d5db;
+  background: #f3f4f6;
+  opacity: 0.78;
+}
+
+.scan-main {
+  min-height: 50px;
+  display: grid;
+  grid-template-columns: 66px 60px 42px 42px 60px 54px;
+  gap: 4px;
+  align-items: center;
+  padding: 8px 8px;
+}
+
+.scan-action {
+  border-radius: 999px;
+  padding: 7px 6px;
+  font-size: 13px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.scan-action.sell {
+  color: var(--red);
+  background: var(--red-bg);
+}
+
+.scan-action.reduce {
+  color: var(--orange);
+  background: var(--orange-bg);
+}
+
+.scan-action.buy {
+  color: #047857;
+  background: var(--green-bg);
+}
+
+.scan-action.test {
+  color: var(--yellow);
+  background: var(--yellow-bg);
+}
+
+.scan-action.watch {
+  color: var(--gray);
+  background: var(--gray-bg);
+}
+
+.scan-action.block {
+  color: var(--block);
+  background: var(--block-bg);
+}
+
+.scan-stock {
+  font-size: 24px;
+  font-weight: 950;
+  letter-spacing: -0.5px;
+}
+
+.scan-score {
+  font-size: 20px;
+  font-weight: 950;
+  text-align: right;
+}
+
+.scan-top {
+  color: #ef4444;
+  font-size: 10px;
+  font-weight: 950;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.scan-entry {
+  font-size: 13px;
+  color: #334155;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-close {
+  font-size: 14px;
+  color: #334155;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 展開資訊 */
+.scan-detail {
+  display: none;
+  padding: 0 10px 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.scan-detail.open {
+  display: block;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.detail-grid div {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 9px;
+}
+
+.detail-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.detail-grid b {
+  display: block;
+  font-size: 17px;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.detail-text {
+  margin-top: 10px;
+  color: #334155;
+}
+
+.detail-text b {
+  display: block;
+  font-size: 18px;
+  margin-bottom: 3px;
+}
+
+.detail-text p {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+/* 收合區 */
+.compact-card {
+  padding: 14px 16px;
+}
+
+summary {
+  cursor: pointer;
+  font-size: 24px;
+  font-weight: 950;
+  line-height: 1.2;
+  list-style: none;
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+/* 篩選狀態一行 */
+.compact-stats-card h2 {
+  margin-bottom: 10px;
+}
+
+.stats-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 15px;
+  color: #334155;
+}
+
+.stats-line span {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 10px;
+}
+
+.stats-line b {
+  font-size: 17px;
+  color: var(--text);
+}
+
+.source-line {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.more-note,
+.empty {
+  padding: 14px;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  color: var(--muted);
+  font-size: 18px;
+  margin-top: 8px;
+}
+
+@media (max-width: 430px) {
+  .page {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .card {
+    padding: 14px;
+  }
+
+  .scan-main {
+    grid-template-columns: 60px 56px 38px 34px 56px 50px;
+    gap: 3px;
+    padding: 7px 7px;
+    min-height: 48px;
+  }
+
+  .scan-action {
+    font-size: 12px;
+    padding: 6px 4px;
+  }
+
+  .scan-stock {
+    font-size: 22px;
+  }
+
+  .scan-score {
+    font-size: 18px;
+  }
+
+  .scan-top {
+    font-size: 9px;
+  }
+
+  .scan-entry {
+    font-size: 12px;
+  }
+
+  .scan-close {
+    font-size: 13px;
+  }
+
+  .count-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+
+  .count-grid b {
+    font-size: 23px;
+  }
+
+  .count-grid span {
+    font-size: 12px;
+  }
+
+  .hint {
+    display: none;
+  }
+}
+
+@media (max-width: 380px) {
+  .scan-main {
+    grid-template-columns: 58px 54px 36px 52px 48px;
+  }
+
+  .scan-top {
+    display: none;
+  }
+}
+
+/* GitHub 本機設定 */
+.github-form {
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+}
+
+.github-form input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  padding: 13px 14px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  background: #ffffff;
+}
+
+.github-form input::placeholder {
+  color: #a3a3a3;
+}
+
+.github-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.secondary-btn {
+  background: #eef2ff;
+  color: var(--blue);
+}
+
+button:disabled {
+  opacity: 0.65;
+}
