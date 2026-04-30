@@ -1469,3 +1469,169 @@ button:disabled {
 .scan-liq.liq-none {
   display: none;
 }
+/* v266.9 穩定版：手機可讀性 + 不擠版 */
+.scan-main-live {
+  grid-template-columns: 58px 54px 34px 46px 58px 46px;
+  gap: 3px;
+}
+
+.scan-main-live .scan-top {
+  display: none;
+}
+
+.scan-action {
+  font-size: 12px;
+  padding: 6px 4px;
+}
+
+.scan-stock {
+  font-size: 20px;
+  letter-spacing: -0.8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-score {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-entry {
+  font-size: 11px;
+}
+
+.scan-close {
+  font-size: 12px;
+}
+
+.scan-liq {
+  font-size: 10px;
+  font-weight: 950;
+  border-radius: 999px;
+  text-align: center;
+  padding: 5px 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.liq-high {
+  color: #047857;
+  background: #d1fae5;
+}
+
+.liq-mid {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.liq-low {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.liq-none {
+  color: #64748b;
+  background: #f1f5f9;
+}
+
+.detail-grid {
+  gap: 7px;
+}
+
+.detail-grid div {
+  padding: 8px;
+}
+
+.detail-grid span {
+  font-size: 12px;
+}
+
+.detail-grid b {
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.detail-grid b.liq-high,
+.detail-grid b.liq-mid,
+.detail-grid b.liq-low,
+.detail-grid b.liq-none {
+  display: inline-block;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 14px;
+}
+
+.detail-text b {
+  font-size: 17px;
+}
+
+.detail-text p {
+  font-size: 16px;
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.stats-line span {
+  font-size: 13px;
+  padding: 6px 9px;
+}
+
+.stats-line b {
+  font-size: 15px;
+}
+
+.position-inline-risk-text p,
+.position-risk-text p {
+  font-size: 16px;
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+@media (max-width: 380px) {
+  .scan-main-live {
+    grid-template-columns: 54px 50px 30px 42px 52px 40px;
+  }
+
+  .scan-stock {
+    font-size: 18px;
+  }
+
+  .scan-action {
+    font-size: 11px;
+  }
+}
+
+
+/* v266.9.1：空資訊隱藏後的排版 */
+.detail-grid:empty {
+  display: none;
+}
+
+.scan-entry {
+  max-width: 52px;
+}
+
+.scan-liq.liq-none {
+  display: none;
+}
+
+
+/* v266.9.2：保留所有欄位，但缺資料清楚顯示 */
+.detail-grid b {
+  min-height: 1.3em;
+}
+
+.detail-grid b:empty::after {
+  content: "--";
+  color: #94a3b8;
+}
+
+.liq-none {
+  color: #64748b;
+  background: #f1f5f9;
+}
