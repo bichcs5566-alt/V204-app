@@ -1,0 +1,412 @@
+/*
+style.css - Final Action UI
+*/
+
+:root {
+  --bg: #f5f1e9;
+  --card: #ffffff;
+  --text: #101827;
+  --muted: #667085;
+  --line: #e5e7eb;
+  --blue: #263f6d;
+  --green: #16a34a;
+  --green-bg: #e8f8ee;
+  --red: #dc2626;
+  --red-bg: #fee2e2;
+  --orange: #ea580c;
+  --orange-bg: #ffedd5;
+  --yellow: #a16207;
+  --yellow-bg: #fef3c7;
+  --gray: #475569;
+  --gray-bg: #f1f5f9;
+  --block: #6b7280;
+  --block-bg: #e5e7eb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  font-weight: 700;
+}
+
+.page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 28px 22px 80px;
+}
+
+.card {
+  background: var(--card);
+  border-radius: 34px;
+  padding: 34px;
+  margin: 24px 0;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.05);
+}
+
+.hero h1 {
+  font-size: 46px;
+  margin: 0 0 24px;
+  letter-spacing: -1px;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+
+button {
+  border: none;
+  border-radius: 24px;
+  background: var(--blue);
+  color: white;
+  font-size: 28px;
+  font-weight: 900;
+  padding: 24px 18px;
+}
+
+.sync {
+  color: var(--muted);
+  font-size: 26px;
+  margin: 18px 0;
+}
+
+.sync.ok {
+  color: #15803d;
+}
+
+.sync.error {
+  color: var(--red);
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.mini {
+  background: #f8fafc;
+  border: 2px solid var(--line);
+  border-radius: 22px;
+  padding: 20px 24px;
+}
+
+.mini span {
+  display: block;
+  color: var(--muted);
+  font-size: 22px;
+  margin-bottom: 8px;
+}
+
+.mini b {
+  display: block;
+  font-size: 28px;
+  color: var(--text);
+}
+
+.decision {
+  border: 4px solid var(--line);
+}
+
+.decision.sell {
+  background: #fff7f7;
+  border-color: #fca5a5;
+}
+
+.decision.reduce {
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+
+.decision.buy {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.decision.test {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.decision.watch {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.small-title {
+  color: var(--muted);
+  font-size: 28px;
+  margin-bottom: 12px;
+}
+
+.big-decision {
+  font-size: 72px;
+  line-height: 1;
+  margin-bottom: 18px;
+  letter-spacing: -3px;
+}
+
+.decision p {
+  font-size: 30px;
+  line-height: 1.45;
+  color: #475569;
+  margin: 0 0 24px;
+}
+
+.count-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+}
+
+.count-grid div {
+  background: white;
+  border: 2px solid var(--line);
+  border-radius: 22px;
+  text-align: center;
+  padding: 20px 6px;
+}
+
+.count-grid b {
+  display: block;
+  font-size: 42px;
+}
+
+.count-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 20px;
+  margin-top: 6px;
+}
+
+h2 {
+  font-size: 42px;
+  margin: 0 0 24px;
+  letter-spacing: -1px;
+}
+
+.action-card {
+  border: 3px solid var(--line);
+  border-radius: 28px;
+  padding: 28px;
+  margin: 20px 0;
+}
+
+.action-card.sell {
+  border-color: #fca5a5;
+  background: #fff7f7;
+}
+
+.action-card.reduce {
+  border-color: #fdba74;
+  background: #fff7ed;
+}
+
+.action-card.buy {
+  border-color: #86efac;
+  background: #f8fffb;
+}
+
+.action-card.test {
+  border-color: #fde68a;
+  background: #fffdf5;
+}
+
+.action-card.watch {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.action-card.block {
+  border-color: #d1d5db;
+  background: #f3f4f6;
+  opacity: 0.72;
+}
+
+.topline {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.pill {
+  border-radius: 999px;
+  padding: 16px 24px;
+  font-size: 26px;
+  white-space: nowrap;
+}
+
+.pill.sell, em.sell {
+  color: var(--red);
+  background: var(--red-bg);
+}
+
+.pill.reduce, em.reduce {
+  color: var(--orange);
+  background: var(--orange-bg);
+}
+
+.pill.buy, em.buy {
+  color: #047857;
+  background: var(--green-bg);
+}
+
+.pill.test, em.test {
+  color: var(--yellow);
+  background: var(--yellow-bg);
+}
+
+.pill.watch, em.watch {
+  color: var(--gray);
+  background: var(--gray-bg);
+}
+
+.pill.block, em.block {
+  color: var(--block);
+  background: var(--block-bg);
+}
+
+.stock {
+  font-size: 44px;
+  font-weight: 950;
+}
+
+.score {
+  font-size: 38px;
+  font-weight: 950;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.info-grid div {
+  background: #f8fafc;
+  border: 2px solid var(--line);
+  border-radius: 22px;
+  padding: 20px;
+}
+
+.info-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 22px;
+  margin-bottom: 8px;
+}
+
+.info-grid b {
+  display: block;
+  font-size: 28px;
+}
+
+.reason, .note {
+  margin-top: 22px;
+  color: #334155;
+}
+
+.reason b, .note b {
+  display: block;
+  font-size: 26px;
+  margin-bottom: 8px;
+}
+
+.reason p, .note p {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.45;
+  font-weight: 600;
+}
+
+.simple-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 16px;
+  align-items: center;
+  border-bottom: 2px solid var(--line);
+  padding: 22px 0;
+}
+
+.simple-row b {
+  font-size: 36px;
+}
+
+.simple-row span {
+  font-size: 32px;
+}
+
+.simple-row em {
+  font-style: normal;
+  border-radius: 999px;
+  padding: 14px 24px;
+  font-size: 26px;
+}
+
+.empty {
+  padding: 28px;
+  background: #f8fafc;
+  border: 2px solid var(--line);
+  border-radius: 22px;
+  color: var(--muted);
+  font-size: 28px;
+}
+
+@media (max-width: 520px) {
+  .page {
+    padding: 20px 16px 70px;
+  }
+
+  .card {
+    padding: 28px;
+    border-radius: 30px;
+  }
+
+  .hero h1 {
+    font-size: 42px;
+  }
+
+  .actions {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  button {
+    font-size: 24px;
+    padding: 22px 12px;
+  }
+
+  .count-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .big-decision {
+    font-size: 64px;
+  }
+
+  .topline {
+    grid-template-columns: 1fr auto;
+  }
+
+  .pill {
+    grid-column: 1 / 3;
+    width: fit-content;
+  }
+
+  .stock {
+    font-size: 42px;
+  }
+
+  .score {
+    font-size: 36px;
+  }
+}
