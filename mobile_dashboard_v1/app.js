@@ -11,16 +11,142 @@ app.js - 最終穩定版 UI
 
 const DATA_DIR = "./data/";
 
-// 這裡填你的 Cloudflare Worker API 網址，例如：
-// https://runi-data-pipeline-trigger.<你的帳號>.workers.dev/run
-const RUN_PIPELINE_API = "https://bichcs5566-alt.github.io/V204-app/mobile_dashboard_v1/?v=force_refresh_1";
-
 const FILES = {
   final: DATA_DIR + "final_action_plan.csv",
   finalSummary: DATA_DIR + "final_action_summary.json",
   regime: DATA_DIR + "market_regime.json",
   tradePlan: DATA_DIR + "trade_plan.csv"
 };
+
+const GITHUB_SETTINGS_KEY = "daily_dashboard_github_settings_v1";
+const WORKFLOW_ID = "data_pipeline.yml";
+
+function getGithubSettings() {
+  try {
+    return JSON.parse(localStorage.getItem(GITHUB_SETTINGS_KEY) || "{}");
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveGithubSettings(settings) {
+  localStorage.setItem(GITHUB_SETTINGS_KEY, JSON.stringify(settings));
+}
+
+function clearGithubSettings() {
+  localStorage.removeItem(GITHUB_SETTINGS_KEY);
+}
+
+function githubConfigured() {
+  const s = getGithubSettings();
+  return Boolean(s.owner && s.repo && s.branch && s.token);
+}
+
+function renderGithubSettingsBox() {
+  const saved = getGithubSettings();
+
+  const box = qs("githubSettingsBox");
+  if (!box) return;
+
+  box.innerHTML = `
+    <details ${githubConfigured() ? "" : "open"}>
+      <summary>🔐 GitHub 本機設定</summary>
+
+      <div class="github-form">
+        <input id="ghOwner" placeholder="owner，例如 bichcs5566-alt" value="${safeText(saved.owner, "")}" autocomplete="off" />
+        <input id="ghRepo" placeholder="repo，例如 V204-app" value="${safeText(saved.repo, "")}" autocomplete="off" />
+        <input id="ghBranch" placeholder="branch，例如 main" value="${safeText(saved.branch || "main", "")}" autocomplete="off" />
+        <input id="ghToken" placeholder="token，只存在本機瀏覽器" value="${safeText(saved.token, "")}" type="password" autocomplete="off" />
+        <div class="github-actions">
+          <button id="saveGithubBtn" type="button">儲存</button>
+          <button id="clearGithubBtn" type="button" class="secondary-btn">清除</button>
+        </div>
+        <div id="githubSavedStatus" class="source-line">${githubConfigured() ? "已儲存，可觸發更新" : "未儲存"}</div>
+      </div>
+    </details>
+  `;
+
+  qs("saveGithubBtn").addEventListener("click", () => {
+    const settings = {
+      owner: qs("ghOwner").value.trim(),
+      repo: qs("ghRepo").value.trim(),
+      branch: qs("ghBranch").value.trim() || "main",
+      token: qs("ghToken").value.trim()
+    };
+
+    if (!settings.owner || !settings.repo || !settings.branch || !settings.token) {
+      qs("githubSavedStatus").textContent = "請填完整 owner / repo / branch / token";
+      return;
+    }
+
+    saveGithubSettings(settings);
+    qs("githubSavedStatus").textContent = "已儲存，可觸發更新";
+  });
+
+  qs("clearGithubBtn").addEventListener("click", () => {
+    clearGithubSettings();
+    renderGithubSettingsBox();
+  });
+}
+
+async function triggerDataPipeline() {
+  const settings = getGithubSettings();
+
+  if (!settings.owner || !settings.repo || !settings.branch || !settings.token) {
+    throw new Error("尚未設定 GitHub 本機資料");
+  }
+
+  const url = `https://api.github.com/repos/${encodeURIComponent(settings.owner)}/${encodeURIComponent(settings.repo)}/actions/workflows/${encodeURIComponent(WORKFLOW_ID)}/dispatches`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${settings.token}`,
+      "Accept": "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28"
+    },
+    body: JSON.stringify({
+      ref: settings.branch
+    })
+  });
+
+  if (res.status === 204) {
+    return true;
+  }
+
+  let message = "";
+  try {
+    const data = await res.json();
+    message = data.message || JSON.stringify(data);
+  } catch (e) {
+    message = await res.text();
+  }
+
+  throw new Error(`GitHub Actions 觸發失敗：${res.status} ${message}`);
+}
+
+async function handleUpdateClick() {
+  const btn = qs("updateBtn");
+  const status = qs("syncStatus");
+
+  try {
+    btn.disabled = true;
+    btn.textContent = "⏳ 觸發中";
+    status.innerHTML = "⏳ 正在觸發 data_pipeline...";
+    status.className = "sync";
+
+    await triggerDataPipeline();
+
+    status.innerHTML = "✅ 已觸發 data_pipeline，請到 GitHub Actions 查看進度；跑完後再按重新整理。";
+    status.className = "sync ok";
+  } catch (e) {
+    status.innerHTML = "❌ " + e.message;
+    status.className = "sync error";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🚀 更新資料";
+  }
+}
 
 const ACTION_LABEL = {
   SELL: "賣出",
@@ -251,6 +377,8 @@ function renderAppShell() {
         <div id="metaBox" class="meta-grid"></div>
       </section>
 
+      <section id="githubSettingsBox" class="card compact-card"></section>
+
       <section id="mainDecision" class="card decision"></section>
 
       <section class="card">
@@ -290,50 +418,8 @@ function renderAppShell() {
   `;
 
   qs("refreshBtn").addEventListener("click", () => location.reload());
-  qs("updateBtn").addEventListener("click", runDataPipeline);
-}
-
-async function runDataPipeline() {
-  const btn = qs("updateBtn");
-  const status = qs("syncStatus");
-
-  if (!RUN_PIPELINE_API || RUN_PIPELINE_API.includes("YOUR_WORKER_URL")) {
-    status.innerHTML = "❌ 尚未設定 Worker API 網址";
-    status.className = "sync error";
-    alert("請先把 app.js 裡的 RUN_PIPELINE_API 換成 Cloudflare Worker 的 /run 網址。");
-    return;
-  }
-
-  try {
-    btn.disabled = true;
-    btn.textContent = "🚀 觸發中...";
-    status.innerHTML = "🚀 正在觸發 GitHub Actions data_pipeline...";
-    status.className = "sync";
-
-    const res = await fetch(RUN_PIPELINE_API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ref: "main" })
-    });
-
-    const data = await res.json().catch(() => ({}));
-
-    if (!res.ok || !data.ok) {
-      throw new Error(data.error || data.message || "觸發失敗");
-    }
-
-    status.innerHTML = "✅ 已觸發 data_pipeline，請等 GitHub Actions 跑完後再重新整理";
-    status.className = "sync ok";
-    alert("已成功觸發 data_pipeline。等 Actions 跑完後，按『重新整理』讀取最新 CSV。");
-  } catch (e) {
-    console.error(e);
-    status.innerHTML = "❌ 觸發失敗：" + e.message;
-    status.className = "sync error";
-    alert("觸發失敗：" + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "🚀 更新資料";
-  }
+  qs("updateBtn").addEventListener("click", handleUpdateClick);
+  renderGithubSettingsBox();
 }
 
 function renderMeta(regime, summary, rows) {
