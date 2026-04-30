@@ -18,135 +18,214 @@ const FILES = {
   tradePlan: DATA_DIR + "trade_plan.csv"
 };
 
-const GITHUB_SETTINGS_KEY = "daily_dashboard_github_settings_v1";
-const WORKFLOW_ID = "data_pipeline.yml";
+const GITHUB_CONFIG_KEY = "daily_trading_dashboard_github_config_v1";
+const GITHUB_WORKFLOW_ID = "data_pipeline.yml";
+let pipelineTimer = null;
 
-function getGithubSettings() {
+function loadGitHubConfig() {
   try {
-    return JSON.parse(localStorage.getItem(GITHUB_SETTINGS_KEY) || "{}");
+    const raw = localStorage.getItem(GITHUB_CONFIG_KEY);
+    if (!raw) return { owner: "", repo: "", branch: "main", token: "" };
+    return { owner: "", repo: "", branch: "main", token: "", ...JSON.parse(raw) };
   } catch (e) {
-    return {};
+    return { owner: "", repo: "", branch: "main", token: "" };
   }
 }
 
-function saveGithubSettings(settings) {
-  localStorage.setItem(GITHUB_SETTINGS_KEY, JSON.stringify(settings));
+function saveGitHubConfig(config) {
+  localStorage.setItem(GITHUB_CONFIG_KEY, JSON.stringify(config));
 }
 
-function clearGithubSettings() {
-  localStorage.removeItem(GITHUB_SETTINGS_KEY);
+function clearGitHubConfig() {
+  localStorage.removeItem(GITHUB_CONFIG_KEY);
 }
 
-function githubConfigured() {
-  const s = getGithubSettings();
-  return Boolean(s.owner && s.repo && s.branch && s.token);
+function formatClock(d = new Date()) {
+  const pad = n => String(n).padStart(2, "0");
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-function renderGithubSettingsBox() {
-  const saved = getGithubSettings();
+function formatElapsed(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = total % 60;
+  const pad = n => String(n).padStart(2, "0");
+  if (h > 0) return `${h}:${pad(m)}:${pad(sec)}`;
+  return `${pad(m)}:${pad(sec)}`;
+}
 
-  const box = qs("githubSettingsBox");
-  if (!box) return;
+function setSyncStatus(text, cls = "ok") {
+  const el = qs("syncStatus");
+  if (!el) return;
+  el.innerHTML = text;
+  el.className = `sync ${cls}`;
+}
 
-  box.innerHTML = `
-    <details ${githubConfigured() ? "" : "open"}>
-      <summary>🔐 GitHub 本機設定</summary>
+function getGitHubApiBase(config) {
+  return `https://api.github.com/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}`;
+}
 
-      <div class="github-form">
-        <input id="ghOwner" placeholder="owner，例如 bichcs5566-alt" value="${safeText(saved.owner, "")}" autocomplete="off" />
-        <input id="ghRepo" placeholder="repo，例如 V204-app" value="${safeText(saved.repo, "")}" autocomplete="off" />
-        <input id="ghBranch" placeholder="branch，例如 main" value="${safeText(saved.branch || "main", "")}" autocomplete="off" />
-        <input id="ghToken" placeholder="token，只存在本機瀏覽器" value="${safeText(saved.token, "")}" type="password" autocomplete="off" />
-        <div class="github-actions">
-          <button id="saveGithubBtn" type="button">儲存</button>
-          <button id="clearGithubBtn" type="button" class="secondary-btn">清除</button>
-        </div>
-        <div id="githubSavedStatus" class="source-line">${githubConfigured() ? "已儲存，可觸發更新" : "未儲存"}</div>
-      </div>
-    </details>
-  `;
-
-  qs("saveGithubBtn").addEventListener("click", () => {
-    const settings = {
-      owner: qs("ghOwner").value.trim(),
-      repo: qs("ghRepo").value.trim(),
-      branch: qs("ghBranch").value.trim() || "main",
-      token: qs("ghToken").value.trim()
-    };
-
-    if (!settings.owner || !settings.repo || !settings.branch || !settings.token) {
-      qs("githubSavedStatus").textContent = "請填完整 owner / repo / branch / token";
-      return;
+async function githubFetch(config, url, options = {}) {
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      "Accept": "application/vnd.github+json",
+      "Authorization": `Bearer ${config.token}`,
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...(options.headers || {})
     }
-
-    saveGithubSettings(settings);
-    qs("githubSavedStatus").textContent = "已儲存，可觸發更新";
   });
+  return res;
+}
 
-  qs("clearGithubBtn").addEventListener("click", () => {
-    clearGithubSettings();
-    renderGithubSettingsBox();
-  });
+function startPipelineTicker(startTime, label = "data_pipeline 執行中") {
+  if (pipelineTimer) clearInterval(pipelineTimer);
+  pipelineTimer = setInterval(() => {
+    setSyncStatus(`⏳ ${label}｜已等待 ${formatElapsed(Date.now() - startTime)}｜${formatClock()}`, "ok");
+  }, 1000);
+}
+
+function stopPipelineTicker() {
+  if (pipelineTimer) clearInterval(pipelineTimer);
+  pipelineTimer = null;
 }
 
 async function triggerDataPipeline() {
-  const settings = getGithubSettings();
-
-  if (!settings.owner || !settings.repo || !settings.branch || !settings.token) {
-    throw new Error("尚未設定 GitHub 本機資料");
+  const config = loadGitHubConfig();
+  if (!config.owner || !config.repo || !config.branch || !config.token) {
+    setSyncStatus("❌ 尚未完成 GitHub 本機設定：owner / repo / branch / token 都要填。", "error");
+    return;
   }
 
-  const url = `https://api.github.com/repos/${encodeURIComponent(settings.owner)}/${encodeURIComponent(settings.repo)}/actions/workflows/${encodeURIComponent(WORKFLOW_ID)}/dispatches`;
+  const startedAt = Date.now();
+  const startedIso = new Date(startedAt - 15000).toISOString();
+  startPipelineTicker(startedAt, "已觸發 data_pipeline，等待 GitHub Actions 接手");
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${settings.token}`,
-      "Accept": "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28"
-    },
-    body: JSON.stringify({
-      ref: settings.branch
-    })
+  try {
+    const dispatchUrl = `${getGitHubApiBase(config)}/actions/workflows/${encodeURIComponent(GITHUB_WORKFLOW_ID)}/dispatches`;
+    const dispatchRes = await githubFetch(config, dispatchUrl, {
+      method: "POST",
+      body: JSON.stringify({ ref: config.branch })
+    });
+
+    if (dispatchRes.status !== 204) {
+      stopPipelineTicker();
+      const text = await dispatchRes.text();
+      setSyncStatus(`❌ 觸發失敗 ${dispatchRes.status}：${text || "請檢查 token 權限 / repo / workflow 檔名"}`, "error");
+      return;
+    }
+
+    await waitForPipelineCompletion(config, startedAt, startedIso);
+  } catch (e) {
+    stopPipelineTicker();
+    setSyncStatus(`❌ 觸發失敗：${e.message}`, "error");
+  }
+}
+
+async function waitForPipelineCompletion(config, startedAt, startedIso) {
+  let targetRun = null;
+  let lastStatus = "";
+
+  for (let i = 0; i < 180; i++) {
+    await new Promise(resolve => setTimeout(resolve, i === 0 ? 3500 : 5000));
+
+    const runsUrl =
+      `${getGitHubApiBase(config)}/actions/workflows/${encodeURIComponent(GITHUB_WORKFLOW_ID)}/runs` +
+      `?branch=${encodeURIComponent(config.branch)}&event=workflow_dispatch&per_page=10`;
+
+    const runsRes = await githubFetch(config, runsUrl);
+    if (!runsRes.ok) {
+      const text = await runsRes.text();
+      stopPipelineTicker();
+      setSyncStatus(`❌ 查詢進度失敗 ${runsRes.status}：${text}`, "error");
+      return;
+    }
+
+    const data = await runsRes.json();
+    const runs = Array.isArray(data.workflow_runs) ? data.workflow_runs : [];
+
+    if (!targetRun) {
+      targetRun = runs
+        .filter(r => r.created_at >= startedIso)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0] || null;
+    }
+
+    if (!targetRun) {
+      setSyncStatus(`⏳ 已觸發 data_pipeline｜等待 GitHub 建立 run｜${formatElapsed(Date.now() - startedAt)}｜${formatClock()}`, "ok");
+      continue;
+    }
+
+    const latest = runs.find(r => r.id === targetRun.id) || targetRun;
+    targetRun = latest;
+
+    const statusText = latest.status === "completed"
+      ? `completed / ${latest.conclusion || "unknown"}`
+      : latest.status;
+
+    if (statusText !== lastStatus) {
+      lastStatus = statusText;
+    }
+
+    if (latest.status !== "completed") {
+      setSyncStatus(`⏳ data_pipeline ${statusText}｜已等待 ${formatElapsed(Date.now() - startedAt)}｜${formatClock()}`, "ok");
+      continue;
+    }
+
+    stopPipelineTicker();
+
+    if (latest.conclusion === "success") {
+      setSyncStatus(`✅ 後端更新完成｜用時 ${formatElapsed(Date.now() - startedAt)}｜${formatClock()}｜正在重新整理資料...`, "ok");
+      setTimeout(() => location.reload(), 2500);
+      return;
+    }
+
+    const runUrl = latest.html_url ? `｜請到 Actions 查看失敗紀錄` : "";
+    setSyncStatus(`❌ data_pipeline 結束但失敗：${latest.conclusion || "unknown"}${runUrl}`, "error");
+    return;
+  }
+
+  stopPipelineTicker();
+  setSyncStatus("⚠️ 已觸發，但等待超過 15 分鐘尚未完成；請到 GitHub Actions 查看進度。", "error");
+}
+
+function renderGitHubSettings() {
+  const config = loadGitHubConfig();
+  const ownerEl = qs("ghOwner");
+  const repoEl = qs("ghRepo");
+  const branchEl = qs("ghBranch");
+  const tokenEl = qs("ghToken");
+  const savedEl = qs("ghSavedStatus");
+  if (!ownerEl || !repoEl || !branchEl || !tokenEl || !savedEl) return;
+
+  ownerEl.value = config.owner || "";
+  repoEl.value = config.repo || "";
+  branchEl.value = config.branch || "main";
+  tokenEl.value = config.token || "";
+  savedEl.textContent = config.owner && config.repo && config.branch && config.token ? "已儲存" : "未儲存";
+
+  qs("ghSaveBtn").addEventListener("click", () => {
+    saveGitHubConfig({
+      owner: ownerEl.value.trim(),
+      repo: repoEl.value.trim(),
+      branch: branchEl.value.trim() || "main",
+      token: tokenEl.value.trim()
+    });
+    savedEl.textContent = "已儲存";
+    setSyncStatus(`✅ GitHub 本機設定已儲存｜${formatClock()}`, "ok");
   });
 
-  if (res.status === 204) {
-    return true;
-  }
-
-  let message = "";
-  try {
-    const data = await res.json();
-    message = data.message || JSON.stringify(data);
-  } catch (e) {
-    message = await res.text();
-  }
-
-  throw new Error(`GitHub Actions 觸發失敗：${res.status} ${message}`);
+  qs("ghClearBtn").addEventListener("click", () => {
+    clearGitHubConfig();
+    ownerEl.value = "";
+    repoEl.value = "";
+    branchEl.value = "main";
+    tokenEl.value = "";
+    savedEl.textContent = "未儲存";
+    setSyncStatus(`✅ GitHub 本機設定已清除｜${formatClock()}`, "ok");
+  });
 }
 
-async function handleUpdateClick() {
-  const btn = qs("updateBtn");
-  const status = qs("syncStatus");
-
-  try {
-    btn.disabled = true;
-    btn.textContent = "⏳ 觸發中";
-    status.innerHTML = "⏳ 正在觸發 data_pipeline...";
-    status.className = "sync";
-
-    await triggerDataPipeline();
-
-    status.innerHTML = "✅ 已觸發 data_pipeline，請到 GitHub Actions 查看進度；跑完後再按重新整理。";
-    status.className = "sync ok";
-  } catch (e) {
-    status.innerHTML = "❌ " + e.message;
-    status.className = "sync error";
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "🚀 更新資料";
-  }
-}
 
 const ACTION_LABEL = {
   SELL: "賣出",
@@ -377,8 +456,6 @@ function renderAppShell() {
         <div id="metaBox" class="meta-grid"></div>
       </section>
 
-      <section id="githubSettingsBox" class="card compact-card"></section>
-
       <section id="mainDecision" class="card decision"></section>
 
       <section class="card">
@@ -414,12 +491,29 @@ function renderAppShell() {
         <h2>🧪 篩選狀態</h2>
         <div id="filterStats"></div>
       </section>
+
+      <section class="card github-settings-card">
+        <details>
+          <summary>🔐 GitHub 本機設定</summary>
+          <div class="gh-form">
+            <input id="ghOwner" placeholder="owner，例如 bichcs5566-alt" autocomplete="off" />
+            <input id="ghRepo" placeholder="repo，例如 V204-app" autocomplete="off" />
+            <input id="ghBranch" placeholder="branch，例如 main" autocomplete="off" />
+            <input id="ghToken" type="password" placeholder="token，只存在本機瀏覽器" autocomplete="off" />
+            <div class="gh-actions">
+              <button id="ghSaveBtn" type="button">儲存</button>
+              <button id="ghClearBtn" type="button" class="secondary">清除</button>
+            </div>
+            <div class="source-line">狀態：<b id="ghSavedStatus">未儲存</b>｜Workflow：data_pipeline.yml</div>
+          </div>
+        </details>
+      </section>
     </main>
   `;
 
   qs("refreshBtn").addEventListener("click", () => location.reload());
-  qs("updateBtn").addEventListener("click", handleUpdateClick);
-  renderGithubSettingsBox();
+  qs("updateBtn").addEventListener("click", triggerDataPipeline);
+  renderGitHubSettings();
 }
 
 function renderMeta(regime, summary, rows) {
@@ -432,8 +526,7 @@ function renderMeta(regime, summary, rows) {
     <div class="mini"><span>操作筆數</span><b>${rows.length}</b></div>
   `;
 
-  qs("syncStatus").innerHTML = "✅ 最終操作表已同步";
-  qs("syncStatus").className = "sync ok";
+  setSyncStatus(`✅ 最終操作表已同步｜${formatClock()}`, "ok");
 }
 
 function renderDecision(rows) {
