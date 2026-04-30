@@ -1,4 +1,2 @@
-stock_id,shares,avg_cost,close,unrealized_pct,exit_action,exit_priority,exit_reason,stop_loss_pct,ma20,ma60,mom5,mom20,risk_level,market_regime,generated_at
-4933,1000,80.0,73.6,-0.08,SELL,100,觸發停損 -8.0%,-0.06,62.85,59.69,0.172,0.2981,HIGH,RANGE,2026-04-30 09:20:20
-6651,1000,120.0,107.0,-0.1083,SELL,100,觸發停損 -10.83%,-0.06,95.11,94.2,0.1287,0.3275,HIGH,RANGE,2026-04-30 09:20:20
-3374,1000,210.0,200.5,-0.0452,HOLD,0,持倉狀態正常,-0.06,181.5,174.57,0.0926,0.3062,LOW,RANGE,2026-04-30 09:20:20
+stock_id,shares,lots,avg_cost,close,position_value,unrealized_pct,exit_action,exit_priority,exit_reason,stop_loss_pct,ma20,ma60,mom5,mom20,risk_level,market_regime,generated_at
+2409,3000,3.0,19.0,17.2,51600.0,-0.0947,SELL,100,觸發停損 -9.47% | 跌破 MA20,-0.06,18.1,16.24,-0.031,0.1862,MEDIUM,RANGE,2026-04-30 11:34:22

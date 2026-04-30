@@ -1,417 +1,416 @@
 final_action,stock_id,source,bucket,score,entry_type,execution_flag,allowed,close,suggested_amount,target_weight,priority,reason,system_note
-SELL,4933,EXIT,POSITION,100.0,,SELL,True,73.6,,,0,觸發停損 -8.0%,出場優先
-SELL,6651,EXIT,POSITION,100.0,,SELL,True,107.0,,,0,觸發停損 -10.83%,出場優先
-BUY,1110,ENTRY,CORE,80.0,PULLBACK,TOP,True,15.42,20000,0.02,2,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,TOP + timing 合格：允許分批
-BUY,2465,ENTRY,CORE,80.0,BREAK,TOP,True,74.07,20000,0.02,2,強勢引擎｜20日動能｜均線多頭｜量能確認,TOP + timing 合格：允許分批
-BUY,3680,ENTRY,CORE,80.0,BREAK,TOP,True,537.54,20000,0.02,2,強勢引擎｜20日動能｜均線多頭｜量能確認,TOP + timing 合格：允許分批
-TEST,4133,ENTRY,PRE,100.0,WAIT,TOP,True,21.6,10000,0.01,3,波動壓縮 | 安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,TOP + timing 合格：允許分批
-TEST,6464,ENTRY,PRE,100.0,WAIT,TOP,True,76.1,10000,0.01,3,波動壓縮 | 安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,TOP + timing 合格：允許分批
-WATCH,8926,ENTRY,PRE,100.0,WAIT,WATCH,False,44.4,0,0.0,8,波動壓縮 | 安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,WATCH：保留觀察，不下單
-WATCH,1233,ENTRY,PRE,86.0,WAIT,WATCH,False,28.75,0,0.0,8,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,WATCH：保留觀察，不下單
-WATCH,1713,ENTRY,PRE,86.0,WAIT,WATCH,False,46.3,0,0.0,8,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,WATCH：保留觀察，不下單
-WATCH,2538,ENTRY,PRE,86.0,WAIT,WATCH,False,9.76,0,0.0,8,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,WATCH：保留觀察，不下單
-WATCH,2753,ENTRY,PRE,86.0,WAIT,WATCH,False,177.5,0,0.0,8,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,WATCH：保留觀察，不下單
-WATCH,2892,ENTRY,PRE,86.0,WAIT,WATCH,False,28.85,0,0.0,8,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,WATCH：保留觀察，不下單
-WATCH,1418,ENTRY,CORE,80.0,PULLBACK,WATCH,False,19.22,0,0.0,8,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,WATCH：保留觀察，不下單
-WATCH,1536,ENTRY,CORE,80.0,PULLBACK,WATCH,False,51.55,0,0.0,8,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,WATCH：保留觀察，不下單
-WATCH,1598,ENTRY,CORE,80.0,WAIT,WATCH,False,20.82,0,0.0,8,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,WATCH：保留觀察，不下單
-WATCH,2031,ENTRY,CORE,80.0,PULLBACK,WATCH,False,40.69,0,0.0,8,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,WATCH：保留觀察，不下單
-WATCH,6761,ENTRY,CORE,80.0,WAIT,WATCH,False,218.22,0,0.0,8,強勢引擎｜20日動能｜均線多頭｜量能確認,WATCH：保留觀察，不下單
-WATCH,9912,ENTRY,CORE,80.0,PULLBACK,WATCH,False,12.76,0,0.0,8,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,WATCH：保留觀察，不下單
-BLOCK,1423,ENTRY,PRE,86.0,WAIT,BLOCK,False,41.6,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3176,ENTRY,PRE,86.0,WAIT,BLOCK,False,32.95,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4106,ENTRY,PRE,86.0,WAIT,BLOCK,False,22.3,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4506,ENTRY,PRE,86.0,WAIT,BLOCK,False,117.0,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4580,ENTRY,PRE,86.0,WAIT,BLOCK,False,79.6,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5209,ENTRY,PRE,86.0,WAIT,BLOCK,False,163.0,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5487,ENTRY,PRE,86.0,WAIT,BLOCK,False,29.4,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5603,ENTRY,PRE,86.0,WAIT,BLOCK,False,16.5,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6170,ENTRY,PRE,86.0,WAIT,BLOCK,False,52.1,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6474,ENTRY,PRE,86.0,WAIT,BLOCK,False,37.5,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6609,ENTRY,PRE,86.0,WAIT,BLOCK,False,39.4,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6997,ENTRY,PRE,86.0,WAIT,BLOCK,False,79.0,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8071,ENTRY,PRE,86.0,WAIT,BLOCK,False,16.4,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5876,ENTRY,PRE,82.0,WAIT,BLOCK,False,39.05,0,0.0,9,安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2455,ENTRY,CORE,80.0,WAIT,BLOCK,False,347.85,0,0.0,9,強勢引擎｜20日動能｜均線多頭｜量能確認,BLOCK：超出本市場狀態可執行名額
-BLOCK,4967,ENTRY,CORE,80.0,WAIT,BLOCK,False,281.28,0,0.0,9,強勢引擎｜20日動能｜均線多頭｜量能確認,BLOCK：超出本市場狀態可執行名額
-BLOCK,6505,ENTRY,CORE,80.0,WAIT,BLOCK,False,56.46,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：超出本市場狀態可執行名額
-BLOCK,7786,ENTRY,CORE,80.0,WAIT,BLOCK,False,139.64,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：超出本市場狀態可執行名額
-BLOCK,8080,ENTRY,PRE,80.0,WAIT,BLOCK,False,28.3,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破,BLOCK：超出本市場狀態可執行名額
-BLOCK,8249,ENTRY,PRE,80.0,WAIT,BLOCK,False,49.45,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破,BLOCK：超出本市場狀態可執行名額
-BLOCK,1216,ENTRY,PRE,72.0,WAIT,BLOCK,False,69.3,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1307,ENTRY,PRE,72.0,WAIT,BLOCK,False,31.7,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1444,ENTRY,PRE,72.0,WAIT,BLOCK,False,6.11,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1612,ENTRY,PRE,72.0,WAIT,BLOCK,False,35.65,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2015,ENTRY,PRE,72.0,WAIT,BLOCK,False,60.9,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2035,ENTRY,PRE,72.0,WAIT,BLOCK,False,28.3,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2109,ENTRY,PRE,72.0,WAIT,BLOCK,False,14.4,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2211,ENTRY,PRE,72.0,WAIT,BLOCK,False,97.5,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2547,ENTRY,PRE,72.0,WAIT,BLOCK,False,10.35,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2845,ENTRY,PRE,72.0,WAIT,BLOCK,False,12.25,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2883,ENTRY,PRE,72.0,WAIT,BLOCK,False,21.5,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3541,ENTRY,PRE,72.0,WAIT,BLOCK,False,23.45,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3632,ENTRY,PRE,72.0,WAIT,BLOCK,False,8.78,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4102,ENTRY,PRE,72.0,WAIT,BLOCK,False,18.25,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4120,ENTRY,PRE,72.0,WAIT,BLOCK,False,48.0,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4536,ENTRY,PRE,72.0,WAIT,BLOCK,False,149.5,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4538,ENTRY,PRE,72.0,WAIT,BLOCK,False,18.3,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4584,ENTRY,PRE,72.0,WAIT,BLOCK,False,41.0,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5348,ENTRY,PRE,72.0,WAIT,BLOCK,False,17.0,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5609,ENTRY,PRE,72.0,WAIT,BLOCK,False,78.0,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6015,ENTRY,PRE,72.0,WAIT,BLOCK,False,14.2,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6020,ENTRY,PRE,72.0,WAIT,BLOCK,False,19.25,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6026,ENTRY,PRE,72.0,WAIT,BLOCK,False,15.35,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6171,ENTRY,PRE,72.0,WAIT,BLOCK,False,25.5,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6185,ENTRY,PRE,72.0,WAIT,BLOCK,False,14.25,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6189,ENTRY,PRE,72.0,WAIT,BLOCK,False,47.95,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6446,ENTRY,PRE,72.0,WAIT,BLOCK,False,661.0,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6581,ENTRY,PRE,72.0,WAIT,BLOCK,False,107.5,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6955,ENTRY,PRE,72.0,WAIT,BLOCK,False,166.5,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6961,ENTRY,PRE,72.0,WAIT,BLOCK,False,58.3,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,7708,ENTRY,PRE,72.0,WAIT,BLOCK,False,91.7,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8284,ENTRY,PRE,72.0,WAIT,BLOCK,False,64.0,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8473,ENTRY,PRE,72.0,WAIT,BLOCK,False,35.9,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,9926,ENTRY,PRE,72.0,WAIT,BLOCK,False,49.4,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,9927,ENTRY,PRE,72.0,WAIT,BLOCK,False,68.3,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,9940,ENTRY,PRE,72.0,WAIT,BLOCK,False,20.0,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,9941,ENTRY,PRE,72.0,WAIT,BLOCK,False,77.1,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1315,ENTRY,PRE,68.0,WAIT,BLOCK,False,62.3,0,0.0,9,安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1525,ENTRY,PRE,68.0,WAIT,BLOCK,False,63.3,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1726,ENTRY,PRE,68.0,WAIT,BLOCK,False,75.6,0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2023,ENTRY,PRE,68.0,WAIT,BLOCK,False,14.0,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2480,ENTRY,PRE,68.0,WAIT,BLOCK,False,143.0,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2729,ENTRY,PRE,68.0,WAIT,BLOCK,False,165.5,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2884,ENTRY,PRE,68.0,WAIT,BLOCK,False,31.85,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2926,ENTRY,PRE,68.0,WAIT,BLOCK,False,37.6,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3164,ENTRY,PRE,68.0,WAIT,BLOCK,False,17.7,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3356,ENTRY,PRE,68.0,WAIT,BLOCK,False,54.0,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4510,ENTRY,PRE,68.0,WAIT,BLOCK,False,47.0,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4728,ENTRY,PRE,68.0,WAIT,BLOCK,False,389.5,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5215,ENTRY,PRE,68.0,WAIT,BLOCK,False,37.4,0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6123,ENTRY,PRE,68.0,WAIT,BLOCK,False,43.85,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6412,ENTRY,PRE,68.0,WAIT,BLOCK,False,81.0,0,0.0,9,波動壓縮 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6505,ENTRY,PRE,68.0,WAIT,BLOCK,False,56.4,0,0.0,9,波動壓縮 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：同股已由高優先桶接管
-BLOCK,6516,ENTRY,PRE,68.0,WAIT,BLOCK,False,60.8,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8487,ENTRY,PRE,68.0,WAIT,BLOCK,False,77.1,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1419,ENTRY,PRE,66.0,WAIT,BLOCK,False,64.4,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,BLOCK：超出本市場狀態可執行名額
-BLOCK,1504,ENTRY,PRE,66.0,WAIT,BLOCK,False,62.4,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,BLOCK：超出本市場狀態可執行名額
-BLOCK,2012,ENTRY,PRE,66.0,WAIT,BLOCK,False,14.7,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,BLOCK：超出本市場狀態可執行名額
-BLOCK,2250,ENTRY,PRE,66.0,WAIT,BLOCK,False,63.0,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,BLOCK：超出本市場狀態可執行名額
-BLOCK,3257,ENTRY,PRE,66.0,WAIT,BLOCK,False,53.3,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,BLOCK：超出本市場狀態可執行名額
-BLOCK,4743,ENTRY,PRE,66.0,WAIT,BLOCK,False,53.2,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,BLOCK：超出本市場狀態可執行名額
-BLOCK,5203,ENTRY,PRE,66.0,WAIT,BLOCK,False,65.4,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,BLOCK：超出本市場狀態可執行名額
-BLOCK,5225,ENTRY,PRE,66.0,WAIT,BLOCK,False,76.6,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,BLOCK：超出本市場狀態可執行名額
-BLOCK,6264,ENTRY,PRE,66.0,WAIT,BLOCK,False,6.09,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,BLOCK：超出本市場狀態可執行名額
-BLOCK,6496,ENTRY,PRE,66.0,WAIT,BLOCK,False,25.3,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,BLOCK：超出本市場狀態可執行名額
-BLOCK,8929,ENTRY,PRE,66.0,WAIT,BLOCK,False,15.1,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,BLOCK：超出本市場狀態可執行名額
-BLOCK,1536,ENTRY,PRE,62.0,PULLBACK,BLOCK,False,51.5,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破,BLOCK：同股已由高優先桶接管
-BLOCK,2115,ENTRY,PRE,62.0,WAIT,BLOCK,False,21.2,0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破,BLOCK：超出本市場狀態可執行名額
-BLOCK,3501,ENTRY,PRE,62.0,WAIT,BLOCK,False,46.85,0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破,BLOCK：超出本市場狀態可執行名額
-BLOCK,5392,ENTRY,PRE,62.0,WAIT,BLOCK,False,40.15,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破,BLOCK：超出本市場狀態可執行名額
-BLOCK,6239,ENTRY,PRE,62.0,WAIT,BLOCK,False,203.0,0,0.0,9,安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收,BLOCK：超出本市場狀態可執行名額
-BLOCK,6535,ENTRY,PRE,62.0,WAIT,BLOCK,False,152.0,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破,BLOCK：超出本市場狀態可執行名額
-BLOCK,1110,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,15.4,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,1341,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,61.2,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,1418,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,19.2,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,1525,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,63.3,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,1536,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,51.5,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,1593,ENTRY,PRE,58.0,WAIT,BLOCK,False,31.3,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1598,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,20.8,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,1612,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,35.65,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,1712,ENTRY,PRE,58.0,WAIT,BLOCK,False,42.2,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1712,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,42.2,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,2024,ENTRY,PRE,58.0,WAIT,BLOCK,False,14.1,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2031,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,40.65,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,2207,ENTRY,PRE,58.0,WAIT,BLOCK,False,476.5,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2353,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,27.6,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,2439,ENTRY,PRE,58.0,WAIT,BLOCK,False,86.0,0,0.0,9,洗盤收回 | 均線收斂 | 放量吸收 | 接近突破,BLOCK：超出本市場狀態可執行名額
-BLOCK,2498,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,40.15,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：超出本市場狀態可執行名額
-BLOCK,2506,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,8.89,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,2597,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,157.0,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：超出本市場狀態可執行名額
-BLOCK,2633,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,26.5,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：超出本市場狀態可執行名額
-BLOCK,2762,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,73.0,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,2881,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,90.0,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,3023,ENTRY,PRE,58.0,WAIT,BLOCK,False,283.5,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3046,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,48.5,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：超出本市場狀態可執行名額
-BLOCK,3219,ENTRY,PRE,58.0,WAIT,BLOCK,False,67.0,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3615,ENTRY,PRE,58.0,WAIT,BLOCK,False,31.85,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3622,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,55.7,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：超出本市場狀態可執行名額
-BLOCK,4106,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,22.3,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,4551,ENTRY,PRE,58.0,WAIT,BLOCK,False,134.0,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5203,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,65.4,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,5345,ENTRY,PRE,58.0,WAIT,BLOCK,False,21.9,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6189,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,47.95,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,6498,ENTRY,PRE,58.0,WAIT,BLOCK,False,88.4,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6499,ENTRY,PRE,58.0,WAIT,BLOCK,False,83.7,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6505,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,56.4,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,6574,ENTRY,PRE,58.0,WAIT,BLOCK,False,101.5,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6579,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,121.5,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,6914,ENTRY,PRE,58.0,WAIT,BLOCK,False,145.0,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6955,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,166.5,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,7765,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,226.5,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：超出本市場狀態可執行名額
-BLOCK,7786,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,139.5,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,7792,ENTRY,PRE,58.0,WAIT,BLOCK,False,355.5,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8249,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,49.45,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,9912,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,12.75,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,9938,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,44.15,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：超出本市場狀態可執行名額
-BLOCK,9940,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,20.0,0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
-BLOCK,3672,ENTRY,PRE,56.0,WAIT,BLOCK,False,11.95,0,0.0,9,波動壓縮 | 安靜吸籌 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5011,ENTRY,PRE,56.0,WAIT,BLOCK,False,14.75,0,0.0,9,波動壓縮 | 安靜吸籌 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6165,ENTRY,PRE,56.0,WAIT,BLOCK,False,53.1,0,0.0,9,波動壓縮 | 安靜吸籌 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6233,ENTRY,PRE,56.0,WAIT,BLOCK,False,28.25,0,0.0,9,波動壓縮 | 安靜吸籌 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6859,ENTRY,PRE,56.0,WAIT,BLOCK,False,125.0,0,0.0,9,波動壓縮 | 安靜吸籌 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1104,ENTRY,PRE,54.0,WAIT,BLOCK,False,28.35,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1108,ENTRY,PRE,54.0,WAIT,BLOCK,False,14.55,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1109,ENTRY,PRE,54.0,WAIT,BLOCK,False,15.45,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1215,ENTRY,PRE,54.0,WAIT,BLOCK,False,138.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1217,ENTRY,PRE,54.0,WAIT,BLOCK,False,9.9,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1218,ENTRY,PRE,54.0,WAIT,BLOCK,False,18.95,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1232,ENTRY,PRE,54.0,WAIT,BLOCK,False,148.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1234,ENTRY,PRE,54.0,WAIT,BLOCK,False,35.25,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1240,ENTRY,PRE,54.0,WAIT,BLOCK,False,59.6,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1256,ENTRY,PRE,54.0,WAIT,BLOCK,False,161.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1264,ENTRY,PRE,54.0,WAIT,BLOCK,False,273.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1268,ENTRY,PRE,54.0,WAIT,BLOCK,False,155.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1294,ENTRY,PRE,54.0,WAIT,BLOCK,False,79.6,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1326,ENTRY,PRE,54.0,WAIT,BLOCK,False,52.3,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1341,ENTRY,PRE,54.0,WAIT,BLOCK,False,61.2,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1402,ENTRY,PRE,54.0,WAIT,BLOCK,False,25.75,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1409,ENTRY,PRE,54.0,WAIT,BLOCK,False,16.8,0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1413,ENTRY,PRE,54.0,WAIT,BLOCK,False,9.53,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1417,ENTRY,PRE,54.0,WAIT,BLOCK,False,8.85,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1418,ENTRY,PRE,54.0,PULLBACK,BLOCK,False,19.2,0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：同股已由高優先桶接管
-BLOCK,1432,ENTRY,PRE,54.0,WAIT,BLOCK,False,16.85,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1437,ENTRY,PRE,54.0,WAIT,BLOCK,False,29.65,0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1446,ENTRY,PRE,54.0,WAIT,BLOCK,False,15.8,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1447,ENTRY,PRE,54.0,WAIT,BLOCK,False,4.99,0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1459,ENTRY,PRE,54.0,WAIT,BLOCK,False,11.7,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1460,ENTRY,PRE,54.0,WAIT,BLOCK,False,6.98,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1527,ENTRY,PRE,54.0,WAIT,BLOCK,False,32.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1531,ENTRY,PRE,54.0,WAIT,BLOCK,False,12.95,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1535,ENTRY,PRE,54.0,WAIT,BLOCK,False,50.9,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1537,ENTRY,PRE,54.0,WAIT,BLOCK,False,123.0,0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1558,ENTRY,PRE,54.0,WAIT,BLOCK,False,92.2,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1580,ENTRY,PRE,54.0,WAIT,BLOCK,False,123.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1583,ENTRY,PRE,54.0,WAIT,BLOCK,False,46.6,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1598,ENTRY,PRE,54.0,WAIT,BLOCK,False,20.8,0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：同股已由高優先桶接管
-BLOCK,1614,ENTRY,PRE,54.0,WAIT,BLOCK,False,31.85,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1615,ENTRY,PRE,54.0,WAIT,BLOCK,False,45.7,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1702,ENTRY,PRE,54.0,WAIT,BLOCK,False,35.1,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1704,ENTRY,PRE,54.0,WAIT,BLOCK,False,53.1,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1730,ENTRY,PRE,54.0,WAIT,BLOCK,False,52.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1731,ENTRY,PRE,54.0,WAIT,BLOCK,False,21.65,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1732,ENTRY,PRE,54.0,WAIT,BLOCK,False,25.8,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1733,ENTRY,PRE,54.0,WAIT,BLOCK,False,28.55,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1742,ENTRY,PRE,54.0,WAIT,BLOCK,False,15.9,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1760,ENTRY,PRE,54.0,WAIT,BLOCK,False,68.2,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1777,ENTRY,PRE,54.0,WAIT,BLOCK,False,70.9,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1788,ENTRY,PRE,54.0,WAIT,BLOCK,False,136.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1805,ENTRY,PRE,54.0,WAIT,BLOCK,False,10.85,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1817,ENTRY,PRE,54.0,WAIT,BLOCK,False,38.6,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2010,ENTRY,PRE,54.0,WAIT,BLOCK,False,24.75,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2013,ENTRY,PRE,54.0,WAIT,BLOCK,False,42.75,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2029,ENTRY,PRE,54.0,WAIT,BLOCK,False,20.2,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2030,ENTRY,PRE,54.0,WAIT,BLOCK,False,15.95,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2031,ENTRY,PRE,54.0,PULLBACK,BLOCK,False,40.65,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：同股已由高優先桶接管
-BLOCK,2069,ENTRY,PRE,54.0,WAIT,BLOCK,False,18.8,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2103,ENTRY,PRE,54.0,WAIT,BLOCK,False,19.65,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2204,ENTRY,PRE,54.0,WAIT,BLOCK,False,54.1,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2347,ENTRY,PRE,54.0,WAIT,BLOCK,False,82.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2353,ENTRY,PRE,54.0,WAIT,BLOCK,False,27.6,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2362,ENTRY,PRE,54.0,WAIT,BLOCK,False,38.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2374,ENTRY,PRE,54.0,WAIT,BLOCK,False,78.4,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2387,ENTRY,PRE,54.0,WAIT,BLOCK,False,40.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2393,ENTRY,PRE,54.0,WAIT,BLOCK,False,71.1,0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2395,ENTRY,PRE,54.0,WAIT,BLOCK,False,359.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2412,ENTRY,PRE,54.0,WAIT,BLOCK,False,136.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2420,ENTRY,PRE,54.0,WAIT,BLOCK,False,54.7,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2421,ENTRY,PRE,54.0,WAIT,BLOCK,False,145.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2432,ENTRY,PRE,54.0,WAIT,BLOCK,False,27.65,0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2450,ENTRY,PRE,54.0,WAIT,BLOCK,False,29.6,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2453,ENTRY,PRE,54.0,WAIT,BLOCK,False,53.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2496,ENTRY,PRE,54.0,WAIT,BLOCK,False,64.6,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2504,ENTRY,PRE,54.0,WAIT,BLOCK,False,35.25,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2506,ENTRY,PRE,54.0,WAIT,BLOCK,False,8.89,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2511,ENTRY,PRE,54.0,WAIT,BLOCK,False,7.99,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2514,ENTRY,PRE,54.0,WAIT,BLOCK,False,13.3,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2537,ENTRY,PRE,54.0,WAIT,BLOCK,False,10.2,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2603,ENTRY,PRE,54.0,WAIT,BLOCK,False,202.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2608,ENTRY,PRE,54.0,WAIT,BLOCK,False,30.25,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2613,ENTRY,PRE,54.0,WAIT,BLOCK,False,22.4,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2614,ENTRY,PRE,54.0,WAIT,BLOCK,False,20.2,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2636,ENTRY,PRE,54.0,WAIT,BLOCK,False,67.1,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2704,ENTRY,PRE,54.0,WAIT,BLOCK,False,41.7,0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2727,ENTRY,PRE,54.0,WAIT,BLOCK,False,226.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2762,ENTRY,PRE,54.0,WAIT,BLOCK,False,73.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2801,ENTRY,PRE,54.0,WAIT,BLOCK,False,21.15,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2816,ENTRY,PRE,54.0,WAIT,BLOCK,False,30.35,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2820,ENTRY,PRE,54.0,WAIT,BLOCK,False,16.8,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2836,ENTRY,PRE,54.0,WAIT,BLOCK,False,11.85,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2852,ENTRY,PRE,54.0,WAIT,BLOCK,False,26.1,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2881,ENTRY,PRE,54.0,WAIT,BLOCK,False,90.0,0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2885,ENTRY,PRE,54.0,WAIT,BLOCK,False,52.2,0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2903,ENTRY,PRE,54.0,WAIT,BLOCK,False,22.2,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2904,ENTRY,PRE,54.0,WAIT,BLOCK,False,16.25,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2905,ENTRY,PRE,54.0,WAIT,BLOCK,False,13.7,0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2906,ENTRY,PRE,54.0,WAIT,BLOCK,False,12.4,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2937,ENTRY,PRE,54.0,WAIT,BLOCK,False,43.75,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2939,ENTRY,PRE,54.0,WAIT,BLOCK,False,25.1,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2945,ENTRY,PRE,54.0,WAIT,BLOCK,False,41.15,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2947,ENTRY,PRE,54.0,WAIT,BLOCK,False,78.1,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3022,ENTRY,PRE,54.0,WAIT,BLOCK,False,69.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3032,ENTRY,PRE,54.0,WAIT,BLOCK,False,64.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3033,ENTRY,PRE,54.0,WAIT,BLOCK,False,35.75,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3118,ENTRY,PRE,54.0,WAIT,BLOCK,False,33.6,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3130,ENTRY,PRE,54.0,WAIT,BLOCK,False,221.0,0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3158,ENTRY,PRE,54.0,WAIT,BLOCK,False,89.3,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3213,ENTRY,PRE,54.0,WAIT,BLOCK,False,104.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3218,ENTRY,PRE,54.0,WAIT,BLOCK,False,136.0,0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3266,ENTRY,PRE,54.0,WAIT,BLOCK,False,13.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3285,ENTRY,PRE,54.0,WAIT,BLOCK,False,28.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3293,ENTRY,PRE,54.0,WAIT,BLOCK,False,748.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3310,ENTRY,PRE,54.0,WAIT,BLOCK,False,69.9,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3332,ENTRY,PRE,54.0,WAIT,BLOCK,False,62.6,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3373,ENTRY,PRE,54.0,WAIT,BLOCK,False,16.9,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3426,ENTRY,PRE,54.0,WAIT,BLOCK,False,47.65,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3479,ENTRY,PRE,54.0,WAIT,BLOCK,False,90.7,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3512,ENTRY,PRE,54.0,WAIT,BLOCK,False,21.35,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3546,ENTRY,PRE,54.0,WAIT,BLOCK,False,70.9,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3563,ENTRY,PRE,54.0,WAIT,BLOCK,False,873.0,0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3646,ENTRY,PRE,54.0,WAIT,BLOCK,False,23.3,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3666,ENTRY,PRE,54.0,WAIT,BLOCK,False,26.4,0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,3684,ENTRY,PRE,54.0,WAIT,BLOCK,False,58.1,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4105,ENTRY,PRE,54.0,WAIT,BLOCK,False,74.2,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4111,ENTRY,PRE,54.0,WAIT,BLOCK,False,29.45,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4114,ENTRY,PRE,54.0,WAIT,BLOCK,False,30.8,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4116,ENTRY,PRE,54.0,WAIT,BLOCK,False,39.95,0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4126,ENTRY,PRE,54.0,WAIT,BLOCK,False,79.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4127,ENTRY,PRE,54.0,WAIT,BLOCK,False,38.35,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4137,ENTRY,PRE,54.0,WAIT,BLOCK,False,106.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4175,ENTRY,PRE,54.0,WAIT,BLOCK,False,54.4,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4303,ENTRY,PRE,54.0,WAIT,BLOCK,False,53.9,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4433,ENTRY,PRE,54.0,WAIT,BLOCK,False,20.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4440,ENTRY,PRE,54.0,WAIT,BLOCK,False,17.9,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4523,ENTRY,PRE,54.0,WAIT,BLOCK,False,30.6,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4527,ENTRY,PRE,54.0,WAIT,BLOCK,False,42.75,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4535,ENTRY,PRE,54.0,WAIT,BLOCK,False,27.65,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4554,ENTRY,PRE,54.0,WAIT,BLOCK,False,29.9,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4568,ENTRY,PRE,54.0,WAIT,BLOCK,False,43.7,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4572,ENTRY,PRE,54.0,WAIT,BLOCK,False,144.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4702,ENTRY,PRE,54.0,WAIT,BLOCK,False,9.73,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4754,ENTRY,PRE,54.0,WAIT,BLOCK,False,37.05,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4770,ENTRY,PRE,54.0,WAIT,BLOCK,False,221.5,0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4915,ENTRY,PRE,54.0,WAIT,BLOCK,False,73.3,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4938,ENTRY,PRE,54.0,WAIT,BLOCK,False,82.3,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4974,ENTRY,PRE,54.0,WAIT,BLOCK,False,71.9,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4987,ENTRY,PRE,54.0,WAIT,BLOCK,False,81.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5009,ENTRY,PRE,54.0,WAIT,BLOCK,False,32.2,0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5013,ENTRY,PRE,54.0,WAIT,BLOCK,False,28.8,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5213,ENTRY,PRE,54.0,WAIT,BLOCK,False,25.9,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5220,ENTRY,PRE,54.0,WAIT,BLOCK,False,20.2,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5315,ENTRY,PRE,54.0,WAIT,BLOCK,False,22.3,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5455,ENTRY,PRE,54.0,WAIT,BLOCK,False,25.25,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5478,ENTRY,PRE,54.0,WAIT,BLOCK,False,97.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5519,ENTRY,PRE,54.0,WAIT,BLOCK,False,32.55,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5531,ENTRY,PRE,54.0,WAIT,BLOCK,False,8.29,0,0.0,9,安靜吸籌 | 洗盤收回 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5878,ENTRY,PRE,54.0,WAIT,BLOCK,False,40.8,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5880,ENTRY,PRE,54.0,WAIT,BLOCK,False,22.95,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5903,ENTRY,PRE,54.0,WAIT,BLOCK,False,189.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5906,ENTRY,PRE,54.0,WAIT,BLOCK,False,49.95,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6005,ENTRY,PRE,54.0,WAIT,BLOCK,False,28.05,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6024,ENTRY,PRE,54.0,WAIT,BLOCK,False,56.2,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6101,ENTRY,PRE,54.0,WAIT,BLOCK,False,40.45,0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6115,ENTRY,PRE,54.0,WAIT,BLOCK,False,47.75,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6154,ENTRY,PRE,54.0,WAIT,BLOCK,False,13.2,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6161,ENTRY,PRE,54.0,WAIT,BLOCK,False,41.45,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6184,ENTRY,PRE,54.0,WAIT,BLOCK,False,46.8,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6194,ENTRY,PRE,54.0,WAIT,BLOCK,False,32.65,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6203,ENTRY,PRE,54.0,WAIT,BLOCK,False,64.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6222,ENTRY,PRE,54.0,WAIT,BLOCK,False,21.75,0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6225,ENTRY,PRE,54.0,WAIT,BLOCK,False,20.45,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6240,ENTRY,PRE,54.0,WAIT,BLOCK,False,19.1,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6246,ENTRY,PRE,54.0,WAIT,BLOCK,False,16.4,0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6248,ENTRY,PRE,54.0,WAIT,BLOCK,False,19.55,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6266,ENTRY,PRE,54.0,WAIT,BLOCK,False,27.85,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6416,ENTRY,PRE,54.0,WAIT,BLOCK,False,81.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6504,ENTRY,PRE,54.0,WAIT,BLOCK,False,39.45,0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6538,ENTRY,PRE,54.0,WAIT,BLOCK,False,75.4,0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6561,ENTRY,PRE,54.0,WAIT,BLOCK,False,340.5,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6570,ENTRY,PRE,54.0,WAIT,BLOCK,False,39.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6579,ENTRY,PRE,54.0,WAIT,BLOCK,False,121.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6582,ENTRY,PRE,54.0,WAIT,BLOCK,False,30.85,0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6590,ENTRY,PRE,54.0,WAIT,BLOCK,False,70.3,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6592,ENTRY,PRE,54.0,WAIT,BLOCK,False,61.2,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6597,ENTRY,PRE,54.0,WAIT,BLOCK,False,62.4,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6615,ENTRY,PRE,54.0,WAIT,BLOCK,False,33.45,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6637,ENTRY,PRE,54.0,WAIT,BLOCK,False,72.3,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6654,ENTRY,PRE,54.0,WAIT,BLOCK,False,89.9,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6692,ENTRY,PRE,54.0,WAIT,BLOCK,False,32.35,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6754,ENTRY,PRE,54.0,WAIT,BLOCK,False,46.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6771,ENTRY,PRE,54.0,WAIT,BLOCK,False,44.4,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6790,ENTRY,PRE,54.0,WAIT,BLOCK,False,39.6,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6794,ENTRY,PRE,54.0,WAIT,BLOCK,False,81.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6803,ENTRY,PRE,54.0,WAIT,BLOCK,False,288.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6811,ENTRY,PRE,54.0,WAIT,BLOCK,False,194.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6844,ENTRY,PRE,54.0,WAIT,BLOCK,False,64.2,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6846,ENTRY,PRE,54.0,WAIT,BLOCK,False,69.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6884,ENTRY,PRE,54.0,WAIT,BLOCK,False,34.55,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6958,ENTRY,PRE,54.0,WAIT,BLOCK,False,19.9,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6965,ENTRY,PRE,54.0,WAIT,BLOCK,False,87.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,7713,ENTRY,PRE,54.0,WAIT,BLOCK,False,67.9,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,7718,ENTRY,PRE,54.0,WAIT,BLOCK,False,47.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,7743,ENTRY,PRE,54.0,WAIT,BLOCK,False,19.9,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,7767,ENTRY,PRE,54.0,WAIT,BLOCK,False,44.75,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,7791,ENTRY,PRE,54.0,WAIT,BLOCK,False,64.8,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8083,ENTRY,PRE,54.0,WAIT,BLOCK,False,176.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8341,ENTRY,PRE,54.0,WAIT,BLOCK,False,74.7,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8367,ENTRY,PRE,54.0,WAIT,BLOCK,False,42.2,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8411,ENTRY,PRE,54.0,WAIT,BLOCK,False,12.25,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8421,ENTRY,PRE,54.0,WAIT,BLOCK,False,13.6,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8423,ENTRY,PRE,54.0,WAIT,BLOCK,False,17.95,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8424,ENTRY,PRE,54.0,WAIT,BLOCK,False,74.4,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8432,ENTRY,PRE,54.0,WAIT,BLOCK,False,50.1,0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8435,ENTRY,PRE,54.0,WAIT,BLOCK,False,55.6,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8443,ENTRY,PRE,54.0,WAIT,BLOCK,False,11.85,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8450,ENTRY,PRE,54.0,WAIT,BLOCK,False,16.5,0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8462,ENTRY,PRE,54.0,WAIT,BLOCK,False,149.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8477,ENTRY,PRE,54.0,WAIT,BLOCK,False,13.55,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8481,ENTRY,PRE,54.0,WAIT,BLOCK,False,40.9,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8905,ENTRY,PRE,54.0,WAIT,BLOCK,False,40.75,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8908,ENTRY,PRE,54.0,WAIT,BLOCK,False,39.45,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8916,ENTRY,PRE,54.0,WAIT,BLOCK,False,47.35,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8917,ENTRY,PRE,54.0,WAIT,BLOCK,False,52.3,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8924,ENTRY,PRE,54.0,WAIT,BLOCK,False,68.7,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,8936,ENTRY,PRE,54.0,WAIT,BLOCK,False,50.1,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,9908,ENTRY,PRE,54.0,WAIT,BLOCK,False,29.6,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,9912,ENTRY,PRE,54.0,PULLBACK,BLOCK,False,12.75,0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：同股已由高優先桶接管
-BLOCK,9917,ENTRY,PRE,54.0,WAIT,BLOCK,False,113.0,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,9925,ENTRY,PRE,54.0,WAIT,BLOCK,False,40.3,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,9930,ENTRY,PRE,54.0,WAIT,BLOCK,False,69.8,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,9934,ENTRY,PRE,54.0,WAIT,BLOCK,False,9.27,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,9937,ENTRY,PRE,54.0,WAIT,BLOCK,False,56.4,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,9942,ENTRY,PRE,54.0,WAIT,BLOCK,False,116.5,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,9943,ENTRY,PRE,54.0,WAIT,BLOCK,False,55.4,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,9944,ENTRY,PRE,54.0,WAIT,BLOCK,False,16.4,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,9951,ENTRY,PRE,54.0,WAIT,BLOCK,False,53.6,0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1522,ENTRY,PRE,52.0,WAIT,BLOCK,False,30.95,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
-BLOCK,1532,ENTRY,PRE,52.0,WAIT,BLOCK,False,20.85,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
-BLOCK,2061,ENTRY,PRE,52.0,WAIT,BLOCK,False,19.35,0,0.0,9,安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2208,ENTRY,PRE,52.0,WAIT,BLOCK,False,19.8,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
-BLOCK,2889,ENTRY,PRE,52.0,WAIT,BLOCK,False,14.5,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
-BLOCK,3059,ENTRY,PRE,52.0,WAIT,BLOCK,False,40.3,0,0.0,9,安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4533,ENTRY,PRE,52.0,WAIT,BLOCK,False,31.1,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
-BLOCK,4555,ENTRY,PRE,52.0,WAIT,BLOCK,False,40.35,0,0.0,9,安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,5278,ENTRY,PRE,52.0,WAIT,BLOCK,False,23.65,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
-BLOCK,5543,ENTRY,PRE,52.0,WAIT,BLOCK,False,29.75,0,0.0,9,安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6125,ENTRY,PRE,52.0,WAIT,BLOCK,False,55.8,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
-BLOCK,6188,ENTRY,PRE,52.0,WAIT,BLOCK,False,83.4,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
-BLOCK,6265,ENTRY,PRE,52.0,WAIT,BLOCK,False,39.8,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
-BLOCK,7705,ENTRY,PRE,52.0,WAIT,BLOCK,False,32.9,0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
-BLOCK,8455,ENTRY,PRE,52.0,WAIT,BLOCK,False,23.7,0,0.0,9,安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,1473,ENTRY,PRE,50.0,WAIT,BLOCK,False,21.25,0,0.0,9,波動壓縮 | 安靜吸籌 | 放量吸收,BLOCK：超出本市場狀態可執行名額
-BLOCK,1722,ENTRY,PRE,50.0,WAIT,BLOCK,False,50.7,0,0.0,9,均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2534,ENTRY,PRE,50.0,WAIT,BLOCK,False,19.05,0,0.0,9,洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,2850,ENTRY,PRE,50.0,WAIT,BLOCK,False,133.0,0,0.0,9,均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,4904,ENTRY,PRE,50.0,WAIT,BLOCK,False,94.5,0,0.0,9,洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6183,ENTRY,PRE,50.0,WAIT,BLOCK,False,92.2,0,0.0,9,洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
-BLOCK,6606,ENTRY,PRE,50.0,WAIT,BLOCK,False,24.1,0,0.0,9,洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+SELL,2409,EXIT,POSITION,100.0,SELL,SELL,True,17.2,51600.0,,0,觸發停損 -9.47% | 跌破 MA20 | 損益 -9.47% | 均價 19.0 | 張數 3.0,持倉風控：必須優先處理出場｜風險 MEDIUM
+BUY,1110,ENTRY,CORE,80.0,PULLBACK,TOP,True,15.42,20000.0,0.02,2,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,TOP + timing 合格：允許分批
+BUY,2465,ENTRY,CORE,80.0,BREAK,TOP,True,74.07,20000.0,0.02,2,強勢引擎｜20日動能｜均線多頭｜量能確認,TOP + timing 合格：允許分批
+BUY,3680,ENTRY,CORE,80.0,BREAK,TOP,True,537.54,20000.0,0.02,2,強勢引擎｜20日動能｜均線多頭｜量能確認,TOP + timing 合格：允許分批
+TEST,4133,ENTRY,PRE,100.0,WAIT,TOP,True,21.6,10000.0,0.01,3,波動壓縮 | 安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,TOP + timing 合格：允許分批
+TEST,6464,ENTRY,PRE,100.0,WAIT,TOP,True,76.1,10000.0,0.01,3,波動壓縮 | 安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,TOP + timing 合格：允許分批
+WATCH,8926,ENTRY,PRE,100.0,WAIT,WATCH,False,44.4,0.0,0.0,8,波動壓縮 | 安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,WATCH：保留觀察，不下單
+WATCH,1233,ENTRY,PRE,86.0,WAIT,WATCH,False,28.75,0.0,0.0,8,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,WATCH：保留觀察，不下單
+WATCH,1713,ENTRY,PRE,86.0,WAIT,WATCH,False,46.3,0.0,0.0,8,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,WATCH：保留觀察，不下單
+WATCH,2538,ENTRY,PRE,86.0,WAIT,WATCH,False,9.76,0.0,0.0,8,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,WATCH：保留觀察，不下單
+WATCH,2753,ENTRY,PRE,86.0,WAIT,WATCH,False,177.5,0.0,0.0,8,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,WATCH：保留觀察，不下單
+WATCH,2892,ENTRY,PRE,86.0,WAIT,WATCH,False,28.85,0.0,0.0,8,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,WATCH：保留觀察，不下單
+WATCH,1418,ENTRY,CORE,80.0,PULLBACK,WATCH,False,19.22,0.0,0.0,8,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,WATCH：保留觀察，不下單
+WATCH,1536,ENTRY,CORE,80.0,PULLBACK,WATCH,False,51.55,0.0,0.0,8,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,WATCH：保留觀察，不下單
+WATCH,1598,ENTRY,CORE,80.0,WAIT,WATCH,False,20.82,0.0,0.0,8,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,WATCH：保留觀察，不下單
+WATCH,2031,ENTRY,CORE,80.0,PULLBACK,WATCH,False,40.69,0.0,0.0,8,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,WATCH：保留觀察，不下單
+WATCH,6761,ENTRY,CORE,80.0,WAIT,WATCH,False,218.22,0.0,0.0,8,強勢引擎｜20日動能｜均線多頭｜量能確認,WATCH：保留觀察，不下單
+WATCH,9912,ENTRY,CORE,80.0,PULLBACK,WATCH,False,12.76,0.0,0.0,8,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,WATCH：保留觀察，不下單
+BLOCK,1423,ENTRY,PRE,86.0,WAIT,BLOCK,False,41.6,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3176,ENTRY,PRE,86.0,WAIT,BLOCK,False,32.95,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4106,ENTRY,PRE,86.0,WAIT,BLOCK,False,22.3,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4506,ENTRY,PRE,86.0,WAIT,BLOCK,False,117.0,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4580,ENTRY,PRE,86.0,WAIT,BLOCK,False,79.6,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5209,ENTRY,PRE,86.0,WAIT,BLOCK,False,163.0,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5487,ENTRY,PRE,86.0,WAIT,BLOCK,False,29.4,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5603,ENTRY,PRE,86.0,WAIT,BLOCK,False,16.5,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6170,ENTRY,PRE,86.0,WAIT,BLOCK,False,52.1,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6474,ENTRY,PRE,86.0,WAIT,BLOCK,False,37.5,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6609,ENTRY,PRE,86.0,WAIT,BLOCK,False,39.4,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6997,ENTRY,PRE,86.0,WAIT,BLOCK,False,79.0,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8071,ENTRY,PRE,86.0,WAIT,BLOCK,False,16.4,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5876,ENTRY,PRE,82.0,WAIT,BLOCK,False,39.05,0.0,0.0,9,安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2455,ENTRY,CORE,80.0,WAIT,BLOCK,False,347.85,0.0,0.0,9,強勢引擎｜20日動能｜均線多頭｜量能確認,BLOCK：超出本市場狀態可執行名額
+BLOCK,4967,ENTRY,CORE,80.0,WAIT,BLOCK,False,281.28,0.0,0.0,9,強勢引擎｜20日動能｜均線多頭｜量能確認,BLOCK：超出本市場狀態可執行名額
+BLOCK,6505,ENTRY,CORE,80.0,WAIT,BLOCK,False,56.46,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：超出本市場狀態可執行名額
+BLOCK,7786,ENTRY,CORE,80.0,WAIT,BLOCK,False,139.64,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：超出本市場狀態可執行名額
+BLOCK,8080,ENTRY,PRE,80.0,WAIT,BLOCK,False,28.3,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破,BLOCK：超出本市場狀態可執行名額
+BLOCK,8249,ENTRY,PRE,80.0,WAIT,BLOCK,False,49.45,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破,BLOCK：超出本市場狀態可執行名額
+BLOCK,1216,ENTRY,PRE,72.0,WAIT,BLOCK,False,69.3,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1307,ENTRY,PRE,72.0,WAIT,BLOCK,False,31.7,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1444,ENTRY,PRE,72.0,WAIT,BLOCK,False,6.11,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1612,ENTRY,PRE,72.0,WAIT,BLOCK,False,35.65,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2015,ENTRY,PRE,72.0,WAIT,BLOCK,False,60.9,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2035,ENTRY,PRE,72.0,WAIT,BLOCK,False,28.3,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2109,ENTRY,PRE,72.0,WAIT,BLOCK,False,14.4,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2211,ENTRY,PRE,72.0,WAIT,BLOCK,False,97.5,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2547,ENTRY,PRE,72.0,WAIT,BLOCK,False,10.35,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2845,ENTRY,PRE,72.0,WAIT,BLOCK,False,12.25,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2883,ENTRY,PRE,72.0,WAIT,BLOCK,False,21.5,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3541,ENTRY,PRE,72.0,WAIT,BLOCK,False,23.45,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3632,ENTRY,PRE,72.0,WAIT,BLOCK,False,8.78,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4102,ENTRY,PRE,72.0,WAIT,BLOCK,False,18.25,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4120,ENTRY,PRE,72.0,WAIT,BLOCK,False,48.0,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4536,ENTRY,PRE,72.0,WAIT,BLOCK,False,149.5,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4538,ENTRY,PRE,72.0,WAIT,BLOCK,False,18.3,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4584,ENTRY,PRE,72.0,WAIT,BLOCK,False,41.0,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5348,ENTRY,PRE,72.0,WAIT,BLOCK,False,17.0,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5609,ENTRY,PRE,72.0,WAIT,BLOCK,False,78.0,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6015,ENTRY,PRE,72.0,WAIT,BLOCK,False,14.2,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6020,ENTRY,PRE,72.0,WAIT,BLOCK,False,19.25,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6026,ENTRY,PRE,72.0,WAIT,BLOCK,False,15.35,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6171,ENTRY,PRE,72.0,WAIT,BLOCK,False,25.5,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6185,ENTRY,PRE,72.0,WAIT,BLOCK,False,14.25,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6189,ENTRY,PRE,72.0,WAIT,BLOCK,False,47.95,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6446,ENTRY,PRE,72.0,WAIT,BLOCK,False,661.0,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6581,ENTRY,PRE,72.0,WAIT,BLOCK,False,107.5,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6955,ENTRY,PRE,72.0,WAIT,BLOCK,False,166.5,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6961,ENTRY,PRE,72.0,WAIT,BLOCK,False,58.3,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,7708,ENTRY,PRE,72.0,WAIT,BLOCK,False,91.7,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8284,ENTRY,PRE,72.0,WAIT,BLOCK,False,64.0,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8473,ENTRY,PRE,72.0,WAIT,BLOCK,False,35.9,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,9926,ENTRY,PRE,72.0,WAIT,BLOCK,False,49.4,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,9927,ENTRY,PRE,72.0,WAIT,BLOCK,False,68.3,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,9940,ENTRY,PRE,72.0,WAIT,BLOCK,False,20.0,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,9941,ENTRY,PRE,72.0,WAIT,BLOCK,False,77.1,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1315,ENTRY,PRE,68.0,WAIT,BLOCK,False,62.3,0.0,0.0,9,安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1525,ENTRY,PRE,68.0,WAIT,BLOCK,False,63.3,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1726,ENTRY,PRE,68.0,WAIT,BLOCK,False,75.6,0.0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2023,ENTRY,PRE,68.0,WAIT,BLOCK,False,14.0,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2480,ENTRY,PRE,68.0,WAIT,BLOCK,False,143.0,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2729,ENTRY,PRE,68.0,WAIT,BLOCK,False,165.5,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2884,ENTRY,PRE,68.0,WAIT,BLOCK,False,31.85,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2926,ENTRY,PRE,68.0,WAIT,BLOCK,False,37.6,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3164,ENTRY,PRE,68.0,WAIT,BLOCK,False,17.7,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3356,ENTRY,PRE,68.0,WAIT,BLOCK,False,54.0,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4510,ENTRY,PRE,68.0,WAIT,BLOCK,False,47.0,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4728,ENTRY,PRE,68.0,WAIT,BLOCK,False,389.5,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5215,ENTRY,PRE,68.0,WAIT,BLOCK,False,37.4,0.0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6123,ENTRY,PRE,68.0,WAIT,BLOCK,False,43.85,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6412,ENTRY,PRE,68.0,WAIT,BLOCK,False,81.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6505,ENTRY,PRE,68.0,WAIT,BLOCK,False,56.4,0.0,0.0,9,波動壓縮 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：同股已由高優先桶接管
+BLOCK,6516,ENTRY,PRE,68.0,WAIT,BLOCK,False,60.8,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8487,ENTRY,PRE,68.0,WAIT,BLOCK,False,77.1,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1419,ENTRY,PRE,66.0,WAIT,BLOCK,False,64.4,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,BLOCK：超出本市場狀態可執行名額
+BLOCK,1504,ENTRY,PRE,66.0,WAIT,BLOCK,False,62.4,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,BLOCK：超出本市場狀態可執行名額
+BLOCK,2012,ENTRY,PRE,66.0,WAIT,BLOCK,False,14.7,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,BLOCK：超出本市場狀態可執行名額
+BLOCK,2250,ENTRY,PRE,66.0,WAIT,BLOCK,False,63.0,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,BLOCK：超出本市場狀態可執行名額
+BLOCK,3257,ENTRY,PRE,66.0,WAIT,BLOCK,False,53.3,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,BLOCK：超出本市場狀態可執行名額
+BLOCK,4743,ENTRY,PRE,66.0,WAIT,BLOCK,False,53.2,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,BLOCK：超出本市場狀態可執行名額
+BLOCK,5203,ENTRY,PRE,66.0,WAIT,BLOCK,False,65.4,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,BLOCK：超出本市場狀態可執行名額
+BLOCK,5225,ENTRY,PRE,66.0,WAIT,BLOCK,False,76.6,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,BLOCK：超出本市場狀態可執行名額
+BLOCK,6264,ENTRY,PRE,66.0,WAIT,BLOCK,False,6.09,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,BLOCK：超出本市場狀態可執行名額
+BLOCK,6496,ENTRY,PRE,66.0,WAIT,BLOCK,False,25.3,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,BLOCK：超出本市場狀態可執行名額
+BLOCK,8929,ENTRY,PRE,66.0,WAIT,BLOCK,False,15.1,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,BLOCK：超出本市場狀態可執行名額
+BLOCK,1536,ENTRY,PRE,62.0,PULLBACK,BLOCK,False,51.5,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破,BLOCK：同股已由高優先桶接管
+BLOCK,2115,ENTRY,PRE,62.0,WAIT,BLOCK,False,21.2,0.0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破,BLOCK：超出本市場狀態可執行名額
+BLOCK,3501,ENTRY,PRE,62.0,WAIT,BLOCK,False,46.85,0.0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破,BLOCK：超出本市場狀態可執行名額
+BLOCK,5392,ENTRY,PRE,62.0,WAIT,BLOCK,False,40.15,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破,BLOCK：超出本市場狀態可執行名額
+BLOCK,6239,ENTRY,PRE,62.0,WAIT,BLOCK,False,203.0,0.0,0.0,9,安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收,BLOCK：超出本市場狀態可執行名額
+BLOCK,6535,ENTRY,PRE,62.0,WAIT,BLOCK,False,152.0,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破,BLOCK：超出本市場狀態可執行名額
+BLOCK,1110,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,15.4,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,1341,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,61.2,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,1418,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,19.2,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,1525,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,63.3,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,1536,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,51.5,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,1593,ENTRY,PRE,58.0,WAIT,BLOCK,False,31.3,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1598,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,20.8,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,1612,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,35.65,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,1712,ENTRY,PRE,58.0,WAIT,BLOCK,False,42.2,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1712,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,42.2,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,2024,ENTRY,PRE,58.0,WAIT,BLOCK,False,14.1,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2031,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,40.65,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,2207,ENTRY,PRE,58.0,WAIT,BLOCK,False,476.5,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2353,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,27.6,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,2439,ENTRY,PRE,58.0,WAIT,BLOCK,False,86.0,0.0,0.0,9,洗盤收回 | 均線收斂 | 放量吸收 | 接近突破,BLOCK：超出本市場狀態可執行名額
+BLOCK,2498,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,40.15,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：超出本市場狀態可執行名額
+BLOCK,2506,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,8.89,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,2597,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,157.0,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：超出本市場狀態可執行名額
+BLOCK,2633,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,26.5,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：超出本市場狀態可執行名額
+BLOCK,2762,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,73.0,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,2881,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,90.0,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,3023,ENTRY,PRE,58.0,WAIT,BLOCK,False,283.5,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3046,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,48.5,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：超出本市場狀態可執行名額
+BLOCK,3219,ENTRY,PRE,58.0,WAIT,BLOCK,False,67.0,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3615,ENTRY,PRE,58.0,WAIT,BLOCK,False,31.85,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3622,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,55.7,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：超出本市場狀態可執行名額
+BLOCK,4106,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,22.3,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,4551,ENTRY,PRE,58.0,WAIT,BLOCK,False,134.0,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5203,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,65.4,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,5345,ENTRY,PRE,58.0,WAIT,BLOCK,False,21.9,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6189,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,47.95,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,6498,ENTRY,PRE,58.0,WAIT,BLOCK,False,88.4,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6499,ENTRY,PRE,58.0,WAIT,BLOCK,False,83.7,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6505,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,56.4,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,6574,ENTRY,PRE,58.0,WAIT,BLOCK,False,101.5,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6579,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,121.5,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,6914,ENTRY,PRE,58.0,WAIT,BLOCK,False,145.0,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6955,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,166.5,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,7765,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,226.5,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：超出本市場狀態可執行名額
+BLOCK,7786,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,139.5,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,7792,ENTRY,PRE,58.0,WAIT,BLOCK,False,355.5,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8249,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,49.45,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,9912,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,12.75,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,9938,ENTRY,ALPHA,58.0,PULLBACK,BLOCK,False,44.15,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：超出本市場狀態可執行名額
+BLOCK,9940,ENTRY,ALPHA,58.0,WAIT,BLOCK,False,20.0,0.0,0.0,9,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,BLOCK：同股已由高優先桶接管
+BLOCK,3672,ENTRY,PRE,56.0,WAIT,BLOCK,False,11.95,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5011,ENTRY,PRE,56.0,WAIT,BLOCK,False,14.75,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6165,ENTRY,PRE,56.0,WAIT,BLOCK,False,53.1,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6233,ENTRY,PRE,56.0,WAIT,BLOCK,False,28.25,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6859,ENTRY,PRE,56.0,WAIT,BLOCK,False,125.0,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1104,ENTRY,PRE,54.0,WAIT,BLOCK,False,28.35,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1108,ENTRY,PRE,54.0,WAIT,BLOCK,False,14.55,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1109,ENTRY,PRE,54.0,WAIT,BLOCK,False,15.45,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1215,ENTRY,PRE,54.0,WAIT,BLOCK,False,138.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1217,ENTRY,PRE,54.0,WAIT,BLOCK,False,9.9,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1218,ENTRY,PRE,54.0,WAIT,BLOCK,False,18.95,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1232,ENTRY,PRE,54.0,WAIT,BLOCK,False,148.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1234,ENTRY,PRE,54.0,WAIT,BLOCK,False,35.25,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1240,ENTRY,PRE,54.0,WAIT,BLOCK,False,59.6,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1256,ENTRY,PRE,54.0,WAIT,BLOCK,False,161.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1264,ENTRY,PRE,54.0,WAIT,BLOCK,False,273.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1268,ENTRY,PRE,54.0,WAIT,BLOCK,False,155.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1294,ENTRY,PRE,54.0,WAIT,BLOCK,False,79.6,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1326,ENTRY,PRE,54.0,WAIT,BLOCK,False,52.3,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1341,ENTRY,PRE,54.0,WAIT,BLOCK,False,61.2,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1402,ENTRY,PRE,54.0,WAIT,BLOCK,False,25.75,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1409,ENTRY,PRE,54.0,WAIT,BLOCK,False,16.8,0.0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1413,ENTRY,PRE,54.0,WAIT,BLOCK,False,9.53,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1417,ENTRY,PRE,54.0,WAIT,BLOCK,False,8.85,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1418,ENTRY,PRE,54.0,PULLBACK,BLOCK,False,19.2,0.0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：同股已由高優先桶接管
+BLOCK,1432,ENTRY,PRE,54.0,WAIT,BLOCK,False,16.85,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1437,ENTRY,PRE,54.0,WAIT,BLOCK,False,29.65,0.0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1446,ENTRY,PRE,54.0,WAIT,BLOCK,False,15.8,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1447,ENTRY,PRE,54.0,WAIT,BLOCK,False,4.99,0.0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1459,ENTRY,PRE,54.0,WAIT,BLOCK,False,11.7,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1460,ENTRY,PRE,54.0,WAIT,BLOCK,False,6.98,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1527,ENTRY,PRE,54.0,WAIT,BLOCK,False,32.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1531,ENTRY,PRE,54.0,WAIT,BLOCK,False,12.95,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1535,ENTRY,PRE,54.0,WAIT,BLOCK,False,50.9,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1537,ENTRY,PRE,54.0,WAIT,BLOCK,False,123.0,0.0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1558,ENTRY,PRE,54.0,WAIT,BLOCK,False,92.2,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1580,ENTRY,PRE,54.0,WAIT,BLOCK,False,123.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1583,ENTRY,PRE,54.0,WAIT,BLOCK,False,46.6,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1598,ENTRY,PRE,54.0,WAIT,BLOCK,False,20.8,0.0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：同股已由高優先桶接管
+BLOCK,1614,ENTRY,PRE,54.0,WAIT,BLOCK,False,31.85,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1615,ENTRY,PRE,54.0,WAIT,BLOCK,False,45.7,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1702,ENTRY,PRE,54.0,WAIT,BLOCK,False,35.1,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1704,ENTRY,PRE,54.0,WAIT,BLOCK,False,53.1,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1730,ENTRY,PRE,54.0,WAIT,BLOCK,False,52.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1731,ENTRY,PRE,54.0,WAIT,BLOCK,False,21.65,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1732,ENTRY,PRE,54.0,WAIT,BLOCK,False,25.8,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1733,ENTRY,PRE,54.0,WAIT,BLOCK,False,28.55,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1742,ENTRY,PRE,54.0,WAIT,BLOCK,False,15.9,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1760,ENTRY,PRE,54.0,WAIT,BLOCK,False,68.2,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1777,ENTRY,PRE,54.0,WAIT,BLOCK,False,70.9,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1788,ENTRY,PRE,54.0,WAIT,BLOCK,False,136.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1805,ENTRY,PRE,54.0,WAIT,BLOCK,False,10.85,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1817,ENTRY,PRE,54.0,WAIT,BLOCK,False,38.6,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2010,ENTRY,PRE,54.0,WAIT,BLOCK,False,24.75,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2013,ENTRY,PRE,54.0,WAIT,BLOCK,False,42.75,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2029,ENTRY,PRE,54.0,WAIT,BLOCK,False,20.2,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2030,ENTRY,PRE,54.0,WAIT,BLOCK,False,15.95,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2031,ENTRY,PRE,54.0,PULLBACK,BLOCK,False,40.65,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：同股已由高優先桶接管
+BLOCK,2069,ENTRY,PRE,54.0,WAIT,BLOCK,False,18.8,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2103,ENTRY,PRE,54.0,WAIT,BLOCK,False,19.65,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2204,ENTRY,PRE,54.0,WAIT,BLOCK,False,54.1,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2347,ENTRY,PRE,54.0,WAIT,BLOCK,False,82.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2353,ENTRY,PRE,54.0,WAIT,BLOCK,False,27.6,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2362,ENTRY,PRE,54.0,WAIT,BLOCK,False,38.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2374,ENTRY,PRE,54.0,WAIT,BLOCK,False,78.4,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2387,ENTRY,PRE,54.0,WAIT,BLOCK,False,40.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2393,ENTRY,PRE,54.0,WAIT,BLOCK,False,71.1,0.0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2395,ENTRY,PRE,54.0,WAIT,BLOCK,False,359.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2412,ENTRY,PRE,54.0,WAIT,BLOCK,False,136.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2420,ENTRY,PRE,54.0,WAIT,BLOCK,False,54.7,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2421,ENTRY,PRE,54.0,WAIT,BLOCK,False,145.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2432,ENTRY,PRE,54.0,WAIT,BLOCK,False,27.65,0.0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2450,ENTRY,PRE,54.0,WAIT,BLOCK,False,29.6,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2453,ENTRY,PRE,54.0,WAIT,BLOCK,False,53.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2496,ENTRY,PRE,54.0,WAIT,BLOCK,False,64.6,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2504,ENTRY,PRE,54.0,WAIT,BLOCK,False,35.25,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2506,ENTRY,PRE,54.0,WAIT,BLOCK,False,8.89,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2511,ENTRY,PRE,54.0,WAIT,BLOCK,False,7.99,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2514,ENTRY,PRE,54.0,WAIT,BLOCK,False,13.3,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2537,ENTRY,PRE,54.0,WAIT,BLOCK,False,10.2,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2603,ENTRY,PRE,54.0,WAIT,BLOCK,False,202.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2608,ENTRY,PRE,54.0,WAIT,BLOCK,False,30.25,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2613,ENTRY,PRE,54.0,WAIT,BLOCK,False,22.4,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2614,ENTRY,PRE,54.0,WAIT,BLOCK,False,20.2,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2636,ENTRY,PRE,54.0,WAIT,BLOCK,False,67.1,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2704,ENTRY,PRE,54.0,WAIT,BLOCK,False,41.7,0.0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2727,ENTRY,PRE,54.0,WAIT,BLOCK,False,226.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2762,ENTRY,PRE,54.0,WAIT,BLOCK,False,73.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2801,ENTRY,PRE,54.0,WAIT,BLOCK,False,21.15,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2816,ENTRY,PRE,54.0,WAIT,BLOCK,False,30.35,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2820,ENTRY,PRE,54.0,WAIT,BLOCK,False,16.8,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2836,ENTRY,PRE,54.0,WAIT,BLOCK,False,11.85,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2852,ENTRY,PRE,54.0,WAIT,BLOCK,False,26.1,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2881,ENTRY,PRE,54.0,WAIT,BLOCK,False,90.0,0.0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2885,ENTRY,PRE,54.0,WAIT,BLOCK,False,52.2,0.0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2903,ENTRY,PRE,54.0,WAIT,BLOCK,False,22.2,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2904,ENTRY,PRE,54.0,WAIT,BLOCK,False,16.25,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2905,ENTRY,PRE,54.0,WAIT,BLOCK,False,13.7,0.0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2906,ENTRY,PRE,54.0,WAIT,BLOCK,False,12.4,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2937,ENTRY,PRE,54.0,WAIT,BLOCK,False,43.75,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2939,ENTRY,PRE,54.0,WAIT,BLOCK,False,25.1,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2945,ENTRY,PRE,54.0,WAIT,BLOCK,False,41.15,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2947,ENTRY,PRE,54.0,WAIT,BLOCK,False,78.1,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3022,ENTRY,PRE,54.0,WAIT,BLOCK,False,69.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3032,ENTRY,PRE,54.0,WAIT,BLOCK,False,64.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3033,ENTRY,PRE,54.0,WAIT,BLOCK,False,35.75,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3118,ENTRY,PRE,54.0,WAIT,BLOCK,False,33.6,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3130,ENTRY,PRE,54.0,WAIT,BLOCK,False,221.0,0.0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3158,ENTRY,PRE,54.0,WAIT,BLOCK,False,89.3,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3213,ENTRY,PRE,54.0,WAIT,BLOCK,False,104.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3218,ENTRY,PRE,54.0,WAIT,BLOCK,False,136.0,0.0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3266,ENTRY,PRE,54.0,WAIT,BLOCK,False,13.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3285,ENTRY,PRE,54.0,WAIT,BLOCK,False,28.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3293,ENTRY,PRE,54.0,WAIT,BLOCK,False,748.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3310,ENTRY,PRE,54.0,WAIT,BLOCK,False,69.9,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3332,ENTRY,PRE,54.0,WAIT,BLOCK,False,62.6,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3373,ENTRY,PRE,54.0,WAIT,BLOCK,False,16.9,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3426,ENTRY,PRE,54.0,WAIT,BLOCK,False,47.65,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3479,ENTRY,PRE,54.0,WAIT,BLOCK,False,90.7,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3512,ENTRY,PRE,54.0,WAIT,BLOCK,False,21.35,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3546,ENTRY,PRE,54.0,WAIT,BLOCK,False,70.9,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3563,ENTRY,PRE,54.0,WAIT,BLOCK,False,873.0,0.0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3646,ENTRY,PRE,54.0,WAIT,BLOCK,False,23.3,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3666,ENTRY,PRE,54.0,WAIT,BLOCK,False,26.4,0.0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,3684,ENTRY,PRE,54.0,WAIT,BLOCK,False,58.1,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4105,ENTRY,PRE,54.0,WAIT,BLOCK,False,74.2,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4111,ENTRY,PRE,54.0,WAIT,BLOCK,False,29.45,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4114,ENTRY,PRE,54.0,WAIT,BLOCK,False,30.8,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4116,ENTRY,PRE,54.0,WAIT,BLOCK,False,39.95,0.0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4126,ENTRY,PRE,54.0,WAIT,BLOCK,False,79.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4127,ENTRY,PRE,54.0,WAIT,BLOCK,False,38.35,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4137,ENTRY,PRE,54.0,WAIT,BLOCK,False,106.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4175,ENTRY,PRE,54.0,WAIT,BLOCK,False,54.4,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4303,ENTRY,PRE,54.0,WAIT,BLOCK,False,53.9,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4433,ENTRY,PRE,54.0,WAIT,BLOCK,False,20.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4440,ENTRY,PRE,54.0,WAIT,BLOCK,False,17.9,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4523,ENTRY,PRE,54.0,WAIT,BLOCK,False,30.6,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4527,ENTRY,PRE,54.0,WAIT,BLOCK,False,42.75,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4535,ENTRY,PRE,54.0,WAIT,BLOCK,False,27.65,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4554,ENTRY,PRE,54.0,WAIT,BLOCK,False,29.9,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4568,ENTRY,PRE,54.0,WAIT,BLOCK,False,43.7,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4572,ENTRY,PRE,54.0,WAIT,BLOCK,False,144.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4702,ENTRY,PRE,54.0,WAIT,BLOCK,False,9.73,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4754,ENTRY,PRE,54.0,WAIT,BLOCK,False,37.05,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4770,ENTRY,PRE,54.0,WAIT,BLOCK,False,221.5,0.0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4915,ENTRY,PRE,54.0,WAIT,BLOCK,False,73.3,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4938,ENTRY,PRE,54.0,WAIT,BLOCK,False,82.3,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4974,ENTRY,PRE,54.0,WAIT,BLOCK,False,71.9,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4987,ENTRY,PRE,54.0,WAIT,BLOCK,False,81.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5009,ENTRY,PRE,54.0,WAIT,BLOCK,False,32.2,0.0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5013,ENTRY,PRE,54.0,WAIT,BLOCK,False,28.8,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5213,ENTRY,PRE,54.0,WAIT,BLOCK,False,25.9,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5220,ENTRY,PRE,54.0,WAIT,BLOCK,False,20.2,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5315,ENTRY,PRE,54.0,WAIT,BLOCK,False,22.3,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5455,ENTRY,PRE,54.0,WAIT,BLOCK,False,25.25,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5478,ENTRY,PRE,54.0,WAIT,BLOCK,False,97.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5519,ENTRY,PRE,54.0,WAIT,BLOCK,False,32.55,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5531,ENTRY,PRE,54.0,WAIT,BLOCK,False,8.29,0.0,0.0,9,安靜吸籌 | 洗盤收回 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5878,ENTRY,PRE,54.0,WAIT,BLOCK,False,40.8,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5880,ENTRY,PRE,54.0,WAIT,BLOCK,False,22.95,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5903,ENTRY,PRE,54.0,WAIT,BLOCK,False,189.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5906,ENTRY,PRE,54.0,WAIT,BLOCK,False,49.95,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6005,ENTRY,PRE,54.0,WAIT,BLOCK,False,28.05,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6024,ENTRY,PRE,54.0,WAIT,BLOCK,False,56.2,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6101,ENTRY,PRE,54.0,WAIT,BLOCK,False,40.45,0.0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6115,ENTRY,PRE,54.0,WAIT,BLOCK,False,47.75,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6154,ENTRY,PRE,54.0,WAIT,BLOCK,False,13.2,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6161,ENTRY,PRE,54.0,WAIT,BLOCK,False,41.45,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6184,ENTRY,PRE,54.0,WAIT,BLOCK,False,46.8,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6194,ENTRY,PRE,54.0,WAIT,BLOCK,False,32.65,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6203,ENTRY,PRE,54.0,WAIT,BLOCK,False,64.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6222,ENTRY,PRE,54.0,WAIT,BLOCK,False,21.75,0.0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6225,ENTRY,PRE,54.0,WAIT,BLOCK,False,20.45,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6240,ENTRY,PRE,54.0,WAIT,BLOCK,False,19.1,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6246,ENTRY,PRE,54.0,WAIT,BLOCK,False,16.4,0.0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6248,ENTRY,PRE,54.0,WAIT,BLOCK,False,19.55,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6266,ENTRY,PRE,54.0,WAIT,BLOCK,False,27.85,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6416,ENTRY,PRE,54.0,WAIT,BLOCK,False,81.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6504,ENTRY,PRE,54.0,WAIT,BLOCK,False,39.45,0.0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6538,ENTRY,PRE,54.0,WAIT,BLOCK,False,75.4,0.0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6561,ENTRY,PRE,54.0,WAIT,BLOCK,False,340.5,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6570,ENTRY,PRE,54.0,WAIT,BLOCK,False,39.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6579,ENTRY,PRE,54.0,WAIT,BLOCK,False,121.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6582,ENTRY,PRE,54.0,WAIT,BLOCK,False,30.85,0.0,0.0,9,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6590,ENTRY,PRE,54.0,WAIT,BLOCK,False,70.3,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6592,ENTRY,PRE,54.0,WAIT,BLOCK,False,61.2,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6597,ENTRY,PRE,54.0,WAIT,BLOCK,False,62.4,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6615,ENTRY,PRE,54.0,WAIT,BLOCK,False,33.45,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6637,ENTRY,PRE,54.0,WAIT,BLOCK,False,72.3,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6654,ENTRY,PRE,54.0,WAIT,BLOCK,False,89.9,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6692,ENTRY,PRE,54.0,WAIT,BLOCK,False,32.35,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6754,ENTRY,PRE,54.0,WAIT,BLOCK,False,46.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6771,ENTRY,PRE,54.0,WAIT,BLOCK,False,44.4,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6790,ENTRY,PRE,54.0,WAIT,BLOCK,False,39.6,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6794,ENTRY,PRE,54.0,WAIT,BLOCK,False,81.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6803,ENTRY,PRE,54.0,WAIT,BLOCK,False,288.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6811,ENTRY,PRE,54.0,WAIT,BLOCK,False,194.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6844,ENTRY,PRE,54.0,WAIT,BLOCK,False,64.2,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6846,ENTRY,PRE,54.0,WAIT,BLOCK,False,69.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6884,ENTRY,PRE,54.0,WAIT,BLOCK,False,34.55,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6958,ENTRY,PRE,54.0,WAIT,BLOCK,False,19.9,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6965,ENTRY,PRE,54.0,WAIT,BLOCK,False,87.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,7713,ENTRY,PRE,54.0,WAIT,BLOCK,False,67.9,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,7718,ENTRY,PRE,54.0,WAIT,BLOCK,False,47.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,7743,ENTRY,PRE,54.0,WAIT,BLOCK,False,19.9,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,7767,ENTRY,PRE,54.0,WAIT,BLOCK,False,44.75,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,7791,ENTRY,PRE,54.0,WAIT,BLOCK,False,64.8,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8083,ENTRY,PRE,54.0,WAIT,BLOCK,False,176.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8341,ENTRY,PRE,54.0,WAIT,BLOCK,False,74.7,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8367,ENTRY,PRE,54.0,WAIT,BLOCK,False,42.2,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8411,ENTRY,PRE,54.0,WAIT,BLOCK,False,12.25,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8421,ENTRY,PRE,54.0,WAIT,BLOCK,False,13.6,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8423,ENTRY,PRE,54.0,WAIT,BLOCK,False,17.95,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8424,ENTRY,PRE,54.0,WAIT,BLOCK,False,74.4,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8432,ENTRY,PRE,54.0,WAIT,BLOCK,False,50.1,0.0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8435,ENTRY,PRE,54.0,WAIT,BLOCK,False,55.6,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8443,ENTRY,PRE,54.0,WAIT,BLOCK,False,11.85,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8450,ENTRY,PRE,54.0,WAIT,BLOCK,False,16.5,0.0,0.0,9,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8462,ENTRY,PRE,54.0,WAIT,BLOCK,False,149.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8477,ENTRY,PRE,54.0,WAIT,BLOCK,False,13.55,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8481,ENTRY,PRE,54.0,WAIT,BLOCK,False,40.9,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8905,ENTRY,PRE,54.0,WAIT,BLOCK,False,40.75,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8908,ENTRY,PRE,54.0,WAIT,BLOCK,False,39.45,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8916,ENTRY,PRE,54.0,WAIT,BLOCK,False,47.35,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8917,ENTRY,PRE,54.0,WAIT,BLOCK,False,52.3,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8924,ENTRY,PRE,54.0,WAIT,BLOCK,False,68.7,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,8936,ENTRY,PRE,54.0,WAIT,BLOCK,False,50.1,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,9908,ENTRY,PRE,54.0,WAIT,BLOCK,False,29.6,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,9912,ENTRY,PRE,54.0,PULLBACK,BLOCK,False,12.75,0.0,0.0,9,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：同股已由高優先桶接管
+BLOCK,9917,ENTRY,PRE,54.0,WAIT,BLOCK,False,113.0,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,9925,ENTRY,PRE,54.0,WAIT,BLOCK,False,40.3,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,9930,ENTRY,PRE,54.0,WAIT,BLOCK,False,69.8,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,9934,ENTRY,PRE,54.0,WAIT,BLOCK,False,9.27,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,9937,ENTRY,PRE,54.0,WAIT,BLOCK,False,56.4,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,9942,ENTRY,PRE,54.0,WAIT,BLOCK,False,116.5,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,9943,ENTRY,PRE,54.0,WAIT,BLOCK,False,55.4,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,9944,ENTRY,PRE,54.0,WAIT,BLOCK,False,16.4,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,9951,ENTRY,PRE,54.0,WAIT,BLOCK,False,53.6,0.0,0.0,9,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1522,ENTRY,PRE,52.0,WAIT,BLOCK,False,30.95,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
+BLOCK,1532,ENTRY,PRE,52.0,WAIT,BLOCK,False,20.85,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
+BLOCK,2061,ENTRY,PRE,52.0,WAIT,BLOCK,False,19.35,0.0,0.0,9,安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2208,ENTRY,PRE,52.0,WAIT,BLOCK,False,19.8,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
+BLOCK,2889,ENTRY,PRE,52.0,WAIT,BLOCK,False,14.5,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
+BLOCK,3059,ENTRY,PRE,52.0,WAIT,BLOCK,False,40.3,0.0,0.0,9,安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4533,ENTRY,PRE,52.0,WAIT,BLOCK,False,31.1,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
+BLOCK,4555,ENTRY,PRE,52.0,WAIT,BLOCK,False,40.35,0.0,0.0,9,安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,5278,ENTRY,PRE,52.0,WAIT,BLOCK,False,23.65,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
+BLOCK,5543,ENTRY,PRE,52.0,WAIT,BLOCK,False,29.75,0.0,0.0,9,安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6125,ENTRY,PRE,52.0,WAIT,BLOCK,False,55.8,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
+BLOCK,6188,ENTRY,PRE,52.0,WAIT,BLOCK,False,83.4,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
+BLOCK,6265,ENTRY,PRE,52.0,WAIT,BLOCK,False,39.8,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
+BLOCK,7705,ENTRY,PRE,52.0,WAIT,BLOCK,False,32.9,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 均線收斂,BLOCK：超出本市場狀態可執行名額
+BLOCK,8455,ENTRY,PRE,52.0,WAIT,BLOCK,False,23.7,0.0,0.0,9,安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,1473,ENTRY,PRE,50.0,WAIT,BLOCK,False,21.25,0.0,0.0,9,波動壓縮 | 安靜吸籌 | 放量吸收,BLOCK：超出本市場狀態可執行名額
+BLOCK,1722,ENTRY,PRE,50.0,WAIT,BLOCK,False,50.7,0.0,0.0,9,均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2534,ENTRY,PRE,50.0,WAIT,BLOCK,False,19.05,0.0,0.0,9,洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,2850,ENTRY,PRE,50.0,WAIT,BLOCK,False,133.0,0.0,0.0,9,均線收斂 | 放量吸收 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,4904,ENTRY,PRE,50.0,WAIT,BLOCK,False,94.5,0.0,0.0,9,洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6183,ENTRY,PRE,50.0,WAIT,BLOCK,False,92.2,0.0,0.0,9,洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額
+BLOCK,6606,ENTRY,PRE,50.0,WAIT,BLOCK,False,24.1,0.0,0.0,9,洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,BLOCK：超出本市場狀態可執行名額

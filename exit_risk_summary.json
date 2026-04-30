@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-04-30 09:20:20",
+  "generated_at": "2026-04-30 11:34:22",
   "source": "exit_risk_engine",
-  "position_source": "current_positions.csv",
+  "position_source": "positions_manual.csv",
   "market_regime": "RANGE",
-  "positions": 3,
-  "sell_count": 2,
+  "positions": 1,
+  "sell_count": 1,
   "reduce_count": 0,
   "watch_count": 0,
-  "hold_count": 1,
+  "hold_count": 0,
   "rule": "SELL 必須處理；REDUCE 降倉；WATCH 觀察；HOLD 續抱。"
 }

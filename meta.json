@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-30 09:19:46",
+  "generated_at": "2026-04-30 11:33:48",
   "source": "v266_strategy_engine",
   "signal_date": "2026-04-30",
   "trade_date": "2026-05-01",
@@ -18,7 +18,7 @@
   "test_count": 2,
   "watch_count": 0,
   "bridge_source": "v265_3_dashboard_bridge",
-  "bridge_generated_at": "2026-04-30 09:20:08",
+  "bridge_generated_at": "2026-04-30 11:34:10",
   "core_trade_count": 5,
   "alpha_trade_count": 8,
   "bridge_files": [
