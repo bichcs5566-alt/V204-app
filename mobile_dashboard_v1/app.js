@@ -721,6 +721,7 @@ function renderAppShell() {
 
         <div id="positionStatus" class="position-status">持倉狀態讀取中...</div>
         <div id="positionList"></div>
+        <div id="positionRiskHints"></div>
       </section>
 
       <section class="card">
@@ -972,6 +973,62 @@ function renderSectionList(targetId, rows, prefix, limit = 80) {
   bindToggle();
 }
 
+
+function getPositionDecisionRows(rows) {
+  return (rows || []).filter(r => {
+    const source = String(r.source || "").toUpperCase();
+    const bucket = String(r.bucket || "").toUpperCase();
+    return source === "EXIT" || source === "POSITION" || bucket === "POSITION";
+  });
+}
+
+function renderPositionRiskHints(rows) {
+  const box = qs("positionRiskHints");
+  if (!box) return;
+
+  const list = getPositionDecisionRows(rows);
+
+  if (!list.length) {
+    box.innerHTML = "";
+    return;
+  }
+
+  box.innerHTML = `
+    <div class="position-risk-panel">
+      <div class="position-risk-title">⚠️ 持倉風控提示</div>
+      ${list.map((row, idx) => {
+        const action = normalizeAction(row.final_action || row.action);
+        const cls = ACTION_CLASS[action] || "watch";
+        const label = ACTION_LABEL[action] || action;
+        const stock = safeText(row.stock_id);
+        const close = num(row.close);
+        const reason = safeText(row.reason, "無");
+        const note = safeText(row.system_note, "無");
+        const entry = safeText(row.entry_type || row.execution_flag, "--");
+        const amount = row.suggested_amount ? money(row.suggested_amount) : "--";
+
+        return `
+          <article class="position-risk-item ${cls}">
+            <div class="position-risk-head">
+              <span class="scan-action ${cls}">${ACTION_EMOJI[action] || "⚪"} ${label}</span>
+              <b>${stock}</b>
+              <span>${entry}</span>
+              <strong>${close}</strong>
+            </div>
+            <div class="position-risk-grid">
+              <div><span>參考價</span><b>${close}</b></div>
+              <div><span>部位金額</span><b>${amount}</b></div>
+            </div>
+            <div class="position-risk-text"><b>原因</b><p>${reason}</p></div>
+            <div class="position-risk-text"><b>系統提示</b><p>${note}</p></div>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+
 function renderScanRow(row, key) {
   const action = normalizeAction(row.final_action || row.action);
   const cls = ACTION_CLASS[action] || "watch";
@@ -988,6 +1045,12 @@ function renderScanRow(row, key) {
   const weight = row.target_weight ? pct(row.target_weight) : "--";
   const reason = safeText(row.reason, "無");
   const note = safeText(row.system_note, "無");
+  const isPositionDecision = String(source).toUpperCase() === "EXIT" || String(bucket).toUpperCase() === "POSITION";
+
+  const extraDetail = isPositionDecision
+    ? `<div class="detail-text position-detail-note"><b>持倉提示</b><p>完整風控原因已移到上方「持倉風控提示」。</p></div>`
+    : `<div class="detail-text"><b>原因</b><p>${reason}</p></div>
+       <div class="detail-text"><b>系統提示</b><p>${note}</p></div>`;
 
   return `
     <article class="scan-item ${cls}">
@@ -1009,8 +1072,7 @@ function renderScanRow(row, key) {
           <div><span>建議金額</span><b>${amount}</b></div>
           <div><span>目標權重</span><b>${weight}</b></div>
         </div>
-        <div class="detail-text"><b>原因</b><p>${reason}</p></div>
-        <div class="detail-text"><b>系統提示</b><p>${note}</p></div>
+        ${extraDetail}
       </div>
     </article>
   `;
@@ -1091,6 +1153,7 @@ async function init() {
     const groups = splitRows(rows);
 
     renderMeta(regime, summary, rows);
+    renderPositionRiskHints(rows);
     renderDecision(rows);
     renderFinalActions(groups.main);
     renderSectionList("testList", groups.test, "test", 80);
