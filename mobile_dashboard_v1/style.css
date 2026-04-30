@@ -745,3 +745,33 @@ button:disabled {
     grid-template-columns: 70px 58px 46px 24px 72px 62px;
   }
 }
+/* 持倉同步分秒狀態 */
+.position-status {
+  margin: 10px 0 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.35;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.position-status.ok {
+  color: #15803d;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.position-status.error {
+  color: #dc2626;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+#positionLiveClock {
+  white-space: nowrap;
+}
