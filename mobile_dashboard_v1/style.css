@@ -900,3 +900,110 @@ button:disabled {
   .position-risk-text p {
     font-size: 17px;
   }
+/* 持倉風控提示：放進每一張持倉卡片框內 */
+.position-inline-risk {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1.8px solid var(--line);
+  background: #fff;
+}
+
+.position-inline-risk.sell {
+  background: #fff7f7;
+  border-color: #fca5a5;
+}
+
+.position-inline-risk.reduce {
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+
+.position-inline-risk.watch,
+.position-inline-risk.block {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.position-inline-risk-head {
+  display: grid;
+  grid-template-columns: 82px 1fr 62px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.position-inline-risk-head b {
+  font-size: 18px;
+  font-weight: 950;
+  color: #334155;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.position-inline-risk-head strong {
+  text-align: right;
+  font-size: 18px;
+  color: #334155;
+}
+
+.position-inline-risk-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.position-inline-risk-grid div {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 9px;
+}
+
+.position-inline-risk-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.position-inline-risk-grid b {
+  display: block;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.position-inline-risk-text {
+  margin-top: 10px;
+  color: #334155;
+}
+
+.position-inline-risk-text b {
+  display: block;
+  font-size: 18px;
+  margin-bottom: 3px;
+}
+
+.position-inline-risk-text p {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.35;
+  font-weight: 700;
+}
+
+/* 舊的獨立風控區隱藏，避免多一個欄位 */
+#positionRiskHints,
+.position-risk-panel {
+  display: none !important;
+}
+
+@media (max-width: 430px) {
+  .position-inline-risk-head {
+    grid-template-columns: 74px 1fr 52px;
+  }
+
+  .position-inline-risk-text p {
+    font-size: 17px;
+  }
+}
