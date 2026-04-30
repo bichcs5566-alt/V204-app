@@ -13,7 +13,7 @@ const DATA_DIR = "./data/";
 
 // 這裡填你的 Cloudflare Worker API 網址，例如：
 // https://runi-data-pipeline-trigger.<你的帳號>.workers.dev/run
-const RUN_PIPELINE_API = "https://YOUR_WORKER_URL/run";
+const RUN_PIPELINE_API = "https://bichcs5566-alt.github.io/V204-app/mobile_dashboard_v1/?v=force_refresh_1";
 
 const FILES = {
   final: DATA_DIR + "final_action_plan.csv",
