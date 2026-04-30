@@ -590,3 +590,57 @@ button:disabled {
   background: #eef2ff;
   color: var(--blue);
 }
+/* GitHub 本機設定區 */
+.github-settings-card h2 {
+  margin-bottom: 14px;
+}
+
+.github-input {
+  width: 100%;
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin: 8px 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+  background: #fff;
+  outline: none;
+}
+
+.github-input::placeholder {
+  color: #9ca3af;
+  font-weight: 700;
+}
+
+.github-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.github-actions .secondary {
+  background: #eef2ff;
+  color: var(--blue);
+}
+
+.github-status {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.github-status.saved {
+  color: #15803d;
+}
+
+#syncStatus {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+#liveClock {
+  white-space: nowrap;
+}
