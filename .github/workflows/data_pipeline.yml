@@ -75,9 +75,17 @@ jobs:
         run: |
           python feature_timing_engine.py
 
-      - name: Run final trading system allocator
+      - name: Run trading system allocator
         run: |
           python trading_system_allocator.py
+
+      - name: Run exit risk engine
+        run: |
+          python exit_risk_engine.py
+
+      - name: Run final decision engine
+        run: |
+          python final_decision_engine.py
 
       - name: Sync dashboard
         run: |
@@ -87,11 +95,13 @@ jobs:
             echo "bridge not found, skip"
           fi
 
-      - name: Keep final dashboard files after bridge
+      - name: Keep C complete dashboard files after bridge
         run: |
           python pre_move_dashboard_patch.py
           python feature_timing_engine.py
           python trading_system_allocator.py
+          python exit_risk_engine.py
+          python final_decision_engine.py
 
       - name: Clean runtime big files
         run: |
@@ -107,7 +117,52 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
 
-          git add             data_meta.json             feature_meta.json             data_guard_report.json             backfill_report.json             trade_plan.csv             candidates.csv             core_candidates.csv             alpha_candidates.csv             selection_debug.csv             meta.json             pre_move_candidates.csv             pre_move_summary.json             market_regime.json             timing_candidates.csv             timing_summary.json             trading_system_plan.csv             trading_system_summary.json             bridge_debug.csv             mobile_dashboard_v1/data/meta.json             mobile_dashboard_v1/data/trade_plan.csv             mobile_dashboard_v1/data/candidates.csv             mobile_dashboard_v1/data/core_candidates.csv             mobile_dashboard_v1/data/alpha_candidates.csv             mobile_dashboard_v1/data/selection_debug.csv             mobile_dashboard_v1/data/data_guard_report.json             mobile_dashboard_v1/data/backfill_report.json             mobile_dashboard_v1/data/data_meta.json             mobile_dashboard_v1/data/feature_meta.json             mobile_dashboard_v1/data/pre_move_candidates.csv             mobile_dashboard_v1/data/pre_move_summary.json             mobile_dashboard_v1/data/pre_move_cards.json             mobile_dashboard_v1/data/market_regime.json             mobile_dashboard_v1/data/timing_candidates.csv             mobile_dashboard_v1/data/timing_summary.json             mobile_dashboard_v1/data/trading_system_plan.csv             mobile_dashboard_v1/data/trading_system_summary.json             mobile_dashboard_v1/data/bridge_debug.csv || true
+          git add \
+            data_meta.json \
+            feature_meta.json \
+            data_guard_report.json \
+            backfill_report.json \
+            trade_plan.csv \
+            candidates.csv \
+            core_candidates.csv \
+            alpha_candidates.csv \
+            selection_debug.csv \
+            meta.json \
+            pre_move_candidates.csv \
+            pre_move_summary.json \
+            market_regime.json \
+            timing_candidates.csv \
+            timing_summary.json \
+            trading_system_plan.csv \
+            trading_system_summary.json \
+            exit_risk_plan.csv \
+            exit_risk_summary.json \
+            final_action_plan.csv \
+            final_action_summary.json \
+            bridge_debug.csv \
+            mobile_dashboard_v1/data/meta.json \
+            mobile_dashboard_v1/data/trade_plan.csv \
+            mobile_dashboard_v1/data/candidates.csv \
+            mobile_dashboard_v1/data/core_candidates.csv \
+            mobile_dashboard_v1/data/alpha_candidates.csv \
+            mobile_dashboard_v1/data/selection_debug.csv \
+            mobile_dashboard_v1/data/data_guard_report.json \
+            mobile_dashboard_v1/data/backfill_report.json \
+            mobile_dashboard_v1/data/data_meta.json \
+            mobile_dashboard_v1/data/feature_meta.json \
+            mobile_dashboard_v1/data/pre_move_candidates.csv \
+            mobile_dashboard_v1/data/pre_move_summary.json \
+            mobile_dashboard_v1/data/pre_move_cards.json \
+            mobile_dashboard_v1/data/market_regime.json \
+            mobile_dashboard_v1/data/timing_candidates.csv \
+            mobile_dashboard_v1/data/timing_summary.json \
+            mobile_dashboard_v1/data/trading_system_plan.csv \
+            mobile_dashboard_v1/data/trading_system_summary.json \
+            mobile_dashboard_v1/data/exit_risk_plan.csv \
+            mobile_dashboard_v1/data/exit_risk_summary.json \
+            mobile_dashboard_v1/data/final_action_plan.csv \
+            mobile_dashboard_v1/data/final_action_summary.json \
+            mobile_dashboard_v1/data/bridge_debug.csv || true
 
           git reset -- price_panel_daily.csv || true
           git reset -- feature_panel_daily.csv || true
@@ -119,6 +174,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "no update"
           else
-            git commit -m "final integrated trading system"
+            git commit -m "complete trading system with exit risk"
             git push origin main
           fi
