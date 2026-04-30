@@ -1,6 +1,20 @@
+"""
+final_decision_engine.py
+v266.9 穩定版
+
+修正：
+1. CSV 全部以 utf-8-sig 輸出，避免手機前端顯示亂碼。
+2. stock_id 全面字串化，避免 3501 變 350162.0 / 3501.0。
+3. final_action_plan.csv 強制保留 UI 需要欄位：
+   strategy_type / liquidity_level / liquidity_tag / liquidity_score / volume / turnover
+4. WATCH / BLOCK 若主表缺資料，會從 trade_plan / candidates / alpha / core 回補。
+5. 持倉 EXIT / POSITION 優先，不破壞原本進場策略。
+"""
+
 from pathlib import Path
 from datetime import datetime
 import json
+import math
 import pandas as pd
 
 ROOT = Path(".")
@@ -14,23 +28,43 @@ OUTPUT_COLUMNS = [
     "liquidity_level", "liquidity_tag", "liquidity_score", "volume", "turnover",
 ]
 
+def clean_text(v, default=""):
+    if v is None:
+        return default
+    if isinstance(v, float) and math.isnan(v):
+        return default
+    s = str(v)
+    if s.lower() in ["nan", "none", "null"]:
+        return default
+    return s
+
+def normalize_stock_id(x):
+    s = clean_text(x).strip()
+    if not s:
+        return ""
+    if s.endswith(".0"):
+        s = s[:-2]
+    # 修掉被串接/污染的常見尾碼，例如 350162.0 無法猜原碼，不硬切；只處理純數字合理長度
+    if s.isdigit() and len(s) <= 4:
+        return s.zfill(4)
+    return s
+
 def read_csv_any(paths):
     for p in paths:
         p = Path(p)
-        if p.exists() and p.stat().st_size > 0:
+        if not p.exists() or p.stat().st_size == 0:
+            continue
+        for enc in ["utf-8-sig", "utf-8", "big5", "cp950"]:
             try:
-                df = pd.read_csv(p)
+                df = pd.read_csv(p, encoding=enc, dtype={"stock_id": str})
                 if not df.empty:
+                    df.columns = [str(c).strip() for c in df.columns]
+                    if "stock_id" in df.columns:
+                        df["stock_id"] = df["stock_id"].apply(normalize_stock_id)
                     return df
             except Exception:
-                pass
+                continue
     return pd.DataFrame()
-
-def normalize_stock_id(x):
-    s = str(x).strip()
-    if s.endswith(".0"):
-        s = s[:-2]
-    return s.zfill(4) if s.isdigit() and len(s) <= 4 else s
 
 def is_true(x):
     return str(x).strip().lower() in ["true", "1", "yes"] or x is True
@@ -41,33 +75,52 @@ def pct_text(x):
     except Exception:
         return ""
 
+def write_csv_both(df, name):
+    df.to_csv(ROOT / name, index=False, encoding="utf-8-sig")
+    df.to_csv(DATA_DIR / name, index=False, encoding="utf-8-sig")
+
 def make_lookup():
     frames = []
     for name in ["trade_plan.csv", "candidates.csv", "alpha_candidates.csv", "core_candidates.csv"]:
         df = read_csv_any([ROOT / name, DATA_DIR / name])
         if not df.empty and "stock_id" in df.columns:
-            df = df.copy()
-            df["stock_id"] = df["stock_id"].apply(normalize_stock_id)
             frames.append(df)
+
     if not frames:
         return {}
-    all_df = pd.concat(frames, ignore_index=True).drop_duplicates("stock_id", keep="first")
+
+    all_df = pd.concat(frames, ignore_index=True)
+    all_df["stock_id"] = all_df["stock_id"].apply(normalize_stock_id)
+
+    # 優先 trade_plan，其次 candidates，先出現者保留
+    all_df = all_df.drop_duplicates("stock_id", keep="first")
     return {str(r["stock_id"]): r.to_dict() for _, r in all_df.iterrows()}
 
-def clean(v, default=""):
-    if v is None:
-        return default
-    s = str(v)
-    if s in ["", "nan", "None"]:
-        return default
-    return v
-
 def pick(row, lookup, col, default=""):
-    v = clean(row.get(col, ""), None)
-    if v is not None:
+    v = row.get(col, default) if hasattr(row, "get") else default
+    v = clean_text(v, "")
+    if v != "":
         return v
-    sid = normalize_stock_id(row.get("stock_id", ""))
-    return clean(lookup.get(sid, {}).get(col, ""), default)
+
+    sid = normalize_stock_id(row.get("stock_id", "")) if hasattr(row, "get") else ""
+    src = lookup.get(sid, {})
+    return clean_text(src.get(col, default), default)
+
+def norm_action(v):
+    s = clean_text(v).strip().upper()
+    if s in ["買進"]:
+        return "BUY"
+    if s in ["試單"]:
+        return "TEST"
+    if s in ["觀察"]:
+        return "WATCH"
+    if s in ["禁止"]:
+        return "BLOCK"
+    if s in ["賣出"]:
+        return "SELL"
+    if s in ["減碼"]:
+        return "REDUCE"
+    return s
 
 def main():
     generated_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
@@ -84,50 +137,52 @@ def main():
     rows = []
     holding_ids = set()
 
-    if not exitp.empty:
-        exitp.columns = [str(c).strip() for c in exitp.columns]
-        if "stock_id" in exitp.columns:
-            exitp["stock_id"] = exitp["stock_id"].apply(normalize_stock_id)
-            holding_ids = set(exitp["stock_id"])
+    # 1) 持倉出場層：優先
+    if not exitp.empty and "stock_id" in exitp.columns:
+        exitp["stock_id"] = exitp["stock_id"].apply(normalize_stock_id)
+        holding_ids = set(exitp["stock_id"])
 
         for _, r in exitp.iterrows():
-            raw_action = str(r.get("exit_action", "")).upper()
+            raw_action = norm_action(r.get("exit_action", ""))
             if raw_action == "SELL":
-                final_action, priority, allowed, note = "SELL", 0, True, "æåé¢¨æ§ï¼å¿é åªåèçåºå ´"
+                final_action, priority, allowed, note = "SELL", 0, True, "持倉風控：必須優先處理出場"
             elif raw_action == "REDUCE":
-                final_action, priority, allowed, note = "REDUCE", 1, True, "æåé¢¨æ§ï¼å»ºè­°éåæ§é¢¨éª"
+                final_action, priority, allowed, note = "REDUCE", 1, True, "持倉風控：建議降倉控風險"
             elif raw_action in ["HOLD", "WATCH"]:
-                final_action, priority, allowed, note = "WATCH", 7, False, "æåè§å¯ï¼ç®åä¸æ°å¢ãä¸åºå ´"
+                final_action, priority, allowed, note = "WATCH", 7, False, "持倉觀察：目前不新增、不出場"
             else:
                 continue
 
             reason_parts = []
-            if clean(r.get("exit_reason", "")):
-                reason_parts.append(str(r.get("exit_reason", "")))
+            er = clean_text(r.get("exit_reason", ""))
+            if er:
+                reason_parts.append(er)
             u = pct_text(r.get("unrealized_pct", ""))
             if u:
-                reason_parts.append(f"æç {u}")
-            if clean(r.get("avg_cost", "")):
-                reason_parts.append(f"åå¹ {r.get('avg_cost')}")
-            if clean(r.get("lots", "")):
-                reason_parts.append(f"å¼µæ¸ {r.get('lots')}")
+                reason_parts.append(f"損益 {u}")
+            avg = clean_text(r.get("avg_cost", ""))
+            if avg:
+                reason_parts.append(f"均價 {avg}")
+            lots = clean_text(r.get("lots", ""))
+            if lots:
+                reason_parts.append(f"張數 {lots}")
 
             rows.append({
                 "final_action": final_action,
-                "stock_id": r.get("stock_id", ""),
+                "stock_id": normalize_stock_id(r.get("stock_id", "")),
                 "source": "EXIT",
                 "bucket": "POSITION",
                 "strategy_type": "POSITION",
-                "score": r.get("exit_priority", 0),
+                "score": clean_text(r.get("exit_priority", 0)),
                 "entry_type": raw_action,
                 "execution_flag": raw_action,
                 "allowed": allowed,
-                "close": r.get("close", ""),
-                "suggested_amount": r.get("position_value", ""),
+                "close": clean_text(r.get("close", "")),
+                "suggested_amount": clean_text(r.get("position_value", "")),
                 "target_weight": "",
                 "priority": priority,
                 "reason": " | ".join(reason_parts),
-                "system_note": f"{note}ï½é¢¨éª {r.get('risk_level', '')}",
+                "system_note": f"{note}｜風險 {clean_text(r.get('risk_level', ''))}",
                 "liquidity_level": "",
                 "liquidity_tag": "",
                 "liquidity_score": "",
@@ -135,25 +190,26 @@ def main():
                 "turnover": "",
             })
 
-    if not trading.empty:
-        trading.columns = [str(c).strip() for c in trading.columns]
-        if "stock_id" in trading.columns:
-            trading["stock_id"] = trading["stock_id"].apply(normalize_stock_id)
+    # 2) 進場策略層
+    if not trading.empty and "stock_id" in trading.columns:
+        trading["stock_id"] = trading["stock_id"].apply(normalize_stock_id)
 
         for _, r in trading.iterrows():
-            sid = r.get("stock_id", "")
-            if sid in holding_ids:
+            sid = normalize_stock_id(r.get("stock_id", ""))
+            if not sid or sid in holding_ids:
                 continue
 
-            raw_action = str(r.get("action", r.get("final_action", ""))).upper()
+            raw_action = norm_action(r.get("action", r.get("final_action", "")))
             allowed = is_true(r.get("allowed", True))
+
             strategy_type = pick(r, lookup, "strategy_type", pick(r, lookup, "bucket", ""))
             bucket = pick(r, lookup, "bucket", strategy_type)
+            liq = pick(r, lookup, "liquidity_level", "").upper()
 
             if raw_action in ["BUY", "TEST", "WATCH", "BLOCK"]:
                 final_action = raw_action
             else:
-                flag = str(r.get("execution_flag", "")).upper()
+                flag = norm_action(r.get("execution_flag", ""))
                 if allowed and flag == "TOP":
                     final_action = "BUY" if str(strategy_type).upper() == "ALPHA" else "TEST"
                 elif flag == "WATCH":
@@ -161,8 +217,7 @@ def main():
                 else:
                     final_action = "BLOCK"
 
-            # å¯¦æ°ä¿è­·ï¼æµåæ§ä¸è¶³ä¸å¯ BUY
-            liq = str(pick(r, lookup, "liquidity_level", "")).upper()
+            # 實戰保護：流動性不足不可 BUY
             if final_action == "BUY" and liq in ["LOW", "BLOCK", ""]:
                 final_action = "TEST" if liq == "LOW" else "BLOCK"
 
@@ -176,7 +231,7 @@ def main():
                 "strategy_type": strategy_type,
                 "score": pick(r, lookup, "score", pick(r, lookup, "entry_score", "")),
                 "entry_type": pick(r, lookup, "action_sub", r.get("entry_type", "")),
-                "execution_flag": r.get("execution_flag", raw_action),
+                "execution_flag": pick(r, lookup, "execution_flag", raw_action),
                 "allowed": allowed,
                 "close": pick(r, lookup, "close", pick(r, lookup, "ref_price", "")),
                 "suggested_amount": pick(r, lookup, "suggested_amount", ""),
@@ -193,14 +248,17 @@ def main():
 
     out = pd.DataFrame(rows, columns=OUTPUT_COLUMNS)
     if not out.empty:
-        out = out.sort_values(["priority", "score", "stock_id"], ascending=[True, False, True])
+        # 轉成數值排序，但保留原欄位輸出
+        out["_score_num"] = pd.to_numeric(out["score"], errors="coerce").fillna(0)
+        out["_priority_num"] = pd.to_numeric(out["priority"], errors="coerce").fillna(9)
+        out = out.sort_values(["_priority_num", "_score_num", "stock_id"], ascending=[True, False, True])
+        out = out.drop(columns=["_score_num", "_priority_num"])
 
-    out.to_csv(ROOT / "final_action_plan.csv", index=False, encoding="utf-8")
-    out.to_csv(DATA_DIR / "final_action_plan.csv", index=False, encoding="utf-8")
+    write_csv_both(out, "final_action_plan.csv")
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_final_integrated",
+        "source": "final_decision_engine_v266_9_stable",
         "rows": int(len(out)),
         "sell_count": int((out["final_action"] == "SELL").sum()) if not out.empty else 0,
         "reduce_count": int((out["final_action"] == "REDUCE").sum()) if not out.empty else 0,
@@ -213,6 +271,7 @@ def main():
         "high_liquidity_count": int((out["liquidity_level"].astype(str).str.upper() == "HIGH").sum()) if not out.empty else 0,
         "medium_liquidity_count": int((out["liquidity_level"].astype(str).str.upper() == "MEDIUM").sum()) if not out.empty else 0,
         "low_liquidity_count": int((out["liquidity_level"].astype(str).str.upper() == "LOW").sum()) if not out.empty else 0,
+        "encoding": "utf-8-sig",
     }
 
     for p in [ROOT / "final_action_summary.json", DATA_DIR / "final_action_summary.json"]:
