@@ -1,19 +1,11 @@
 /*
-app.js - Final Action UI 版
+app.js - 掃描列表 + 展開詳情版
 
-用途：
-讓手機每日操作介面優先讀取：
-mobile_dashboard_v1/data/final_action_plan.csv
-
-顯示順序：
-1. SELL   賣出
-2. REDUCE 減碼
-3. BUY    買進
-4. TEST   試單
-5. WATCH  觀察
-6. BLOCK  禁止
-
-如果 final_action_plan.csv 不存在，會 fallback 讀 trade_plan.csv。
+重點：
+1. 預設一行一檔，降低高度
+2. 保留原本所有資訊
+3. 點擊該列可展開：來源、策略層、目標權重、原因、系統提示
+4. 優先讀 final_action_plan.csv
 */
 
 const DATA_DIR = "./data/";
@@ -22,9 +14,7 @@ const FILES = {
   final: DATA_DIR + "final_action_plan.csv",
   finalSummary: DATA_DIR + "final_action_summary.json",
   regime: DATA_DIR + "market_regime.json",
-  trading: DATA_DIR + "trading_system_plan.csv",
-  tradePlan: DATA_DIR + "trade_plan.csv",
-  meta: DATA_DIR + "meta.json"
+  tradePlan: DATA_DIR + "trade_plan.csv"
 };
 
 const ACTION_LABEL = {
@@ -100,7 +90,6 @@ function parseCsv(text) {
     headers.forEach((h, idx) => obj[h] = values[idx] ?? "");
     rows.push(obj);
   }
-
   return rows;
 }
 
@@ -111,7 +100,6 @@ function parseCsvLine(line) {
 
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
-
     if (ch === '"') {
       if (inQuotes && line[i + 1] === '"') {
         cur += '"';
@@ -233,7 +221,10 @@ function renderAppShell() {
       <section id="mainDecision" class="card decision"></section>
 
       <section class="card">
-        <h2>🔥 最終操作</h2>
+        <div class="section-head">
+          <h2>🔥 最終操作</h2>
+          <span class="hint">點擊股票可展開詳情</span>
+        </div>
         <div id="finalActionList"></div>
       </section>
 
@@ -261,10 +252,7 @@ function renderAppShell() {
 }
 
 function renderMeta(regime, summary, rows) {
-  const counts = groupCounts(rows);
-  const box = qs("metaBox");
-
-  box.innerHTML = `
+  qs("metaBox").innerHTML = `
     <div class="mini"><span>來源版本</span><b>C 完整交易系統</b></div>
     <div class="mini"><span>市場狀態</span><b>${safeText(regime.label || regime.regime)}</b></div>
     <div class="mini"><span>風險模式</span><b>${safeText(regime.risk_mode)}</b></div>
@@ -305,11 +293,12 @@ function renderFinalActions(rows) {
     return;
   }
 
-  container.innerHTML = sorted.map(row => {
+  container.innerHTML = sorted.map((row, idx) => {
     const action = normalizeAction(row.final_action || row.action);
     const cls = ACTION_CLASS[action] || "watch";
     const label = ACTION_LABEL[action] || action;
     const emoji = ACTION_EMOJI[action] || "⚪";
+
     const stock = safeText(row.stock_id);
     const score = safeText(row.score);
     const source = safeText(row.source);
@@ -322,34 +311,37 @@ function renderFinalActions(rows) {
     const note = safeText(row.system_note, "無");
 
     return `
-      <article class="action-card ${cls}">
-        <div class="topline">
-          <div class="pill ${cls}">${emoji} ${label}</div>
-          <div class="stock">${stock}</div>
-          <div class="score">${score}</div>
+      <article class="scan-item ${cls}" data-row="${idx}">
+        <div class="scan-main">
+          <div class="scan-action ${cls}">${emoji} ${label}</div>
+          <div class="scan-stock">${stock}</div>
+          <div class="scan-score">${score}</div>
+          <div class="scan-entry">${entry}</div>
+          <div class="scan-close">${close}</div>
+          <div class="scan-amount">${amount}</div>
         </div>
 
-        <div class="info-grid">
-          <div><span>來源</span><b>${source}</b></div>
-          <div><span>策略層</span><b>${bucket}</b></div>
-          <div><span>進場型態</span><b>${entry}</b></div>
-          <div><span>參考價</span><b>${close}</b></div>
-          <div><span>建議金額</span><b>${amount}</b></div>
-          <div><span>目標權重</span><b>${weight}</b></div>
-        </div>
-
-        <div class="reason">
-          <b>原因</b>
-          <p>${reason}</p>
-        </div>
-
-        <div class="note">
-          <b>系統提示</b>
-          <p>${note}</p>
+        <div class="scan-detail">
+          <div class="detail-grid">
+            <div><span>來源</span><b>${source}</b></div>
+            <div><span>策略層</span><b>${bucket}</b></div>
+            <div><span>進場型態</span><b>${entry}</b></div>
+            <div><span>參考價</span><b>${close}</b></div>
+            <div><span>建議金額</span><b>${amount}</b></div>
+            <div><span>目標權重</span><b>${weight}</b></div>
+          </div>
+          <div class="detail-text"><b>原因</b><p>${reason}</p></div>
+          <div class="detail-text"><b>系統提示</b><p>${note}</p></div>
         </div>
       </article>
     `;
   }).join("");
+
+  document.querySelectorAll(".scan-item").forEach(el => {
+    el.addEventListener("click", () => {
+      el.classList.toggle("open");
+    });
+  });
 }
 
 function renderStats(rows, summary) {
@@ -399,7 +391,6 @@ async function loadFinalRows() {
     console.warn("final_action_plan fallback", e);
   }
 
-  // fallback：舊 trade_plan
   try {
     const txt = await fetchText(FILES.tradePlan);
     const oldRows = parseCsv(txt);
