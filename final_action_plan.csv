@@ -1,4 +1,5 @@
 final_action,stock_id,source,bucket,score,entry_type,execution_flag,allowed,close,suggested_amount,target_weight,priority,reason,system_note
+SELL,2330,EXIT,POSITION,100.0,SELL,SELL,True,2135.0,2135000.0,,0,觸發停損 -8.37% | 損益 -8.37% | 均價 2330.0 | 張數 1.0,持倉風控：必須優先處理出場｜風險 HIGH
 SELL,2409,EXIT,POSITION,100.0,SELL,SELL,True,17.2,51600.0,,0,觸發停損 -9.47% | 跌破 MA20 | 損益 -9.47% | 均價 19.0 | 張數 3.0,持倉風控：必須優先處理出場｜風險 MEDIUM
 BUY,1110,ENTRY,CORE,80.0,PULLBACK,TOP,True,15.42,20000.0,0.02,2,反轉引擎｜靠近MA20｜均線收斂｜量能回溫,TOP + timing 合格：允許分批
 BUY,2465,ENTRY,CORE,80.0,BREAK,TOP,True,74.07,20000.0,0.02,2,強勢引擎｜20日動能｜均線多頭｜量能確認,TOP + timing 合格：允許分批

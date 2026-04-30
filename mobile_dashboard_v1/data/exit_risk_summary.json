@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-04-30 12:04:42",
+  "generated_at": "2026-04-30 13:08:19",
   "source": "exit_risk_engine",
   "position_source": "positions_manual.csv",
   "market_regime": "RANGE",
-  "positions": 1,
-  "sell_count": 1,
+  "positions": 2,
+  "sell_count": 2,
   "reduce_count": 0,
   "watch_count": 0,
   "hold_count": 0,
