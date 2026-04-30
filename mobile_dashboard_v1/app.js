@@ -1100,6 +1100,13 @@ function liquiditySortRank(row) {
   return 0;
 }
 
+
+function detailCell(label, value, extraClass = "") {
+  const v = safeText(value, "");
+  if (v === "" || v === "--" || v === "0張" || v === "0" || v === "0.00" || v === "0.00億") return "";
+  return `<div><span>${label}</span><b class="${extraClass}">${v}</b></div>`;
+}
+
 function renderScanRow(row, key) {
   const action = normalizeAction(row.final_action || row.action);
   const cls = ACTION_CLASS[action] || "watch";
@@ -1144,16 +1151,16 @@ function renderScanRow(row, key) {
 
       <div class="scan-detail" id="${key}">
         <div class="detail-grid">
-          <div><span>來源</span><b>${source}</b></div>
-          <div><span>策略層</span><b>${strat}</b></div>
-          <div><span>進場型態</span><b>${entry}</b></div>
-          <div><span>參考價</span><b>${close}</b></div>
-          <div><span>建議金額</span><b>${amount}</b></div>
-          <div><span>目標權重</span><b>${weight}</b></div>
-          <div><span>流動性</span><b class="${liqCls}">${liqLabel}</b></div>
-          <div><span>成交量</span><b>${volume}</b></div>
-          <div><span>成交金額</span><b>${turnover}</b></div>
-          <div><span>流動性分數</span><b>${liqScore}</b></div>
+          ${detailCell("來源", source)}
+          ${detailCell("策略層", strat)}
+          ${detailCell("進場型態", entry)}
+          ${detailCell("參考價", close)}
+          ${detailCell("建議金額", amount)}
+          ${detailCell("目標權重", weight)}
+          ${detailCell("流動性", liqLabel, liqCls)}
+          ${detailCell("成交量", volume)}
+          ${detailCell("成交金額", turnover)}
+          ${detailCell("流動性分數", liqScore)}
         </div>
         ${extraDetail}
       </div>
