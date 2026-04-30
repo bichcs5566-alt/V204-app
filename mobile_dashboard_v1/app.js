@@ -109,7 +109,7 @@ function parseCsv(text) {
   const lines = text.replace(/\r/g, "").split("\n").filter(x => x.trim() !== "");
   if (lines.length <= 1) return rows;
 
-  const headers = parseCsvLine(lines[0]).map(h => h.trim());
+  const headers = parseCsvLine(lines[0].replace(/^\uFEFF/, "")).map(h => h.trim());
 
   for (let i = 1; i < lines.length; i++) {
     const values = parseCsvLine(lines[i]);
@@ -526,7 +526,8 @@ function renderPositions() {
 
   box.innerHTML = rows.map((row, idx) => {
     const key = `pos-${idx}`;
-    const stock = safeText(row.stock_id);
+    let stock = safeText(row.stock_id);
+  if (stock.endsWith(".0")) stock = stock.slice(0, -2);
     const avg = num(row.avg_price);
     const lots = num(row.lots, 2);
     const shares = money(row.shares);
@@ -1105,7 +1106,8 @@ function renderScanRow(row, key) {
   const label = ACTION_LABEL[action] || action;
   const emoji = ACTION_EMOJI[action] || "⚪";
   const top = isTop(row) ? "🔥TOP" : "";
-  const stock = safeText(row.stock_id);
+  let stock = safeText(row.stock_id);
+  if (stock.endsWith(".0")) stock = stock.slice(0, -2);
   const score = safeText(row.score);
   const source = safeText(row.source);
   const bucket = safeText(row.bucket);
