@@ -1,5 +1,10 @@
 /*
-style.css - Final Action UI
+style.css - Final Action UI 手機壓縮版
+
+目標：
+1. 手機畫面更緊湊
+2. 避免卡片太寬、字太大
+3. 保留 SELL / REDUCE / BUY / TEST / WATCH / BLOCK 顏色與排序
 */
 
 :root {
@@ -9,7 +14,6 @@ style.css - Final Action UI
   --muted: #667085;
   --line: #e5e7eb;
   --blue: #263f6d;
-  --green: #16a34a;
   --green-bg: #e8f8ee;
   --red: #dc2626;
   --red-bg: #fee2e2;
@@ -36,46 +40,49 @@ body {
 }
 
 .page {
-  max-width: 860px;
+  width: 100%;
+  max-width: 760px;
   margin: 0 auto;
-  padding: 28px 22px 80px;
+  padding: 18px 14px 64px;
 }
 
 .card {
   background: var(--card);
-  border-radius: 34px;
-  padding: 34px;
-  margin: 24px 0;
-  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.05);
+  border-radius: 26px;
+  padding: 22px;
+  margin: 16px 0;
+  box-shadow: 0 6px 22px rgba(15, 23, 42, 0.045);
 }
 
 .hero h1 {
-  font-size: 46px;
-  margin: 0 0 24px;
+  font-size: 34px;
+  line-height: 1.15;
+  margin: 0 0 18px;
   letter-spacing: -1px;
 }
 
 .actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 18px;
-  margin-bottom: 22px;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 button {
   border: none;
-  border-radius: 24px;
+  border-radius: 18px;
   background: var(--blue);
   color: white;
-  font-size: 28px;
+  font-size: 21px;
   font-weight: 900;
-  padding: 24px 18px;
+  padding: 17px 8px;
+  line-height: 1.2;
 }
 
 .sync {
   color: var(--muted);
-  font-size: 26px;
-  margin: 18px 0;
+  font-size: 22px;
+  margin: 14px 0;
 }
 
 .sync.ok {
@@ -89,31 +96,32 @@ button {
 .meta-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 16px;
+  gap: 12px;
 }
 
 .mini {
   background: #f8fafc;
-  border: 2px solid var(--line);
-  border-radius: 22px;
-  padding: 20px 24px;
+  border: 1.5px solid var(--line);
+  border-radius: 18px;
+  padding: 15px 18px;
 }
 
 .mini span {
   display: block;
   color: var(--muted);
-  font-size: 22px;
-  margin-bottom: 8px;
+  font-size: 19px;
+  margin-bottom: 6px;
 }
 
 .mini b {
   display: block;
-  font-size: 28px;
+  font-size: 25px;
+  line-height: 1.25;
   color: var(--text);
 }
 
 .decision {
-  border: 4px solid var(--line);
+  border: 3px solid var(--line);
 }
 
 .decision.sell {
@@ -143,61 +151,64 @@ button {
 
 .small-title {
   color: var(--muted);
-  font-size: 28px;
-  margin-bottom: 12px;
+  font-size: 24px;
+  margin-bottom: 8px;
 }
 
 .big-decision {
-  font-size: 72px;
+  font-size: 54px;
   line-height: 1;
-  margin-bottom: 18px;
-  letter-spacing: -3px;
+  margin-bottom: 14px;
+  letter-spacing: -2px;
 }
 
 .decision p {
-  font-size: 30px;
-  line-height: 1.45;
+  font-size: 25px;
+  line-height: 1.4;
   color: #475569;
-  margin: 0 0 24px;
+  margin: 0 0 18px;
 }
 
 .count-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 14px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
 }
 
 .count-grid div {
   background: white;
-  border: 2px solid var(--line);
-  border-radius: 22px;
+  border: 1.5px solid var(--line);
+  border-radius: 18px;
   text-align: center;
-  padding: 20px 6px;
+  padding: 15px 4px;
 }
 
 .count-grid b {
   display: block;
-  font-size: 42px;
+  font-size: 36px;
+  line-height: 1;
 }
 
 .count-grid span {
   display: block;
   color: var(--muted);
-  font-size: 20px;
+  font-size: 18px;
   margin-top: 6px;
 }
 
 h2 {
-  font-size: 42px;
-  margin: 0 0 24px;
+  font-size: 34px;
+  line-height: 1.15;
+  margin: 0 0 18px;
   letter-spacing: -1px;
 }
 
 .action-card {
-  border: 3px solid var(--line);
-  border-radius: 28px;
-  padding: 28px;
-  margin: 20px 0;
+  border: 2.5px solid var(--line);
+  border-radius: 24px;
+  padding: 20px;
+  margin: 16px 0;
+  overflow: hidden;
 }
 
 .action-card.sell {
@@ -234,15 +245,15 @@ h2 {
 .topline {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: 18px;
+  gap: 12px;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 18px;
 }
 
 .pill {
   border-radius: 999px;
-  padding: 16px 24px;
-  font-size: 26px;
+  padding: 11px 16px;
+  font-size: 22px;
   white-space: nowrap;
 }
 
@@ -277,120 +288,233 @@ h2 {
 }
 
 .stock {
-  font-size: 44px;
+  font-size: 38px;
   font-weight: 950;
+  min-width: 0;
 }
 
 .score {
-  font-size: 38px;
+  font-size: 34px;
   font-weight: 950;
+  text-align: right;
 }
 
 .info-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 12px;
 }
 
 .info-grid div {
   background: #f8fafc;
-  border: 2px solid var(--line);
-  border-radius: 22px;
-  padding: 20px;
+  border: 1.5px solid var(--line);
+  border-radius: 18px;
+  padding: 15px;
+  min-width: 0;
 }
 
 .info-grid span {
   display: block;
   color: var(--muted);
-  font-size: 22px;
-  margin-bottom: 8px;
+  font-size: 19px;
+  margin-bottom: 7px;
+  line-height: 1.15;
 }
 
 .info-grid b {
   display: block;
-  font-size: 28px;
+  font-size: 25px;
+  line-height: 1.18;
+  word-break: break-word;
 }
 
 .reason, .note {
-  margin-top: 22px;
+  margin-top: 18px;
   color: #334155;
 }
 
 .reason b, .note b {
   display: block;
-  font-size: 26px;
-  margin-bottom: 8px;
+  font-size: 24px;
+  margin-bottom: 6px;
 }
 
 .reason p, .note p {
   margin: 0;
-  font-size: 28px;
-  line-height: 1.45;
+  font-size: 25px;
+  line-height: 1.4;
   font-weight: 600;
 }
 
 .simple-row {
   display: grid;
   grid-template-columns: 1fr auto auto;
-  gap: 16px;
+  gap: 12px;
   align-items: center;
-  border-bottom: 2px solid var(--line);
-  padding: 22px 0;
+  border-bottom: 1.5px solid var(--line);
+  padding: 17px 0;
 }
 
 .simple-row b {
-  font-size: 36px;
+  font-size: 31px;
 }
 
 .simple-row span {
-  font-size: 32px;
+  font-size: 28px;
 }
 
 .simple-row em {
   font-style: normal;
   border-radius: 999px;
-  padding: 14px 24px;
-  font-size: 26px;
+  padding: 10px 18px;
+  font-size: 22px;
 }
 
 .empty {
-  padding: 28px;
+  padding: 22px;
   background: #f8fafc;
-  border: 2px solid var(--line);
-  border-radius: 22px;
+  border: 1.5px solid var(--line);
+  border-radius: 18px;
   color: var(--muted);
-  font-size: 28px;
+  font-size: 24px;
 }
 
-@media (max-width: 520px) {
+/* iPhone 窄螢幕特化 */
+@media (max-width: 430px) {
   .page {
-    padding: 20px 16px 70px;
+    padding: 14px 10px 56px;
   }
 
   .card {
-    padding: 28px;
-    border-radius: 30px;
+    padding: 18px;
+    border-radius: 24px;
+    margin: 14px 0;
   }
 
   .hero h1 {
-    font-size: 42px;
-  }
-
-  .actions {
-    grid-template-columns: 1fr 1fr;
+    font-size: 31px;
   }
 
   button {
-    font-size: 24px;
-    padding: 22px 12px;
+    font-size: 19px;
+    padding: 15px 6px;
+    border-radius: 16px;
+  }
+
+  .sync {
+    font-size: 20px;
+  }
+
+  .mini {
+    padding: 13px 15px;
+    border-radius: 16px;
+  }
+
+  .mini span {
+    font-size: 17px;
+  }
+
+  .mini b {
+    font-size: 22px;
+  }
+
+  .big-decision {
+    font-size: 48px;
+  }
+
+  .decision p {
+    font-size: 23px;
   }
 
   .count-grid {
     grid-template-columns: repeat(3, 1fr);
   }
 
-  .big-decision {
-    font-size: 64px;
+  .count-grid b {
+    font-size: 32px;
+  }
+
+  .count-grid span {
+    font-size: 16px;
+  }
+
+  h2 {
+    font-size: 31px;
+  }
+
+  .action-card {
+    padding: 17px;
+    border-radius: 22px;
+    margin: 14px 0;
+  }
+
+  .topline {
+    grid-template-columns: auto 1fr auto;
+    gap: 9px;
+    margin-bottom: 15px;
+  }
+
+  .pill {
+    padding: 9px 13px;
+    font-size: 19px;
+  }
+
+  .stock {
+    font-size: 33px;
+  }
+
+  .score {
+    font-size: 30px;
+  }
+
+  .info-grid {
+    gap: 10px;
+  }
+
+  .info-grid div {
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .info-grid span {
+    font-size: 17px;
+  }
+
+  .info-grid b {
+    font-size: 22px;
+  }
+
+  .reason b, .note b {
+    font-size: 22px;
+  }
+
+  .reason p, .note p {
+    font-size: 22px;
+  }
+
+  .simple-row b {
+    font-size: 28px;
+  }
+
+  .simple-row span {
+    font-size: 25px;
+  }
+
+  .simple-row em {
+    font-size: 20px;
+    padding: 9px 15px;
+  }
+}
+
+/* 超窄螢幕：讓最終操作卡片更不爆版 */
+@media (max-width: 380px) {
+  .page {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .card {
+    padding: 16px;
   }
 
   .topline {
@@ -403,10 +527,18 @@ h2 {
   }
 
   .stock {
-    font-size: 42px;
+    font-size: 31px;
   }
 
   .score {
-    font-size: 36px;
+    font-size: 28px;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .info-grid b {
+    font-size: 20px;
   }
 }
