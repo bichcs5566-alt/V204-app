@@ -566,3 +566,27 @@ summary::-webkit-details-marker {
 button:disabled {
   opacity: 0.65;
 }
+/* GitHub 本機設定區補強：可直接加在 style.css 最底部 */
+.github-settings-card input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 13px 14px;
+  margin-top: 10px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  background: #fff;
+}
+
+.gh-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.gh-actions .secondary {
+  background: #eef2ff;
+  color: var(--blue);
+}
