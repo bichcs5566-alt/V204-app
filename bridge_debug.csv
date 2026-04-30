@@ -6,6 +6,6 @@ candidates.csv,60,ok
 selection_debug.csv,1,ok
 full_summary.csv,1,ok
 daily_nav.csv,1,ok
-current_positions.csv,0,ok
+current_positions.csv,3,ok
 position_monitor.csv,0,ok
 watchlist_monitor.csv,0,ok
