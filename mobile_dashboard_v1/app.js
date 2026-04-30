@@ -20,6 +20,7 @@ const FILES = {
 };
 
 const GH_STORAGE_KEY = "daily_dashboard_github_settings_v1";
+const POS_STORAGE_KEY = "daily_dashboard_positions_v1";
 const DEFAULT_WORKFLOW_ID = "data_pipeline.yml";
 
 const ACTION_LABEL = {
@@ -374,6 +375,254 @@ function renderGithubSettingsStatus(message, saved) {
   el.className = saved ? "github-status saved" : "github-status";
 }
 
+
+function loadPositions() {
+  try {
+    const raw = localStorage.getItem(POS_STORAGE_KEY);
+    const rows = raw ? JSON.parse(raw) : [];
+    return Array.isArray(rows) ? rows.filter(p => p.stock_id) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function savePositions(rows) {
+  localStorage.setItem(POS_STORAGE_KEY, JSON.stringify(rows || []));
+}
+
+function positionToCsv(rows) {
+  const headers = ["stock_id", "avg_price", "shares", "lots", "note", "updated_at"];
+  const esc = (v) => {
+    const s = String(v ?? "");
+    if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  };
+
+  const lines = [headers.join(",")];
+  rows.forEach(r => {
+    lines.push(headers.map(h => esc(r[h])).join(","));
+  });
+  return lines.join("\n") + "\n";
+}
+
+function positionCost(row) {
+  const avg = Number(row.avg_price);
+  const shares = Number(row.shares);
+  if (!Number.isFinite(avg) || !Number.isFinite(shares)) return "--";
+  return Math.round(avg * shares).toLocaleString("en-US");
+}
+
+function renderPositions() {
+  const box = qs("positionList");
+  if (!box) return;
+
+  const rows = loadPositions();
+
+  if (!rows.length) {
+    box.innerHTML = `<div class="empty">尚未建立持倉。請輸入個股、均價、張數後按「新增 / 更新」。</div>`;
+    return;
+  }
+
+  box.innerHTML = rows.map((row, idx) => {
+    const key = `pos-${idx}`;
+    const stock = safeText(row.stock_id);
+    const avg = num(row.avg_price);
+    const lots = num(row.lots, 2);
+    const shares = money(row.shares);
+    const cost = positionCost(row);
+    const note = safeText(row.note, "手動持倉");
+
+    return `
+      <article class="scan-item position">
+        <div class="scan-main position-main" data-toggle="${key}">
+          <div class="scan-action position">📦 持倉</div>
+          <div class="scan-stock">${stock}</div>
+          <div class="scan-score">${lots}</div>
+          <div class="scan-top">張</div>
+          <div class="scan-entry">均價 ${avg}</div>
+          <div class="scan-close">${cost}</div>
+        </div>
+
+        <div class="scan-detail" id="${key}">
+          <div class="detail-grid">
+            <div><span>個股</span><b>${stock}</b></div>
+            <div><span>均價</span><b>${avg}</b></div>
+            <div><span>張數</span><b>${lots}</b></div>
+            <div><span>股數</span><b>${shares}</b></div>
+            <div><span>成本</span><b>${cost}</b></div>
+            <div><span>更新時間</span><b>${safeText(row.updated_at)}</b></div>
+          </div>
+          <div class="detail-text"><b>備註</b><p>${note}</p></div>
+          <div class="position-row-actions">
+            <button type="button" data-edit-position="${stock}">編輯</button>
+            <button type="button" class="danger" data-delete-position="${stock}">刪除</button>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  bindToggle();
+  bindPositionRowActions();
+}
+
+function clearPositionForm() {
+  if (qs("posStock")) qs("posStock").value = "";
+  if (qs("posPrice")) qs("posPrice").value = "";
+  if (qs("posLots")) qs("posLots").value = "";
+  if (qs("posNote")) qs("posNote").value = "";
+}
+
+function addOrUpdatePosition() {
+  const stock = (qs("posStock")?.value || "").trim();
+  const price = Number(qs("posPrice")?.value || "");
+  const lots = Number(qs("posLots")?.value || "");
+  const note = (qs("posNote")?.value || "").trim();
+
+  if (!stock) {
+    setSyncStatus("❌ 請輸入個股代號", "sync error");
+    return;
+  }
+
+  if (!Number.isFinite(price) || price <= 0) {
+    setSyncStatus("❌ 請輸入正確均價", "sync error");
+    return;
+  }
+
+  if (!Number.isFinite(lots) || lots <= 0) {
+    setSyncStatus("❌ 請輸入正確張數", "sync error");
+    return;
+  }
+
+  const rows = loadPositions();
+  const idx = rows.findIndex(r => String(r.stock_id) === stock);
+  const item = {
+    stock_id: stock,
+    avg_price: String(price),
+    lots: String(lots),
+    shares: String(Math.round(lots * 1000)),
+    note: note || "手動持倉",
+    updated_at: formatTWDateTime(new Date().toISOString())
+  };
+
+  if (idx >= 0) rows[idx] = item;
+  else rows.push(item);
+
+  rows.sort((a, b) => String(a.stock_id).localeCompare(String(b.stock_id)));
+  savePositions(rows);
+  renderPositions();
+  clearPositionForm();
+  setSyncStatus(`✅ 持倉已儲存於本機｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync ok");
+  startLiveClock();
+}
+
+function bindPositionRowActions() {
+  document.querySelectorAll("[data-edit-position]").forEach(btn => {
+    if (btn.dataset.bound === "1") return;
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const stock = btn.getAttribute("data-edit-position");
+      const row = loadPositions().find(r => String(r.stock_id) === stock);
+      if (!row) return;
+      qs("posStock").value = row.stock_id || "";
+      qs("posPrice").value = row.avg_price || "";
+      qs("posLots").value = row.lots || "";
+      qs("posNote").value = row.note || "";
+      window.scrollTo({ top: qs("positionCard").offsetTop - 10, behavior: "smooth" });
+    });
+  });
+
+  document.querySelectorAll("[data-delete-position]").forEach(btn => {
+    if (btn.dataset.bound === "1") return;
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const stock = btn.getAttribute("data-delete-position");
+      const rows = loadPositions().filter(r => String(r.stock_id) !== stock);
+      savePositions(rows);
+      renderPositions();
+      setSyncStatus(`✅ 已刪除持倉 ${stock}｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync ok");
+      startLiveClock();
+    });
+  });
+}
+
+async function getFileSha(path) {
+  try {
+    const res = await githubApi(`/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}`, {
+      method: "GET"
+    });
+    const text = await res.text();
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`讀取 ${path} 失敗 ${res.status}：${compactErrorText(text)}`);
+    const data = JSON.parse(text);
+    return data.sha || null;
+  } catch (e) {
+    if (String(e.message || "").includes("404")) return null;
+    throw e;
+  }
+}
+
+function base64Utf8(str) {
+  return btoa(unescape(encodeURIComponent(str)));
+}
+
+async function putRepoFile(path, content, message) {
+  const gh = loadGithubSettings();
+  const sha = await getFileSha(path);
+
+  const body = {
+    message,
+    content: base64Utf8(content),
+    branch: gh.branch
+  };
+
+  if (sha) body.sha = sha;
+
+  const res = await githubApi(`/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}`, {
+    method: "PUT",
+    body: JSON.stringify(body)
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`寫入 ${path} 失敗 ${res.status}：${compactErrorText(text)}`);
+  }
+
+  return JSON.parse(text);
+}
+
+async function syncPositionsToRepo() {
+  const rows = loadPositions();
+  const csv = positionToCsv(rows);
+
+  if (!rows.length) {
+    setSyncStatus("❌ 尚未建立持倉，請先新增持倉再同步。", "sync error");
+    return false;
+  }
+
+  setSyncStatus(`📦 持倉同步到 GitHub 中｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync");
+  startLiveClock();
+
+  await putRepoFile("positions_manual.csv", csv, "update manual positions");
+  await putRepoFile("mobile_dashboard_v1/data/positions_manual.csv", csv, "update dashboard manual positions");
+
+  setSyncStatus(`✅ 持倉已同步到 GitHub｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync ok");
+  startLiveClock();
+  return true;
+}
+
+async function rerunStrategyWithPositions() {
+  try {
+    const ok = await syncPositionsToRepo();
+    if (!ok) return;
+    await triggerDataPipeline();
+  } catch (e) {
+    setSyncStatus(`❌ 持倉同步 / 重跑失敗：${e.message}`, "sync error");
+  }
+}
+
 function renderAppShell() {
   const gh = loadGithubSettings();
 
@@ -390,6 +639,28 @@ function renderAppShell() {
       </section>
 
       <section id="mainDecision" class="card decision"></section>
+
+      <section id="positionCard" class="card position-card">
+        <div class="section-head">
+          <h2>📦 持倉管理</h2>
+          <span class="hint">輸入後可同步並重跑策略</span>
+        </div>
+
+        <div class="position-form">
+          <input id="posStock" class="position-input" placeholder="個股，例如 2330" inputmode="numeric" />
+          <input id="posPrice" class="position-input" placeholder="均價，例如 580" inputmode="decimal" />
+          <input id="posLots" class="position-input" placeholder="張數，例如 1.5" inputmode="decimal" />
+          <input id="posNote" class="position-input" placeholder="備註，可不填" />
+        </div>
+
+        <div class="position-actions">
+          <button id="addPositionBtn" type="button">新增 / 更新</button>
+          <button id="syncPositionBtn" type="button" class="secondary">同步持倉</button>
+          <button id="rerunWithPositionBtn" type="button" class="danger">重跑策略</button>
+        </div>
+
+        <div id="positionList"></div>
+      </section>
 
       <section class="card">
         <div class="section-head">
@@ -444,6 +715,10 @@ function renderAppShell() {
   qs("updateBtn").addEventListener("click", triggerDataPipeline);
   qs("saveGhBtn").addEventListener("click", saveGithubSettings);
   qs("clearGhBtn").addEventListener("click", clearGithubSettings);
+  qs("addPositionBtn").addEventListener("click", addOrUpdatePosition);
+  qs("syncPositionBtn").addEventListener("click", syncPositionsToRepo);
+  qs("rerunWithPositionBtn").addEventListener("click", rerunStrategyWithPositions);
+  renderPositions();
 }
 
 async function githubApi(path, options = {}) {
