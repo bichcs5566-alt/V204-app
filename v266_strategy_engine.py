@@ -62,8 +62,8 @@ def next_trade_date(signal_date):
 
 
 def write_both(df, name):
-    df.to_csv(ROOT / name, index=False, encoding="utf-8")
-    df.to_csv(DATA_DIR / name, index=False, encoding="utf-8")
+    df.to_csv(ROOT / name, index=False, encoding="utf-8-sig")
+    df.to_csv(DATA_DIR / name, index=False, encoding="utf-8-sig")
 
 
 def safe_num(s, default=np.nan):
@@ -474,7 +474,7 @@ def main():
 
     meta = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "source": "v266_strategy_engine_final_integrated",
+        "source": "v266_9_strategy_engine_stable",
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
         "data_state": "fresh",
@@ -491,7 +491,7 @@ def main():
     }
 
     for p in [ROOT / "meta.json", DATA_DIR / "meta.json"]:
-        with open(p, "w", encoding="utf-8") as f:
+        with open(p, "w", encoding="utf-8-sig") as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
 
     print(json.dumps(meta, ensure_ascii=False, indent=2))
