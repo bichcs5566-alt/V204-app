@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-04-30 07:18:27",
+  "source": "position_engine_v1",
+  "input_file": "final_action_plan.csv",
+  "total_capital": 1000000,
+  "daily_use_ratio": 0.4,
+  "max_per_stock_ratio": 0.1,
+  "rows": 227,
+  "total_suggested_amount": 92000,
+  "group_counts": {
+    "BLOCK": 212,
+    "WATCH": 10,
+    "TOP_BREAK": 2,
+    "TEST": 2,
+    "SELL": 1
+  },
+  "action_counts": {
+    "BLOCK": 212,
+    "WATCH": 10,
+    "BUY": 2,
+    "TEST": 2,
+    "SELL": 1
+  },
+  "rule": "依 TOP/BREAK/TEST 自動分配 suggested_amount 與 target_weight。"
+}

@@ -1,76 +1,11 @@
 {
-  "generated_at": "2026-04-30 01:42:27",
-  "source": "v266_strategy_engine",
-  "signal_date": "2026-04-30",
-  "trade_date": "2026-05-01",
+  "generated_at": "2026-04-30 15:18:27",
+  "now_time": "2026-04-30 15:18:27",
+  "signal_date": "2026-04-24",
+  "trade_date": "2026-04-27",
+  "price_panel_latest_date": "2026-04-24",
   "data_state": "fresh",
-  "market_regime": "RANGE",
-  "regime_info": {
-    "pct_above_ma20": 0.4676,
-    "pct_above_ma60": 0.4421,
-    "pct_mom20_pos": 0.61,
-    "pct_strong": 0.1123,
-    "median_mom20": 0.0217,
-    "regime_score": 3
-  },
-  "trade_plan_count": 13,
-  "buy_count": 5,
-  "test_count": 8,
-  "watch_count": 0,
-  "bridge_source": "v265_3_dashboard_bridge",
-  "bridge_generated_at": "2026-04-30 01:42:47",
-  "core_trade_count": 5,
-  "alpha_trade_count": 8,
-  "bridge_files": [
-    {
-      "file": "trade_plan.csv",
-      "rows": 13,
-      "state": "ok"
-    },
-    {
-      "file": "core_candidates.csv",
-      "rows": 30,
-      "state": "ok"
-    },
-    {
-      "file": "alpha_candidates.csv",
-      "rows": 30,
-      "state": "ok"
-    },
-    {
-      "file": "candidates.csv",
-      "rows": 60,
-      "state": "ok"
-    },
-    {
-      "file": "selection_debug.csv",
-      "rows": 1,
-      "state": "ok"
-    },
-    {
-      "file": "full_summary.csv",
-      "rows": 1,
-      "state": "ok"
-    },
-    {
-      "file": "daily_nav.csv",
-      "rows": 1,
-      "state": "ok"
-    },
-    {
-      "file": "current_positions.csv",
-      "rows": 3,
-      "state": "ok"
-    },
-    {
-      "file": "position_monitor.csv",
-      "rows": 0,
-      "state": "ok"
-    },
-    {
-      "file": "watchlist_monitor.csv",
-      "rows": 0,
-      "state": "ok"
-    }
-  ]
+  "source": "v2.8_real_market_auto",
+  "trade_plan_batch": "2026-04-30 15:18:27",
+  "position_writeback_state": "idle"
 }
