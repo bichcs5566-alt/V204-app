@@ -1,516 +1,73 @@
-/*
-style.css - 掃描列表 + 展開詳情版
-*/
+/* 🔥 掃描列表（高度壓縮版） */
 
-:root {
-  --bg: #f5f1e9;
-  --card: #ffffff;
-  --text: #101827;
-  --muted: #667085;
-  --line: #e5e7eb;
-  --blue: #263f6d;
-  --green-bg: #e8f8ee;
-  --red: #dc2626;
-  --red-bg: #fee2e2;
-  --orange: #ea580c;
-  --orange-bg: #ffedd5;
-  --yellow: #a16207;
-  --yellow-bg: #fef3c7;
-  --gray: #475569;
-  --gray-bg: #f1f5f9;
-  --block: #6b7280;
-  --block-bg: #e5e7eb;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
-  font-weight: 700;
-}
-
-.page {
-  width: 100%;
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 14px 10px 56px;
-}
-
-.card {
-  background: var(--card);
-  border-radius: 22px;
-  padding: 16px;
-  margin: 14px 0;
-  box-shadow: 0 5px 18px rgba(15, 23, 42, 0.04);
-}
-
-.hero h1 {
-  font-size: 30px;
-  line-height: 1.15;
-  margin: 0 0 14px;
-  letter-spacing: -1px;
-}
-
-.actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-button {
-  border: none;
-  border-radius: 15px;
-  background: var(--blue);
-  color: white;
-  font-size: 18px;
-  font-weight: 900;
-  padding: 14px 6px;
-  line-height: 1.2;
-}
-
-.sync {
-  color: var(--muted);
-  font-size: 19px;
-  margin: 12px 0;
-}
-
-.sync.ok {
-  color: #15803d;
-}
-
-.sync.error {
-  color: var(--red);
-}
-
-.meta-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-}
-
-.mini {
-  background: #f8fafc;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 11px 13px;
-}
-
-.mini span {
-  display: block;
-  color: var(--muted);
-  font-size: 15px;
-  margin-bottom: 4px;
-}
-
-.mini b {
-  display: block;
-  font-size: 20px;
-  line-height: 1.25;
-  color: var(--text);
-}
-
-.decision {
-  border: 2.5px solid var(--line);
-}
-
-.decision.sell {
-  background: #fff7f7;
-  border-color: #fca5a5;
-}
-
-.decision.reduce {
-  background: #fff7ed;
-  border-color: #fdba74;
-}
-
-.decision.buy {
-  background: #f0fdf4;
-  border-color: #86efac;
-}
-
-.decision.test {
-  background: #fffbeb;
-  border-color: #fde68a;
-}
-
-.decision.watch {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-}
-
-.small-title {
-  color: var(--muted);
-  font-size: 21px;
-  margin-bottom: 6px;
-}
-
-.big-decision {
-  font-size: 42px;
-  line-height: 1;
-  margin-bottom: 10px;
-  letter-spacing: -2px;
-}
-
-.decision p {
-  font-size: 21px;
-  line-height: 1.35;
-  color: #475569;
-  margin: 0 0 14px;
-}
-
-.count-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 7px;
-}
-
-.count-grid div {
-  background: white;
-  border: 1px solid var(--line);
-  border-radius: 13px;
-  text-align: center;
-  padding: 10px 2px;
-}
-
-.count-grid b {
-  display: block;
-  font-size: 25px;
-  line-height: 1;
-}
-
-.count-grid span {
-  display: block;
-  color: var(--muted);
-  font-size: 13px;
-  margin-top: 5px;
-}
-
-.section-head {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-h2 {
-  font-size: 29px;
-  line-height: 1.1;
-  margin: 0 0 12px;
-  letter-spacing: -1px;
-}
-
-.section-head h2 {
-  margin-bottom: 0;
-}
-
-.hint {
-  color: var(--muted);
-  font-size: 14px;
-  white-space: nowrap;
-}
-
-/* 掃描列表核心 */
 .scan-item {
-  border: 1.5px solid var(--line);
   border-radius: 14px;
   margin: 8px 0;
-  overflow: hidden;
+  padding: 6px 8px;
   background: #fff;
+  border: 1px solid #ddd;
 }
 
-.scan-item.sell {
-  border-color: #fca5a5;
-  background: #fff7f7;
-}
+/* 顏色 */
+.scan-item.SELL { background: #fff1f1; border-color: #ffb3b3; }
+.scan-item.BUY { background: #f0fff5; border-color: #a7f3d0; }
+.scan-item.TEST { background: #fff9e6; border-color: #fde68a; }
+.scan-item.WATCH { background: #f5f5f5; }
 
-.scan-item.reduce {
-  border-color: #fdba74;
-  background: #fff7ed;
-}
-
-.scan-item.buy {
-  border-color: #86efac;
-  background: #f8fffb;
-}
-
-.scan-item.test {
-  border-color: #fde68a;
-  background: #fffdf5;
-}
-
-.scan-item.watch {
-  border-color: #cbd5e1;
-  background: #f8fafc;
-}
-
-.scan-item.block {
-  border-color: #d1d5db;
-  background: #f3f4f6;
-  opacity: 0.75;
-}
-
+/* 主列 */
 .scan-main {
-  min-height: 52px;
   display: grid;
-  grid-template-columns: 72px 64px 46px 70px 60px 74px;
-  gap: 5px;
+  grid-template-columns: 60px 70px 50px 70px 60px;
   align-items: center;
-  padding: 8px 9px;
+  font-size: 14px;
 }
 
+/* 各欄位 */
 .scan-action {
-  border-radius: 999px;
-  padding: 7px 8px;
-  font-size: 15px;
-  text-align: center;
-  white-space: nowrap;
-}
-
-.scan-action.sell {
-  color: var(--red);
-  background: var(--red-bg);
-}
-
-.scan-action.reduce {
-  color: var(--orange);
-  background: var(--orange-bg);
-}
-
-.scan-action.buy {
-  color: #047857;
-  background: var(--green-bg);
-}
-
-.scan-action.test {
-  color: var(--yellow);
-  background: var(--yellow-bg);
-}
-
-.scan-action.watch {
-  color: var(--gray);
-  background: var(--gray-bg);
-}
-
-.scan-action.block {
-  color: var(--block);
-  background: var(--block-bg);
+  font-weight: bold;
 }
 
 .scan-stock {
-  font-size: 25px;
-  font-weight: 950;
-  letter-spacing: -0.5px;
+  font-size: 20px;
+  font-weight: 900;
 }
 
 .scan-score {
-  font-size: 22px;
-  font-weight: 950;
   text-align: right;
 }
 
-.scan-entry,
-.scan-close,
-.scan-amount {
-  font-size: 15px;
-  color: #334155;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.scan-entry {
+  font-size: 12px;
+  color: #666;
 }
 
-.scan-close,
-.scan-amount {
+.scan-price {
   text-align: right;
+  font-size: 13px;
 }
 
-/* 展開區：保留完整資訊 */
+/* 展開區 */
 .scan-detail {
   display: none;
-  padding: 0 10px 12px;
-  border-top: 1px solid rgba(148, 163, 184, 0.35);
-}
-
-.scan-item.open .scan-detail {
-  display: block;
+  margin-top: 8px;
+  border-top: 1px solid #eee;
+  padding-top: 8px;
 }
 
 .detail-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  padding-top: 10px;
+  gap: 6px;
 }
 
 .detail-grid div {
-  background: #f8fafc;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 9px;
-}
-
-.detail-grid span {
-  display: block;
-  color: var(--muted);
-  font-size: 14px;
-  margin-bottom: 4px;
-}
-
-.detail-grid b {
-  display: block;
-  font-size: 17px;
-  line-height: 1.2;
-  word-break: break-word;
+  background: #f7f7f7;
+  border-radius: 8px;
+  padding: 6px;
+  font-size: 12px;
 }
 
 .detail-text {
-  margin-top: 10px;
-  color: #334155;
-}
-
-.detail-text b {
-  display: block;
-  font-size: 18px;
-  margin-bottom: 3px;
-}
-
-.detail-text p {
-  margin: 0;
-  font-size: 18px;
-  line-height: 1.35;
-  font-weight: 600;
-}
-
-.simple-row {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 10px;
-  align-items: center;
-  border-bottom: 1px solid var(--line);
-  padding: 12px 0;
-}
-
-.simple-row b {
-  font-size: 24px;
-}
-
-.simple-row span {
-  font-size: 22px;
-}
-
-.simple-row em {
-  font-style: normal;
-  border-radius: 999px;
-  padding: 7px 12px;
-  font-size: 17px;
-}
-
-em.sell {
-  color: var(--red);
-  background: var(--red-bg);
-}
-
-em.reduce {
-  color: var(--orange);
-  background: var(--orange-bg);
-}
-
-em.buy {
-  color: #047857;
-  background: var(--green-bg);
-}
-
-em.test {
-  color: var(--yellow);
-  background: var(--yellow-bg);
-}
-
-em.watch {
-  color: var(--gray);
-  background: var(--gray-bg);
-}
-
-em.block {
-  color: var(--block);
-  background: var(--block-bg);
-}
-
-.empty {
-  padding: 18px;
-  background: #f8fafc;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  color: var(--muted);
-  font-size: 20px;
-}
-
-/* iPhone 一般尺寸 */
-@media (max-width: 430px) {
-  .page {
-    padding-left: 8px;
-    padding-right: 8px;
-  }
-
-  .card {
-    padding: 14px;
-  }
-
-  .scan-main {
-    grid-template-columns: 66px 58px 42px 62px 54px 60px;
-    gap: 4px;
-    padding: 7px 7px;
-    min-height: 48px;
-  }
-
-  .scan-action {
-    font-size: 13px;
-    padding: 6px 6px;
-  }
-
-  .scan-stock {
-    font-size: 23px;
-  }
-
-  .scan-score {
-    font-size: 20px;
-  }
-
-  .scan-entry,
-  .scan-close,
-  .scan-amount {
-    font-size: 13px;
-  }
-
-  .count-grid {
-    grid-template-columns: repeat(5, 1fr);
-  }
-
-  .count-grid b {
-    font-size: 23px;
-  }
-
-  .count-grid span {
-    font-size: 12px;
-  }
-}
-
-/* 超窄螢幕：隱藏金額欄，避免爆版 */
-@media (max-width: 380px) {
-  .scan-main {
-    grid-template-columns: 62px 56px 40px 58px 50px;
-  }
-
-  .scan-amount {
-    display: none;
-  }
-
-  .hint {
-    display: none;
-  }
+  margin-top: 6px;
+  font-size: 13px;
 }
