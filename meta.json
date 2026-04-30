@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-30 13:07:43",
-  "source": "v266_strategy_engine",
+  "generated_at": "2026-04-30 14:25:24",
+  "source": "v266_strategy_engine_final_integrated",
   "signal_date": "2026-04-30",
   "trade_date": "2026-05-01",
   "data_state": "fresh",
@@ -13,33 +13,37 @@
     "median_mom20": 0.0217,
     "regime_score": 3
   },
-  "trade_plan_count": 13,
-  "buy_count": 11,
-  "test_count": 2,
+  "trade_plan_count": 15,
+  "buy_count": 8,
+  "test_count": 7,
   "watch_count": 0,
+  "dual_strategy": {
+    "CORE": "早期卡位 / 1000張以上小倉",
+    "ALPHA": "高流動性強勢延續 / 3000張以上主力倉位"
+  },
   "bridge_source": "v265_3_dashboard_bridge",
-  "bridge_generated_at": "2026-04-30 13:53:42",
-  "core_trade_count": 5,
-  "alpha_trade_count": 8,
+  "bridge_generated_at": "2026-04-30 14:25:47",
+  "core_trade_count": 4,
+  "alpha_trade_count": 11,
   "bridge_files": [
     {
       "file": "trade_plan.csv",
-      "rows": 13,
+      "rows": 15,
       "state": "ok"
     },
     {
       "file": "core_candidates.csv",
-      "rows": 30,
+      "rows": 60,
       "state": "ok"
     },
     {
       "file": "alpha_candidates.csv",
-      "rows": 30,
+      "rows": 60,
       "state": "ok"
     },
     {
       "file": "candidates.csv",
-      "rows": 60,
+      "rows": 120,
       "state": "ok"
     },
     {
