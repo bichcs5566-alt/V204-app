@@ -258,7 +258,7 @@ def main():
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v266_9_stable",
+        "source": "final_decision_engine_v266_9_1_stable",
         "rows": int(len(out)),
         "sell_count": int((out["final_action"] == "SELL").sum()) if not out.empty else 0,
         "reduce_count": int((out["final_action"] == "REDUCE").sum()) if not out.empty else 0,
