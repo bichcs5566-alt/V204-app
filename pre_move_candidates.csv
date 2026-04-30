@@ -1,336 +1,364 @@
 date,stock_id,action,pre_score,close,price_tier,target_weight,suggested_amount,setup_type,signal_tags,vol_squeeze,quiet_accumulation,shakeout,ma_compress,volume_absorb,near_breakout
-2026-04-29,1805,BUY,86,10.75,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
-2026-04-29,2028,BUY,86,18.05,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收 | 結構尚可,True,True,True,True,True,False
-2026-04-29,2762,BUY,86,73.0,50-100,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
-2026-04-30,3176,BUY,86,32.95,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
+2026-04-30,4133,BUY,100,21.6,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,True,True,True,True
+2026-04-30,6464,BUY,100,76.1,50-100,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,True,True,True,True
+2026-04-30,8926,BUY,100,44.4,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,True,True,True,True
+2026-04-30,1233,BUY,86,28.75,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
+2026-04-30,1423,BUY,86,41.6,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
+2026-04-30,1713,BUY,86,46.3,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
+2026-04-30,2538,BUY,86,9.76,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
+2026-04-30,2753,BUY,86,177.5,100-500,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
+2026-04-30,2892,BUY,86,28.85,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
+2026-04-30,4106,BUY,86,22.3,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
 2026-04-30,4506,BUY,86,117.0,100-500,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
 2026-04-30,4580,BUY,86,79.6,50-100,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
 2026-04-30,5209,BUY,86,163.0,100-500,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
 2026-04-30,5487,BUY,86,29.4,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
 2026-04-30,5603,BUY,86,16.5,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
-2026-04-29,5906,BUY,86,49.5,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
 2026-04-30,6170,BUY,86,52.1,50-100,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
-2026-04-30,6474,BUY,86,37.5,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
 2026-04-30,6609,BUY,86,39.4,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
-2026-04-29,6955,BUY,86,167.0,100-500,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
+2026-04-27,6856,BUY,86,50.5,50-100,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,True,True,True,True,False,True
 2026-04-30,6997,BUY,86,79.0,50-100,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
-2026-04-30,8071,BUY,86,16.4,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
-2026-04-29,9924,BUY,86,44.1,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,True,True,True,True,False,True
-2026-04-29,9930,BUY,86,69.6,50-100,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
-2026-04-30,8080,BUY,80,28.3,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破,True,True,False,True,True,True
-2026-04-29,1216,TEST,72,70.0,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
-2026-04-29,1459,TEST,72,11.75,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,8284,BUY,86,64.0,50-100,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
+2026-04-30,5876,BUY,82,39.05,50以下,0.01,10000,主力佈局完成,安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,True,True,True,True
+2026-04-27,5301,BUY,80,8.85,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收,True,True,True,True,True,False
+2026-04-30,8249,BUY,80,49.45,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破,True,True,False,True,True,True
+2026-04-30,1216,TEST,72,69.3,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,1307,TEST,72,31.7,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,1444,TEST,72,6.11,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,True,True,False,True,True,False
+2026-04-30,1612,TEST,72,35.65,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,1788,TEST,72,136.0,100-500,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,2015,TEST,72,60.9,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-04-30,2035,TEST,72,28.3,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
-2026-04-29,2069,TEST,72,19.1,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,2109,TEST,72,14.4,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,2211,TEST,72,97.5,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,2547,TEST,72,10.35,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,True,True,False,True,True,False
+2026-04-30,2845,TEST,72,12.25,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,2883,TEST,72,21.5,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,2947,TEST,72,78.1,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-04-30,3541,TEST,72,23.45,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-04-30,3632,TEST,72,8.78,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,True,True,False,True,True,False
 2026-04-30,4102,TEST,72,18.25,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,True,True,False,True,True,False
 2026-04-30,4120,TEST,72,48.0,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
-2026-04-29,4536,TEST,72,151.5,100-500,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,4536,TEST,72,149.5,100-500,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-04-30,4538,TEST,72,18.3,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
-2026-04-30,4584,TEST,72,41.0,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
-2026-04-29,4585,TEST,72,311.5,100-500,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,True,True,False,True,True,False
 2026-04-24,5348,TEST,72,17.0,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-04-30,5609,TEST,72,78.0,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
-2026-04-30,6015,TEST,72,14.2,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-04-30,6020,TEST,72,19.25,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-04-30,6026,TEST,72,15.35,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-04-30,6171,TEST,72,25.5,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,True,True,False,True,True,False
 2026-04-30,6185,TEST,72,14.25,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
-2026-04-29,6412,TEST,72,77.7,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,True,True,False,True,True,False
+2026-04-30,6189,TEST,72,47.95,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,6222,TEST,72,21.75,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,6446,TEST,72,661.0,500-1000,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,6581,TEST,72,107.5,100-500,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,6859,TEST,72,125.0,100-500,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,6955,TEST,72,166.5,100-500,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-04-30,6961,TEST,72,58.3,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-04-30,7708,TEST,72,91.7,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
-2026-04-30,8284,TEST,72,64.0,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
-2026-04-29,1217,TEST,68,9.93,50以下,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
-2026-04-29,1413,TEST,68,9.5,50以下,0.005,5000,佈局高機率,波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,True,False,True,True,False,True
-2026-04-29,1439,TEST,68,26.65,50以下,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
-2026-04-29,1731,TEST,68,21.65,50以下,0.005,5000,佈局高機率,波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,True,False,True,True,False,True
-2026-04-29,2534,TEST,68,19.25,50以下,0.005,5000,佈局高機率,波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,True,False,True,True,False,True
+2026-04-30,8473,TEST,72,35.9,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,True,True,False,True,True,False
+2026-04-30,9926,TEST,72,49.4,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,9927,TEST,72,68.3,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,9940,TEST,72,20.0,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,9941,TEST,72,77.1,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-04-30,1315,TEST,68,62.3,50-100,0.005,5000,佈局高機率,安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收 | 結構尚可,False,True,True,True,True,False
+2026-04-30,1525,TEST,68,63.3,50-100,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
+2026-04-30,1726,TEST,68,75.6,50-100,0.005,5000,佈局高機率,波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,True,False,True,True,False,True
+2026-04-30,2023,TEST,68,14.0,50以下,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
+2026-04-30,2480,TEST,68,143.0,100-500,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
 2026-04-30,2729,TEST,68,165.5,100-500,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
-2026-04-29,2908,TEST,68,20.8,50以下,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
+2026-04-30,2884,TEST,68,31.85,50以下,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
 2026-04-30,2926,TEST,68,37.6,50以下,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
+2026-04-30,3164,TEST,68,17.7,50以下,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
+2026-04-30,3356,TEST,68,54.0,50-100,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
 2026-04-30,4510,TEST,68,47.0,50以下,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
-2026-04-24,4728,TEST,68,389.5,100-500,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
-2026-04-29,5215,TEST,68,37.85,50以下,0.005,5000,佈局高機率,波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,True,False,True,True,False,True
+2026-04-30,5215,TEST,68,37.4,50以下,0.005,5000,佈局高機率,波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,True,False,True,True,False,True
+2026-04-27,5520,TEST,68,81.0,50-100,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
 2026-04-30,6123,TEST,68,43.85,50以下,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
-2026-04-29,6189,TEST,68,48.05,50以下,0.005,5000,佈局高機率,波動壓縮 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,False,False,True,True,True
+2026-04-30,6412,TEST,68,81.0,50-100,0.005,5000,佈局高機率,波動壓縮 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,False,False,True,True,True
+2026-04-30,6474,TEST,68,37.5,50以下,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
+2026-04-30,6505,TEST,68,56.4,50-100,0.005,5000,佈局高機率,波動壓縮 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,False,False,True,True,True
 2026-04-30,6516,TEST,68,60.8,50-100,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
-2026-04-29,6936,TEST,68,34.65,50以下,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
-2026-04-29,7791,TEST,68,64.7,50-100,0.005,5000,佈局高機率,波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,True,False,True,True,False,True
-2026-04-29,9925,TEST,68,40.3,50以下,0.005,5000,佈局高機率,波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,True,False,True,True,False,True
-2026-04-29,2439,TEST,66,88.4,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,True,True,False,True,False,True
+2026-04-30,8071,TEST,68,16.4,50以下,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
+2026-04-30,8487,TEST,68,77.1,50-100,0.005,5000,佈局高機率,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,True,True,True
+2026-04-30,1419,TEST,66,64.4,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,True,True,False,True,False,True
+2026-04-30,1504,TEST,66,62.4,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,True,True,False,True,False,True
+2026-04-30,2012,TEST,66,14.7,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,True,True,False,True,True,False
+2026-04-30,2250,TEST,66,63.0,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,True,True,False,True,False,True
+2026-04-30,3257,TEST,66,53.3,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,True,True,False,True,True,False
 2026-04-30,4743,TEST,66,53.2,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,True,True,False,True,False,True
-2026-04-30,6264,TEST,66,6.09,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,True,True,False,True,True,False
+2026-04-30,5203,TEST,66,65.4,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,True,True,False,True,False,True
+2026-04-30,5225,TEST,66,76.6,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,True,True,False,True,False,True
 2026-04-30,6496,TEST,66,25.3,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,True,True,False,True,True,False
-2026-04-29,7705,TEST,66,33.25,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,True,True,False,True,True,False
-2026-04-29,8476,TEST,66,17.65,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,True,True,False,True,True,False
+2026-04-30,8080,TEST,66,28.3,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,True,True,False,True,True,False
 2026-04-30,8929,TEST,66,15.1,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,True,True,False,True,True,False
+2026-04-30,1536,WATCH,62,51.5,50-100,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破,False,True,False,True,True,True
+2026-04-30,2115,WATCH,62,21.2,50以下,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破,True,False,True,True,False,True
+2026-04-30,3501,WATCH,62,46.85,50以下,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破,True,False,True,True,False,True
 2026-04-30,5392,WATCH,62,40.15,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破,False,True,False,True,True,True
+2026-04-30,6239,WATCH,62,203.0,100-500,0.0,0,佈局觀察,安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收,False,True,True,True,True,False
 2026-04-30,6535,WATCH,62,152.0,100-500,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破,False,True,False,True,True,True
-2026-04-29,8131,WATCH,62,64.1,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 放量吸收 | 接近突破,True,False,False,True,True,True
 2026-04-30,1593,WATCH,58,31.3,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
-2026-04-29,2207,WATCH,58,480.0,100-500,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
-2026-04-29,3023,WATCH,58,282.5,100-500,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
-2026-04-30,3219,WATCH,58,67.0,50-100,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
+2026-04-30,1712,WATCH,58,42.2,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
+2026-04-30,2024,WATCH,58,14.1,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
+2026-04-30,2207,WATCH,58,476.5,100-500,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
+2026-04-30,2439,WATCH,58,86.0,50-100,0.0,0,佈局觀察,洗盤收回 | 均線收斂 | 放量吸收 | 接近突破,False,False,True,True,True,True
+2026-04-30,3023,WATCH,58,283.5,100-500,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
 2026-04-30,3615,WATCH,58,31.85,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
+2026-04-30,4551,WATCH,58,134.0,100-500,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
 2026-04-30,5345,WATCH,58,21.9,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
 2026-04-30,6498,WATCH,58,88.4,50-100,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
 2026-04-30,6499,WATCH,58,83.7,50-100,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
 2026-04-30,6574,WATCH,58,101.5,100-500,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
+2026-04-30,6914,WATCH,58,145.0,100-500,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
 2026-04-30,7792,WATCH,58,355.5,100-500,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
-2026-04-29,9110,WATCH,58,2.96,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
-2026-04-30,3672,WATCH,56,11.95,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 接近突破 | 結構尚可,True,True,False,False,False,True
-2026-04-30,5011,WATCH,56,14.75,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 接近突破 | 結構尚可,True,True,False,False,False,True
-2026-04-29,6165,WATCH,56,52.2,50-100,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 接近突破 | 結構尚可,True,True,False,False,False,True
-2026-04-30,6233,WATCH,56,28.25,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 接近突破 | 結構尚可,True,True,False,False,False,True
-2026-04-30,6859,WATCH,56,125.0,100-500,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 接近突破 | 結構尚可,True,True,False,False,False,True
-2026-04-29,1104,WATCH,54,28.6,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1108,WATCH,54,14.65,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1109,WATCH,54,15.45,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1218,WATCH,54,19.0,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1232,WATCH,54,149.0,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1233,WATCH,54,29.05,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1234,WATCH,54,35.25,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6165,WATCH,56,53.1,50-100,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 放量吸收 | 結構尚可,True,True,False,False,True,False
+2026-04-30,1104,WATCH,54,28.35,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1108,WATCH,54,14.55,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1109,WATCH,54,15.45,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1215,WATCH,54,138.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1217,WATCH,54,9.9,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1218,WATCH,54,18.95,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1232,WATCH,54,148.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1234,WATCH,54,35.25,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,1240,WATCH,54,59.6,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-30,1264,WATCH,54,273.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1256,WATCH,54,161.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,1268,WATCH,54,155.0,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,1294,WATCH,54,79.6,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1307,WATCH,54,31.35,50以下,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,True,False,True,True,False,False
-2026-04-29,1325,WATCH,54,26.8,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 放量吸收 | 結構尚可,True,False,False,True,True,False
-2026-04-29,1341,WATCH,54,61.0,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1402,WATCH,54,26.05,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1417,WATCH,54,8.87,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1423,WATCH,54,41.8,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1432,WATCH,54,16.95,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1437,WATCH,54,29.95,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1444,WATCH,54,6.14,50以下,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,True,False,True,True,False,False
-2026-04-29,1457,WATCH,54,14.6,50以下,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,True,False,True,True,False,False
-2026-04-29,1460,WATCH,54,6.98,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1465,WATCH,54,12.1,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,False,True,False,True,True,False
-2026-04-29,1468,WATCH,54,12.25,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1527,WATCH,54,32.5,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1531,WATCH,54,13.1,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
-2026-04-29,1535,WATCH,54,50.9,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1537,WATCH,54,122.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1558,WATCH,54,91.0,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1326,WATCH,54,52.3,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1341,WATCH,54,61.2,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1402,WATCH,54,25.75,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1409,WATCH,54,16.8,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
+2026-04-30,1413,WATCH,54,9.53,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1417,WATCH,54,8.85,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1418,WATCH,54,19.2,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
+2026-04-30,1432,WATCH,54,16.85,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1437,WATCH,54,29.65,50以下,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,True,False,True,True,False,False
+2026-04-30,1446,WATCH,54,15.8,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1447,WATCH,54,4.99,50以下,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,True,False,True,True,False,False
+2026-04-30,1459,WATCH,54,11.7,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1460,WATCH,54,6.98,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1527,WATCH,54,32.5,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1531,WATCH,54,12.95,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1535,WATCH,54,50.9,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1537,WATCH,54,123.0,100-500,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
+2026-04-30,1558,WATCH,54,92.2,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,1580,WATCH,54,123.0,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1583,WATCH,54,47.1,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1612,WATCH,54,35.55,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1614,WATCH,54,32.15,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1617,WATCH,54,15.25,50以下,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,True,False,True,True,False,False
+2026-04-30,1583,WATCH,54,46.6,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1598,WATCH,54,20.8,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
+2026-04-30,1614,WATCH,54,31.85,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1615,WATCH,54,45.7,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1702,WATCH,54,35.1,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,False,True,False,True,True,False
 2019-01-29,1704,WATCH,54,53.1,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1712,WATCH,54,42.85,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1720,WATCH,54,61.4,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1726,WATCH,54,75.8,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1732,WATCH,54,26.05,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1730,WATCH,54,52.5,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1731,WATCH,54,21.65,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1732,WATCH,54,25.8,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1733,WATCH,54,28.55,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,1742,WATCH,54,15.9,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1752,WATCH,54,33.6,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,False,True,False,True,True,False
+2026-04-30,1760,WATCH,54,68.2,50-100,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,False,True,False,True,True,False
 2026-04-30,1777,WATCH,54,70.9,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-30,1788,WATCH,54,136.0,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1817,WATCH,54,38.7,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2008,WATCH,54,28.0,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
-2026-04-29,2010,WATCH,54,24.85,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2013,WATCH,54,43.05,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2015,WATCH,54,61.8,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2029,WATCH,54,20.1,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2030,WATCH,54,16.4,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2109,WATCH,54,14.4,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2204,WATCH,54,54.2,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2357,WATCH,54,588.0,500-1000,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2387,WATCH,54,40.55,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2390,WATCH,54,9.93,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2412,WATCH,54,136.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2432,WATCH,54,27.8,50以下,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,True,False,True,True,False,False
-2026-04-29,2450,WATCH,54,30.05,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2453,WATCH,54,53.6,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2482,WATCH,54,16.95,50以下,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,True,False,True,True,False,False
-2026-04-29,2496,WATCH,54,64.4,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2504,WATCH,54,35.6,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2506,WATCH,54,8.8,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2511,WATCH,54,8.0,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2514,WATCH,54,13.25,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2524,WATCH,54,37.7,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,False,True,False,True,True,False
-2026-04-29,2535,WATCH,54,75.7,50-100,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
-2026-04-29,2538,WATCH,54,9.93,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2597,WATCH,54,154.5,100-500,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,False,True,False,True,True,False
-2026-04-29,2603,WATCH,54,201.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2608,WATCH,54,30.1,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2614,WATCH,54,20.3,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2615,WATCH,54,75.7,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2617,WATCH,54,29.8,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2636,WATCH,54,67.1,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2704,WATCH,54,42.7,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2727,WATCH,54,226.0,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2753,WATCH,54,179.0,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2801,WATCH,54,21.35,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2816,WATCH,54,30.45,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2820,WATCH,54,16.9,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2836,WATCH,54,11.95,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2845,WATCH,54,12.3,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2852,WATCH,54,26.15,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2889,WATCH,54,14.75,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2903,WATCH,54,22.35,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1805,WATCH,54,10.85,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,1817,WATCH,54,38.6,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2010,WATCH,54,24.75,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2013,WATCH,54,42.75,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2029,WATCH,54,20.2,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2030,WATCH,54,15.95,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2031,WATCH,54,40.65,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2069,WATCH,54,18.8,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2103,WATCH,54,19.65,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2204,WATCH,54,54.1,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2347,WATCH,54,82.5,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2353,WATCH,54,27.6,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2362,WATCH,54,38.5,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2374,WATCH,54,78.4,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2387,WATCH,54,40.5,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2393,WATCH,54,71.1,50-100,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
+2026-04-30,2395,WATCH,54,359.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2412,WATCH,54,136.0,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2420,WATCH,54,54.7,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2421,WATCH,54,145.0,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2432,WATCH,54,27.65,50以下,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,True,False,True,True,False,False
+2026-04-30,2450,WATCH,54,29.6,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2453,WATCH,54,53.5,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2496,WATCH,54,64.6,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2504,WATCH,54,35.25,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2506,WATCH,54,8.89,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2511,WATCH,54,7.99,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2514,WATCH,54,13.3,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2537,WATCH,54,10.2,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,False,True,False,True,True,False
+2026-04-30,2603,WATCH,54,202.0,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2608,WATCH,54,30.25,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2613,WATCH,54,22.4,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2614,WATCH,54,20.2,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2636,WATCH,54,67.1,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2704,WATCH,54,41.7,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
+2026-04-30,2727,WATCH,54,226.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2762,WATCH,54,73.0,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2801,WATCH,54,21.15,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2816,WATCH,54,30.35,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2820,WATCH,54,16.8,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2836,WATCH,54,11.85,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2852,WATCH,54,26.1,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2881,WATCH,54,90.0,50-100,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
+2026-04-30,2885,WATCH,54,52.2,50-100,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
+2026-04-30,2903,WATCH,54,22.2,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2904,WATCH,54,16.25,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2905,WATCH,54,13.7,50以下,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,True,False,True,True,False,False
+2026-04-30,2906,WATCH,54,12.4,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,2937,WATCH,54,43.75,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2939,WATCH,54,25.5,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,2945,WATCH,54,42.0,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-30,2947,WATCH,54,78.1,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,3033,WATCH,54,35.85,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,3046,WATCH,54,48.25,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2939,WATCH,54,25.1,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,2945,WATCH,54,41.15,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,3022,WATCH,54,69.0,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,3032,WATCH,54,64.0,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,3033,WATCH,54,35.75,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,3118,WATCH,54,33.6,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-30,3158,WATCH,54,89.3,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,3130,WATCH,54,221.0,100-500,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
+2026-04-30,3176,WATCH,54,32.95,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
 2026-04-30,3213,WATCH,54,104.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,3218,WATCH,54,136.0,100-500,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
-2026-04-29,3266,WATCH,54,13.6,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,3266,WATCH,54,13.5,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,3285,WATCH,54,28.5,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,3293,WATCH,54,748.0,500-1000,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,3310,WATCH,54,69.9,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-30,3332,WATCH,54,62.6,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,3373,WATCH,54,16.9,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,3426,WATCH,54,47.65,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,3479,WATCH,54,90.7,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,3512,WATCH,54,21.35,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,3546,WATCH,54,70.9,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,3563,WATCH,54,877.0,500-1000,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,True,False,True,True,False,False
+2026-04-30,3563,WATCH,54,873.0,500-1000,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,True,False,True,True,False,False
 2026-04-30,3646,WATCH,54,23.3,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-30,3666,WATCH,54,26.4,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
+2026-04-30,3672,WATCH,54,11.95,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
 2026-04-30,3684,WATCH,54,58.1,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,4105,WATCH,54,74.2,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,4106,WATCH,54,22.2,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,4111,WATCH,54,29.45,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,4114,WATCH,54,30.8,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,4116,WATCH,54,39.95,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
-2026-04-30,4126,WATCH,54,79.5,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-30,4127,WATCH,54,38.35,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,4133,WATCH,54,21.75,50以下,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,True,False,True,True,False,False
-2026-04-29,4137,WATCH,54,107.0,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,4137,WATCH,54,106.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,4175,WATCH,54,54.4,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,4303,WATCH,54,53.9,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,4433,WATCH,54,20.0,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,4440,WATCH,54,18.0,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,4440,WATCH,54,17.9,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,4523,WATCH,54,30.6,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-30,4527,WATCH,54,42.75,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,4535,WATCH,54,27.65,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,4554,WATCH,54,29.9,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-24,4568,WATCH,54,43.7,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,4581,WATCH,54,49.7,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
+2026-04-27,4568,WATCH,54,43.4,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,4572,WATCH,54,144.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,4702,WATCH,54,9.73,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,4754,WATCH,54,37.05,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,4915,WATCH,54,73.9,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,4770,WATCH,54,221.5,100-500,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,True,False,True,True,False,False
+2026-04-30,4915,WATCH,54,73.3,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,4938,WATCH,54,82.3,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,4974,WATCH,54,71.9,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,4987,WATCH,54,81.5,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,5009,WATCH,54,32.2,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
+2026-04-30,5011,WATCH,54,14.75,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
 2026-04-30,5013,WATCH,54,28.8,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,False,True,False,True,True,False
 2026-04-30,5213,WATCH,54,25.9,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,5220,WATCH,54,20.2,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,5315,WATCH,54,22.3,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,5455,WATCH,54,25.25,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,False,True,False,True,True,False
 2026-04-30,5478,WATCH,54,97.0,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,5519,WATCH,54,32.7,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,5522,WATCH,54,69.2,50-100,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,True,False,True,True,False,False
-2026-04-29,5538,WATCH,54,31.9,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
-2026-04-29,5607,WATCH,54,47.05,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,5519,WATCH,54,32.55,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,5531,WATCH,54,8.29,50以下,0.0,0,佈局觀察,安靜吸籌 | 洗盤收回 | 均線收斂 | 結構尚可,False,True,True,True,False,False
 2026-04-30,5878,WATCH,54,40.8,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,5880,WATCH,54,22.95,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,5903,WATCH,54,189.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,6005,WATCH,54,28.1,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,6024,WATCH,54,55.7,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,5906,WATCH,54,49.95,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6005,WATCH,54,28.05,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6015,WATCH,54,14.2,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6024,WATCH,54,56.2,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,6101,WATCH,54,40.45,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
-2026-04-29,6115,WATCH,54,47.95,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6115,WATCH,54,47.75,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,6154,WATCH,54,13.2,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-30,6161,WATCH,54,41.45,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,6184,WATCH,54,46.7,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6184,WATCH,54,46.8,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,6194,WATCH,54,32.65,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6195,WATCH,54,23.7,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,6203,WATCH,54,64.5,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-30,6222,WATCH,54,21.75,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
+2026-04-30,6225,WATCH,54,20.45,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,False,True,False,True,True,False
 2026-04-30,6240,WATCH,54,19.1,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6242,WATCH,54,38.45,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
 2026-04-30,6246,WATCH,54,16.4,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
 2026-04-30,6248,WATCH,54,19.55,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-30,6266,WATCH,54,27.85,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,6446,WATCH,54,647.0,500-1000,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,6464,WATCH,54,75.6,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6416,WATCH,54,81.0,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6504,WATCH,54,39.45,50以下,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,True,False,True,True,False,False
 2026-04-30,6538,WATCH,54,75.4,50-100,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
 2026-04-30,6561,WATCH,54,340.5,100-500,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,False,True,False,True,True,False
 2026-04-30,6570,WATCH,54,39.0,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,6579,WATCH,54,117.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,6581,WATCH,54,107.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6579,WATCH,54,121.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6582,WATCH,54,30.85,50以下,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,True,False,True,True,False,False
 2026-04-30,6590,WATCH,54,70.3,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,6592,WATCH,54,62.1,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6592,WATCH,54,61.2,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,6597,WATCH,54,62.4,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,6598,WATCH,54,21.95,50以下,0.0,0,佈局觀察,波動壓縮 | 洗盤收回 | 均線收斂 | 結構尚可,True,False,True,True,False,False
 2026-04-30,6615,WATCH,54,33.45,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,6637,WATCH,54,72.3,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6642,WATCH,54,57.2,50-100,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
 2026-04-30,6654,WATCH,54,89.9,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,6692,WATCH,54,32.35,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,6754,WATCH,54,46.6,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,6790,WATCH,54,39.6,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,6794,WATCH,54,81.3,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6754,WATCH,54,46.0,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6771,WATCH,54,44.4,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6790,WATCH,54,39.6,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6794,WATCH,54,81.5,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,6803,WATCH,54,288.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,6811,WATCH,54,194.0,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,6835,WATCH,54,39.8,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
 2026-04-30,6844,WATCH,54,64.2,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,6846,WATCH,54,69.0,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,6884,WATCH,54,34.55,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,6958,WATCH,54,19.8,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,6965,WATCH,54,86.9,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6922,WATCH,54,176.5,100-500,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
+2026-04-30,6958,WATCH,54,19.9,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,6965,WATCH,54,87.0,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,7713,WATCH,54,67.9,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,7718,WATCH,54,47.0,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,7743,WATCH,54,19.9,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,7767,WATCH,54,44.75,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,7791,WATCH,54,64.8,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,8083,WATCH,54,176.0,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,8341,WATCH,54,74.8,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,8367,WATCH,54,42.45,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,8411,WATCH,54,12.25,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,8341,WATCH,54,74.7,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,8367,WATCH,54,42.2,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,8411,WATCH,54,12.25,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,8421,WATCH,54,13.6,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,8423,WATCH,54,17.95,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,8424,WATCH,54,74.4,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,8432,WATCH,54,50.1,50-100,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
 2026-04-30,8435,WATCH,54,55.6,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,8443,WATCH,54,11.95,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,8443,WATCH,54,11.85,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,8450,WATCH,54,16.5,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,False,True,False,True,True,False
+2026-04-30,8462,WATCH,54,149.0,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,8477,WATCH,54,13.55,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,8481,WATCH,54,41.5,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,8487,WATCH,54,77.5,50-100,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
+2026-04-30,8481,WATCH,54,40.9,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,8905,WATCH,54,40.75,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,8908,WATCH,54,39.45,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,8916,WATCH,54,47.35,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,8917,WATCH,54,52.3,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,8924,WATCH,54,68.7,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,8936,WATCH,54,50.1,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,9907,WATCH,54,17.7,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,9908,WATCH,54,29.8,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,9917,WATCH,54,114.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,9926,WATCH,54,49.3,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,9937,WATCH,54,56.6,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,9940,WATCH,54,19.9,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,9941,WATCH,54,78.8,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,9942,WATCH,54,116.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,9943,WATCH,54,55.8,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,9944,WATCH,54,16.3,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,9908,WATCH,54,29.6,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,9912,WATCH,54,12.75,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
+2026-04-30,9917,WATCH,54,113.0,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,9925,WATCH,54,40.3,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,9930,WATCH,54,69.8,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,9934,WATCH,54,9.27,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,9937,WATCH,54,56.4,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,9942,WATCH,54,116.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,9943,WATCH,54,55.4,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-04-30,9944,WATCH,54,16.4,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-04-30,9951,WATCH,54,53.6,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-04-29,1319,WATCH,52,74.8,50-100,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂,True,True,False,True,False,False
-2026-04-29,1532,WATCH,52,20.9,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂,True,True,False,True,False,False
+2026-04-30,1522,WATCH,52,30.95,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂,True,True,False,True,False,False
+2026-04-30,1532,WATCH,52,20.85,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂,True,True,False,True,False,False
 2026-04-30,2061,WATCH,52,19.35,50以下,0.0,0,佈局觀察,安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,False,True,True
-2026-04-29,3019,WATCH,52,142.0,100-500,0.0,0,佈局觀察,安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,False,True,True
-2026-04-29,3617,WATCH,52,190.5,100-500,0.0,0,佈局觀察,安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,False,True,True
-2026-04-30,4533,WATCH,52,31.1,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂,True,True,False,True,False,False
+2026-04-30,2208,WATCH,52,19.8,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂,True,True,False,True,False,False
+2026-04-30,2889,WATCH,52,14.5,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂,True,True,False,True,False,False
+2026-04-30,3059,WATCH,52,40.3,50以下,0.0,0,佈局觀察,安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,False,True,True
+2026-04-30,4555,WATCH,52,40.35,50以下,0.0,0,佈局觀察,安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,False,True,True
 2026-04-30,5278,WATCH,52,23.65,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂,True,True,False,True,False,False
 2026-04-30,5543,WATCH,52,29.75,50以下,0.0,0,佈局觀察,安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,False,True,True
 2026-04-30,6125,WATCH,52,55.8,50-100,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂,True,True,False,True,False,False
 2026-04-30,6188,WATCH,52,83.4,50-100,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂,True,True,False,True,False,False
-2026-04-29,6214,WATCH,52,121.5,100-500,0.0,0,佈局觀察,安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,False,True,True
 2026-04-30,6265,WATCH,52,39.8,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂,True,True,False,True,False,False
+2026-04-30,7705,WATCH,52,32.9,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂,True,True,False,True,False,False
 2026-04-30,8455,WATCH,52,23.7,50以下,0.0,0,佈局觀察,安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,False,True,True
-2026-04-29,1463,WATCH,50,18.85,50以下,0.0,0,佈局觀察,均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,False,False,True,True,True
-2026-04-29,2328,WATCH,50,47.2,50以下,0.0,0,佈局觀察,均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,False,False,True,True,True
-2026-04-29,2374,WATCH,50,75.0,50-100,0.0,0,佈局觀察,均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,False,False,True,True,True
-2026-04-29,2385,WATCH,50,124.5,100-500,0.0,0,佈局觀察,洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,False,False,True,True,False,True
-2026-04-29,2480,WATCH,50,143.0,100-500,0.0,0,佈局觀察,洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,False,False,True,True,False,True
-2026-04-29,2881,WATCH,50,91.3,50-100,0.0,0,佈局觀察,均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,False,False,True,True,True
-2026-04-29,2883,WATCH,50,21.7,50以下,0.0,0,佈局觀察,均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,False,False,True,True,True
-2026-04-29,2890,WATCH,50,31.9,50以下,0.0,0,佈局觀察,洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,False,False,True,True,False,True
-2026-04-29,2901,WATCH,50,24.2,50以下,0.0,0,佈局觀察,均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,False,False,True,True,True
-2026-04-29,3052,WATCH,50,10.7,50以下,0.0,0,佈局觀察,洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,False,False,True,True,False,True
-2026-04-29,3059,WATCH,50,40.8,50以下,0.0,0,佈局觀察,均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,False,False,True,True,True
-2026-04-29,5876,WATCH,50,39.35,50以下,0.0,0,佈局觀察,洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,False,False,True,True,False,True
-2026-04-29,6215,WATCH,50,107.0,100-500,0.0,0,佈局觀察,均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,False,False,True,True,True
-2026-04-29,6666,WATCH,50,40.9,50以下,0.0,0,佈局觀察,洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,False,False,True,True,False,True
-2026-04-29,9105,WATCH,50,6.01,50以下,0.0,0,佈局觀察,均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,False,False,True,True,True
+2026-04-30,1473,WATCH,50,21.25,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 放量吸收,True,True,False,False,True,False
+2026-04-30,1722,WATCH,50,50.7,50-100,0.0,0,佈局觀察,均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,False,False,True,True,True
+2026-04-30,2534,WATCH,50,19.05,50以下,0.0,0,佈局觀察,洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,False,False,True,True,False,True
+2026-04-30,2850,WATCH,50,133.0,100-500,0.0,0,佈局觀察,均線收斂 | 放量吸收 | 接近突破 | 結構尚可,False,False,False,True,True,True
+2026-04-30,4904,WATCH,50,94.5,50-100,0.0,0,佈局觀察,洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,False,False,True,True,False,True
+2026-04-30,6183,WATCH,50,92.2,50-100,0.0,0,佈局觀察,洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,False,False,True,True,False,True
+2026-04-30,6606,WATCH,50,24.1,50以下,0.0,0,佈局觀察,洗盤收回 | 均線收斂 | 接近突破 | 結構尚可,False,False,True,True,False,True
