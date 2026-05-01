@@ -1832,3 +1832,51 @@ button:disabled {
   white-space: normal;
   word-break: keep-all;
 }
+/* v266.18 總經強化版：只顯示在總經狀態卡片內 */
+.macro-explain-v266162,
+.macro-explain-v266153,
+.macro-explain-v266152 {
+  display: none !important;
+}
+
+.macro-value-v26618 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: clamp(24px, 5vw, 34px);
+  font-weight: 950;
+  color: #0f172a;
+  line-height: 1.35;
+}
+
+.macro-pill-v26618 {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  font-size: clamp(13px, 3.2vw, 15px);
+  font-weight: 950;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.macro-conf-v26618 {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.macro-change-v26618 {
+  display: inline-flex;
+  width: 100%;
+  margin-top: 2px;
+  font-size: clamp(13px, 3.2vw, 15px);
+  font-weight: 900;
+  color: #475569;
+  line-height: 1.3;
+}
