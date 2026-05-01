@@ -1,0 +1,236 @@
+name: data_pipeline
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 台灣時間 19:00 = UTC 11:00
+    - cron: "0 11 * * 1-5"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: data_pipeline_main
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync latest main before generating outputs
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git fetch origin main
+          git pull --ff-only origin main
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy requests
+
+      - name: Show manual positions status
+        run: |
+          echo "=== positions_manual.csv ==="
+          if [ -f positions_manual.csv ]; then
+            head -20 positions_manual.csv
+          else
+            echo "positions_manual.csv not found"
+          fi
+
+          echo "=== mobile_dashboard_v1/data/positions_manual.csv ==="
+          if [ -f mobile_dashboard_v1/data/positions_manual.csv ]; then
+            head -20 mobile_dashboard_v1/data/positions_manual.csv
+          else
+            echo "mobile_dashboard_v1/data/positions_manual.csv not found"
+          fi
+
+      - name: Merge price panel parts into runtime file
+        run: |
+          python merge_price_panel_parts_runtime.py
+
+      - name: Backfill missing days
+        run: |
+          python backfill_missing_days.py
+
+      - name: Build features
+        run: |
+          python v266_build_features.py
+
+      - name: Run market regime
+        run: |
+          python market_regime_engine.py
+
+      - name: Run pre-move engine
+        run: |
+          python pre_move_engine.py
+          python pre_move_dashboard_patch.py
+
+      - name: Run data guard
+        run: |
+          python v266_data_guard.py
+
+      - name: Run strategy
+        run: |
+          python v266_strategy_engine.py
+
+      - name: Run timing engine
+        run: |
+          python feature_timing_engine.py
+
+      - name: Run trading system allocator
+        run: |
+          python trading_system_allocator.py
+
+      - name: Build market snapshot
+        run: |
+          python market_snapshot.py
+          python market_regime.py
+          python macro_regime.py
+
+      - name: Run exit risk engine
+        run: |
+          python exit_risk_engine.py
+
+      - name: Run final decision engine
+        run: |
+          python - <<'PY'
+import chip_concentration_v26620
+print("chip module ok")
+PY
+          python final_decision_engine.py
+
+      - name: Sync dashboard
+        run: |
+          if [ -f v3_1_dashboard_bridge.py ]; then
+            python v3_1_dashboard_bridge.py
+          else
+            echo "bridge not found, skip"
+          fi
+
+      - name: Keep C complete dashboard files after bridge
+        run: |
+          python pre_move_dashboard_patch.py
+          python feature_timing_engine.py
+          python trading_system_allocator.py
+          python market_snapshot.py
+          python market_regime.py
+          python macro_regime.py
+          python exit_risk_engine.py
+          python - <<'PY'
+import chip_concentration_v26620
+print("chip module ok")
+PY
+          python final_decision_engine.py
+
+      - name: Clean runtime big files
+        run: |
+          rm -f price_panel_daily.csv
+          rm -f feature_panel_daily.csv
+          rm -f raw_market_daily.csv
+          rm -f mobile_dashboard_v1/data/price_panel_daily.csv
+          rm -f mobile_dashboard_v1/data/feature_panel_daily.csv
+          rm -f mobile_dashboard_v1/data/raw_market_daily.csv
+
+      - name: Commit small files only
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+          git add \
+            positions_manual.csv \
+            mobile_dashboard_v1/data/positions_manual.csv \
+            data_meta.json \
+            feature_meta.json \
+            data_guard_report.json \
+            backfill_report.json \
+            trade_plan.csv \
+            candidates.csv \
+            core_candidates.csv \
+            alpha_candidates.csv \
+            selection_debug.csv \
+            meta.json \
+            pre_move_candidates.csv \
+            pre_move_summary.json \
+            market_regime.json \
+            timing_candidates.csv \
+            timing_summary.json \
+            trading_system_plan.csv \
+            trading_system_summary.json \
+            exit_risk_plan.csv \
+            exit_risk_summary.json \
+            market_snapshot.csv \
+            market_regime.csv \
+            macro_regime.csv \
+            macro_regime.json \
+            market_regime.json \
+            market_snapshot_summary.json \
+            final_action_plan.csv \
+            top_opportunities.csv \
+            final_action_summary.json \
+            bridge_debug.csv \
+            mobile_dashboard_v1/data/meta.json \
+            mobile_dashboard_v1/data/trade_plan.csv \
+            mobile_dashboard_v1/data/candidates.csv \
+            mobile_dashboard_v1/data/core_candidates.csv \
+            mobile_dashboard_v1/data/alpha_candidates.csv \
+            mobile_dashboard_v1/data/selection_debug.csv \
+            mobile_dashboard_v1/data/data_guard_report.json \
+            mobile_dashboard_v1/data/backfill_report.json \
+            mobile_dashboard_v1/data/data_meta.json \
+            mobile_dashboard_v1/data/feature_meta.json \
+            mobile_dashboard_v1/data/pre_move_candidates.csv \
+            mobile_dashboard_v1/data/pre_move_summary.json \
+            mobile_dashboard_v1/data/pre_move_cards.json \
+            mobile_dashboard_v1/data/market_regime.json \
+            mobile_dashboard_v1/data/timing_candidates.csv \
+            mobile_dashboard_v1/data/timing_summary.json \
+            mobile_dashboard_v1/data/trading_system_plan.csv \
+            mobile_dashboard_v1/data/trading_system_summary.json \
+            mobile_dashboard_v1/data/exit_risk_plan.csv \
+            mobile_dashboard_v1/data/exit_risk_summary.json \
+            mobile_dashboard_v1/data/market_snapshot.csv \
+            mobile_dashboard_v1/data/market_regime.csv \
+            mobile_dashboard_v1/data/macro_regime.csv \
+            mobile_dashboard_v1/data/macro_regime.json \
+            macro_regime.csv \
+            macro_regime.json \
+            mobile_dashboard_v1/data/market_regime.json \
+            market_regime.csv \
+            macro_regime.csv \
+            macro_regime.json \
+            market_regime.json \
+            mobile_dashboard_v1/data/market_snapshot_summary.json \
+            mobile_dashboard_v1/data/final_action_plan.csv \
+            mobile_dashboard_v1/data/top_opportunities.csv \
+            top_opportunities.csv \
+            mobile_dashboard_v1/data/final_action_summary.json \
+            mobile_dashboard_v1/data/bridge_debug.csv || true
+
+          # 大檔只當 runtime 使用，不納入 commit。
+          git reset -- price_panel_daily.csv || true
+          git reset -- feature_panel_daily.csv || true
+          git reset -- raw_market_daily.csv || true
+          git reset -- mobile_dashboard_v1/data/price_panel_daily.csv || true
+          git reset -- mobile_dashboard_v1/data/feature_panel_daily.csv || true
+          git reset -- mobile_dashboard_v1/data/raw_market_daily.csv || true
+
+          if git diff --cached --quiet; then
+            echo "no update"
+          else
+            git commit -m "complete trading system with exit risk and manual positions"
+            git push origin main
+          fi
