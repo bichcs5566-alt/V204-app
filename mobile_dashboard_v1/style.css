@@ -1757,3 +1757,17 @@ button:disabled {
   margin-top: 6px;
   word-break: break-word;
 }
+/* v266.16 出場詳情強化 */
+.scan-item.sell .scan-detail,
+.scan-item.reduce .scan-detail {
+  background: rgba(255, 245, 245, 0.72);
+}
+
+.scan-item.sell .detail-text b,
+.scan-item.reduce .detail-text b {
+  color: #991b1b;
+}
+
+.detail-grid div b {
+  word-break: break-word;
+}
