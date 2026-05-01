@@ -1,0 +1,25 @@
+{
+  "generated_at": "2026-05-01 08:25:12",
+  "system": "macro_regime_v266_12",
+  "macro_regime": "RISK_ON",
+  "macro_label": "總經偏多",
+  "macro_policy": "總經環境支持進攻",
+  "macro_score": 2.0,
+  "macro_score_ratio": 1.0,
+  "valid_indicator_count": 2,
+  "total_indicator_count": 7,
+  "good_count": 2,
+  "mid_count": 0,
+  "bad_count": 0,
+  "unknown_count": 5,
+  "top_notes": [
+    "抓取失敗或無資料",
+    "抓取失敗或無資料",
+    "抓取失敗或無資料",
+    "抓取失敗或無資料",
+    "抓取失敗或無資料",
+    "台股中期趨勢偏多",
+    "商品趨勢偏多，景氣/通膨動能較強"
+  ],
+  "encoding": "utf-8-sig"
+}

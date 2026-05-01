@@ -1,0 +1,8 @@
+﻿indicator,source,date,value,score,status,label,ret20,ma60,ret60
+yield_curve_10y3m,FRED:T10Y3M,,,0,UNKNOWN,抓取失敗或無資料,,,
+us_unemployment,FRED:UNRATE,,,0,UNKNOWN,抓取失敗或無資料,,,
+us_consumer_sentiment,FRED:UMCSENT,,,0,UNKNOWN,抓取失敗或無資料,,,
+us_durable_orders,FRED:DGORDER,,,0,UNKNOWN,抓取失敗或無資料,,,
+us_leading_index,FRED:USSLIND,,,0,UNKNOWN,抓取失敗或無資料,,,
+taiex_trend,Yahoo:^TWII,2026-04-30,38926.63,1,GOOD,台股中期趨勢偏多,0.2271,34307.3,
+crb_proxy,Yahoo:DBC,2026-04-30,31.1,1,GOOD,商品趨勢偏多，景氣/通膨動能較強,,,0.2878
