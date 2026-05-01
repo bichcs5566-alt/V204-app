@@ -99,6 +99,7 @@ jobs:
         run: |
           python market_snapshot.py
           python market_regime.py
+          python macro_regime.py
 
       - name: Run exit risk engine
         run: |
@@ -123,6 +124,7 @@ jobs:
           python trading_system_allocator.py
           python market_snapshot.py
           python market_regime.py
+          python macro_regime.py
           python exit_risk_engine.py
           python final_decision_engine.py
 
@@ -164,6 +166,8 @@ jobs:
             exit_risk_summary.json \
             market_snapshot.csv \
             market_regime.csv \
+            macro_regime.csv \
+            macro_regime.json \
             market_regime.json \
             market_snapshot_summary.json \
             final_action_plan.csv \
@@ -191,8 +195,14 @@ jobs:
             mobile_dashboard_v1/data/exit_risk_summary.json \
             mobile_dashboard_v1/data/market_snapshot.csv \
             mobile_dashboard_v1/data/market_regime.csv \
+            mobile_dashboard_v1/data/macro_regime.csv \
+            mobile_dashboard_v1/data/macro_regime.json \
+            macro_regime.csv \
+            macro_regime.json \
             mobile_dashboard_v1/data/market_regime.json \
             market_regime.csv \
+            macro_regime.csv \
+            macro_regime.json \
             market_regime.json \
             mobile_dashboard_v1/data/market_snapshot_summary.json \
             mobile_dashboard_v1/data/final_action_plan.csv \
