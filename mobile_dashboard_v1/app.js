@@ -160,7 +160,7 @@ async function loadMacroDashboardV26614() {
 }
 
 /*
-app.js - v266.17 總經旁邊直觀提示版：保留原本功能 + SELL/REDUCE完整欄位
+app.js - v266.17.1 總經分數旁提示修正版：保留原本功能 + SELL/REDUCE完整欄位
 
 保留：
 1. 原本卡片 UI / 列表 / CSV 讀取 / 排序 / 展開邏輯
@@ -1780,13 +1780,9 @@ async function loadMacroExplainV266153() {
   }
 }
 
-setTimeout(() => {
-  try { loadMacroExplainV266153(); } catch(e) { console.log(e); }
-}, 800);
 
-setTimeout(() => {
-  try { loadMacroExplainV266153(); } catch(e) { console.log(e); }
-}, 1800);
+
+
 
 
 
@@ -1893,13 +1889,7 @@ async function renderMacroExplainV266162() {
 }
 
 // 等首頁資料 render 完再插入，避免找不到卡片
-setTimeout(renderMacroExplainV266162, 700);
-setTimeout(renderMacroExplainV266162, 1600);
-setTimeout(renderMacroExplainV266162, 2800);
-
-
-
-// ===== v266.17 總經旁邊直觀提示版 =====
+// ===== v266.17.1 總經分數旁提示修正版 =====
 function macroInlineDecisionV26617(data) {
   const score = Number(data?.macro_score || 0);
   const unknown = Number(data?.unknown_count || 0);
@@ -1953,6 +1943,116 @@ async function renderMacroInlineHintV26617() {
   }
 }
 
-setTimeout(renderMacroInlineHintV26617, 600);
-setTimeout(renderMacroInlineHintV26617, 1400);
-setTimeout(renderMacroInlineHintV26617, 2600);
+
+
+
+// ===== v266.17.1 總經分數旁提示修正版：只保留 inline，不顯示下方大卡 =====
+function macroInlineDecisionV266171(data) {
+  const score = Number(data?.macro_score || 0);
+  const unknown = Number(data?.unknown_count || 0);
+  const confidence = String(data?.macro_confidence || data?.macro_confidence_label || "").toUpperCase();
+
+  let decision = "⚖️ 中性｜控倉";
+  if (score >= 3) decision = "🔥 偏多｜可分批";
+  else if (score >= 1) decision = "🧭 試單｜不可重倉";
+  else if (score <= -2) decision = "⚠️ 防守｜停止新倉";
+
+  let conf = "📘 信心未定";
+  if (confidence.includes("HIGH") || confidence.includes("高")) conf = "📘 信心高";
+  else if (confidence.includes("MEDIUM") || confidence.includes("中")) conf = "📘 信心中";
+  else if (confidence.includes("LOW") || confidence.includes("低") || unknown >= 4) conf = "📘 信心低";
+
+  return `${decision}｜${conf}`;
+}
+
+function macroScoreTextV266171(data) {
+  const score = Number(data?.macro_score || 0);
+  const total =
+    Number(data?.total_indicator_count || 0) ||
+    Number(data?.valid_indicator_count || 0) + Number(data?.unknown_count || 0) ||
+    7;
+
+  return `${score}/${total}`;
+}
+
+async function renderMacroInlineHintV266171() {
+  try {
+    // 清掉前幾版放在下面的大型說明卡
+    document.querySelectorAll(
+      ".macro-explain-v266162, .macro-explain-v266153, .macro-explain-v266152"
+    ).forEach(el => el.remove());
+
+    const res = await fetch("./data/macro_regime.json?ts=" + Date.now(), { cache: "no-store" });
+    const data = await res.json();
+
+    const hint = macroInlineDecisionV266171(data);
+    const scoreText = macroScoreTextV266171(data);
+    const label = data?.macro_label || "總經狀態";
+
+    const all = Array.from(document.querySelectorAll("body *"));
+    let target = null;
+
+    for (const el of all) {
+      const txt = (el.textContent || "").trim();
+      if (
+        txt.includes("總經狀態") &&
+        (txt.includes("總經偏") || txt.includes("分數"))
+      ) {
+        target = el;
+        break;
+      }
+    }
+
+    if (!target) return;
+
+    // 將卡片內容改成：總經偏多｜分數 2/7 + inline 提示
+    const labelNode = Array.from(target.querySelectorAll("*")).find(el =>
+      (el.textContent || "").trim() === "總經狀態"
+    );
+
+    // 找實際數值區塊：通常是最大字那個，也可能就是 target 自身文字
+    let valueNode = null;
+    const nodes = Array.from(target.querySelectorAll("*")).reverse();
+    for (const el of nodes) {
+      const txt = (el.textContent || "").trim();
+      if (
+        txt.includes("總經偏") ||
+        txt.includes("分數") ||
+        txt.match(/總經.*\|\s*分數/)
+      ) {
+        valueNode = el;
+        break;
+      }
+    }
+
+    if (!valueNode || valueNode === labelNode) {
+      valueNode = target;
+    }
+
+    // 避免重複嵌套
+    const oldHint = target.querySelector(".macro-inline-hint-v266171");
+    if (oldHint) oldHint.remove();
+
+    const cleanValue = `${label}｜分數 ${scoreText}`;
+    const inline = document.createElement("span");
+    inline.className = "macro-inline-hint-v266171";
+    inline.textContent = hint;
+
+    if (valueNode === target) {
+      // 保守模式：只附加在卡片內，不破壞標題
+      const existing = Array.from(target.childNodes).find(n => 
+        n.nodeType === Node.TEXT_NODE && String(n.textContent || "").includes("總經")
+      );
+      target.appendChild(inline);
+    } else {
+      valueNode.textContent = cleanValue + " ";
+      valueNode.appendChild(inline);
+    }
+  } catch (e) {
+    console.log("v266.17.1 macro inline hint failed", e);
+  }
+}
+
+setTimeout(renderMacroInlineHintV266171, 600);
+setTimeout(renderMacroInlineHintV266171, 1400);
+setTimeout(renderMacroInlineHintV266171, 2600);
