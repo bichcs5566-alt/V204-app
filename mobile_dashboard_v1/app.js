@@ -160,7 +160,7 @@ async function loadMacroDashboardV26614() {
 }
 
 /*
-app.js - v266.16.1 出場詳情強化版：保留原本功能 + SELL/REDUCE完整欄位
+app.js - v266.17 總經旁邊直觀提示版：保留原本功能 + SELL/REDUCE完整欄位
 
 保留：
 1. 原本卡片 UI / 列表 / CSV 讀取 / 排序 / 展開邏輯
@@ -1787,3 +1787,172 @@ setTimeout(() => {
 setTimeout(() => {
   try { loadMacroExplainV266153(); } catch(e) { console.log(e); }
 }, 1800);
+
+
+
+// ===== v266.16.2 總經提示強制顯示：評分標準 + 操作提示 =====
+function macroRuleTextV266162(data) {
+  const valid = Number(data?.valid_indicator_count || 0);
+  const total = Number(data?.total_indicator_count || 0);
+  const unknown = Number(data?.unknown_count || 0);
+  const rawLabel = data?.macro_raw_label || data?.macro_label || "--";
+  const nowLabel = data?.macro_label || "--";
+  const score = Number(data?.macro_score || 0);
+  const adjusted = Number(data?.macro_adjusted_score ?? data?.macro_score ?? 0);
+  const confidence = data?.macro_confidence_label || data?.macro_confidence || "信心未定";
+
+  const validText = total > 0
+    ? `有效指標 ${valid}/${total}｜未知 ${unknown}｜${confidence}｜加權分數 ${adjusted.toFixed(2)}`
+    : `有效資料不足｜${confidence}`;
+
+  return `每項總經指標以 +1 / 0 / -1 評分；分數越高代表環境越偏多，分數越低代表越保守。原始判斷：${rawLabel}｜目前判斷：${nowLabel}｜分數 ${score.toFixed(1)}｜${validText}`;
+}
+
+function macroAdviceTextV266162(data) {
+  const label = data?.macro_label || "--";
+  const policy = data?.macro_policy || "";
+  const score = Number(data?.macro_score || 0);
+  const confidence = data?.macro_confidence || "";
+  const unknown = Number(data?.unknown_count || 0);
+
+  let advice = "";
+
+  if (score >= 3) {
+    advice = "總經偏多：允許正常試單與分批買進，但仍需避開追高。";
+  } else if (score >= 1) {
+    advice = "總經偏多但強度普通：BUY 降級 TEST，適合小量測試，不適合一次重倉。";
+  } else if (score <= -2) {
+    advice = "總經偏弱：優先控風險，買進降級觀察，持倉需嚴格停損。";
+  } else {
+    advice = "總經中性：以個股訊號為主，但買進金額要保守。";
+  }
+
+  if (policy) advice += `｜系統政策：${policy}`;
+  if (confidence === "LOW" || unknown >= 4) {
+    advice += "｜注意：總經資料不完整，不能單獨作為重倉依據。";
+  }
+
+  return advice;
+}
+
+async function renderMacroExplainV266162() {
+  try {
+    const res = await fetch("./data/macro_regime.json?ts=" + Date.now(), { cache: "no-store" });
+    const data = await res.json();
+
+    const html = `
+      <div class="macro-explain-v266162">
+        <div class="macro-explain-title">📘 總經評分標準</div>
+        <div class="macro-explain-body">${macroRuleTextV266162(data)}</div>
+        <div class="macro-explain-title">🧭 總經操作提示</div>
+        <div class="macro-explain-body">${macroAdviceTextV266162(data)}</div>
+      </div>
+    `;
+
+    const old = document.querySelector(".macro-explain-v266162");
+    if (old) {
+      old.outerHTML = html;
+      return;
+    }
+
+    const all = Array.from(document.querySelectorAll("body *"));
+    let target = null;
+
+    // 優先插在「總經狀態」卡片後面
+    for (const el of all) {
+      const txt = (el.textContent || "").trim();
+      if (txt.includes("總經狀態") && (txt.includes("總經偏") || txt.includes("分數"))) {
+        target = el;
+        break;
+      }
+    }
+
+    // 找不到就插在「風險模式」前面，避免跑到很下面
+    if (!target) {
+      for (const el of all) {
+        const txt = (el.textContent || "").trim();
+        if (txt.includes("風險模式")) {
+          target = el;
+          break;
+        }
+      }
+    }
+
+    const wrap = document.createElement("div");
+    wrap.innerHTML = html;
+    const node = wrap.firstElementChild;
+
+    if (target && target.parentElement) {
+      target.insertAdjacentElement("afterend", node);
+    } else {
+      (document.querySelector("main") || document.body).prepend(node);
+    }
+  } catch (e) {
+    console.log("v266.16.2 macro explain render failed", e);
+  }
+}
+
+// 等首頁資料 render 完再插入，避免找不到卡片
+setTimeout(renderMacroExplainV266162, 700);
+setTimeout(renderMacroExplainV266162, 1600);
+setTimeout(renderMacroExplainV266162, 2800);
+
+
+
+// ===== v266.17 總經旁邊直觀提示版 =====
+function macroInlineDecisionV26617(data) {
+  const score = Number(data?.macro_score || 0);
+  const unknown = Number(data?.unknown_count || 0);
+  const confidence = String(data?.macro_confidence || data?.macro_confidence_label || "").toUpperCase();
+
+  let decision = "⚖️ 中性｜控倉操作";
+  if (score >= 3) decision = "🔥 偏多｜可正常分批";
+  else if (score >= 1) decision = "🧭 試單｜不可重倉";
+  else if (score <= -2) decision = "⚠️ 防守｜停止新倉";
+
+  let conf = "📘 信心未定";
+  if (confidence.includes("HIGH") || confidence.includes("高")) conf = "📘 信心高";
+  else if (confidence.includes("MEDIUM") || confidence.includes("中")) conf = "📘 信心中";
+  else if (confidence.includes("LOW") || confidence.includes("低") || unknown >= 4) conf = "📘 信心低";
+
+  return `${decision}｜${conf}`;
+}
+
+async function renderMacroInlineHintV26617() {
+  try {
+    const res = await fetch("./data/macro_regime.json?ts=" + Date.now(), { cache: "no-store" });
+    const data = await res.json();
+    const hint = macroInlineDecisionV26617(data);
+
+    const all = Array.from(document.querySelectorAll("body *"));
+    let target = null;
+
+    for (const el of all) {
+      const txt = (el.textContent || "").trim();
+      if (
+        txt.includes("總經狀態") &&
+        (txt.includes("總經偏") || txt.includes("分數"))
+      ) {
+        target = el;
+        break;
+      }
+    }
+
+    if (!target) return;
+
+    let hintNode = target.querySelector(".macro-inline-hint-v26617");
+    if (!hintNode) {
+      hintNode = document.createElement("div");
+      hintNode.className = "macro-inline-hint-v26617";
+      target.appendChild(hintNode);
+    }
+
+    hintNode.textContent = hint;
+  } catch (e) {
+    console.log("v266.17 macro inline hint failed", e);
+  }
+}
+
+setTimeout(renderMacroInlineHintV26617, 600);
+setTimeout(renderMacroInlineHintV26617, 1400);
+setTimeout(renderMacroInlineHintV26617, 2600);
