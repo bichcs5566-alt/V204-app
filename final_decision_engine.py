@@ -351,6 +351,51 @@ def main():
     out = pd.DataFrame(rows, columns=OUTPUT_COLUMNS)
 
     if not out.empty:
+        out["stock_id"] = out["stock_id"].apply(normalize_stock_id)
+
+        # v266.10.1：最後保險補股票名稱
+        # 來源順序：market_snapshot.csv → stock_basic_tw_full.csv → stock_basic.csv
+        name_maps = []
+        for name_file in ["market_snapshot.csv", "stock_basic_tw_full.csv", "stock_basic.csv"]:
+            df_name = read_csv_any([ROOT / name_file, DATA_DIR / name_file])
+            if df_name.empty or "stock_id" not in df_name.columns:
+                continue
+
+            df_name = df_name.copy()
+
+            if "stock_name" not in df_name.columns:
+                for alt in ["name", "證券名稱", "股票名稱", "公司名稱"]:
+                    if alt in df_name.columns:
+                        df_name["stock_name"] = df_name[alt]
+                        break
+
+            if "stock_name" not in df_name.columns:
+                continue
+
+            df_name["stock_id"] = df_name["stock_id"].apply(normalize_stock_id)
+            df_name["stock_name"] = df_name["stock_name"].astype(str).replace(["nan", "None", "null"], "")
+            df_name = df_name[df_name["stock_name"].astype(str).str.strip() != ""]
+            if not df_name.empty:
+                name_maps.append(
+                    df_name[["stock_id", "stock_name"]]
+                    .drop_duplicates("stock_id", keep="first")
+                    .set_index("stock_id")["stock_name"]
+                    .to_dict()
+                )
+
+        def fill_stock_name(row):
+            cur = clean_text(row.get("stock_name", ""), "")
+            if cur not in ["", "--"]:
+                return cur
+            sid = normalize_stock_id(row.get("stock_id", ""))
+            for mp in name_maps:
+                v = clean_text(mp.get(sid, ""), "")
+                if v not in ["", "--"]:
+                    return v
+            return ""
+
+        out["stock_name"] = out.apply(fill_stock_name, axis=1)
+
         out["_score_num"] = pd.to_numeric(out["score"], errors="coerce").fillna(0)
         out["_priority_num"] = pd.to_numeric(out["priority"], errors="coerce").fillna(9)
         out = out.sort_values(["_priority_num", "_score_num", "stock_id"], ascending=[True, False, True])
@@ -360,7 +405,7 @@ def main():
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v266_10_market_snapshot",
+        "source": "final_decision_engine_v266_10_1_stock_name_fixed",
         "rows": int(len(out)),
         "sell_count": int((out["final_action"] == "SELL").sum()) if not out.empty else 0,
         "reduce_count": int((out["final_action"] == "REDUCE").sum()) if not out.empty else 0,
@@ -383,6 +428,7 @@ def main():
             "pre_move_candidates.csv",
             "timing_candidates.csv"
         ],
+        "with_name_count": int((out["stock_name"].astype(str).str.strip() != "").sum()) if not out.empty else 0,
         "encoding": "utf-8-sig",
     }
 
