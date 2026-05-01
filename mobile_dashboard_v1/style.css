@@ -1703,3 +1703,34 @@ button:disabled {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* v266.15.2 Macro explain + section TOP */
+.macro-explain-v266152 {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  color: #334155;
+  font-size: 15px;
+  line-height: 1.55;
+  font-weight: 700;
+}
+
+.macro-explain-v266152 b {
+  color: #0f172a;
+  font-size: 16px;
+}
+
+.top-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #fff3cd;
+  border: 1px solid #ffe08a;
+  color: #9a6700;
+  font-size: 13px;
+  font-weight: 900;
+  margin-right: 4px;
+  white-space: nowrap;
+}
