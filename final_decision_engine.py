@@ -643,7 +643,7 @@ def apply_top_opportunities_v26614(out):
 
     for rank, sid in enumerate(top_ids, start=1):
         mask = out["stock_id"].astype(str).eq(str(sid))
-        out.loc[mask, "opportunity_rank"] = rank
+        out.loc[mask, "opportunity_rank"] = str(rank)
         out.loc[mask, "top_opportunity"] = f"TOP{rank}"
         out.loc[mask, "system_note"] = (
             out.loc[mask, "system_note"].astype(str).replace(["nan", "None", "null"], "")
@@ -862,7 +862,7 @@ def main():
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v266_15_stable",
+        "source": "final_decision_engine_v266_15_1_rank_fix",
         "rows": int(len(out)),
         "sell_count": int((out["final_action"] == "SELL").sum()) if not out.empty else 0,
         "reduce_count": int((out["final_action"] == "REDUCE").sum()) if not out.empty else 0,
