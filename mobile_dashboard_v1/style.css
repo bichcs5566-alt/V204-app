@@ -1880,3 +1880,55 @@ button:disabled {
   color: #475569;
   line-height: 1.3;
 }
+/* v266.19 總經提示精準覆蓋版 */
+.macro-explain-v266162,
+.macro-explain-v266153,
+.macro-explain-v266152,
+.macro-value-v26618 {
+  display: none !important;
+}
+
+.macro-value-host-v26619 {
+  overflow: visible !important;
+}
+
+.macro-line-v26619 {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  line-height: 1.35;
+}
+
+.macro-main-v26619 {
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+}
+
+.macro-pill-v26619 {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  font-size: clamp(13px, 3.1vw, 15px);
+  font-weight: 950;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.macro-conf-v26619 {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.macro-change-v26619 {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #475569;
+}
