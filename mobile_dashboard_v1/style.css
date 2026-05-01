@@ -1652,3 +1652,21 @@ button:disabled {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* v266.14 TOP5 / Macro UI */
+.top-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #fff3cd;
+  border: 1px solid #ffe08a;
+  color: #9a6700;
+  font-size: 13px;
+  font-weight: 900;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.detail-text p {
+  word-break: break-word;
+}
