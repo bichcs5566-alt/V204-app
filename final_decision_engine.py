@@ -217,6 +217,45 @@ def norm_action(v):
     return mapping.get(s, s)
 
 
+
+def load_macro_guard():
+    """
+    v266.12：總經最高層風控。
+    讀 macro_regime.json，決定總經環境：
+    RISK_ON：可進攻
+    NEUTRAL：中性
+    RISK_OFF：降低進攻
+    """
+    data = {}
+    for p in [ROOT / "macro_regime.json", DATA_DIR / "macro_regime.json"]:
+        try:
+            if p.exists() and p.stat().st_size > 0:
+                data = json.loads(p.read_text(encoding="utf-8"))
+                break
+        except Exception:
+            pass
+
+    if not data:
+        return {
+            "macro_regime": "NEUTRAL",
+            "macro_label": "總經中性",
+            "macro_policy": "總經資料不足，暫用中性模式",
+            "macro_score": 0,
+            "macro_score_ratio": 0,
+            "valid_indicator_count": 0,
+            "total_indicator_count": 0,
+        }
+
+    return {
+        "macro_regime": str(data.get("macro_regime", "NEUTRAL")).upper(),
+        "macro_label": str(data.get("macro_label", "總經中性")),
+        "macro_policy": str(data.get("macro_policy", "")),
+        "macro_score": data.get("macro_score", 0),
+        "macro_score_ratio": data.get("macro_score_ratio", 0),
+        "valid_indicator_count": data.get("valid_indicator_count", 0),
+        "total_indicator_count": data.get("total_indicator_count", 0),
+    }
+
 def load_market_guard():
     """
     v266.11 市場濾網：
@@ -304,51 +343,91 @@ def load_market_guard():
 
 def apply_market_guard(out):
     """
-    只調整最終動作，不改原始策略分數與資料欄位。
-    持倉 EXIT / SELL / REDUCE 不受市場風控影響。
+    v266.12：三層風控
+    1) 總經 macro：決定大方向
+    2) 市場 market：決定當天節奏
+    3) 個股 final_action：決定標的
+
+    持倉 EXIT / SELL / REDUCE 不受降級影響，仍優先處理。
     """
     guard = load_market_guard()
+    macro = load_macro_guard()
+
+    guard.update(macro)
 
     if out.empty:
         return out, guard
 
     out = out.copy()
-    mode = guard["market_guard_mode"]
-    label = guard["market_guard_label"]
+    market_mode = guard.get("market_guard_mode", "MID")
+    market_label = guard.get("market_guard_label", "")
+    macro_regime = guard.get("macro_regime", "NEUTRAL")
+    macro_label = guard.get("macro_label", "總經中性")
+    macro_policy = guard.get("macro_policy", "")
 
     protected = (
         out["source"].astype(str).str.upper().eq("EXIT")
         | out["final_action"].astype(str).str.upper().isin(["SELL", "REDUCE"])
     )
 
-    if mode == "MID":
-        mask = (~protected) & out["final_action"].astype(str).str.upper().eq("BUY")
-        out.loc[mask, "final_action"] = "TEST"
-        out.loc[mask, "priority"] = 3
+    strategy_upper = out["strategy_type"].astype(str).str.upper()
+    final_upper = out["final_action"].astype(str).str.upper()
 
-        out.loc[mask, "system_note"] = (
-            out.loc[mask, "system_note"]
-            .astype(str)
-            .replace(["nan", "None", "null"], "")
-            .apply(lambda x: (x + "｜" if x else "") + label)
+    # === 總經層：先決定大方向 ===
+    if macro_regime == "RISK_OFF":
+        # 總經偏空：ALPHA 不做 BUY；一般 BUY 降 TEST；TEST 降 WATCH
+        buy_mask = (~protected) & final_upper.eq("BUY")
+        test_mask = (~protected) & final_upper.eq("TEST")
+
+        out.loc[buy_mask, "final_action"] = "TEST"
+        out.loc[buy_mask, "priority"] = 3
+        out.loc[test_mask, "final_action"] = "WATCH"
+        out.loc[test_mask, "priority"] = 8
+        out.loc[test_mask, "suggested_amount"] = 0
+        out.loc[test_mask, "target_weight"] = 0
+
+        macro_note = f"{macro_label}：{macro_policy}"
+        affected = buy_mask | test_mask
+        out.loc[affected, "system_note"] = (
+            out.loc[affected, "system_note"].astype(str).replace(["nan", "None", "null"], "")
+            .apply(lambda x: (x + "｜" if x else "") + macro_note)
         )
 
-    elif mode == "WEAK":
-        mask = (~protected) & out["final_action"].astype(str).str.upper().isin(["BUY", "TEST"])
+    elif macro_regime == "NEUTRAL":
+        # 總經中性：ALPHA BUY 降 TEST；CORE 小倉可以保留
+        alpha_buy = (~protected) & final_upper.eq("BUY") & strategy_upper.str.contains("ALPHA", na=False)
+        out.loc[alpha_buy, "final_action"] = "TEST"
+        out.loc[alpha_buy, "priority"] = 3
+        out.loc[alpha_buy, "system_note"] = (
+            out.loc[alpha_buy, "system_note"].astype(str).replace(["nan", "None", "null"], "")
+            .apply(lambda x: (x + "｜" if x else "") + f"{macro_label}：ALPHA 降級 TEST")
+        )
+
+    # 重新抓一次 final_action，避免前面已改動
+    final_upper = out["final_action"].astype(str).str.upper()
+
+    # === 市場層：再控制當天節奏 ===
+    if market_mode == "MID":
+        mask = (~protected) & final_upper.eq("BUY")
+        out.loc[mask, "final_action"] = "TEST"
+        out.loc[mask, "priority"] = 3
+        out.loc[mask, "system_note"] = (
+            out.loc[mask, "system_note"].astype(str).replace(["nan", "None", "null"], "")
+            .apply(lambda x: (x + "｜" if x else "") + market_label)
+        )
+
+    elif market_mode == "WEAK":
+        mask = (~protected) & final_upper.isin(["BUY", "TEST"])
         out.loc[mask, "final_action"] = "WATCH"
         out.loc[mask, "priority"] = 8
         out.loc[mask, "suggested_amount"] = 0
         out.loc[mask, "target_weight"] = 0
-
         out.loc[mask, "system_note"] = (
-            out.loc[mask, "system_note"]
-            .astype(str)
-            .replace(["nan", "None", "null"], "")
-            .apply(lambda x: (x + "｜" if x else "") + label)
+            out.loc[mask, "system_note"].astype(str).replace(["nan", "None", "null"], "")
+            .apply(lambda x: (x + "｜" if x else "") + market_label)
         )
 
     return out, guard
-
 
 def main():
     generated_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
@@ -544,7 +623,7 @@ def main():
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v266_11_market_filter",
+        "source": "final_decision_engine_v266_12_macro_filter",
         "rows": int(len(out)),
         "sell_count": int((out["final_action"] == "SELL").sum()) if not out.empty else 0,
         "reduce_count": int((out["final_action"] == "REDUCE").sum()) if not out.empty else 0,
