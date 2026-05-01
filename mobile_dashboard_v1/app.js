@@ -160,7 +160,7 @@ async function loadMacroDashboardV26614() {
 }
 
 /*
-app.js - 最新 data_pipeline 系統：本機 Token 觸發版 + 時間校準版
+app.js - v266.16.1 出場詳情強化版：保留原本功能 + SELL/REDUCE完整欄位
 
 保留：
 1. 原本卡片 UI / 列表 / CSV 讀取 / 排序 / 展開邏輯
@@ -1384,6 +1384,95 @@ function liquiditySortRank(row) {
 }
 
 
+
+// ===== v266.16.1 SELL / REDUCE 出場詳情強化 =====
+function inferExitTypeV26616(row) {
+  const direct = row.exit_type || row.exit_pattern || row.exit_mode || row["出場型態"];
+  if (direct) return safeText(direct);
+
+  const text = `${row.reason || ""} ${row.system_note || ""} ${row.note || ""}`;
+  if (/停損|stop/i.test(text)) return "停損出場";
+  if (/跌破\s*MA20|MA20|月線|均線/i.test(text)) return "跌破均線出場";
+  if (/停利|獲利|take profit/i.test(text)) return "停利出場";
+  if (/減碼|風險|部位/i.test(text)) return "風險減碼";
+  if (/動能轉弱|5日動能轉弱|轉弱|弱勢/i.test(text)) return "動能轉弱出場";
+  return "持倉風控出場";
+}
+
+function inferExitReasonV26616(row) {
+  const direct = row.exit_reason || row["出場原因"];
+  if (direct) return safeText(direct);
+  return safeText(row.reason || row.note || row.system_note, "依持倉風控條件出場。");
+}
+
+function inferExitKbarTypeV26616(row) {
+  const direct =
+    row.exit_kbar_type ||
+    row.exit_candle_type ||
+    row.kbar_type ||
+    row.candle_type ||
+    row.candle_pattern ||
+    row.price_action ||
+    row["出場K棒型態"];
+
+  if (direct) return safeText(direct);
+
+  const text = `${row.reason || ""} ${row.system_note || ""} ${row.note || ""}`;
+
+  if (/長黑|黑K/i.test(text)) return "長黑K轉弱";
+  if (/跌破|破線|破位|MA20|均線/i.test(text)) return "跌破型K棒";
+  if (/吞噬/i.test(text)) return "空方吞噬";
+  if (/上影|爆量上影|長上影/i.test(text)) return "上影線壓力";
+  if (/量縮|無量/i.test(text)) return "量縮轉弱";
+  if (/停損/i.test(text)) return "停損觸發K棒";
+  return "尚未標註K棒";
+}
+
+function inferExitKbarReasonV26616(row) {
+  const direct =
+    row.exit_kbar_reason ||
+    row.exit_candle_reason ||
+    row.kbar_reason ||
+    row.candle_reason ||
+    row["K棒判斷原因"];
+
+  if (direct) return safeText(direct);
+
+  const text = `${row.reason || ""} ${row.system_note || ""} ${row.note || ""}`;
+
+  if (/停損/i.test(text)) return "價格已觸發停損條件，先保護本金。";
+  if (/跌破\s*MA20|MA20|均線|月線/i.test(text)) return "價格跌破關鍵均線，趨勢防守失效。";
+  if (/動能轉弱|5日動能轉弱|轉弱/i.test(text)) return "短線動能轉弱，續抱勝率下降。";
+  if (/損益|虧損|負/i.test(text)) return "持倉損益惡化，需要優先控制風險。";
+  if (/上影|壓力/i.test(text)) return "上方賣壓增加，短線容易轉弱。";
+  return "後端尚未提供K棒細節，先以出場原因判斷。";
+}
+
+function inferExitRiskLevelV26616(row) {
+  const direct = row.risk_level || row.exit_risk_level || row["風險等級"];
+  if (direct) return safeText(direct);
+
+  const text = `${row.reason || ""} ${row.system_note || ""} ${row.note || ""}`.toUpperCase();
+  if (/HIGH|高風險|停損|跌破/.test(text)) return "HIGH";
+  if (/MEDIUM|中風險|轉弱|減碼/.test(text)) return "MEDIUM";
+  if (/LOW|低風險/.test(text)) return "LOW";
+  return "--";
+}
+
+function inferExitAdviceV26616(row, action) {
+  const direct = row.exit_advice || row.action_advice || row.decision_note || row.zh_hint || row.chinese_hint;
+  if (direct) return safeText(direct);
+
+  if (action === "SELL") return "優先處理賣出，不建議拖延。";
+  if (action === "REDUCE") return "先減碼控制風險，保留觀察彈性。";
+  return "依系統提示處理。";
+}
+
+function isExitActionV26616(action) {
+  return ["SELL", "REDUCE"].includes(String(action || "").toUpperCase());
+}
+
+
 function detailCell(label, value, extraClass = "") {
   let v = safeText(value, "--");
   if (v === "" || v === "undefined" || v === "null") v = "--";
@@ -1398,6 +1487,7 @@ function renderScanRow(row, key) {
   const top = isTop(row) ? "🔥TOP" : "";
   let stock = safeText(row.stock_id);
   if (stock.endsWith(".0")) stock = stock.slice(0, -2);
+
   const stockName = safeText(row.stock_name, "");
   const topBadge = getTopBadge(row);
   const score = safeText(row.score);
@@ -1415,29 +1505,30 @@ function renderScanRow(row, key) {
   const strat = zhStrategy(strategyDisplay(row));
   const reason = safeText(row.reason || row.note, "無");
   const note = safeText(row.system_note || row.note, "無");
-  const isPositionDecision = String(source).toUpperCase() === "EXIT" || String(bucket).toUpperCase() === "POSITION";
-
   const finalAdvice = zhFinalAdvice(row);
-  const extraDetail = isPositionDecision
-    ? `<div class="detail-text position-detail-note"><b>持倉提示</b><p>${finalAdvice}</p></div>`
-    : `<div class="detail-text"><b>原因</b><p>${reason}</p></div>
-       <div class="detail-text"><b>中文決策提示</b><p>${finalAdvice}</p></div>
-       <div class="detail-text"><b>系統提示</b><p>${note}</p></div>`;
+  const isExit = isExitActionV26616(action);
 
-  return `
-    <article class="scan-item ${cls}">
-      <div class="scan-main scan-main-live" data-toggle="${key}">
-        <div class="scan-action ${cls}">${emoji} ${label}</div>
-        <div class="scan-stock">${stock}</div>
-        <div class="scan-score">${score}</div>
-        <div class="scan-top">${top}</div>
-        <div class="scan-entry">${entry}</div>
-        <div class="scan-liq ${liqCls}">${liqLabel}</div>
-        <div class="scan-close">${close}</div>
-      </div>
+  const exitType = inferExitTypeV26616(row);
+  const exitReason = inferExitReasonV26616(row);
+  const exitKbarType = inferExitKbarTypeV26616(row);
+  const exitKbarReason = inferExitKbarReasonV26616(row);
+  const exitRisk = inferExitRiskLevelV26616(row);
+  const exitAdvice = inferExitAdviceV26616(row, action);
 
-      <div class="scan-detail" id="${key}">
-        <div class="detail-grid">
+  const detailGrid = isExit ? `
+          ${detailCell("股票名稱", stockName)}
+          ${detailCell("來源", source)}
+          ${detailCell("策略層", strat)}
+          ${detailCell("出場型態", exitType)}
+          ${detailCell("出場K棒型態", exitKbarType)}
+          ${detailCell("參考價", close)}
+          ${detailCell("建議金額", amount)}
+          ${detailCell("目標權重", weight)}
+          ${detailCell("流動性", liqLabel, liqCls)}
+          ${detailCell("成交量", formatLotsFromShares(row.volume))}
+          ${detailCell("成交金額", formatTurnoverTW(row.turnover))}
+          ${detailCell("風險等級", exitRisk)}
+        ` : `
           ${detailCell("股票名稱", stockName)}
           ${topBadge ? detailCell("系統評測", topBadge + "｜優先觀察") : ""}
           ${detailCell("來源", source)}
@@ -1450,8 +1541,36 @@ function renderScanRow(row, key) {
           ${detailCell("成交量", formatLotsFromShares(row.volume))}
           ${detailCell("成交金額", formatTurnoverTW(row.turnover))}
           ${detailCell("流動性分數", liqScore)}
+        `;
+
+  const detailText = isExit ? `
+        <div class="detail-text exit-detail-text"><b>出場原因</b><p>${exitReason}</p></div>
+        <div class="detail-text exit-detail-text"><b>K棒判斷原因</b><p>${exitKbarReason}</p></div>
+        <div class="detail-text exit-detail-text"><b>建議動作</b><p>${exitAdvice}</p></div>
+        <div class="detail-text exit-detail-text"><b>系統提示</b><p>${note}</p></div>
+      ` : `
+        <div class="detail-text"><b>原因</b><p>${reason}</p></div>
+        <div class="detail-text"><b>中文決策提示</b><p>${finalAdvice}</p></div>
+        <div class="detail-text"><b>系統提示</b><p>${note}</p></div>
+      `;
+
+  return `
+    <article class="scan-item ${cls}">
+      <div class="scan-main scan-main-live" data-toggle="${key}">
+        <div class="scan-action ${cls}">${emoji} ${label}</div>
+        <div class="scan-stock">${stock}</div>
+        <div class="scan-score">${score}</div>
+        <div class="scan-top">${top}</div>
+        <div class="scan-entry">${isExit ? label : entry}</div>
+        <div class="scan-liq ${liqCls}">${liqLabel}</div>
+        <div class="scan-close">${close}</div>
+      </div>
+
+      <div class="scan-detail" id="${key}">
+        <div class="detail-grid">
+          ${detailGrid}
         </div>
-        ${extraDetail}
+        ${detailText}
       </div>
     </article>
   `;
