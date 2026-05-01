@@ -67,6 +67,100 @@ function qs(id) {
   return document.getElementById(id);
 }
 
+
+// ===== v266.10.3 中文語意轉換層 =====
+function zhSource(v) {
+  const s = String(v || "").trim().toUpperCase();
+  const map = {
+    "ENTRY": "策略進場",
+    "EXIT": "策略出場",
+    "POSITION": "持倉管理",
+    "V266_DUAL": "雙策略系統",
+    "FINAL_DECISION_ENGINE": "最終決策",
+    "TRADE_PLAN": "交易計畫",
+    "CANDIDATES": "候選名單",
+    "MANUAL": "手動持倉"
+  };
+  return map[s] || safeText(v, "--");
+}
+
+function zhStrategy(v) {
+  const s = String(v || "").trim().toUpperCase();
+  const map = {
+    "PRE": "預備佈局",
+    "CORE": "核心卡位",
+    "CORE 卡位": "核心卡位",
+    "ALPHA": "主力動能",
+    "ALPHA 主力": "主力動能",
+    "DUAL": "雙策略",
+    "POSITION": "持倉風控",
+    "TEST": "試單觀察",
+    "WATCH": "觀察名單",
+    "BLOCK": "禁止交易"
+  };
+  return map[s] || safeText(v, "--");
+}
+
+function zhEntry(v) {
+  const s = String(v || "").trim().toUpperCase();
+  const map = {
+    "WAIT": "等待確認",
+    "BREAK": "突破確認",
+    "PULLBACK": "回檔接近",
+    "BUY": "可進場",
+    "TEST": "小量試單",
+    "WATCH": "只觀察",
+    "SELL": "賣出",
+    "REDUCE": "減碼",
+    "HOLD": "續抱觀察",
+    "HIGH_LIQUIDITY_BUY": "高流動性買進",
+    "高流動性強勢買進": "高流動性買進",
+    "強勢試單": "強勢試單",
+    "早期卡位": "早期卡位",
+    "低量試單": "低量試單",
+    "CORE卡位": "核心卡位",
+    "CORE小倉試單": "核心小倉試單",
+    "ALPHA主力買進": "主力買進",
+    "ALPHA試單": "主力試單",
+    "ALPHA觀察": "主力觀察"
+  };
+  return map[s] || safeText(v, "--");
+}
+
+function zhAction(v) {
+  const s = String(v || "").trim().toUpperCase();
+  const map = {
+    "BUY": "買進",
+    "TEST": "試單",
+    "WATCH": "觀察",
+    "BLOCK": "禁止",
+    "SELL": "賣出",
+    "REDUCE": "減碼",
+    "WAIT": "等待",
+    "HOLD": "續抱"
+  };
+  return map[s] || safeText(v, "--");
+}
+
+function zhFinalAdvice(row) {
+  const action = String(row.final_action || row.action || "").trim().toUpperCase();
+  const strategy = String(row.strategy_type || row.bucket || "").trim().toUpperCase();
+  const entry = String(row.entry_type || row.action_sub || "").trim().toUpperCase();
+  const liq = String(row.liquidity_level || "").trim().toUpperCase();
+
+  if (action === "SELL") return "持倉風控：優先處理賣出，不建議拖延。";
+  if (action === "REDUCE") return "持倉風控：建議先減碼，降低部位風險。";
+  if (action === "BUY" && strategy.includes("ALPHA")) return "主力動能：流動性充足，可分批進場。";
+  if (action === "BUY" && strategy.includes("CORE")) return "核心卡位：可小倉進場，等待結構放大。";
+  if (action === "TEST") return "試單模式：只適合小量測試，不要一次重倉。";
+  if (action === "WATCH") return "觀察模式：條件尚未完整，不急著下單。";
+  if (action === "BLOCK") return "禁止交易：條件不足，暫時不要碰。";
+  if (entry === "WAIT") return "等待確認：訊號未完成，先觀察。";
+  if (entry === "BREAK") return "突破型態：注意是否能站穩，不追高。";
+  if (liq === "LOW" || liq === "BLOCK") return "流動性不足：不適合放大資金。";
+  return "系統提示：依照分層操作，避免情緒下單。";
+}
+
 function safeText(v, fallback = "--") {
   if (v === undefined || v === null || v === "") return fallback;
   return String(v);
@@ -1118,9 +1212,9 @@ function renderScanRow(row, key) {
   if (stock.endsWith(".0")) stock = stock.slice(0, -2);
   const stockName = safeText(row.stock_name, "");
   const score = safeText(row.score);
-  const source = safeText(row.source);
-  const bucket = safeText(row.bucket);
-  const entry = safeText(row.entry_type);
+  const source = zhSource(row.source);
+  const bucket = zhStrategy(row.bucket || row.strategy_type);
+  const entry = zhEntry(row.entry_type || row.action_sub);
   const close = num(row.close || row.ref_price);
   const amount = row.suggested_amount ? money(row.suggested_amount) : "--";
   const weight = row.target_weight ? pct(row.target_weight) : "--";
@@ -1129,14 +1223,16 @@ function renderScanRow(row, key) {
   const liqLabel = liquidityLabel(row.liquidity_level || row.liquidity_tag);
   const liqCls = liquidityClass(row.liquidity_level || row.liquidity_tag);
   const liqScore = row.liquidity_score ? num(row.liquidity_score) : "--";
-  const strat = strategyDisplay(row);
+  const strat = zhStrategy(strategyDisplay(row));
   const reason = safeText(row.reason || row.note, "無");
   const note = safeText(row.system_note || row.note, "無");
   const isPositionDecision = String(source).toUpperCase() === "EXIT" || String(bucket).toUpperCase() === "POSITION";
 
+  const finalAdvice = zhFinalAdvice(row);
   const extraDetail = isPositionDecision
-    ? `<div class="detail-text position-detail-note"><b>持倉提示</b><p>完整風控原因已放在持倉卡片內。</p></div>`
+    ? `<div class="detail-text position-detail-note"><b>持倉提示</b><p>${finalAdvice}</p></div>`
     : `<div class="detail-text"><b>原因</b><p>${reason}</p></div>
+       <div class="detail-text"><b>中文決策提示</b><p>${finalAdvice}</p></div>
        <div class="detail-text"><b>系統提示</b><p>${note}</p></div>`;
 
   return `
