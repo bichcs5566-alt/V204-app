@@ -1,13 +1,61 @@
+var topBadge = "";
+
+// ===== v266.15 Stable Helpers / 防炸工具 =====
+function safeObj(row) {
+  return row && typeof row === "object" ? row : {};
+}
+
+function getTopBadge(row) {
+  row = safeObj(row);
+  const top = safeText(row.top_opportunity || "", "");
+  const rank = safeText(row.opportunity_rank || "", "");
+  if (top && top !== "--") return `🔥 ${top}`;
+  if (rank && rank !== "--") return `🔥 TOP${rank}`;
+  return "";
+}
+
+function formatLotsFromShares(v) {
+  if (v === undefined || v === null || v === "" || v === "--") return "--";
+  const raw = Number(String(v).replace(/,/g, "").replace("張", "").replace("股", ""));
+  if (!Number.isFinite(raw) || raw <= 0) return "--";
+
+  // 後端若是股數，轉張；若本來就是張數（通常小於 2,000,000），保留。
+  const lots = raw >= 2000000 ? raw / 1000 : raw;
+  return Math.round(lots).toLocaleString("zh-TW") + "張";
+}
+
+function formatTurnoverTW(v) {
+  if (v === undefined || v === null || v === "" || v === "--") return "--";
+  let raw = Number(String(v).replace(/,/g, "").replace("億", ""));
+  if (!Number.isFinite(raw) || raw <= 0) return "--";
+
+  // 如果是元，轉億；如果已是億，保留。
+  if (raw > 10000000) raw = raw / 100000000;
+  return raw.toLocaleString("zh-TW", { maximumFractionDigits: 2 }) + "億";
+}
+
+function macroConfidenceText(data) {
+  const label = data?.macro_label || "--";
+  const score = Number(data?.macro_score || 0);
+  const adj = Number(data?.macro_adjusted_score ?? data?.macro_score ?? 0);
+  const conf = data?.macro_confidence_label || "";
+  const valid = Number(data?.valid_indicator_count || 0);
+  const total = Number(data?.total_indicator_count || 0);
+
+  if (valid && total) {
+    return `${label}｜分數 ${score.toFixed(1)}｜${conf} ${valid}/${total}｜加權 ${adj.toFixed(2)}`;
+  }
+  return `${label}｜分數 ${score.toFixed(1)}`;
+}
+
+
 // ===== v266.14 Macro Dashboard / 總經狀態讀取 =====
 async function loadMacroDashboardV26614() {
   try {
     const res = await fetch("./data/macro_regime.json?ts=" + Date.now(), { cache: "no-store" });
     const data = await res.json();
 
-    const macroText =
-      (data && data.macro_label)
-        ? `${data.macro_label}｜分數 ${Number(data.macro_score || 0).toFixed(1)}`
-        : "--｜分數 --";
+    const macroText = data ? macroConfidenceText(data) : "--｜分數 --";
 
     const policyText =
       (data && data.macro_policy)
@@ -167,13 +215,7 @@ function zhEntry(v) {
 }
 
 
-function topOpportunityBadge(row) {
-  const top = safeText(row.top_opportunity || "", "");
-  const rank = safeText(row.opportunity_rank || "", "");
-  if (top && top !== "--") return `🔥 ${top}`;
-  if (rank && rank !== "--") return `🔥 TOP${rank}`;
-  return "";
-}
+function topOpportunityBadge(row) { return getTopBadge(row); }
 
 function zhAction(v) {
   const s = String(v || "").trim().toUpperCase();
@@ -671,6 +713,7 @@ function renderPositions() {
     let stock = safeText(row.stock_id);
   if (stock.endsWith(".0")) stock = stock.slice(0, -2);
   const stockName = safeText(row.stock_name, "");
+  const topBadge = getTopBadge(row);
   const topBadge = topOpportunityBadge(row);
     const avg = num(row.avg_price);
     const lots = num(row.lots, 2);
@@ -1297,6 +1340,7 @@ function renderScanRow(row, key) {
   let stock = safeText(row.stock_id);
   if (stock.endsWith(".0")) stock = stock.slice(0, -2);
   const stockName = safeText(row.stock_name, "");
+  const topBadge = getTopBadge(row);
   const topBadge = topOpportunityBadge(row);
   const score = safeText(row.score);
   const source = zhSource(row.source);
@@ -1345,8 +1389,8 @@ function renderScanRow(row, key) {
           ${detailCell("建議金額", amount)}
           ${detailCell("目標權重", weight)}
           ${detailCell("流動性", liqLabel, liqCls)}
-          ${detailCell("成交量", volume)}
-          ${detailCell("成交金額", turnover)}
+          ${detailCell("成交量", formatLotsFromShares(row.volume))}
+          ${detailCell("成交金額", formatTurnoverTW(row.turnover))}
           ${detailCell("流動性分數", liqScore)}
         </div>
         ${extraDetail}
