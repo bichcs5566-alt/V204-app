@@ -24,7 +24,7 @@ from datetime import datetime
 import json
 import math
 import pandas as pd
-from chip_concentration_v26620 import add_chip_columns
+from chip_concentration_v26621 import add_chip_columns
 import numpy as np
 
 ROOT = Path(".")
@@ -37,7 +37,7 @@ OUTPUT_COLUMNS = [
     "priority", "reason", "system_note",
     "opportunity_score", "opportunity_rank", "top_opportunity",
     "liquidity_level", "liquidity_tag", "liquidity_score", "volume", "turnover",
-    "chip_score", "chip_label", "chip_display", "chip_reason", "chip_hint", "chip_valid_count", "chip_missing",
+    "chip_score", "chip_label", "chip_display", "chip_reason", "chip_hint", "chip_valid_count", "chip_missing", "chip_confidence",
 ]
 
 def clean_text(v, default=""):
@@ -896,7 +896,7 @@ def main():
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v266_20_chip_fullB",
+        "source": "final_decision_engine_v266_21_chip_usable",
         "rows": int(len(out)),
         "sell_count": int((out["final_action"] == "SELL").sum()) if not out.empty else 0,
         "reduce_count": int((out["final_action"] == "REDUCE").sum()) if not out.empty else 0,
