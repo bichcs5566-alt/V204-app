@@ -160,7 +160,7 @@ async function loadMacroDashboardV26614() {
 }
 
 /*
-app.js - v266.20 籌碼集中度完整B版：保留原本功能 + SELL/REDUCE完整欄位
+app.js - v266.21 籌碼可用版：保留原本功能 + SELL/REDUCE完整欄位
 
 保留：
 1. 原本卡片 UI / 列表 / CSV 讀取 / 排序 / 展開邏輯
@@ -1481,7 +1481,7 @@ function detailCell(label, value, extraClass = "") {
 
 
 // ===== v266.20 籌碼集中度 UI 輔助 =====
-function chipDisplayV26620(row) {
+function chipDisplayV26621(row) {
   const display = row.chip_display || row["籌碼集中度"];
   if (display && String(display).trim() !== "--") return safeText(display);
 
@@ -1499,7 +1499,7 @@ function chipDisplayV26620(row) {
   return `${Math.round(score)}（${label}）`;
 }
 
-function chipReasonV26620(row) {
+function chipReasonV26621(row) {
   return safeText(
     row.chip_reason ||
     row.chip_concentration_reason ||
@@ -1508,7 +1508,7 @@ function chipReasonV26620(row) {
   );
 }
 
-function chipHintV26620(row) {
+function chipHintV26621(row) {
   return safeText(
     row.chip_hint ||
     row.chip_concentration_hint ||
@@ -1567,7 +1567,7 @@ function renderScanRow(row, key) {
           ${detailCell("成交量", formatLotsFromShares(row.volume))}
           ${detailCell("成交金額", formatTurnoverTW(row.turnover))}
           ${detailCell("風險等級", exitRisk)}
-          ${detailCell("籌碼集中度", chipDisplayV26620(row))}
+          ${detailCell("籌碼集中度", chipDisplayV26621(row))}
         ` : `
           ${detailCell("股票名稱", stockName)}
           ${topBadge ? detailCell("系統評測", topBadge + "｜優先觀察") : ""}
@@ -1581,21 +1581,21 @@ function renderScanRow(row, key) {
           ${detailCell("成交量", formatLotsFromShares(row.volume))}
           ${detailCell("成交金額", formatTurnoverTW(row.turnover))}
           ${detailCell("流動性分數", liqScore)}
-          ${detailCell("籌碼集中度", chipDisplayV26620(row))}
+          ${detailCell("籌碼集中度", chipDisplayV26621(row))}
         `;
 
   const detailText = isExit ? `
         <div class="detail-text exit-detail-text"><b>出場原因</b><p>${exitReason}</p></div>
         <div class="detail-text exit-detail-text"><b>K棒判斷原因</b><p>${exitKbarReason}</p></div>
         <div class="detail-text exit-detail-text"><b>建議動作</b><p>${exitAdvice}</p></div>
-        <div class="detail-text exit-detail-text"><b>籌碼原因</b><p>${chipReasonV26620(row)}</p></div>
-        <div class="detail-text exit-detail-text"><b>中文籌碼提示</b><p>${chipHintV26620(row)}</p></div>
+        <div class="detail-text exit-detail-text"><b>籌碼原因</b><p>${chipReasonV26621(row)}</p></div>
+        <div class="detail-text exit-detail-text"><b>中文籌碼提示</b><p>${chipHintV26621(row)}</p></div>
         <div class="detail-text exit-detail-text"><b>系統提示</b><p>${note}</p></div>
       ` : `
         <div class="detail-text"><b>原因</b><p>${reason}</p></div>
         <div class="detail-text"><b>中文決策提示</b><p>${finalAdvice}</p></div>
-        <div class="detail-text"><b>籌碼原因</b><p>${chipReasonV26620(row)}</p></div>
-        <div class="detail-text"><b>中文籌碼提示</b><p>${chipHintV26620(row)}</p></div>
+        <div class="detail-text"><b>籌碼原因</b><p>${chipReasonV26621(row)}</p></div>
+        <div class="detail-text"><b>中文籌碼提示</b><p>${chipHintV26621(row)}</p></div>
         <div class="detail-text"><b>系統提示</b><p>${note}</p></div>
       `;
 
@@ -1934,7 +1934,7 @@ async function renderMacroExplainV266162() {
 }
 
 // 等首頁資料 render 完再插入，避免找不到卡片
-// ===== v266.20 籌碼集中度完整B版 =====
+// ===== v266.21 籌碼可用版 =====
 function macroInlineDecisionV26617(data) {
   const score = Number(data?.macro_score || 0);
   const unknown = Number(data?.unknown_count || 0);
@@ -1991,7 +1991,7 @@ async function renderMacroInlineHintV26617() {
 
 
 
-// ===== v266.20 籌碼集中度完整B版：只保留 inline，不顯示下方大卡 =====
+// ===== v266.21 籌碼可用版：只保留 inline，不顯示下方大卡 =====
 function macroInlineDecisionV266171(data) {
   const score = Number(data?.macro_score || 0);
   const unknown = Number(data?.unknown_count || 0);
@@ -2101,7 +2101,7 @@ async function renderMacroInlineHintV266171() {
 
 
 
-// ===== v266.20 籌碼集中度完整B版：分數/滿分/信心/變化/操作提示 inline 顯示 =====
+// ===== v266.21 籌碼可用版：分數/滿分/信心/變化/操作提示 inline 顯示 =====
 function macroTotalV26618(data) {
   const total = Number(data?.total_indicator_count || 0);
   const valid = Number(data?.valid_indicator_count || 0);
@@ -2263,7 +2263,7 @@ async function renderMacroEnhancedV26618() {
 
 
 
-// ===== v266.20 籌碼集中度完整B版：直接替換「總經偏多｜分數」那一行 =====
+// ===== v266.21 籌碼可用版：直接替換「總經偏多｜分數」那一行 =====
 function macroTotalV26619(data) {
   const total = Number(data?.total_indicator_count || 0);
   const valid = Number(data?.valid_indicator_count || 0);
@@ -2405,3 +2405,46 @@ setTimeout(renderMacroPreciseV26619, 400);
 setTimeout(renderMacroPreciseV26619, 1200);
 setTimeout(renderMacroPreciseV26619, 2400);
 setTimeout(renderMacroPreciseV26619, 4200);
+
+
+
+// ===== v266.21 籌碼信心顯示 =====
+function chipDisplayV26621(row) {
+  const display = row.chip_display || row["籌碼集中度"];
+  const conf = row.chip_confidence || row["籌碼信心"] || "";
+  if (display && String(display).trim() !== "--") {
+    return conf ? `${safeText(display)}｜${safeText(conf)}` : safeText(display);
+  }
+
+  const scoreRaw = row.chip_score || row.chip_concentration_score || row["籌碼分數"];
+  const score = Number(scoreRaw);
+  if (!Number.isFinite(score)) return "--";
+
+  let label = "🟡 普通";
+  if (score >= 80) label = "🔥 高度集中";
+  else if (score >= 60) label = "🟢 偏集中";
+  else if (score >= 40) label = "🟡 普通";
+  else if (score >= 20) label = "⚠️ 分散";
+  else label = "❌ 極度分散";
+
+  const base = `${Math.round(score)}（${label}）`;
+  return conf ? `${base}｜${safeText(conf)}` : base;
+}
+
+function chipReasonV26621(row) {
+  return safeText(
+    row.chip_reason ||
+    row.chip_concentration_reason ||
+    row["籌碼原因"],
+    "籌碼資料不足"
+  );
+}
+
+function chipHintV26621(row) {
+  return safeText(
+    row.chip_hint ||
+    row.chip_concentration_hint ||
+    row["籌碼提示"],
+    "籌碼資料不足，只能當輔助，不可重倉。"
+  );
+}
