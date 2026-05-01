@@ -431,6 +431,29 @@ def apply_market_guard(out):
     return out, guard
 
 
+
+def macro_confidence_level(valid_count, total_count):
+    try:
+        valid = float(valid_count or 0)
+        total = float(total_count or 0)
+        ratio = valid / total if total > 0 else 0
+    except Exception:
+        ratio = 0
+
+    if ratio >= 0.70:
+        return "HIGH", "高信心", ratio
+    if ratio >= 0.40:
+        return "MID", "中信心", ratio
+    return "LOW", "低信心", ratio
+
+
+def adjusted_macro_score(raw_score, valid_count, total_count):
+    _, _, ratio = macro_confidence_level(valid_count, total_count)
+    try:
+        return round(float(raw_score or 0) * ratio, 2)
+    except Exception:
+        return 0.0
+
 def load_macro_regime_for_v26614():
     data = {}
     for p in [ROOT / "macro_regime.json", DATA_DIR / "macro_regime.json"]:
@@ -446,20 +469,40 @@ def load_macro_regime_for_v26614():
     score = float(data.get("macro_score", 0) or 0)
     ratio = float(data.get("macro_score_ratio", 0) or 0)
 
+    valid_count = int(float(data.get("valid_indicator_count", 0) or 0))
+    total_count = int(float(data.get("total_indicator_count", 0) or 0))
+    unknown_count = int(float(data.get("unknown_count", 0) or 0))
+    conf_code, conf_label, conf_ratio = macro_confidence_level(valid_count, total_count)
+    adj_score = adjusted_macro_score(score, valid_count, total_count)
+
+    # 低信心時不讓總經過度影響操作，避免 2/7 指標就判成強多
+    effective_regime = regime
+    effective_label = label
+    if conf_code == "LOW":
+        effective_regime = "NEUTRAL"
+        effective_label = f"{label}（低信心）"
+
     return {
-        "macro_regime": regime,
-        "macro_label": label,
+        "macro_regime": effective_regime,
+        "macro_raw_regime": regime,
+        "macro_label": effective_label,
+        "macro_raw_label": label,
         "macro_score": score,
+        "macro_adjusted_score": adj_score,
         "macro_score_ratio": ratio,
+        "macro_confidence": conf_code,
+        "macro_confidence_label": conf_label,
+        "macro_confidence_ratio": round(conf_ratio, 4),
         "macro_policy": data.get("macro_policy", ""),
-        "valid_indicator_count": int(float(data.get("valid_indicator_count", 0) or 0)),
-        "unknown_count": int(float(data.get("unknown_count", 0) or 0)),
+        "valid_indicator_count": valid_count,
+        "total_indicator_count": total_count,
+        "unknown_count": unknown_count,
     }
 
 
 def calc_opportunity_score(row):
     """
-    v266.14 機會分數：
+    v266.15 機會分數：
     給 TEST / WATCH 清單排序，不改原本策略邏輯。
     """
     def f(x, default=0):
@@ -796,7 +839,7 @@ def main():
 
         out, market_guard = apply_market_guard(out)
 
-        # v266.14：總經攻擊強度 + TOP5 機會評測
+        # v266.15：總經攻擊強度 + TOP5 機會評測
         out, macro_guard = apply_macro_strength_v26614(out)
         out, top_opportunity_df = apply_top_opportunities_v26614(out)
 
@@ -819,7 +862,7 @@ def main():
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v266_14_macro_top5",
+        "source": "final_decision_engine_v266_15_stable",
         "rows": int(len(out)),
         "sell_count": int((out["final_action"] == "SELL").sum()) if not out.empty else 0,
         "reduce_count": int((out["final_action"] == "REDUCE").sum()) if not out.empty else 0,
@@ -849,6 +892,15 @@ def main():
         "macro_score": macro_guard.get("macro_score", 0),
         "macro_score_ratio": macro_guard.get("macro_score_ratio", 0),
         "macro_policy": macro_guard.get("macro_policy", ""),
+        "macro_raw_regime": macro_guard.get("macro_raw_regime", ""),
+        "macro_raw_label": macro_guard.get("macro_raw_label", ""),
+        "macro_adjusted_score": macro_guard.get("macro_adjusted_score", 0),
+        "macro_confidence": macro_guard.get("macro_confidence", ""),
+        "macro_confidence_label": macro_guard.get("macro_confidence_label", ""),
+        "macro_confidence_ratio": macro_guard.get("macro_confidence_ratio", 0),
+        "valid_indicator_count": macro_guard.get("valid_indicator_count", 0),
+        "total_indicator_count": macro_guard.get("total_indicator_count", 0),
+        "unknown_count": macro_guard.get("unknown_count", 0),
         "encoding": "utf-8-sig",
     }
 
