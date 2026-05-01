@@ -108,7 +108,7 @@ jobs:
       - name: Run final decision engine
         run: |
           python - <<'PY'
-          import chip_concentration_v26620
+          import chip_concentration_v26621
           print("chip module ok")
           PY
           python final_decision_engine.py
@@ -131,7 +131,7 @@ jobs:
           python macro_regime.py
           python exit_risk_engine.py
           python - <<'PY'
-          import chip_concentration_v26620
+          import chip_concentration_v26621
           print("chip module ok")
           PY
           python final_decision_engine.py
