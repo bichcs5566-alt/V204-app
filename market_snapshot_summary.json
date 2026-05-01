@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-05-01 14:33:39",
+  "generated_at": "2026-05-01 16:12:16",
   "source": "market_snapshot_v266_10",
   "market_source": "price_panel_daily.csv",
   "rows": 1965,
-  "with_name_count": 1944,
+  "with_name_count": 1955,
   "high_liquidity_count": 598,
   "medium_liquidity_count": 486,
   "low_liquidity_count": 2,

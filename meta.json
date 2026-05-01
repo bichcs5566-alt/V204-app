@@ -1,13 +1,64 @@
 {
-  "generated_at": "2026-05-01 14:40:15",
-  "source": "v265_clean_strategy_core",
-  "price_source": "price_panel_daily.csv",
-  "signal_date": "2026-04-30",
-  "trade_date": "2026-05-01",
+  "source": "v265_3_dual_engine_core",
+  "bridge_source": "v265_3_dashboard_bridge",
+  "bridge_generated_at": "2026-05-01 16:11:23",
+  "trade_plan_count": 16,
+  "buy_count": 8,
+  "test_count": 8,
+  "watch_count": 0,
+  "core_trade_count": 5,
+  "alpha_trade_count": 11,
   "data_state": "fresh",
-  "trade_plan_count": 14,
-  "buy_count": 0,
-  "test_count": 0,
-  "watch_count": 14,
-  "execution_rule": "T日產生訊號，下一交易日人工下單"
+  "bridge_files": [
+    {
+      "file": "trade_plan.csv",
+      "rows": 16,
+      "state": "ok"
+    },
+    {
+      "file": "core_candidates.csv",
+      "rows": 60,
+      "state": "ok"
+    },
+    {
+      "file": "alpha_candidates.csv",
+      "rows": 60,
+      "state": "ok"
+    },
+    {
+      "file": "candidates.csv",
+      "rows": 120,
+      "state": "ok"
+    },
+    {
+      "file": "selection_debug.csv",
+      "rows": 1,
+      "state": "ok"
+    },
+    {
+      "file": "full_summary.csv",
+      "rows": 1,
+      "state": "ok"
+    },
+    {
+      "file": "daily_nav.csv",
+      "rows": 2,
+      "state": "ok"
+    },
+    {
+      "file": "current_positions.csv",
+      "rows": 3,
+      "state": "ok"
+    },
+    {
+      "file": "position_monitor.csv",
+      "rows": 0,
+      "state": "ok"
+    },
+    {
+      "file": "watchlist_monitor.csv",
+      "rows": 0,
+      "state": "ok"
+    }
+  ]
 }

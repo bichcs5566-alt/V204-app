@@ -1,11 +1,11 @@
 file,rows,state
-trade_plan.csv,17,ok
+trade_plan.csv,16,ok
 core_candidates.csv,60,ok
 alpha_candidates.csv,60,ok
 candidates.csv,120,ok
 selection_debug.csv,1,ok
 full_summary.csv,1,ok
-daily_nav.csv,1,ok
+daily_nav.csv,2,ok
 current_positions.csv,3,ok
 position_monitor.csv,0,ok
 watchlist_monitor.csv,0,ok
