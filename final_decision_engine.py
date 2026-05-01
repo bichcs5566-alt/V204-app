@@ -219,15 +219,52 @@ def norm_action(v):
 
 def load_market_guard():
     """
-    v266.10.2 市場風控補丁：
-    用 market_snapshot_summary.json 的全市場流動性狀態，決定今日進場強度。
+    v266.11 市場濾網：
+    優先讀 market_regime.json 的大盤狀態。
+    若沒有，再 fallback 到 market_snapshot_summary.json 的流動性市場分數。
 
-    STRONG：BUY / TEST / WATCH 全開
-    MID：BUY 降級 TEST
-    WEAK：BUY / TEST 全部降級 WATCH
+    BULL / STRONG：BUY / TEST / WATCH 全開
+    NEUTRAL / MID：BUY 降級 TEST
+    BEAR / WEAK：BUY / TEST 降級 WATCH
     """
-    summary = {}
+    regime_data = {}
+    for p in [ROOT / "market_regime.json", DATA_DIR / "market_regime.json"]:
+        try:
+            if p.exists() and p.stat().st_size > 0:
+                regime_data = json.loads(p.read_text(encoding="utf-8"))
+                break
+        except Exception:
+            pass
 
+    if regime_data:
+        regime = str(regime_data.get("market_regime", "NEUTRAL")).upper()
+        label = str(regime_data.get("market_label", "大盤中性"))
+        change_text = str(regime_data.get("index_change_pct_text", ""))
+        score = float(regime_data.get("market_score", 50) or 50)
+
+        if regime == "BULL":
+            mode = "STRONG"
+            guard_label = f"{label} {change_text}：BUY / TEST / WATCH 全開"
+        elif regime == "BEAR":
+            mode = "WEAK"
+            guard_label = f"{label} {change_text}：BUY / TEST 降級 WATCH，只觀察"
+        else:
+            mode = "MID"
+            guard_label = f"{label} {change_text}：BUY 降級 TEST，控制追高"
+
+        return {
+            "market_guard_mode": mode,
+            "market_guard_score": round(score, 2),
+            "market_guard_label": guard_label,
+            "market_regime": regime,
+            "market_label": label,
+            "index_change_pct_text": change_text,
+            "market_regime_source": regime_data.get("source", ""),
+            "market_regime_method": regime_data.get("method", ""),
+        }
+
+    # fallback：沒有 market_regime 時，使用流動性市場分數
+    summary = {}
     for p in [ROOT / "market_snapshot_summary.json", DATA_DIR / "market_snapshot_summary.json"]:
         try:
             if p.exists() and p.stat().st_size > 0:
@@ -239,28 +276,31 @@ def load_market_guard():
     high = int(float(summary.get("high_liquidity_count", 0) or 0))
     mid = int(float(summary.get("medium_liquidity_count", 0) or 0))
     block = int(float(summary.get("block_liquidity_count", 0) or 0))
-
     score = high * 1.0 + mid * 0.5 - block * 0.7
 
     if score >= 300:
         mode = "STRONG"
-        label = "市場強勢：BUY / TEST / WATCH 全開"
+        label = "市場流動性強：BUY / TEST / WATCH 全開"
+        regime = "BULL"
     elif score >= 150:
         mode = "MID"
-        label = "市場中性：BUY 降級 TEST，控制追高"
+        label = "市場流動性中性：BUY 降級 TEST"
+        regime = "NEUTRAL"
     else:
         mode = "WEAK"
-        label = "市場弱勢：BUY / TEST 降級 WATCH，只觀察"
+        label = "市場流動性弱：BUY / TEST 降級 WATCH"
+        regime = "BEAR"
 
     return {
         "market_guard_mode": mode,
         "market_guard_score": round(score, 2),
         "market_guard_label": label,
-        "high_liquidity_count": high,
-        "medium_liquidity_count": mid,
-        "block_liquidity_count": block,
+        "market_regime": regime,
+        "market_label": label,
+        "index_change_pct_text": "",
+        "market_regime_source": "market_snapshot_summary",
+        "market_regime_method": "liquidity_fallback",
     }
-
 
 def apply_market_guard(out):
     """
@@ -504,7 +544,7 @@ def main():
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v266_10_2_market_guard",
+        "source": "final_decision_engine_v266_11_market_filter",
         "rows": int(len(out)),
         "sell_count": int((out["final_action"] == "SELL").sum()) if not out.empty else 0,
         "reduce_count": int((out["final_action"] == "REDUCE").sum()) if not out.empty else 0,
