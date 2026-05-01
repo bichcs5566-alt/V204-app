@@ -1734,3 +1734,26 @@ button:disabled {
   margin-right: 4px;
   white-space: nowrap;
 }
+/* v266.15.3 總經說明強制顯示 */
+.macro-explain-v266153 {
+  margin: 16px 0;
+  padding: 18px 20px;
+  border-radius: 22px;
+  background: #f8fafc;
+  border: 2px solid #e5e7eb;
+  color: #334155;
+  font-size: 16px;
+  line-height: 1.65;
+  font-weight: 800;
+}
+
+.macro-explain-v266153 .macro-explain-title {
+  color: #0f172a;
+  font-size: 20px;
+  font-weight: 950;
+}
+
+.macro-explain-v266153 .macro-explain-body {
+  margin-top: 6px;
+  word-break: break-word;
+}
