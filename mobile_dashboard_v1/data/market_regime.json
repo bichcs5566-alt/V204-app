@@ -11,7 +11,7 @@
   "market_score": 10.0,
   "market_regime": "NEUTRAL",
   "market_label": "大盤中性",
-  "generated_at": "2026-05-01 10:46:40",
+  "generated_at": "2026-05-01 11:40:28",
   "system": "market_regime_v266_11",
   "action_policy": "控制追高，BUY 降級 TEST"
 }
