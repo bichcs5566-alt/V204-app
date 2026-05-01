@@ -1,3 +1,85 @@
+// ===== v266.15.2 Macro / TOP 說明補強 =====
+function getTopBadgeV266152(row) {
+  row = safeObj(row);
+  const sectionTop = safeText(row.section_top_opportunity || "", "");
+  const overallTop = safeText(row.top_opportunity || "", "");
+  const sectionRank = safeText(row.section_opportunity_rank || "", "");
+  const overallRank = safeText(row.opportunity_rank || "", "");
+
+  if (sectionTop && sectionTop !== "--") return `🔥 ${sectionTop}`;
+  if (overallTop && overallTop !== "--") return `🔥 ${overallTop}`;
+  if (sectionRank && sectionRank !== "--") return `🔥 TOP${sectionRank}`;
+  if (overallRank && overallRank !== "--") return `🔥 TOP${overallRank}`;
+  return "";
+}
+
+function macroRuleTextV266152(data) {
+  const valid = Number(data?.valid_indicator_count || 0);
+  const total = Number(data?.total_indicator_count || 0);
+  const unknown = Number(data?.unknown_count || 0);
+  const raw = data?.macro_raw_label || data?.macro_label || "--";
+  const label = data?.macro_label || "--";
+  const score = Number(data?.macro_score || 0);
+  const adj = Number(data?.macro_adjusted_score ?? data?.macro_score ?? 0);
+  const confidence = data?.macro_confidence_label || "";
+
+  const rule = "評分：每項指標 +1 / 0 / -1；分數越高越偏多，分數越低越保守。";
+  const confidenceText = total
+    ? `有效 ${valid}/${total}，未知 ${unknown}，${confidence || "信心未定"}，加權分數 ${adj.toFixed(2)}。`
+    : "有效資料不足，暫以中性處理。";
+  return `${rule}｜原始：${raw} ${score.toFixed(1)}｜目前：${label}｜${confidenceText}`;
+}
+
+function macroAdviceTextV266152(data) {
+  const label = data?.macro_label || "--";
+  const policy = data?.macro_policy || "--";
+  const unknown = Number(data?.unknown_count || 0);
+
+  let tip = `${label}：${policy}`;
+  if (unknown >= 4) tip += "｜注意：總經資料仍不完整，不能單獨作為重倉依據。";
+  return tip;
+}
+
+async function loadMacroExplainV266152() {
+  try {
+    const res = await fetch("./data/macro_regime.json?ts=" + Date.now(), { cache: "no-store" });
+    const data = await res.json();
+
+    const ruleText = macroRuleTextV266152(data);
+    const adviceText = macroAdviceTextV266152(data);
+
+    const macroRuleEl =
+      document.querySelector("[data-macro-rule]") ||
+      document.querySelector("#macroRule") ||
+      document.querySelector(".macro-rule");
+
+    const macroAdviceEl =
+      document.querySelector("[data-macro-advice]") ||
+      document.querySelector("#macroAdvice") ||
+      document.querySelector(".macro-advice");
+
+    if (macroRuleEl) macroRuleEl.textContent = ruleText;
+    if (macroAdviceEl) macroAdviceEl.textContent = adviceText;
+
+    // 沒有專用欄位時，直接補在總經狀態下方
+    const macroBox =
+      document.querySelector("[data-macro]")?.closest(".stat-card, .info-card, .meta-card, .kv-card, .card") ||
+      document.querySelector("[data-macro]")?.parentElement;
+
+    if (macroBox && !document.querySelector(".macro-explain-v266152")) {
+      const div = document.createElement("div");
+      div.className = "macro-explain-v266152";
+      div.innerHTML = `
+        <div><b>評分標準</b><br>${ruleText}</div>
+        <div style="margin-top:8px;"><b>總經提示</b><br>${adviceText}</div>
+      `;
+      macroBox.appendChild(div);
+    }
+  } catch (e) {
+    console.log("macro explain load fail", e);
+  }
+}
+
 var topBadge = "";
 
 // ===== v266.15.1 Stable Helpers / 防炸工具 =====
@@ -5,14 +87,7 @@ function safeObj(row) {
   return row && typeof row === "object" ? row : {};
 }
 
-function getTopBadge(row) {
-  row = safeObj(row);
-  const top = safeText(row.top_opportunity || "", "");
-  const rank = safeText(row.opportunity_rank || "", "");
-  if (top && top !== "--") return `🔥 ${top}`;
-  if (rank && rank !== "--") return `🔥 TOP${rank}`;
-  return "";
-}
+function getTopBadge(row) { return getTopBadgeV266152(row); }
 
 function formatLotsFromShares(v) {
   if (v === undefined || v === null || v === "" || v === "--") return "--";
@@ -215,22 +290,7 @@ function zhEntry(v) {
 }
 
 
-function topOpportunityBadge(row) { return getTopBadge(row); }
-
-function zhAction(v) {
-  const s = String(v || "").trim().toUpperCase();
-  const map = {
-    "BUY": "買進",
-    "TEST": "試單",
-    "WATCH": "觀察",
-    "BLOCK": "禁止",
-    "SELL": "賣出",
-    "REDUCE": "減碼",
-    "WAIT": "等待",
-    "HOLD": "續抱"
-  };
-  return map[s] || safeText(v, "--");
-}
+function topOpportunityBadge(row) { return getTopBadgeV266152(row); }
 
 function zhFinalAdvice(row) {
   const action = String(row.final_action || row.action || "").trim().toUpperCase();
@@ -1508,3 +1568,5 @@ document.addEventListener("DOMContentLoaded", init);
 
 
 try { loadMacroDashboardV26614(); } catch(e) { console.log(e); }
+
+try { loadMacroExplainV266152(); } catch(e) { console.log(e); }
