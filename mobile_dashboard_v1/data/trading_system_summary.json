@@ -1,34 +1,34 @@
 {
-  "generated_at": "2026-05-01 04:40:45",
+  "generated_at": "2026-05-01 07:28:01",
   "source": "final_trading_system_allocator",
   "capital_assumption": 1000000,
-  "regime": "RANGE",
-  "label": "盤整",
-  "gross_exposure": 0.35,
+  "regime": "UNKNOWN",
+  "label": "未知",
+  "gross_exposure": 0.15,
   "budget": {
-    "PRE": 0.08,
-    "CORE": 0.22,
-    "ALPHA": 0.05
+    "PRE": 0.0,
+    "CORE": 0.12,
+    "ALPHA": 0.03
   },
   "slot_rule": {
     "CORE": {
-      "top": 3,
-      "watch": 6
+      "top": 2,
+      "watch": 5
     },
     "PRE": {
-      "top": 2,
-      "watch": 6
+      "top": 0,
+      "watch": 5
     },
     "ALPHA": {
       "top": 1,
-      "watch": 5
+      "watch": 4
     }
   },
   "total_rows": 447,
-  "top_rows": 5,
-  "watch_rows": 12,
-  "block_rows": 430,
-  "allowed_rows": 5,
+  "top_rows": 2,
+  "watch_rows": 10,
+  "block_rows": 435,
+  "allowed_rows": 2,
   "entry_counts": {
     "WAIT": 429,
     "BREAK": 18
@@ -38,6 +38,6 @@
     "ALPHA": 60,
     "CORE": 17
   },
-  "allowed_amount": 80000,
+  "allowed_amount": 40000,
   "rule": "市場狀態 + 策略分流 + TOP標註 + entry timing + 總曝險。只做 allowed=True。"
 }

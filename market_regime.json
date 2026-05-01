@@ -1,22 +1,17 @@
 {
-  "generated_at": "2026-05-01 04:36:42",
-  "source": "market_regime_engine",
-  "input_file": "feature_panel_daily.csv",
-  "latest_date": "2026-05-01",
-  "regime": "RANGE",
-  "label": "盤整",
-  "risk_mode": "控風險",
-  "breadth_score": 45.19,
-  "above_ma20": 0.455,
-  "above_ma60": 0.4503,
-  "mom20_positive": 0.537,
-  "mom60_positive": 0.3995,
-  "volume_active": 0.1732,
-  "gross_exposure": 0.35,
-  "budget": {
-    "PRE": 0.08,
-    "CORE": 0.22,
-    "ALPHA": 0.05
-  },
-  "rule": "BEAR 停 PRE；RANGE 小倉 PRE；BULL 正常；EXPLOSIVE 加強 CORE，PRE 仍小倉。"
+  "source": "price_panel_daily.csv",
+  "method": "market_breadth",
+  "date": "2026-05-01",
+  "index_close": "",
+  "index_change_pct": 0.0,
+  "index_change_pct_text": "0.00%",
+  "advance_ratio": 0.0,
+  "decline_ratio": 0.0,
+  "median_return": 0.0,
+  "market_score": 10.0,
+  "market_regime": "NEUTRAL",
+  "market_label": "大盤中性",
+  "generated_at": "2026-05-01 07:28:55",
+  "system": "market_regime_v266_11",
+  "action_policy": "控制追高，BUY 降級 TEST"
 }
