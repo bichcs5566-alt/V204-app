@@ -34,6 +34,7 @@ OUTPUT_COLUMNS = [
     "final_action", "stock_id", "stock_name", "source", "bucket", "strategy_type", "score", "entry_type",
     "execution_flag", "allowed", "close", "suggested_amount", "target_weight",
     "priority", "reason", "system_note",
+    "opportunity_score", "opportunity_rank", "top_opportunity",
     "liquidity_level", "liquidity_tag", "liquidity_score", "volume", "turnover",
 ]
 
@@ -429,6 +430,190 @@ def apply_market_guard(out):
 
     return out, guard
 
+
+def load_macro_regime_for_v26614():
+    data = {}
+    for p in [ROOT / "macro_regime.json", DATA_DIR / "macro_regime.json"]:
+        try:
+            if p.exists() and p.stat().st_size > 0:
+                data = json.loads(p.read_text(encoding="utf-8"))
+                break
+        except Exception:
+            pass
+
+    regime = str(data.get("macro_regime", "NEUTRAL")).upper()
+    label = str(data.get("macro_label", "總經中性"))
+    score = float(data.get("macro_score", 0) or 0)
+    ratio = float(data.get("macro_score_ratio", 0) or 0)
+
+    return {
+        "macro_regime": regime,
+        "macro_label": label,
+        "macro_score": score,
+        "macro_score_ratio": ratio,
+        "macro_policy": data.get("macro_policy", ""),
+        "valid_indicator_count": int(float(data.get("valid_indicator_count", 0) or 0)),
+        "unknown_count": int(float(data.get("unknown_count", 0) or 0)),
+    }
+
+
+def calc_opportunity_score(row):
+    """
+    v266.14 機會分數：
+    給 TEST / WATCH 清單排序，不改原本策略邏輯。
+    """
+    def f(x, default=0):
+        try:
+            if x is None:
+                return default
+            s = str(x).replace(",", "").replace("億", "").strip()
+            if s in ["", "--", "nan", "None", "null"]:
+                return default
+            return float(s)
+        except Exception:
+            return default
+
+    action = str(row.get("final_action", "")).upper()
+    source = str(row.get("source", "")).upper()
+    bucket = str(row.get("bucket", row.get("strategy_type", ""))).upper()
+    entry = str(row.get("entry_type", "")).upper()
+    note = str(row.get("system_note", ""))
+    reason = str(row.get("reason", ""))
+
+    liq = f(row.get("liquidity_score", 0))
+    score = f(row.get("score", 0))
+    volume = f(row.get("volume", 0))
+    turnover = f(row.get("turnover", 0))
+
+    op = 0.0
+
+    # 原始策略分數
+    op += score * 0.55
+
+    # 流動性越高越優先
+    op += liq * 0.35
+
+    # 成交量 / 成交金額加分，但避免極端放大
+    if volume > 0:
+        op += min(np.log10(volume + 1) * 4, 25)
+    if turnover > 0:
+        op += min(np.log10(turnover + 1) * 2, 18)
+
+    # 型態加權
+    if "BREAK" in entry or "突破" in entry:
+        op += 12
+    if "PULLBACK" in entry or "回檔" in entry:
+        op += 7
+    if "WAIT" in entry or "等待" in entry:
+        op += 2
+
+    # 策略層加權
+    if "ALPHA" in bucket or "主力" in bucket:
+        op += 10
+    if "CORE" in bucket or "核心" in bucket:
+        op += 6
+    if "PRE" in bucket or "預備" in bucket:
+        op += 2
+
+    # 只針對進場/觀察類做 TOP 評測；出場類不排名
+    if action in ["SELL", "REDUCE"] or source == "EXIT":
+        return 0.0
+
+    return round(float(op), 2)
+
+
+def apply_macro_strength_v26614(out):
+    """
+    總經只調整攻擊強度：
+    RISK_ON：不壓 BUY
+    NEUTRAL：BUY 降 TEST
+    RISK_OFF：BUY/TEST 降 WATCH
+    但 SELL/REDUCE 不受影響。
+    """
+    macro = load_macro_regime_for_v26614()
+
+    if out.empty:
+        return out, macro
+
+    out = out.copy()
+    regime = macro.get("macro_regime", "NEUTRAL")
+    label = macro.get("macro_label", "總經中性")
+    policy = macro.get("macro_policy", "")
+
+    protected = (
+        out["source"].astype(str).str.upper().eq("EXIT")
+        | out["final_action"].astype(str).str.upper().isin(["SELL", "REDUCE"])
+    )
+
+    if regime in ["RISK_OFF", "BEAR", "BAD"]:
+        mask = (~protected) & out["final_action"].astype(str).str.upper().isin(["BUY", "TEST"])
+        out.loc[mask, "final_action"] = "WATCH"
+        out.loc[mask, "priority"] = 8
+        out.loc[mask, "suggested_amount"] = 0
+        out.loc[mask, "target_weight"] = 0
+        out.loc[mask, "system_note"] = (
+            out.loc[mask, "system_note"].astype(str).replace(["nan", "None", "null"], "")
+            .apply(lambda x: (x + "｜" if x else "") + f"{label}：總經偏保守，降級觀察")
+        )
+
+    elif regime in ["NEUTRAL", "MID"]:
+        mask = (~protected) & out["final_action"].astype(str).str.upper().eq("BUY")
+        out.loc[mask, "final_action"] = "TEST"
+        out.loc[mask, "priority"] = 3
+        out.loc[mask, "system_note"] = (
+            out.loc[mask, "system_note"].astype(str).replace(["nan", "None", "null"], "")
+            .apply(lambda x: (x + "｜" if x else "") + f"{label}：BUY 降級 TEST，控制追高")
+        )
+
+    else:
+        # RISK_ON：保留進攻
+        pass
+
+    return out, macro
+
+
+def apply_top_opportunities_v26614(out):
+    """
+    對 TEST / WATCH 做 TOP5 評測。
+    TOP 不代表一定買，而是「最值得優先觀察 / 優先試單」。
+    """
+    if out.empty:
+        return out, pd.DataFrame()
+
+    out = out.copy()
+
+    out["opportunity_score"] = out.apply(calc_opportunity_score, axis=1)
+    out["opportunity_rank"] = ""
+    out["top_opportunity"] = ""
+
+    candidates = out[
+        out["final_action"].astype(str).str.upper().isin(["TEST", "WATCH", "BUY"])
+        & (pd.to_numeric(out["opportunity_score"], errors="coerce").fillna(0) > 0)
+    ].copy()
+
+    if candidates.empty:
+        return out, candidates
+
+    candidates["_op"] = pd.to_numeric(candidates["opportunity_score"], errors="coerce").fillna(0)
+    candidates = candidates.sort_values(["_op", "score"], ascending=[False, False]).head(5).copy()
+    top_ids = [str(x) for x in candidates["stock_id"].tolist()]
+
+    for rank, sid in enumerate(top_ids, start=1):
+        mask = out["stock_id"].astype(str).eq(str(sid))
+        out.loc[mask, "opportunity_rank"] = rank
+        out.loc[mask, "top_opportunity"] = f"TOP{rank}"
+        out.loc[mask, "system_note"] = (
+            out.loc[mask, "system_note"].astype(str).replace(["nan", "None", "null"], "")
+            .apply(lambda x: (x + "｜" if x else "") + f"系統評測 TOP{rank}：優先觀察發動機會")
+        )
+
+    top_df = out[out["stock_id"].astype(str).isin(top_ids)].copy()
+    top_df["_rank"] = pd.to_numeric(top_df["opportunity_rank"], errors="coerce").fillna(999)
+    top_df = top_df.sort_values("_rank").drop(columns=["_rank"], errors="ignore")
+
+    return out, top_df
+
+
 def main():
     generated_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     lookup = make_lookup()
@@ -611,19 +796,30 @@ def main():
 
         out, market_guard = apply_market_guard(out)
 
+        # v266.14：總經攻擊強度 + TOP5 機會評測
+        out, macro_guard = apply_macro_strength_v26614(out)
+        out, top_opportunity_df = apply_top_opportunities_v26614(out)
+
         out["_score_num"] = pd.to_numeric(out["score"], errors="coerce").fillna(0)
         out["_priority_num"] = pd.to_numeric(out["priority"], errors="coerce").fillna(9)
-        out = out.sort_values(["_priority_num", "_score_num", "stock_id"], ascending=[True, False, True])
-        out = out.drop(columns=["_score_num", "_priority_num"])
+        out["_op_num"] = pd.to_numeric(out["opportunity_score"], errors="coerce").fillna(0)
+        out = out.sort_values(["_priority_num", "_op_num", "_score_num", "stock_id"], ascending=[True, False, False, True])
+        out = out.drop(columns=["_score_num", "_priority_num", "_op_num"])
 
     if "market_guard" not in locals():
         market_guard = load_market_guard()
+    if "macro_guard" not in locals():
+        macro_guard = load_macro_regime_for_v26614()
+
+    if "top_opportunity_df" not in locals():
+        out, top_opportunity_df = apply_top_opportunities_v26614(out)
 
     write_csv_both(out, "final_action_plan.csv")
+    write_csv_both(top_opportunity_df, "top_opportunities.csv")
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v266_12_macro_filter",
+        "source": "final_decision_engine_v266_14_macro_top5",
         "rows": int(len(out)),
         "sell_count": int((out["final_action"] == "SELL").sum()) if not out.empty else 0,
         "reduce_count": int((out["final_action"] == "REDUCE").sum()) if not out.empty else 0,
@@ -647,6 +843,12 @@ def main():
             "timing_candidates.csv"
         ],
         "with_name_count": int((out["stock_name"].astype(str).str.strip() != "").sum()) if not out.empty else 0,
+        "top_opportunity_count": int((out["top_opportunity"].astype(str).str.strip() != "").sum()) if "top_opportunity" in out.columns and not out.empty else 0,
+        "macro_regime": macro_guard.get("macro_regime", ""),
+        "macro_label": macro_guard.get("macro_label", ""),
+        "macro_score": macro_guard.get("macro_score", 0),
+        "macro_score_ratio": macro_guard.get("macro_score_ratio", 0),
+        "macro_policy": macro_guard.get("macro_policy", ""),
         "encoding": "utf-8-sig",
     }
 
