@@ -1809,3 +1809,26 @@ button:disabled {
   word-break: keep-all;
   white-space: normal;
 }
+/* v266.17.1 總經分數旁提示：只顯示在總經卡片內 */
+.macro-explain-v266162,
+.macro-explain-v266153,
+.macro-explain-v266152 {
+  display: none !important;
+}
+
+.macro-inline-hint-v266171 {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 8px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.25;
+  white-space: normal;
+  word-break: keep-all;
+}
