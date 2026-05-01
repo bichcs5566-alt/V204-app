@@ -1635,3 +1635,20 @@ button:disabled {
   color: #64748b;
   background: #f1f5f9;
 }
+/* v266.10.3 中文語意提示 */
+.detail-text b {
+  font-size: 17px;
+}
+
+.detail-text p {
+  font-size: 16px;
+  line-height: 1.58;
+  word-break: break-word;
+}
+
+.scan-entry {
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
