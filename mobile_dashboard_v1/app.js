@@ -16,6 +16,7 @@ const FILES = {
   final: DATA_DIR + "final_action_plan.csv",
   finalSummary: DATA_DIR + "final_action_summary.json",
   regime: DATA_DIR + "market_regime.json",
+  macro: DATA_DIR + "macro_regime.json",
   tradePlan: DATA_DIR + "trade_plan.csv"
 };
 
@@ -1060,14 +1061,51 @@ async function triggerDataPipeline() {
   }
 }
 
-function renderMeta(regime, summary, rows) {
+
+function zhMarketRegime(regime) {
+  const r = String(regime || "").toUpperCase();
+  const map = {
+    BULL: "大盤偏多",
+    NEUTRAL: "大盤中性",
+    BEAR: "大盤偏弱"
+  };
+  return map[r] || safeText(regime, "--");
+}
+
+function zhMacroRegime(regime) {
+  const r = String(regime || "").toUpperCase();
+  const map = {
+    RISK_ON: "總經偏多",
+    NEUTRAL: "總經中性",
+    RISK_OFF: "總經偏空"
+  };
+  return map[r] || safeText(regime, "--");
+}
+
+function zhRiskMode(summary, regime, macro) {
+  const macroLabel = safeText(macro.macro_label || summary.macro_label, "");
+  const marketLabel = safeText(regime.market_label || summary.market_label || regime.label || regime.regime, "");
+  const guardLabel = safeText(summary.market_guard_label || regime.action_policy || regime.risk_mode, "");
+  const parts = [];
+  if (macroLabel) parts.push(macroLabel);
+  if (marketLabel) parts.push(marketLabel);
+  if (guardLabel) parts.push(guardLabel);
+  return parts.length ? parts.join("｜") : "--";
+}
+
+function renderMeta(regime, summary, macro, rows) {
   const backendUpdatedAt = formatTWDateTime(summary.generated_at || regime.generated_at);
+
+  const marketText = `${safeText(regime.market_label || summary.market_label || regime.label || regime.regime, "--")} ${safeText(regime.index_change_pct_text || summary.index_change_pct_text, "")}`.trim();
+  const macroText = `${safeText(macro.macro_label || summary.macro_label, "--")}｜分數 ${safeText(macro.macro_score ?? summary.macro_score, "--")}`;
+  const signalDate = safeText(regime.date || regime.latest_date || summary.generated_at, "--");
 
   qs("metaBox").innerHTML = `
     <div class="mini"><span>來源版本</span><b>C 完整交易系統</b></div>
-    <div class="mini"><span>市場狀態</span><b>${safeText(regime.label || regime.regime)}</b></div>
-    <div class="mini"><span>風險模式</span><b>${safeText(regime.risk_mode)}</b></div>
-    <div class="mini"><span>訊號日</span><b>${safeText(regime.latest_date)}</b></div>
+    <div class="mini"><span>市場狀態</span><b>${marketText}</b></div>
+    <div class="mini"><span>總經狀態</span><b>${macroText}</b></div>
+    <div class="mini"><span>風險模式</span><b>${zhRiskMode(summary, regime, macro)}</b></div>
+    <div class="mini"><span>訊號日</span><b>${signalDate}</b></div>
     <div class="mini"><span>最後更新</span><b>${backendUpdatedAt}</b></div>
     <div class="mini"><span>操作筆數</span><b>${rows.length}</b></div>
   `;
@@ -1350,15 +1388,16 @@ async function init() {
   renderAppShell();
 
   try {
-    const [regime, summary, rows] = await Promise.all([
+    const [regime, summary, macro, rows] = await Promise.all([
       fetchJson(FILES.regime, {}),
       fetchJson(FILES.finalSummary, {}),
+      fetchJson(FILES.macro, {}),
       loadFinalRows()
     ]);
 
     const groups = splitRows(rows);
 
-    renderMeta(regime, summary, rows);
+    renderMeta(regime, summary, macro, rows);
     renderPositionRiskHints(rows);
     renderPositions();
     renderDecision(rows);
