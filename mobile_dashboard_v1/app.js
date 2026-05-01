@@ -160,7 +160,7 @@ async function loadMacroDashboardV26614() {
 }
 
 /*
-app.js - v266.18 總經強化版：保留原本功能 + SELL/REDUCE完整欄位
+app.js - v266.19 總經提示精準覆蓋版：保留原本功能 + SELL/REDUCE完整欄位
 
 保留：
 1. 原本卡片 UI / 列表 / CSV 讀取 / 排序 / 展開邏輯
@@ -1889,7 +1889,7 @@ async function renderMacroExplainV266162() {
 }
 
 // 等首頁資料 render 完再插入，避免找不到卡片
-// ===== v266.18 總經強化版 =====
+// ===== v266.19 總經提示精準覆蓋版 =====
 function macroInlineDecisionV26617(data) {
   const score = Number(data?.macro_score || 0);
   const unknown = Number(data?.unknown_count || 0);
@@ -1946,7 +1946,7 @@ async function renderMacroInlineHintV26617() {
 
 
 
-// ===== v266.18 總經強化版：只保留 inline，不顯示下方大卡 =====
+// ===== v266.19 總經提示精準覆蓋版：只保留 inline，不顯示下方大卡 =====
 function macroInlineDecisionV266171(data) {
   const score = Number(data?.macro_score || 0);
   const unknown = Number(data?.unknown_count || 0);
@@ -2056,7 +2056,7 @@ async function renderMacroInlineHintV266171() {
 
 
 
-// ===== v266.18 總經強化版：分數/滿分/信心/變化/操作提示 inline 顯示 =====
+// ===== v266.19 總經提示精準覆蓋版：分數/滿分/信心/變化/操作提示 inline 顯示 =====
 function macroTotalV26618(data) {
   const total = Number(data?.total_indicator_count || 0);
   const valid = Number(data?.valid_indicator_count || 0);
@@ -2215,7 +2215,148 @@ async function renderMacroEnhancedV26618() {
   }
 }
 
-setTimeout(renderMacroEnhancedV26618, 500);
-setTimeout(renderMacroEnhancedV26618, 1300);
-setTimeout(renderMacroEnhancedV26618, 2600);
-setTimeout(renderMacroEnhancedV26618, 4200);
+
+
+
+// ===== v266.19 總經提示精準覆蓋版：直接替換「總經偏多｜分數」那一行 =====
+function macroTotalV26619(data) {
+  const total = Number(data?.total_indicator_count || 0);
+  const valid = Number(data?.valid_indicator_count || 0);
+  const unknown = Number(data?.unknown_count || 0);
+  if (total > 0) return total;
+  if (valid + unknown > 0) return valid + unknown;
+  return 7;
+}
+
+function macroScoreV26619(data) {
+  const raw = Number(data?.macro_score ?? data?.score ?? 0);
+  return Number.isFinite(raw) ? raw : 0;
+}
+
+function macroLabelV26619(data) {
+  const label = data?.macro_label || data?.macro_regime_label || "";
+  if (label) return String(label);
+  const score = macroScoreV26619(data);
+  if (score >= 2) return "總經偏多";
+  if (score <= -2) return "總經偏空";
+  return "總經中性";
+}
+
+function macroConfidenceV26619(data) {
+  const unknown = Number(data?.unknown_count || 0);
+  const valid = Number(data?.valid_indicator_count || 0);
+  const total = macroTotalV26619(data);
+  const raw = String(data?.macro_confidence || data?.macro_confidence_label || "").toUpperCase();
+
+  if (raw.includes("HIGH") || raw.includes("高")) return "📘 信心高";
+  if (raw.includes("MEDIUM") || raw.includes("中")) return "📘 信心中";
+  if (raw.includes("LOW") || raw.includes("低")) return "📘 信心低";
+
+  if (total > 0 && valid / total >= 0.75) return "📘 信心高";
+  if (total > 0 && valid / total >= 0.45) return "📘 信心中";
+  if (unknown >= 4) return "📘 信心低";
+  return "📘 信心未定";
+}
+
+function macroDecisionV26619(data) {
+  const score = macroScoreV26619(data);
+  const total = macroTotalV26619(data);
+  const ratio = total ? score / total : 0;
+
+  if (score >= 3 || ratio >= 0.45) return "🔥 可分批｜勿追高";
+  if (score >= 1) return "🧭 試單｜不可重倉";
+  if (score <= -2) return "⚠️ 防守｜停止新倉";
+  return "⚖️ 中性｜控倉";
+}
+
+function macroChangeTextV26619(data) {
+  const now = macroScoreV26619(data);
+  const prevCandidates = [
+    data?.prev_macro_score,
+    data?.previous_macro_score,
+    data?.yesterday_macro_score,
+    data?.last_macro_score
+  ];
+  const found = prevCandidates.find(v => v !== undefined && v !== null && v !== "");
+  if (found === undefined) return "";
+  const prev = Number(found);
+  if (!Number.isFinite(prev)) return "";
+
+  const diff = now - prev;
+  const sign = diff > 0 ? "+" : "";
+  const word = diff > 0 ? "轉強" : diff < 0 ? "轉弱" : "持平";
+  return `📈 ${sign}${diff.toFixed(1)} ${word}`;
+}
+
+function macroInlineHTMLV26619(data) {
+  const label = macroLabelV26619(data);
+  const score = macroScoreV26619(data);
+  const total = macroTotalV26619(data);
+  const decision = macroDecisionV26619(data);
+  const confidence = macroConfidenceV26619(data);
+  const change = macroChangeTextV26619(data);
+
+  return `
+    <span class="macro-line-v26619">
+      <span class="macro-main-v26619">${label}｜分數 ${score}/${total}</span>
+      <span class="macro-pill-v26619">${decision}</span>
+      <span class="macro-pill-v26619 macro-conf-v26619">${confidence}</span>
+      ${change ? `<span class="macro-pill-v26619 macro-change-v26619">${change}</span>` : ""}
+    </span>
+  `;
+}
+
+function findMacroValueElementV26619() {
+  const all = Array.from(document.querySelectorAll("body *"));
+
+  const direct = all.find(el => {
+    if (el.children.length > 2) return false;
+    const txt = (el.textContent || "").trim();
+    return (
+      txt.includes("總經偏") &&
+      txt.includes("分數") &&
+      !txt.includes("風險模式") &&
+      !txt.includes("市場狀態") &&
+      !txt.includes("macro")
+    );
+  });
+  if (direct) return direct;
+
+  const label = all.find(el => (el.textContent || "").trim() === "總經狀態");
+  if (label) {
+    const card = label.parentElement || label.closest("div");
+    if (card) {
+      const candidates = Array.from(card.querySelectorAll("div, span, b, strong")).filter(el => {
+        const t = (el.textContent || "").trim();
+        return t && t !== "總經狀態" && (t.includes("總經") || t.includes("分數"));
+      });
+      if (candidates.length) return candidates[candidates.length - 1];
+    }
+  }
+
+  return null;
+}
+
+async function renderMacroPreciseV26619() {
+  try {
+    document.querySelectorAll(
+      ".macro-explain-v266162, .macro-explain-v266153, .macro-explain-v266152, .macro-inline-hint-v26617, .macro-inline-hint-v266171, .macro-value-v26618"
+    ).forEach(el => el.remove());
+
+    const res = await fetch("./data/macro_regime.json?ts=" + Date.now(), { cache: "no-store" });
+    const data = await res.json();
+
+    const valueEl = findMacroValueElementV26619();
+    if (!valueEl) return;
+
+    valueEl.innerHTML = macroInlineHTMLV26619(data);
+    valueEl.classList.add("macro-value-host-v26619");
+  } catch (e) {
+    console.log("v266.19 macro precise render failed", e);
+  }
+}
+
+setTimeout(renderMacroPreciseV26619, 400);
+setTimeout(renderMacroPreciseV26619, 1200);
+setTimeout(renderMacroPreciseV26619, 2400);
+setTimeout(renderMacroPreciseV26619, 4200);
