@@ -1569,4 +1569,102 @@ document.addEventListener("DOMContentLoaded", init);
 
 try { loadMacroDashboardV26614(); } catch(e) { console.log(e); }
 
-try { loadMacroExplainV266152(); } catch(e) { console.log(e); }
+
+
+
+
+// ===== v266.15.3 總經說明強制顯示 =====
+function macroRuleTextV266153(data) {
+  const valid = Number(data?.valid_indicator_count || 0);
+  const total = Number(data?.total_indicator_count || 0);
+  const unknown = Number(data?.unknown_count || 0);
+  const raw = data?.macro_raw_label || data?.macro_label || "--";
+  const label = data?.macro_label || "--";
+  const score = Number(data?.macro_score || 0);
+  const adj = Number(data?.macro_adjusted_score ?? data?.macro_score ?? 0);
+  const confidence = data?.macro_confidence_label || "";
+
+  const rule = "評分：每項指標 +1 / 0 / -1；分數越高越偏多，分數越低越保守。";
+  const confidenceText = total
+    ? `有效 ${valid}/${total}，未知 ${unknown}，${confidence || "信心未定"}，加權分數 ${adj.toFixed(2)}。`
+    : "有效資料不足，暫以中性處理。";
+
+  return `${rule}｜原始：${raw} ${score.toFixed(1)}｜目前：${label}｜${confidenceText}`;
+}
+
+function macroAdviceTextV266153(data) {
+  const label = data?.macro_label || "--";
+  const policy = data?.macro_policy || "--";
+  const unknown = Number(data?.unknown_count || 0);
+
+  let tip = `${label}：${policy}`;
+  if (unknown >= 4) tip += "｜注意：總經資料仍不完整，不能單獨作為重倉依據。";
+  return tip;
+}
+
+async function loadMacroExplainV266153() {
+  try {
+    const res = await fetch("./data/macro_regime.json?ts=" + Date.now(), { cache: "no-store" });
+    const data = await res.json();
+
+    const html = `
+      <div class="macro-explain-v266153">
+        <div class="macro-explain-title">📘 總經評分標準</div>
+        <div class="macro-explain-body">${macroRuleTextV266153(data)}</div>
+        <div class="macro-explain-title" style="margin-top:12px;">🧭 總經操作提示</div>
+        <div class="macro-explain-body">${macroAdviceTextV266153(data)}</div>
+      </div>
+    `;
+
+    if (document.querySelector(".macro-explain-v266153")) {
+      document.querySelector(".macro-explain-v266153").outerHTML = html;
+      return;
+    }
+
+    const all = Array.from(document.querySelectorAll("body *"));
+    let target = null;
+
+    for (const el of all) {
+      const t = (el.textContent || "").trim();
+      if (
+        t.includes("總經狀態") &&
+        t.includes("總經偏") &&
+        !t.includes("總經評分標準")
+      ) {
+        target = el;
+        break;
+      }
+    }
+
+    if (!target) {
+      for (const el of all) {
+        const t = (el.textContent || "").trim();
+        if (t.includes("市場狀態") && !t.includes("總經評分標準")) {
+          target = el;
+          break;
+        }
+      }
+    }
+
+    const wrap = document.createElement("div");
+    wrap.innerHTML = html;
+    const node = wrap.firstElementChild;
+
+    if (target && target.parentElement) {
+      target.insertAdjacentElement("afterend", node);
+    } else {
+      const main = document.querySelector("main") || document.querySelector(".app") || document.body;
+      main.prepend(node);
+    }
+  } catch (e) {
+    console.log("macro explain force insert fail", e);
+  }
+}
+
+setTimeout(() => {
+  try { loadMacroExplainV266153(); } catch(e) { console.log(e); }
+}, 800);
+
+setTimeout(() => {
+  try { loadMacroExplainV266153(); } catch(e) { console.log(e); }
+}, 1800);
