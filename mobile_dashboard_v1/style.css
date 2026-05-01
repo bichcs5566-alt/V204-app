@@ -1932,3 +1932,26 @@ button:disabled {
   border-color: #e2e8f0;
   color: #475569;
 }
+/* v266.20 籌碼集中度完整B版 */
+.detail-grid div:has(b) {
+  word-break: break-word;
+}
+
+.detail-text b {
+  letter-spacing: 0.02em;
+}
+
+.chip-high {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.chip-mid {
+  color: #854d0e;
+  background: #fef9c3;
+}
+
+.chip-low {
+  color: #991b1b;
+  background: #fee2e2;
+}
