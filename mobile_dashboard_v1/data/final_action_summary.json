@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-05-01 04:10:32",
-  "source": "final_decision_engine_v266_10_market_snapshot",
+  "generated_at": "2026-05-01 04:42:04",
+  "source": "final_decision_engine_v266_10_1_stock_name_fixed",
   "rows": 449,
   "sell_count": 2,
   "reduce_count": 0,
@@ -23,5 +23,6 @@
     "pre_move_candidates.csv",
     "timing_candidates.csv"
   ],
+  "with_name_count": 445,
   "encoding": "utf-8-sig"
 }
