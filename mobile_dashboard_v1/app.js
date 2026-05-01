@@ -1,6 +1,6 @@
 var topBadge = "";
 
-// ===== v266.15 Stable Helpers / 防炸工具 =====
+// ===== v266.15.1 Stable Helpers / 防炸工具 =====
 function safeObj(row) {
   return row && typeof row === "object" ? row : {};
 }
@@ -714,7 +714,6 @@ function renderPositions() {
   if (stock.endsWith(".0")) stock = stock.slice(0, -2);
   const stockName = safeText(row.stock_name, "");
   const topBadge = getTopBadge(row);
-  const topBadge = topOpportunityBadge(row);
     const avg = num(row.avg_price);
     const lots = num(row.lots, 2);
     const shares = money(row.shares);
@@ -1341,7 +1340,6 @@ function renderScanRow(row, key) {
   if (stock.endsWith(".0")) stock = stock.slice(0, -2);
   const stockName = safeText(row.stock_name, "");
   const topBadge = getTopBadge(row);
-  const topBadge = topOpportunityBadge(row);
   const score = safeText(row.score);
   const source = zhSource(row.source);
   const bucket = zhStrategy(row.bucket || row.strategy_type);
