@@ -617,8 +617,12 @@ def apply_macro_strength_v26614(out):
 
 def apply_top_opportunities_v26614(out):
     """
-    對 TEST / WATCH 做 TOP5 評測。
-    TOP 不代表一定買，而是「最值得優先觀察 / 優先試單」。
+    v266.15.2：
+    1. 全清單 TOP5：top_opportunity / opportunity_rank
+    2. 分區 TOP5：section_top_opportunity / section_opportunity_rank
+       - TEST 前5
+       - WATCH 前5
+       - BUY 前5
     """
     if out.empty:
         return out, pd.DataFrame()
@@ -628,33 +632,59 @@ def apply_top_opportunities_v26614(out):
     out["opportunity_score"] = out.apply(calc_opportunity_score, axis=1)
     out["opportunity_rank"] = ""
     out["top_opportunity"] = ""
+    out["section_opportunity_rank"] = ""
+    out["section_top_opportunity"] = ""
 
-    candidates = out[
+    base_mask = (
         out["final_action"].astype(str).str.upper().isin(["TEST", "WATCH", "BUY"])
         & (pd.to_numeric(out["opportunity_score"], errors="coerce").fillna(0) > 0)
-    ].copy()
+    )
 
+    candidates = out[base_mask].copy()
     if candidates.empty:
         return out, candidates
 
+    # 全清單 TOP5
     candidates["_op"] = pd.to_numeric(candidates["opportunity_score"], errors="coerce").fillna(0)
-    candidates = candidates.sort_values(["_op", "score"], ascending=[False, False]).head(5).copy()
-    top_ids = [str(x) for x in candidates["stock_id"].tolist()]
+    overall = candidates.sort_values(["_op", "score"], ascending=[False, False]).head(5).copy()
+    overall_ids = [str(x) for x in overall["stock_id"].tolist()]
 
-    for rank, sid in enumerate(top_ids, start=1):
+    for rank, sid in enumerate(overall_ids, start=1):
         mask = out["stock_id"].astype(str).eq(str(sid))
         out.loc[mask, "opportunity_rank"] = str(rank)
         out.loc[mask, "top_opportunity"] = f"TOP{rank}"
         out.loc[mask, "system_note"] = (
             out.loc[mask, "system_note"].astype(str).replace(["nan", "None", "null"], "")
-            .apply(lambda x: (x + "｜" if x else "") + f"系統評測 TOP{rank}：優先觀察發動機會")
+            .apply(lambda x: (x + "｜" if x else "") + f"全清單 TOP{rank}：優先觀察發動機會")
         )
 
-    top_df = out[out["stock_id"].astype(str).isin(top_ids)].copy()
+    # 分區 TOP5：讓 WATCH / TEST 各自有 TOP
+    for action_name, label in [("BUY", "買進"), ("TEST", "試單"), ("WATCH", "觀察")]:
+        part = candidates[candidates["final_action"].astype(str).str.upper().eq(action_name)].copy()
+        if part.empty:
+            continue
+
+        part = part.sort_values(["_op", "score"], ascending=[False, False]).head(5).copy()
+        for rank, sid in enumerate([str(x) for x in part["stock_id"].tolist()], start=1):
+            mask = out["stock_id"].astype(str).eq(str(sid))
+            out.loc[mask, "section_opportunity_rank"] = str(rank)
+            out.loc[mask, "section_top_opportunity"] = f"{label}TOP{rank}"
+            out.loc[mask, "system_note"] = (
+                out.loc[mask, "system_note"].astype(str).replace(["nan", "None", "null"], "")
+                .apply(lambda x: (x + "｜" if x else "") + f"{label}清單 TOP{rank}：本區最可能發動")
+            )
+
+    top_df = out[
+        (out["top_opportunity"].astype(str).str.strip() != "")
+        | (out["section_top_opportunity"].astype(str).str.strip() != "")
+    ].copy()
+
     top_df["_rank"] = pd.to_numeric(top_df["opportunity_rank"], errors="coerce").fillna(999)
-    top_df = top_df.sort_values("_rank").drop(columns=["_rank"], errors="ignore")
+    top_df["_section_rank"] = pd.to_numeric(top_df["section_opportunity_rank"], errors="coerce").fillna(999)
+    top_df = top_df.sort_values(["_rank", "_section_rank"]).drop(columns=["_rank", "_section_rank"], errors="ignore")
 
     return out, top_df
+
 
 
 def main():
@@ -862,7 +892,7 @@ def main():
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v266_15_1_rank_fix",
+        "source": "final_decision_engine_v266_15_2_macro_top_section",
         "rows": int(len(out)),
         "sell_count": int((out["final_action"] == "SELL").sum()) if not out.empty else 0,
         "reduce_count": int((out["final_action"] == "REDUCE").sum()) if not out.empty else 0,
