@@ -171,6 +171,7 @@ jobs:
             market_regime.json \
             market_snapshot_summary.json \
             final_action_plan.csv \
+            top_opportunities.csv \
             final_action_summary.json \
             bridge_debug.csv \
             mobile_dashboard_v1/data/meta.json \
@@ -206,6 +207,8 @@ jobs:
             market_regime.json \
             mobile_dashboard_v1/data/market_snapshot_summary.json \
             mobile_dashboard_v1/data/final_action_plan.csv \
+            mobile_dashboard_v1/data/top_opportunities.csv \
+            top_opportunities.csv \
             mobile_dashboard_v1/data/final_action_summary.json \
             mobile_dashboard_v1/data/bridge_debug.csv || true
 
