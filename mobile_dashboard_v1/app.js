@@ -1,3 +1,41 @@
+// ===== v266.14 Macro Dashboard / 總經狀態讀取 =====
+async function loadMacroDashboardV26614() {
+  try {
+    const res = await fetch("./data/macro_regime.json?ts=" + Date.now(), { cache: "no-store" });
+    const data = await res.json();
+
+    const macroText =
+      (data && data.macro_label)
+        ? `${data.macro_label}｜分數 ${Number(data.macro_score || 0).toFixed(1)}`
+        : "--｜分數 --";
+
+    const policyText =
+      (data && data.macro_policy)
+        ? data.macro_policy
+        : "--";
+
+    const macroEl =
+      document.querySelector("[data-macro]") ||
+      document.querySelector("#macroStatus") ||
+      document.querySelector(".macro-status");
+
+    const riskEl =
+      document.querySelector("[data-risk]") ||
+      document.querySelector("#riskMode") ||
+      document.querySelector(".risk-mode");
+
+    if (macroEl) macroEl.textContent = macroText;
+    if (riskEl) {
+      const warn = Number(data?.unknown_count || 0) >= 4 ? "｜資料不完整" : "";
+      riskEl.textContent = `${policyText}${warn}`;
+    }
+
+    window.__macroRegime = data || {};
+  } catch (e) {
+    console.log("macro dashboard load fail", e);
+  }
+}
+
 /*
 app.js - 最新 data_pipeline 系統：本機 Token 觸發版 + 時間校準版
 
@@ -126,6 +164,15 @@ function zhEntry(v) {
     "ALPHA觀察": "主力觀察"
   };
   return map[s] || safeText(v, "--");
+}
+
+
+function topOpportunityBadge(row) {
+  const top = safeText(row.top_opportunity || "", "");
+  const rank = safeText(row.opportunity_rank || "", "");
+  if (top && top !== "--") return `🔥 ${top}`;
+  if (rank && rank !== "--") return `🔥 TOP${rank}`;
+  return "";
 }
 
 function zhAction(v) {
@@ -594,7 +641,7 @@ function renderPositionRiskInsideCard(stock) {
     <div class="position-inline-risk ${cls}">
       <div class="position-inline-risk-head">
         <span class="scan-action ${cls}">${ACTION_EMOJI[action] || "⚪"} ${label}</span>
-        <b>${entry}</b>
+        <b>${topBadge ? `<span class="top-badge">${topBadge}</span>` : ""}${entry}</b>
         <strong>${close}</strong>
       </div>
       <div class="position-inline-risk-grid">
@@ -624,6 +671,7 @@ function renderPositions() {
     let stock = safeText(row.stock_id);
   if (stock.endsWith(".0")) stock = stock.slice(0, -2);
   const stockName = safeText(row.stock_name, "");
+  const topBadge = topOpportunityBadge(row);
     const avg = num(row.avg_price);
     const lots = num(row.lots, 2);
     const shares = money(row.shares);
@@ -1249,6 +1297,7 @@ function renderScanRow(row, key) {
   let stock = safeText(row.stock_id);
   if (stock.endsWith(".0")) stock = stock.slice(0, -2);
   const stockName = safeText(row.stock_name, "");
+  const topBadge = topOpportunityBadge(row);
   const score = safeText(row.score);
   const source = zhSource(row.source);
   const bucket = zhStrategy(row.bucket || row.strategy_type);
@@ -1288,6 +1337,7 @@ function renderScanRow(row, key) {
       <div class="scan-detail" id="${key}">
         <div class="detail-grid">
           ${detailCell("股票名稱", stockName)}
+          ${topBadge ? detailCell("系統評測", topBadge + "｜優先觀察") : ""}
           ${detailCell("來源", source)}
           ${detailCell("策略層", strat)}
           ${detailCell("進場型態", entry)}
@@ -1413,3 +1463,6 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
+
+try { loadMacroDashboardV26614(); } catch(e) { console.log(e); }
