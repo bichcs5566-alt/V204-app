@@ -1,1 +1,1 @@
-NO_POSITION: position_monitor is empty. Overlay generated as empty file.
+NO_POSITION: position file empty

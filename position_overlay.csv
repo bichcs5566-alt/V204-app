@@ -1,1 +1,1 @@
-﻿stock_id,stock_name,position_action,position_reason,position_hint,risk_flag,avg_price,shares,close,ma20,pnl_pct
+﻿stock_id,stock_name,position_action,position_reason,position_hint,take_profit_hint,chip_hint,risk_flag,avg_price,shares,close,ma5,ma20,ma5_status,ma20_status,pnl_pct,chip_score,chip_label,chip_reason,updated_at
