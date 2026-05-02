@@ -1,18 +1,18 @@
 {
   "source": "v265_3_dual_engine_core",
   "bridge_source": "v265_3_dashboard_bridge",
-  "bridge_generated_at": "2026-05-02 07:49:50",
-  "trade_plan_count": 15,
+  "bridge_generated_at": "2026-05-02 08:36:24",
+  "trade_plan_count": 17,
   "buy_count": 8,
-  "test_count": 7,
+  "test_count": 9,
   "watch_count": 0,
-  "core_trade_count": 4,
+  "core_trade_count": 6,
   "alpha_trade_count": 11,
   "data_state": "fresh",
   "bridge_files": [
     {
       "file": "trade_plan.csv",
-      "rows": 15,
+      "rows": 17,
       "state": "ok"
     },
     {
