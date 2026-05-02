@@ -1,373 +1,215 @@
 # -*- coding: utf-8 -*-
 """
-twse_chip_data_v26623.py
-v266.23.7 TWSE 籌碼資料層逐類別完整修正版
-
-修正核心：
-- T86 三大法人不能只依賴 selectType=ALL，因為實測可能只回水泥類。
-- 改成：
-  1. 先嘗試 ALL
-  2. 若筆數太少，改逐類別抓取
-  3. 合併全部類別
-  4. 以 stock_id 去重
-- 產出 chip_source_twse.csv 給 chip_concentration_v26621.py 使用。
-
-輸出：
-- chip_source_twse.csv
-- chip_source_twse_summary.json
-- mobile_dashboard_v1/data/chip_source_twse.csv
-- mobile_dashboard_v1/data/chip_source_twse_summary.json
+chip_concentration_v26621.py
+v266.23.8 救援覆蓋版
 """
 
-from __future__ import annotations
-
 from pathlib import Path
-from datetime import datetime, timedelta
-import json
 import re
-import time
+import math
 import pandas as pd
-import requests
 
 
-DATA_DIR = Path("mobile_dashboard_v1/data")
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-HEADERS = {
-    "User-Agent": "Mozilla/5.0",
-    "Accept": "application/json,text/plain,*/*",
-    "Referer": "https://www.twse.com.tw/",
-}
-
-# TWSE T86 常見類別代碼。
-# 如果 ALL 只回 7 筆，就用這些類別逐一抓。
-T86_SELECT_TYPES = [
-    "01",  # 水泥
-    "02",  # 食品
-    "03",  # 塑膠
-    "04",  # 紡織
-    "05",  # 電機機械
-    "06",  # 電器電纜
-    "07",  # 化學
-    "08",  # 生技醫療
-    "09",  # 玻璃陶瓷
-    "10",  # 造紙
-    "11",  # 鋼鐵
-    "12",  # 橡膠
-    "13",  # 汽車
-    "14",  # 半導體
-    "15",  # 電腦及週邊
-    "16",  # 光電
-    "17",  # 通信網路
-    "18",  # 電子零組件
-    "19",  # 電子通路
-    "20",  # 資訊服務
-    "21",  # 其他電子
-    "22",  # 建材營造
-    "23",  # 航運
-    "24",  # 觀光
-    "25",  # 金融保險
-    "26",  # 貿易百貨
-    "27",  # 油電燃氣
-    "28",  # 其他
-    "29",  # 存託憑證 / 其他分類
-    "30",
-    "31",
-    "32",
-]
-
-
-def log(msg: str):
-    print(f"[v266.23.7 TWSE CHIP] {msg}")
-
-
-def yyyymmdd(dt) -> str:
-    return dt.strftime("%Y%m%d")
-
-
-def to_num(v, default=0.0) -> float:
+def _valid(v):
     try:
+        if v is None or pd.isna(v):
+            return False
+    except Exception:
         if v is None:
+            return False
+    return str(v).strip() not in ("", "--", "-", "nan", "NaN", "None", "null")
+
+
+def _num(v, default=0.0):
+    try:
+        if not _valid(v):
             return default
-        s = str(v).replace(",", "").replace("+", "").replace("--", "").strip()
-        if s in ("", "-", "nan", "NaN", "None", "null"):
+        s = str(v).replace(",", "").replace("+", "").replace("%", "").replace("張", "").replace("股", "").strip()
+        x = float(s)
+        if math.isnan(x) or math.isinf(x):
             return default
-        return float(s)
+        return x
     except Exception:
         return default
 
 
-def fetch_json(url: str, name: str) -> dict:
+def _sid(v):
+    m = re.search(r"(\d{4})", str(v))
+    return m.group(1) if m else ""
+
+
+def _row_sid(row):
+    for c in ["stock_id", "symbol", "code", "個股", "股票代號"]:
+        if c in row.index and _valid(row.get(c)):
+            s = _sid(row.get(c))
+            if s:
+                return s
+    return ""
+
+
+def _read_csv(p):
     try:
-        r = requests.get(url, headers=HEADERS, timeout=30)
-        log(f"{name} HTTP {r.status_code}")
-        if r.status_code != 200:
-            log(f"{name} failed body={r.text[:250]}")
-            return {}
-        try:
-            js = r.json()
-        except Exception:
-            log(f"{name} not json body={r.text[:250]}")
-            return {}
-        return js
-    except Exception as e:
-        log(f"{name} exception={e}")
-        return {}
+        return pd.read_csv(p, encoding="utf-8-sig")
+    except Exception:
+        return pd.read_csv(p)
 
 
-def recent_trade_dates(max_days: int = 14):
-    today = datetime.now().date()
-    for i in range(max_days):
-        d = today - timedelta(days=i)
-        if d.weekday() >= 5:
-            continue
-        yield d
-
-
-def parse_t86_rows(data) -> pd.DataFrame:
-    rows = []
-    for d in data or []:
-        try:
-            stock_id = str(d[0]).strip()
-            if not re.fullmatch(r"\d{4}", stock_id):
-                continue
-
-            # T86 欄位常見位置：
-            # 0 證券代號
-            # 1 證券名稱
-            # 4 外陸資買賣超股數
-            # 10 投信買賣超股數
-            # 16 自營商買賣超股數
-            foreign = to_num(d[4]) if len(d) > 4 else 0.0
-            trust = to_num(d[10]) if len(d) > 10 else 0.0
-            dealer = to_num(d[16]) if len(d) > 16 else 0.0
-            inst = foreign + trust + dealer
-
-            rows.append({
-                "stock_id": stock_id,
-                "stock_name": str(d[1]).strip() if len(d) > 1 else "",
-                "foreign_net_buy": foreign,
-                "trust_net_buy": trust,
-                "dealer_net_buy": dealer,
-                "inst_net_buy": inst,
-                "inst_buy_days": 1 if inst > 0 else 0,
-                "inst_valid": 1,
-            })
-        except Exception:
-            continue
-
-    if not rows:
-        return pd.DataFrame(columns=[
-            "stock_id", "stock_name",
-            "foreign_net_buy", "trust_net_buy", "dealer_net_buy", "inst_net_buy",
-            "inst_buy_days", "inst_valid"
-        ])
-
-    return pd.DataFrame(rows)
-
-
-def fetch_t86_by_type(date: str, select_type: str) -> pd.DataFrame:
-    urls = [
-        f"https://www.twse.com.tw/rwd/zh/fund/T86?date={date}&selectType={select_type}&response=json",
-        f"https://www.twse.com.tw/fund/T86?date={date}&selectType={select_type}&response=json",
-    ]
-
-    for url in urls:
-        js = fetch_json(url, f"T86 date={date} type={select_type}")
-        data = js.get("data", [])
-        if data:
-            df = parse_t86_rows(data)
-            if not df.empty:
+def _load_twse():
+    for p in [
+        Path("mobile_dashboard_v1/data/chip_source_twse.csv"),
+        Path("chip_source_twse.csv"),
+    ]:
+        if p.exists():
+            try:
+                df = _read_csv(p)
+                if "stock_id" in df.columns:
+                    df["stock_id"] = df["stock_id"].astype(str).str.extract(r"(\d{4})")[0]
+                    df = df.dropna(subset=["stock_id"])
                 return df
-        time.sleep(0.25)
-
+            except Exception:
+                pass
     return pd.DataFrame()
 
 
-def fetch_institutional() -> tuple[pd.DataFrame, str, str]:
-    """
-    回傳：
-    df, data_date, fetch_mode
-    """
-    for d in recent_trade_dates(14):
-        date = yyyymmdd(d)
-
-        # 先試 ALL
-        df_all = fetch_t86_by_type(date, "ALL")
-        log(f"T86 ALL date={date} rows={len(df_all)}")
-
-        if len(df_all) >= 100:
-            df_all = df_all.drop_duplicates(subset=["stock_id"], keep="last").sort_values("stock_id")
-            return df_all, date, "ALL"
-
-        # ALL 不足，改逐類別
-        log(f"T86 ALL 筆數不足，改逐類別抓取 date={date}")
-        frames = []
-
-        for st in T86_SELECT_TYPES:
-            df = fetch_t86_by_type(date, st)
-            if not df.empty:
-                log(f"T86 type={st} rows={len(df)}")
-                frames.append(df)
-            time.sleep(0.2)
-
-        if frames:
-            out = pd.concat(frames, ignore_index=True)
-            out = out.drop_duplicates(subset=["stock_id"], keep="last").sort_values("stock_id")
-            log(f"T86 merged date={date} rows={len(out)}")
-            if len(out) >= 100:
-                return out, date, "BY_TYPE"
-
-        log(f"T86 date={date} 仍不足，往前找上一個交易日")
-
-    log("T86 抓不到足夠資料，回空表")
-    return pd.DataFrame(columns=[
-        "stock_id", "stock_name",
-        "foreign_net_buy", "trust_net_buy", "dealer_net_buy", "inst_net_buy",
-        "inst_buy_days", "inst_valid"
-    ]), "", "FAILED"
+def _label(score):
+    score = _num(score)
+    if score >= 80:
+        return "🔥 高度集中"
+    if score >= 60:
+        return "🟢 偏集中"
+    if score >= 40:
+        return "🟡 普通"
+    if score >= 20:
+        return "⚠️ 分散"
+    return "❌ 極度分散"
 
 
-def parse_margin_rows(data) -> pd.DataFrame:
-    rows = []
-    for d in data or []:
-        try:
-            stock_id = str(d[0]).strip()
-            if not re.fullmatch(r"\d{4}", stock_id):
-                continue
+def _score_from_row(row):
+    foreign = _num(row.get("foreign_net_buy", 0))
+    trust = _num(row.get("trust_net_buy", 0))
+    dealer = _num(row.get("dealer_net_buy", 0))
+    inst = _num(row.get("inst_net_buy", foreign + trust + dealer), foreign + trust + dealer)
+    inst_valid = _num(row.get("inst_valid", 0))
 
-            margin_balance = to_num(d[5]) if len(d) > 5 else 0.0
-            short_balance = to_num(d[9]) if len(d) > 9 else 0.0
+    margin_valid = _num(row.get("margin_valid", 0))
+    margin_chg = _num(row.get("margin_balance_change", 0))
+    short_chg = _num(row.get("short_balance_change", 0))
 
-            rows.append({
-                "stock_id": stock_id,
-                "margin_balance": margin_balance,
-                "short_balance": short_balance,
-                "margin_balance_change": 0.0,
-                "short_balance_change": 0.0,
-                "margin_valid": 1,
-            })
-        except Exception:
-            continue
+    valid_count = 0
+    score = 50.0
+    reasons = []
 
-    return pd.DataFrame(rows)
+    if inst_valid > 0 or foreign != 0 or trust != 0 or dealer != 0 or inst != 0:
+        valid_count += 1
+        if inst > 0:
+            score += min(25, 8 + abs(inst) / 2000)
+            reasons.append("三大法人買超")
+        elif inst < 0:
+            score -= min(25, 8 + abs(inst) / 2000)
+            reasons.append("三大法人賣超")
+        else:
+            reasons.append("法人中性")
 
+        if trust > 0:
+            score += min(10, 4 + abs(trust) / 1000)
+            reasons.append("投信買超")
+        elif trust < 0:
+            score -= min(10, 4 + abs(trust) / 1000)
+            reasons.append("投信賣超")
 
-def fetch_margin() -> tuple[pd.DataFrame, str]:
-    for d in recent_trade_dates(14):
-        date = yyyymmdd(d)
+    if margin_valid > 0:
+        valid_count += 1
+        if margin_chg < 0:
+            score += 8
+            reasons.append("融資下降")
+        elif margin_chg > 0:
+            score -= 6
+            reasons.append("融資增加")
+        else:
+            reasons.append("融資變化尚未計算")
 
-        urls = [
-            f"https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date={date}&selectType=ALL&response=json",
-            f"https://www.twse.com.tw/exchangeReport/MI_MARGN?date={date}&selectType=ALL&response=json",
-            f"https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date={date}&response=json",
-            f"https://www.twse.com.tw/exchangeReport/MI_MARGN?date={date}&response=json",
-        ]
+        if short_chg > 0:
+            score += 3
+            reasons.append("融券增加")
 
-        for url in urls:
-            js = fetch_json(url, f"MI_MARGN date={date}")
-            data = js.get("data", [])
-            if not data:
-                time.sleep(0.25)
-                continue
+    score = max(0, min(100, score))
+    label = _label(score)
 
-            df = parse_margin_rows(data)
-            log(f"MI_MARGN date={date} rows={len(df)}")
+    if valid_count == 0:
+        return {
+            "chip_score": 50,
+            "chip_label": "🟡 普通",
+            "chip_display": "50（🟡 普通）",
+            "chip_reason": "籌碼資料不足",
+            "chip_hint": "籌碼資料不足，只能當輔助，不可重倉。",
+            "chip_valid_count": 0,
+            "chip_missing": "三大法人、融資融券",
+            "chip_confidence": "📉 資料不足",
+        }
 
-            if len(df) >= 100:
-                return df.drop_duplicates(subset=["stock_id"], keep="last").sort_values("stock_id"), date
-
-        log(f"MI_MARGN date={date} 無足夠資料，往前找")
-
-    log("MI_MARGN 抓不到足夠資料，回空表")
-    return pd.DataFrame(columns=[
-        "stock_id", "margin_balance", "short_balance",
-        "margin_balance_change", "short_balance_change", "margin_valid"
-    ]), ""
-
-
-def ensure_columns(df: pd.DataFrame) -> pd.DataFrame:
-    defaults = {
-        "stock_id": "",
-        "stock_name": "",
-        "foreign_net_buy": 0.0,
-        "trust_net_buy": 0.0,
-        "dealer_net_buy": 0.0,
-        "inst_net_buy": 0.0,
-        "inst_buy_days": 0,
-        "inst_valid": 0,
-        "margin_balance": 0.0,
-        "short_balance": 0.0,
-        "margin_balance_change": 0.0,
-        "short_balance_change": 0.0,
-        "margin_valid": 0,
+    confidence = "⚠️ 中信心" if valid_count >= 2 else "📉 低信心"
+    return {
+        "chip_score": round(score, 2),
+        "chip_label": label,
+        "chip_display": f"{round(score):.0f}（{label}）",
+        "chip_reason": "｜".join(reasons) if reasons else "籌碼中性",
+        "chip_hint": "籌碼偏集中，有資金進場跡象，可搭配技術面確認。" if score >= 60 else "籌碼普通或資料有限，需搭配技術面確認。",
+        "chip_valid_count": valid_count,
+        "chip_missing": "" if valid_count >= 2 else "融資融券或法人其中一項不足",
+        "chip_confidence": confidence,
     }
 
-    for c, v in defaults.items():
-        if c not in df.columns:
-            df[c] = v
 
-    df = df[list(defaults.keys())].copy()
-    df["stock_id"] = df["stock_id"].astype(str).str.extract(r"(\d{4})")[0]
-    df = df.dropna(subset=["stock_id"])
-    df = df.drop_duplicates(subset=["stock_id"], keep="last")
-    df = df.sort_values("stock_id")
+def add_chip_columns(df):
+    if df is None or len(df) == 0:
+        return df
 
-    num_cols = [c for c in defaults.keys() if c not in ("stock_id", "stock_name")]
-    for c in num_cols:
-        df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
+    out = df.copy()
+    src = _load_twse()
+    out["_chip_sid"] = out.apply(_row_sid, axis=1)
 
-    return df
+    if not src.empty and "stock_id" in src.columns:
+        src = src.drop_duplicates(subset=["stock_id"], keep="last").copy()
+        out = out.merge(src, left_on="_chip_sid", right_on="stock_id", how="left", suffixes=("", "_chip_src"))
+        if "stock_id_chip_src" in out.columns:
+            out.drop(columns=["stock_id_chip_src"], inplace=True, errors="ignore")
+
+    results = out.apply(_score_from_row, axis=1)
+
+    out["chip_score"] = results.apply(lambda x: x["chip_score"])
+    out["chip_label"] = results.apply(lambda x: x["chip_label"])
+    out["chip_display"] = results.apply(lambda x: x["chip_display"])
+    out["chip_reason"] = results.apply(lambda x: x["chip_reason"])
+    out["chip_hint"] = results.apply(lambda x: x["chip_hint"])
+    out["chip_valid_count"] = results.apply(lambda x: x["chip_valid_count"])
+    out["chip_missing"] = results.apply(lambda x: x["chip_missing"])
+    out["chip_confidence"] = results.apply(lambda x: x["chip_confidence"])
+
+    out.drop(columns=["_chip_sid"], inplace=True, errors="ignore")
+    return out
 
 
-def save_outputs(df: pd.DataFrame, inst_date: str, margin_date: str, mode: str):
-    df = ensure_columns(df)
+def get_chip_score(stock_id):
+    src = _load_twse()
+    sid = _sid(stock_id)
+    if not src.empty and "stock_id" in src.columns:
+        hit = src[src["stock_id"].astype(str) == sid]
+        if not hit.empty:
+            r = _score_from_row(hit.iloc[-1])
+            return {
+                "score": r["chip_score"],
+                "label": r["chip_label"],
+                "display": r["chip_display"],
+                "reason": r["chip_reason"],
+                "hint": r["chip_hint"],
+                "confidence": r["chip_confidence"],
+            }
 
-    for p in [
-        Path("chip_source_twse.csv"),
-        DATA_DIR / "chip_source_twse.csv",
-    ]:
-        df.to_csv(p, index=False, encoding="utf-8-sig")
-
-    summary = {
-        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "version": "v266.23.7",
-        "source": "TWSE",
-        "fetch_mode": mode,
-        "inst_date": inst_date,
-        "margin_date": margin_date,
-        "rows": int(len(df)),
-        "inst_valid_count": int(df["inst_valid"].sum()) if "inst_valid" in df.columns else 0,
-        "margin_valid_count": int(df["margin_valid"].sum()) if "margin_valid" in df.columns else 0,
-        "first_20_stock_id": df["stock_id"].head(20).tolist(),
-        "note": "If ALL returns too few rows, script merges T86 by selectType.",
-        "encoding": "utf-8-sig",
+    return {
+        "score": 50,
+        "label": "🟡 普通",
+        "display": "50（🟡 普通）",
+        "reason": "籌碼資料不足",
+        "hint": "籌碼資料不足，只能當輔助，不可重倉。",
+        "confidence": "📉 資料不足",
     }
-
-    for p in [
-        Path("chip_source_twse_summary.json"),
-        DATA_DIR / "chip_source_twse_summary.json",
-    ]:
-        p.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    log(f"saved chip_source_twse rows={summary['rows']} inst_valid={summary['inst_valid_count']} margin_valid={summary['margin_valid_count']} mode={mode}")
-
-
-def main():
-    inst, inst_date, mode = fetch_institutional()
-    margin, margin_date = fetch_margin()
-
-    if inst.empty and margin.empty:
-        out = pd.DataFrame()
-    elif inst.empty:
-        out = margin.copy()
-    elif margin.empty:
-        out = inst.copy()
-    else:
-        out = inst.merge(margin, on="stock_id", how="outer")
-
-    save_outputs(out, inst_date, margin_date, mode)
-
-
-if __name__ == "__main__":
-    main()
