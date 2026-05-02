@@ -1957,44 +1957,45 @@ button:disabled {
 }
 
 
-/* v266.25.3 追加：持倉完整欄位 + 持倉提示 */
-.position-full-card-v266253 .scan-detail {
-  background: #fbfdff;
-}
-
-.position-full-decision-v266253 {
-  margin-top: 14px;
+/* v266.25.4 追加：持倉提示完整欄位版，只作用在持倉卡內 */
+.position-inline-risk-v266254 {
+  margin-top: 12px;
   padding: 12px;
-  border-radius: 16px;
-  border: 2px solid var(--line);
-  background: #f8fafc;
+  border-radius: 14px;
+  border: 1.8px solid var(--line);
+  background: #fff;
 }
 
-.position-full-decision-v266253.hold {
-  background: #f0fdf4;
-  border-color: #86efac;
-}
-
-.position-full-decision-v266253.watch {
-  background: #fffbeb;
-  border-color: #fde68a;
-}
-
-.position-full-decision-v266253.sell {
+.position-inline-risk-v266254.sell {
   background: #fff7f7;
   border-color: #fca5a5;
 }
 
-.position-full-head-v266253 {
+.position-inline-risk-v266254.reduce {
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+
+.position-inline-risk-v266254.watch {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.position-inline-risk-v266254.hold {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.position-inline-risk-head-v266254 {
   display: grid;
-  grid-template-columns: 92px 1fr 72px;
+  grid-template-columns: 86px 1fr 62px;
   gap: 8px;
   align-items: center;
   margin-bottom: 10px;
 }
 
-.position-full-head-v266253 b {
-  font-size: 24px;
+.position-inline-risk-head-v266254 b {
+  font-size: 22px;
   font-weight: 950;
   color: #334155;
   overflow: hidden;
@@ -2002,50 +2003,40 @@ button:disabled {
   white-space: nowrap;
 }
 
-.position-full-head-v266253 strong {
+.position-inline-risk-head-v266254 strong {
   text-align: right;
-  font-size: 22px;
+  font-size: 20px;
   color: #334155;
   font-weight: 950;
 }
 
-.position-full-grid-v266253 {
+.position-inline-risk-grid-v266254 {
   margin-top: 8px;
 }
 
-.position-full-text-v266253 b {
-  font-size: 20px;
-  color: #334155;
-}
-
-.position-full-text-v266253 p {
-  font-size: 19px;
-  line-height: 1.45;
-  font-weight: 800;
-}
-
-.position-full-decision-v266253.sell .position-full-text-v266253 b {
-  color: #991b1b;
-}
-
-.position-full-decision-v266253.hold .position-full-text-v266253 b {
+.position-inline-risk-v266254.hold .detail-text b {
   color: #166534;
 }
 
+.position-inline-risk-v266254.watch .detail-text b {
+  color: #854d0e;
+}
+
+.position-inline-risk-v266254.sell .detail-text b,
+.position-inline-risk-v266254.reduce .detail-text b {
+  color: #991b1b;
+}
+
 @media (max-width: 430px) {
-  .position-full-head-v266253 {
-    grid-template-columns: 82px 1fr 58px;
+  .position-inline-risk-head-v266254 {
+    grid-template-columns: 78px 1fr 52px;
   }
 
-  .position-full-head-v266253 b {
-    font-size: 21px;
+  .position-inline-risk-head-v266254 b {
+    font-size: 20px;
   }
 
-  .position-full-head-v266253 strong {
-    font-size: 18px;
-  }
-
-  .position-full-text-v266253 p {
+  .position-inline-risk-head-v266254 strong {
     font-size: 17px;
   }
 }
