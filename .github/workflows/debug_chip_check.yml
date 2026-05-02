@@ -1,0 +1,96 @@
+name: DEBUG CHIP CHECK v266
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug-chip:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          pip install pandas requests
+
+      - name: List files (確認檔案存在)
+        run: |
+          echo "==== ROOT ===="
+          ls -al
+          echo "==== DATA ===="
+          ls -al mobile_dashboard_v1/data || true
+
+      - name: Run chip debug
+        run: |
+          python << 'PY'
+          from pathlib import Path
+          import pandas as pd
+          import json
+
+          def read_csv(p):
+              try:
+                  return pd.read_csv(p, encoding="utf-8-sig")
+              except:
+                  return pd.read_csv(p)
+
+          def check(path):
+              p = Path(path)
+              print("\n====================")
+              print("CHECK:", path)
+              print("====================")
+
+              if not p.exists():
+                  print("❌ NOT FOUND")
+                  return
+
+              print("✅ FOUND size:", p.stat().st_size)
+
+              if p.suffix == ".json":
+                  try:
+                      data = json.loads(p.read_text(encoding="utf-8"))
+                      print(json.dumps(data, ensure_ascii=False, indent=2))
+                  except Exception as e:
+                      print("❌ JSON ERROR:", e)
+                  return
+
+              try:
+                  df = read_csv(p)
+              except Exception as e:
+                  print("❌ CSV ERROR:", e)
+                  return
+
+              print("rows:", len(df))
+              print("columns:", list(df.columns))
+
+              if "stock_id" in df.columns:
+                  print("sample stock_id:", df["stock_id"].head(20).tolist())
+
+              if len(df) < 50:
+                  print("⚠️ 太少筆數")
+                  print(df.head(20))
+
+              chip_cols = [c for c in df.columns if "chip" in c.lower()]
+              print("chip cols:", chip_cols)
+
+              if "chip_valid_count" in df.columns:
+                  print(df["chip_valid_count"].value_counts())
+
+          files = [
+              "chip_source_twse_summary.json",
+              "mobile_dashboard_v1/data/chip_source_twse_summary.json",
+              "chip_source_twse.csv",
+              "mobile_dashboard_v1/data/chip_source_twse.csv",
+              "final_action_plan.csv",
+              "mobile_dashboard_v1/data/final_action_plan.csv",
+          ]
+
+          for f in files:
+              check(f)
+          PY
