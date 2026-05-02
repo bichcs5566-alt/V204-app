@@ -2670,4 +2670,127 @@ async function loadPositionOverlayV26626() {
 
 setTimeout(loadPositionOverlayV26626, 700);
 setTimeout(loadPositionOverlayV26626, 2200);
+// v266.27 app.js 追加補丁
+// 貼到 app.js 最底部即可；不覆蓋原始 renderPositions。
+// 目的：讓持倉提示優先顯示 overlay 的 close / ma5 / ma20 / pnl / 籌碼 / 停利提示。
+
+window.__positionOverlayMapV26627 = window.__positionOverlayMapV26627 || {};
+
+function sidV26627(v) {
+  const m = String(v || "").match(/(\d{4})/);
+  return m ? m[1] : "";
+}
+
+function txtV26627(v, fallback="--") {
+  const s = String(v ?? "").trim();
+  return s && s !== "nan" && s !== "NaN" ? s : fallback;
+}
+
+async function loadPositionOverlayV26627() {
+  try {
+    const csv = await fetchText("./data/position_overlay.csv");
+    const rows = parseCsv(csv);
+    const map = {};
+    rows.forEach(r => {
+      const sid = sidV26627(r.stock_id);
+      if (sid) map[sid] = r;
+    });
+    window.__positionOverlayMapV26627 = map;
+    patchPositionCardsV26627();
+  } catch(e) {
+    console.log("v266.27 overlay skipped", e);
+  }
+}
+
+function renderOverlayBoxV26627(stock, posRow, riskRow) {
+  const o = window.__positionOverlayMapV26627[String(stock)] || {};
+  const action = txtV26627(o.position_action, riskRow ? "🔴 賣出" : "🟢 抱住");
+  const cls = action.includes("賣") || action.includes("出場") ? "sell" : action.includes("觀察") || action.includes("停利") ? "watch" : "hold";
+  const close = txtV26627(o.close, riskRow?.close || riskRow?.ref_price || "--");
+  const ma5 = txtV26627(o.ma5_status, "MA5：--");
+  const ma20 = txtV26627(o.ma20_status, "MA20：--");
+  const pnl = txtV26627(o.pnl_pct, "--");
+  const chip = txtV26627(o.chip_label, "--");
+  const chipScore = txtV26627(o.chip_score, "--");
+  const risk = txtV26627(o.risk_flag, riskRow ? "HIGH" : "HOLD_CHECK");
+  const reason = txtV26627(o.position_reason, riskRow?.reason || "尚未出現明顯下跌或系統賣出訊號。");
+  const hint = txtV26627(o.position_hint, riskRow?.system_note || "續抱觀察。");
+  const takeProfit = txtV26627(o.take_profit_hint, "尚未達明確停利條件，先依趨勢與籌碼續抱觀察。");
+  const chipHint = txtV26627(o.chip_hint, "籌碼資料有限，搭配技術面確認。");
+  const chipReason = txtV26627(o.chip_reason, "--");
+
+  return `
+    <div class="position-v26627 ${cls}">
+      <div class="position-v26627-head">
+        <span>${action}</span>
+        <b>持倉提示</b>
+        <strong>${close}</strong>
+      </div>
+      <div class="detail-grid">
+        ${detailCell("來源", riskRow ? "策略出場" : "手動持倉")}
+        ${detailCell("策略層", riskRow ? "持倉風控" : "持倉管理")}
+        ${detailCell("持倉型態", action)}
+        ${detailCell("K棒型態", riskRow ? "跌破/風控K棒" : "續抱觀察")}
+        ${detailCell("參考價", close)}
+        ${detailCell("均價", txtV26627(posRow?.avg_price, "--"))}
+        ${detailCell("部位金額", positionCost(posRow))}
+        ${detailCell("損益%", pnl === "--" ? "--" : pnl + "%")}
+        ${detailCell("MA20觀察", ma20)}
+        ${detailCell("五日線觀察", ma5)}
+        ${detailCell("籌碼集中度", chipScore + "｜" + chip)}
+        ${detailCell("風險等級", risk)}
+      </div>
+      <div class="detail-text"><b>原因</b><p>${reason}</p></div>
+      <div class="detail-text"><b>K棒判斷</b><p>${ma5}；${ma20}。</p></div>
+      <div class="detail-text"><b>停利提示</b><p>${takeProfit}</p></div>
+      <div class="detail-text"><b>籌碼提示</b><p>${chipReason}｜${chipHint}</p></div>
+      <div class="detail-text"><b>建議動作</b><p>${hint}</p></div>
+      <div class="detail-text"><b>系統提示</b><p>${action.includes("抱住") ? "尚未跌破關鍵防守時續抱；若跌破五日線、MA20 或籌碼轉弱，再分批停利或出場。" : "持倉已有風險或停利訊號，先控制部位，不要情緒化加碼。"}</p></div>
+    </div>
+  `;
+}
+
+function patchPositionCardsV26627() {
+  const cards = document.querySelectorAll(".scan-item.position");
+  if (!cards.length) return;
+  const risks = typeof getPositionRiskMap === "function" ? getPositionRiskMap() : {};
+  const positions = typeof loadPositions === "function" ? loadPositions() : [];
+
+  cards.forEach(card => {
+    const stock = sidV26627(card.querySelector(".scan-stock")?.textContent);
+    if (!stock) return;
+    const detail = card.querySelector(".scan-detail");
+    if (!detail) return;
+
+    const old = detail.querySelector(".position-v26627");
+    if (old) old.remove();
+
+    const posRow = positions.find(p => sidV26627(p.stock_id) === stock) || {};
+    const riskRow = risks[String(stock)] || null;
+
+    const existing = detail.querySelector(".position-unified-v26626, .position-inline-risk-v266254");
+    if (existing) existing.remove();
+
+    const actions = detail.querySelector(".position-row-actions");
+    const wrap = document.createElement("div");
+    wrap.innerHTML = renderOverlayBoxV26627(stock, posRow, riskRow);
+    const node = wrap.firstElementChild;
+
+    if (actions) detail.insertBefore(node, actions);
+    else detail.appendChild(node);
+  });
+}
+
+if (typeof renderPositions === "function" && !window.__renderPositionsPatchedV26627) {
+  window.__renderPositionsPatchedV26627 = true;
+  const oldRenderPositionsV26627 = renderPositions;
+  renderPositions = function() {
+    oldRenderPositionsV26627.apply(this, arguments);
+    setTimeout(patchPositionCardsV26627, 0);
+  };
+}
+
+setTimeout(loadPositionOverlayV26627, 800);
+setTimeout(loadPositionOverlayV26627, 2400);
+setTimeout(patchPositionCardsV26627, 4000);
 
