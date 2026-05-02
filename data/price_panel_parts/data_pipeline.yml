@@ -56,6 +56,46 @@ jobs:
         run: |
           python v266_strategy_engine.py
 
+      - name: Run timing engine
+        run: |
+          if [ -f feature_timing_engine.py ]; then
+            python feature_timing_engine.py
+          else
+            echo "feature_timing_engine.py not found, skip"
+          fi
+
+      - name: Run trading system allocator
+        run: |
+          if [ -f trading_system_allocator.py ]; then
+            python trading_system_allocator.py
+          else
+            echo "trading_system_allocator.py not found, skip"
+          fi
+
+      - name: Run exit risk engine
+        run: |
+          if [ -f exit_risk_engine.py ]; then
+            python exit_risk_engine.py
+          else
+            echo "exit_risk_engine.py not found, skip"
+          fi
+
+      - name: Run position overlay engine
+        run: |
+          if [ -f position_overlay_engine.py ]; then
+            python position_overlay_engine.py
+          else
+            echo "position_overlay_engine.py not found, skip"
+          fi
+
+      - name: Run final decision engine
+        run: |
+          if [ -f final_decision_engine.py ]; then
+            python final_decision_engine.py
+          else
+            echo "final_decision_engine.py not found, skip"
+          fi
+
       - name: Sync dashboard
         run: |
           if [ -f v3_1_dashboard_bridge.py ]; then
@@ -64,9 +104,26 @@ jobs:
             echo "bridge not found, skip"
           fi
 
-      - name: Keep pre-move dashboard files after bridge
+      - name: Keep dashboard files after bridge
         run: |
-          python pre_move_dashboard_patch.py
+          if [ -f pre_move_dashboard_patch.py ]; then
+            python pre_move_dashboard_patch.py
+          fi
+          if [ -f feature_timing_engine.py ]; then
+            python feature_timing_engine.py
+          fi
+          if [ -f trading_system_allocator.py ]; then
+            python trading_system_allocator.py
+          fi
+          if [ -f exit_risk_engine.py ]; then
+            python exit_risk_engine.py
+          fi
+          if [ -f position_overlay_engine.py ]; then
+            python position_overlay_engine.py
+          fi
+          if [ -f final_decision_engine.py ]; then
+            python final_decision_engine.py
+          fi
 
       - name: Clean big files
         run: |
@@ -95,6 +152,16 @@ jobs:
             meta.json \
             pre_move_candidates.csv \
             pre_move_summary.json \
+            timing_candidates.csv \
+            timing_summary.json \
+            trading_system_plan.csv \
+            trading_system_summary.json \
+            exit_risk_plan.csv \
+            exit_risk_summary.json \
+            final_action_plan.csv \
+            final_action_summary.json \
+            position_overlay.csv \
+            manual_positions.csv \
             mobile_dashboard_v1/data/meta.json \
             mobile_dashboard_v1/data/trade_plan.csv \
             mobile_dashboard_v1/data/candidates.csv \
@@ -107,7 +174,19 @@ jobs:
             mobile_dashboard_v1/data/feature_meta.json \
             mobile_dashboard_v1/data/pre_move_candidates.csv \
             mobile_dashboard_v1/data/pre_move_summary.json \
-            mobile_dashboard_v1/data/pre_move_cards.json || true
+            mobile_dashboard_v1/data/pre_move_cards.json \
+            mobile_dashboard_v1/data/timing_candidates.csv \
+            mobile_dashboard_v1/data/timing_summary.json \
+            mobile_dashboard_v1/data/trading_system_plan.csv \
+            mobile_dashboard_v1/data/trading_system_summary.json \
+            mobile_dashboard_v1/data/exit_risk_plan.csv \
+            mobile_dashboard_v1/data/exit_risk_summary.json \
+            mobile_dashboard_v1/data/final_action_plan.csv \
+            mobile_dashboard_v1/data/final_action_summary.json \
+            mobile_dashboard_v1/data/position_overlay.csv \
+            mobile_dashboard_v1/data/position_overlay_debug.csv \
+            mobile_dashboard_v1/data/position_overlay_summary.txt \
+            mobile_dashboard_v1/data/manual_positions.csv || true
 
           git reset -- price_panel_daily.csv || true
           git reset -- feature_panel_daily.csv || true
@@ -116,9 +195,12 @@ jobs:
           git reset -- mobile_dashboard_v1/data/feature_panel_daily.csv || true
           git reset -- mobile_dashboard_v1/data/raw_market_daily.csv || true
 
+          echo "==== staged files ===="
+          git diff --cached --name-only
+
           if git diff --cached --quiet; then
             echo "no update"
           else
-            git commit -m "add pre-move engine and auto update"
+            git commit -m "update daily dashboard and position overlay"
             git push
           fi
