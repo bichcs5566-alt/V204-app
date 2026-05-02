@@ -1,2 +1,2 @@
 ﻿source,method,date,index_close,index_change_pct,index_change_pct_text,advance_ratio,decline_ratio,median_return,market_score,market_regime,market_label,generated_at,system,action_policy
-price_panel_daily.csv,market_breadth,2026-05-01,,0.0,0.00%,0.0,0.0,0.0,10.0,NEUTRAL,大盤中性,2026-05-02 08:37:30,market_regime_v266_11,控制追高，BUY 降級 TEST
+price_panel_daily.csv,market_breadth,2026-05-01,,0.0,0.00%,0.0,0.0,0.0,10.0,NEUTRAL,大盤中性,2026-05-02 09:10:51,market_regime_v266_11,控制追高，BUY 降級 TEST
