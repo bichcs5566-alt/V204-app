@@ -1,26 +1,29 @@
-name: POSITION OVERLAY v26625
+steps:
+  - name: Checkout repo
+    uses: actions/checkout@v4
 
-on:
-  workflow_dispatch:
+  - name: Setup Python
+    uses: actions/setup-python@v5
+    with:
+      python-version: "3.11"
 
-jobs:
-  overlay:
-    runs-on: ubuntu-latest
+  - name: Install deps
+    run: pip install pandas
 
-    steps:
-      - uses: actions/checkout@v4
+  - name: Run position overlay
+    run: python position_overlay_engine.py
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+  - name: Commit overlay result
+    run: |
+      git config --global user.name "actions-user"
+      git config --global user.email "actions@github.com"
 
-      - run: pip install pandas
+      git add position_overlay.csv || true
+      git add mobile_dashboard_v1/data/position_overlay.csv || true
+      git add mobile_dashboard_v1/data/position_overlay_summary.txt || true
 
-      - run: python position_overlay_engine.py
+      git commit -m "update position overlay" || echo "no changes"
 
-      - run: |
-          git config --global user.name "actions-user"
-          git config --global user.email "actions@github.com"
-          git add .
-          git commit -m "update overlay" || echo "no change"
-          git push
+  - name: Push
+    run: |
+      git push
