@@ -109,6 +109,11 @@ jobs:
           python feature_timing_engine.py
           python trading_system_allocator.py
           python exit_risk_engine.py
+          if [ -f position_overlay_engine.py ]; then
+            python position_overlay_engine.py
+          else
+            echo "position_overlay_engine.py not found, skip"
+          fi
           python final_decision_engine.py
 
       - name: Clean runtime big files
@@ -146,6 +151,7 @@ jobs:
             exit_risk_plan.csv \
             exit_risk_summary.json \
             position_overlay.csv \
+            manual_positions.csv \
             final_action_plan.csv \
             final_action_summary.json \
             bridge_debug.csv \
@@ -171,6 +177,8 @@ jobs:
             mobile_dashboard_v1/data/exit_risk_summary.json \
             mobile_dashboard_v1/data/position_overlay.csv \
             mobile_dashboard_v1/data/position_overlay_summary.txt \
+            mobile_dashboard_v1/data/position_overlay_debug.csv \
+            mobile_dashboard_v1/data/manual_positions.csv \
             mobile_dashboard_v1/data/final_action_plan.csv \
             mobile_dashboard_v1/data/final_action_summary.json \
             mobile_dashboard_v1/data/bridge_debug.csv || true
