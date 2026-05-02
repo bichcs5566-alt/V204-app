@@ -1,49 +1,27 @@
 # -*- coding: utf-8 -*-
 """
-v266.21 籌碼可用版
+v266.23.3 chip_concentration_v26621.py 兼容覆蓋版
 
-核心：
-- 先讓籌碼集中度真正可用，不再大量 fallback 50。
-- 優先吃「三大法人」與「融資融券」。
-- 外資持股、投信、大戶/董監欄位保留，抓不到就降權。
-- 支援多種可能欄位名稱，避免因欄位名不同造成假性沒資料。
+用途：
+- 保留 final_decision_engine.py 原本 import 名稱：chip_concentration_v26621
+- 實際改成讀取 TWSE 產出的 chip_source_twse.csv
+- 解決畫面一直顯示「籌碼資料不足 / 50 普通」的問題
 
-輸出欄位：
-chip_score
-chip_label
-chip_display
-chip_reason
-chip_hint
-chip_valid_count
-chip_missing
-chip_confidence
+需要存在：
+- chip_source_twse.csv
+或
+- mobile_dashboard_v1/data/chip_source_twse.csv
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 import math
 import re
-import numpy as np
 import pandas as pd
 
 
-def _norm_col(c: str) -> str:
-    return str(c).strip().lower().replace(" ", "").replace("-", "_")
-
-
-def _build_colmap(row) -> dict:
-    return {_norm_col(k): k for k in row.index}
-
-
-def _get(row, names, default=None):
-    cmap = _build_colmap(row)
-    for name in names:
-        key = _norm_col(name)
-        if key in cmap:
-            v = row.get(cmap[key])
-            if _valid(v):
-                return v
-    return default
+_CHIP_SOURCE_CACHE = None
 
 
 def _valid(v) -> bool:
@@ -62,7 +40,7 @@ def _num(v, default=0.0) -> float:
     try:
         if not _valid(v):
             return default
-        s = str(v).replace(",", "").replace("%", "").replace("張", "").replace("股", "").strip()
+        s = str(v).replace(",", "").replace("+", "").replace("%", "").replace("張", "").replace("股", "").strip()
         x = float(s)
         if math.isnan(x) or math.isinf(x):
             return default
@@ -71,18 +49,72 @@ def _num(v, default=0.0) -> float:
         return default
 
 
-def _to_lot_if_needed(v) -> float:
-    """
-    台股成交量有些資料是「股」，有些是「張」。
-    若數值超大，推定為股，轉成張。
-    """
-    x = _num(v, 0.0)
-    if abs(x) >= 1_000_000:
-        return x / 1000.0
-    return x
+def _stock_id_from_any(v) -> str:
+    m = re.search(r"(\d{4})", str(v))
+    return m.group(1) if m else ""
 
 
-def chip_label(score: float) -> str:
+def _stock_id_from_row(row) -> str:
+    for c in ["stock_id", "symbol", "code", "個股", "股票代號"]:
+        if c in row.index and _valid(row.get(c)):
+            sid = _stock_id_from_any(row.get(c))
+            if sid:
+                return sid
+    return ""
+
+
+def _read_csv_safe(path: Path) -> pd.DataFrame:
+    try:
+        return pd.read_csv(path, encoding="utf-8-sig")
+    except Exception:
+        return pd.read_csv(path)
+
+
+def _load_chip_source() -> pd.DataFrame:
+    global _CHIP_SOURCE_CACHE
+    if _CHIP_SOURCE_CACHE is not None:
+        return _CHIP_SOURCE_CACHE
+
+    candidates = [
+        Path("mobile_dashboard_v1/data/chip_source_twse.csv"),
+        Path("chip_source_twse.csv"),
+        Path("mobile_dashboard_v1/data/chip_source_free.csv"),
+        Path("chip_source_free.csv"),
+    ]
+
+    for p in candidates:
+        if p.exists():
+            try:
+                df = _read_csv_safe(p)
+                if "stock_id" in df.columns:
+                    df["stock_id"] = df["stock_id"].astype(str).str.extract(r"(\d{4})")[0]
+                    df = df.dropna(subset=["stock_id"])
+                _CHIP_SOURCE_CACHE = df
+                return _CHIP_SOURCE_CACHE
+            except Exception:
+                continue
+
+    _CHIP_SOURCE_CACHE = pd.DataFrame()
+    return _CHIP_SOURCE_CACHE
+
+
+def _merge_chip_source(row):
+    base = row.to_dict() if hasattr(row, "to_dict") else dict(row)
+    sid = _stock_id_from_row(row)
+
+    src = _load_chip_source()
+    if sid and not src.empty and "stock_id" in src.columns:
+        hit = src[src["stock_id"].astype(str) == sid]
+        if not hit.empty:
+            extra = hit.iloc[-1].to_dict()
+            for k, v in extra.items():
+                if not _valid(base.get(k)):
+                    base[k] = v
+
+    return pd.Series(base)
+
+
+def _label(score: float) -> str:
     score = _num(score)
     if score >= 80:
         return "🔥 高度集中"
@@ -95,12 +127,24 @@ def chip_label(score: float) -> str:
     return "❌ 極度分散"
 
 
-def chip_hint(score: float, confidence: str) -> str:
+def _confidence(valid_count: int) -> str:
+    if valid_count >= 3:
+        return "📊 高信心"
+    if valid_count >= 2:
+        return "⚠️ 中信心"
+    if valid_count >= 1:
+        return "📉 低信心"
+    return "📉 資料不足"
+
+
+def _hint(score: float, conf: str) -> str:
     score = _num(score)
-    if "資料不足" in confidence:
+    if "資料不足" in conf:
         return "籌碼資料不足，只能當輔助，不可重倉。"
+    if "低信心" in conf:
+        return "目前只有部分籌碼資料，僅可輔助判斷，不可單獨重倉。"
     if score >= 80:
-        return "籌碼高度集中，主力/資金共識強，可搭配技術面優先觀察。"
+        return "籌碼高度集中，資金共識強，可搭配技術面優先觀察。"
     if score >= 60:
         return "籌碼偏集中，有資金進場跡象，可小量試單或觀察續強。"
     if score >= 40:
@@ -110,230 +154,93 @@ def chip_hint(score: float, confidence: str) -> str:
     return "籌碼極度分散，不具主力優勢，避免追高或重倉。"
 
 
-def chip_confidence(valid_count: int) -> str:
-    if valid_count >= 4:
-        return "📊 高信心"
-    if valid_count >= 2:
-        return "⚠️ 中信心"
-    return "📉 資料不足"
+def _score_inst(row):
+    inst_valid = _num(row.get("inst_valid", 0), 0)
+    foreign = _num(row.get("foreign_net_buy", 0), 0)
+    trust = _num(row.get("trust_net_buy", 0), 0)
+    dealer = _num(row.get("dealer_net_buy", 0), 0)
+    inst = _num(row.get("inst_net_buy", foreign + trust + dealer), foreign + trust + dealer)
+    buy_days = _num(row.get("inst_buy_days", 0), 0)
 
+    if inst_valid <= 0 and foreign == 0 and trust == 0 and dealer == 0 and inst == 0:
+        return None, "三大法人資料不足"
 
-def _score_three_major(row):
-    """
-    三大法人 / 法人買賣超
-
-    支援欄位範例：
-    - inst_buy_days / institutional_buy_days / three_major_buy_days / 法人連買天數
-    - inst_net_buy / institutional_net_buy / three_major_net_buy / 三大法人買賣超
-    - foreign_net_buy / trust_net_buy / dealer_net_buy
-    - 外資買賣超 / 投信買賣超 / 自營商買賣超
-    """
-    buy_days = _num(_get(row, [
-        "inst_buy_days", "institutional_buy_days", "three_major_buy_days",
-        "法人連買天數", "三大法人連買天數", "連買天數"
-    ], 0), 0)
-
-    inst_net = _get(row, [
-        "inst_net_buy", "institutional_net_buy", "three_major_net_buy",
-        "三大法人買賣超", "三大法人買超", "法人買賣超", "法人買超"
-    ], None)
-
-    if inst_net is None:
-        foreign = _num(_get(row, ["foreign_net_buy", "foreign_buy", "外資買賣超", "外資買超"], 0), 0)
-        trust = _num(_get(row, ["trust_net_buy", "investment_trust_net_buy", "投信買賣超", "投信買超"], 0), 0)
-        dealer = _num(_get(row, ["dealer_net_buy", "dealer_buy", "自營商買賣超", "自營商買超"], 0), 0)
-        inst_net_num = foreign + trust + dealer
-        has_net = any(abs(x) > 0 for x in [foreign, trust, dealer])
-    else:
-        inst_net_num = _num(inst_net, 0)
-        has_net = True
-
-    if buy_days == 0 and not has_net:
-        return None, "法人資料不足"
-
-    score = 50
-    reason = []
+    score = 50.0
+    reasons = []
 
     if buy_days >= 5:
-        score += 30
-        reason.append("法人連買5日以上")
+        score += 25
+        reasons.append("法人連買5日以上")
     elif buy_days >= 3:
-        score += 22
-        reason.append("法人連買3日")
+        score += 18
+        reasons.append("法人連買3日")
     elif buy_days >= 1:
-        score += 10
-        reason.append("法人轉買")
+        score += 8
+        reasons.append("法人單日買超")
     else:
-        reason.append("法人未連買")
+        reasons.append("法人未連買")
 
-    if inst_net_num > 0:
-        score += min(20, 8 + abs(inst_net_num) / 1000)
-        reason.append("法人買超")
-    elif inst_net_num < 0:
-        score -= min(25, 10 + abs(inst_net_num) / 1000)
-        reason.append("法人賣超")
+    if inst > 0:
+        score += min(25, 8 + abs(inst) / 2000)
+        reasons.append("三大法人買超")
+    elif inst < 0:
+        score -= min(30, 10 + abs(inst) / 2000)
+        reasons.append("三大法人賣超")
 
-    return max(0, min(100, score)), "｜".join(reason)
+    if trust > 0:
+        score += min(12, 5 + abs(trust) / 1000)
+        reasons.append("投信買超")
+    elif trust < 0:
+        score -= min(12, 5 + abs(trust) / 1000)
+        reasons.append("投信賣超")
 
-
-def _score_trust(row):
-    buy_days = _num(_get(row, [
-        "trust_buy_days", "investment_trust_buy_days", "投信連買天數"
-    ], 0), 0)
-
-    net = _get(row, [
-        "trust_net_buy", "investment_trust_net_buy", "trust_buy",
-        "投信買賣超", "投信買超"
-    ], None)
-
-    if buy_days == 0 and net is None:
-        return None, "投信資料不足"
-
-    net_num = _num(net, 0)
-    score = 50
-    reason = []
-
-    if buy_days >= 5:
-        score += 30
-        reason.append("投信連買5日以上")
-    elif buy_days >= 3:
-        score += 22
-        reason.append("投信連買3日")
-    elif buy_days >= 1:
-        score += 10
-        reason.append("投信轉買")
-
-    if net_num > 0:
-        score += min(20, 8 + abs(net_num) / 500)
-        reason.append("投信買超")
-    elif net_num < 0:
-        score -= min(25, 10 + abs(net_num) / 500)
-        reason.append("投信賣超")
-
-    if not reason:
-        reason.append("投信持平")
-
-    return max(0, min(100, score)), "｜".join(reason)
-
-
-def _score_foreign_holding(row):
-    delta = _get(row, [
-        "foreign_holding_change", "foreign_hold_pct_change", "foreign_holding_pct_delta",
-        "foreign_pct_delta", "外資持股變化", "外資持股比例變化"
-    ], None)
-
-    if delta is None:
-        return None, "外資持股資料不足"
-
-    d = _num(delta, 0)
-    if d >= 1.0:
-        return 90, "外資持股明顯提升"
-    if d >= 0.3:
-        return 75, "外資持股提升"
-    if d > 0:
-        return 62, "外資持股小幅提升"
-    if d <= -1.0:
-        return 20, "外資持股明顯下降"
-    if d <= -0.3:
-        return 35, "外資持股下降"
-    return 50, "外資持股持平"
+    return max(0, min(100, score)), "｜".join(reasons)
 
 
 def _score_margin(row):
-    """
-    融資融券：
-    - 融資下降：籌碼較乾淨，加分
-    - 融資暴增：散戶追高風險，扣分
-    - 融券增加：可能有軋空燃料，小加分
-    """
-    margin_delta = _get(row, [
-        "margin_balance_change", "margin_change", "margin_delta", "margin_financing_delta",
-        "融資變化", "融資餘額增減", "融資增減"
-    ], None)
+    margin_valid = _num(row.get("margin_valid", 0), 0)
+    margin_chg = _num(row.get("margin_balance_change", 0), 0)
+    short_chg = _num(row.get("short_balance_change", 0), 0)
+    margin_bal = _num(row.get("margin_balance", 0), 0)
+    short_bal = _num(row.get("short_balance", 0), 0)
 
-    short_delta = _get(row, [
-        "short_balance_change", "short_change", "short_delta", "securities_lending_delta",
-        "融券變化", "融券餘額增減", "融券增減"
-    ], None)
-
-    if margin_delta is None and short_delta is None:
+    if margin_valid <= 0 and margin_chg == 0 and short_chg == 0 and margin_bal == 0 and short_bal == 0:
         return None, "融資融券資料不足"
 
-    score = 50
-    reason = []
+    score = 50.0
+    reasons = []
 
-    if margin_delta is not None:
-        md = _to_lot_if_needed(margin_delta)
-        if md < -500:
-            score += 25
-            reason.append("融資明顯下降")
-        elif md < 0:
-            score += 15
-            reason.append("融資下降")
-        elif md > 1000:
-            score -= 25
-            reason.append("融資暴增")
-        elif md > 0:
-            score -= 10
-            reason.append("融資增加")
-        else:
-            reason.append("融資持平")
+    if margin_chg < -500:
+        score += 22
+        reasons.append("融資明顯下降")
+    elif margin_chg < 0:
+        score += 12
+        reasons.append("融資下降")
+    elif margin_chg > 1000:
+        score -= 22
+        reasons.append("融資暴增")
+    elif margin_chg > 0:
+        score -= 10
+        reasons.append("融資增加")
+    else:
+        reasons.append("融資變化不足或尚未計算")
 
-    if short_delta is not None:
-        sd = _to_lot_if_needed(short_delta)
-        if sd > 0:
-            score += 8
-            reason.append("融券增加")
-        elif sd < 0:
-            score += 3
-            reason.append("融券回補")
-        else:
-            reason.append("融券持平")
+    if short_chg > 0:
+        score += 6
+        reasons.append("融券增加")
+    elif short_chg < 0:
+        score += 3
+        reasons.append("融券回補")
 
-    return max(0, min(100, score)), "｜".join(reason)
-
-
-def _score_major_holder(row):
-    delta = _get(row, [
-        "major_holder_change", "big_holder_change", "major_holder_pct_change",
-        "director_holding_change", "insider_holding_change", "director_pct_change",
-        "大戶持股變化", "董監持股變化"
-    ], None)
-
-    if delta is None:
-        return None, "大戶/董監資料不足"
-
-    d = _num(delta, 0)
-    if d >= 1.0:
-        return 88, "大戶/董監持股明顯增加"
-    if d >= 0.2:
-        return 72, "大戶/董監持股增加"
-    if d > -0.2:
-        return 55, "大戶/董監持股穩定"
-    if d <= -1.0:
-        return 20, "大戶/董監持股明顯下降"
-    return 35, "大戶/董監持股下降"
+    return max(0, min(100, score)), "｜".join(reasons)
 
 
 def calc_chip_score(row) -> dict:
-    """
-    v266.21 權重：
-    - 三大法人 40%
-    - 融資融券 30%
-    - 投信 15%
-    - 外資持股 10%
-    - 大戶/董監 5%
+    row = _merge_chip_source(row)
 
-    原因：
-    現階段先讓可每日抓的資料權重提高；
-    慢資料或常缺資料保留但不讓它拖垮系統。
-    """
     parts = [
-        ("三大法人", 0.40, _score_three_major(row)),
+        ("三大法人", 0.70, _score_inst(row)),
         ("融資融券", 0.30, _score_margin(row)),
-        ("投信", 0.15, _score_trust(row)),
-        ("外資持股", 0.10, _score_foreign_holding(row)),
-        ("大戶/董監", 0.05, _score_major_holder(row)),
     ]
 
     valid = []
@@ -346,19 +253,18 @@ def calc_chip_score(row) -> dict:
             missing.append(name)
         else:
             valid.append((name, weight, score))
-            if reason:
-                reasons.append(reason)
+            reasons.append(reason)
 
     if not valid:
         score = 50.0
-        conf = chip_confidence(0)
-        label = chip_label(score)
+        conf = _confidence(0)
+        label = _label(score)
         return {
             "chip_score": round(score, 2),
             "chip_label": label,
             "chip_display": f"{round(score):.0f}（{label}）",
             "chip_reason": "籌碼資料不足",
-            "chip_hint": chip_hint(score, conf),
+            "chip_hint": _hint(score, conf),
             "chip_valid_count": 0,
             "chip_missing": "、".join(missing),
             "chip_confidence": conf,
@@ -368,10 +274,10 @@ def calc_chip_score(row) -> dict:
     score = sum((w / total_weight) * s for _, w, s in valid)
     score = max(0, min(100, float(score)))
 
-    conf = chip_confidence(len(valid))
-    label = chip_label(score)
+    conf = _confidence(len(valid))
+    label = _label(score)
 
-    reason = "｜".join(reasons)
+    reason = "｜".join([r for r in reasons if r])
     if missing:
         reason += "｜缺資料：" + "、".join(missing)
 
@@ -380,7 +286,7 @@ def calc_chip_score(row) -> dict:
         "chip_label": label,
         "chip_display": f"{round(score):.0f}（{label}）",
         "chip_reason": reason,
-        "chip_hint": chip_hint(score, conf),
+        "chip_hint": _hint(score, conf),
         "chip_valid_count": len(valid),
         "chip_missing": "、".join(missing),
         "chip_confidence": conf,
@@ -404,3 +310,17 @@ def add_chip_columns(df: pd.DataFrame) -> pd.DataFrame:
     out["chip_confidence"] = results.apply(lambda x: x["chip_confidence"])
 
     return out
+
+
+def get_chip_score(stock_id):
+    sid = _stock_id_from_any(stock_id)
+    row = pd.Series({"stock_id": sid})
+    r = calc_chip_score(row)
+    return {
+        "score": r["chip_score"],
+        "label": r["chip_label"],
+        "display": r["chip_display"],
+        "reason": r["chip_reason"],
+        "hint": r["chip_hint"],
+        "confidence": r["chip_confidence"],
+    }
