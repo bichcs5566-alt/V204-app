@@ -2828,3 +2828,156 @@ v266.29C TOP優先排序補丁
 
   console.log("[v266.29C] TOP優先排序補丁已啟用");
 })();
+/*
+v266.29E 試單 / 觀察清單去重補丁
+目的：
+1. 同一檔股票在 TEST 試單清單、WATCH 觀察清單只保留一張卡。
+2. 保留優先順序：
+   TOP名次優先 → 分數較高優先 → 流動性分數較高優先 → 參考價較新/較高者優先。
+3. 不動原本策略資料，只在前端顯示層去重。
+4. 可直接貼到 mobile_dashboard_v1/app.js 最底部。
+
+注意：
+如果同一檔同時出現在「賣出 / 買進 / 試單 / 觀察」，不跨區刪除。
+只針對各區塊內部同股票去重。
+*/
+
+(function () {
+  function toNum(v, fallback = 0) {
+    const n = Number(String(v ?? "").replace(/[^\d.-]/g, ""));
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function normAction(row) {
+    return String(row.final_action || row.action || "").trim().toUpperCase();
+  }
+
+  function getTopRank(row) {
+    const fields = [
+      row.section_top_opportunity,
+      row.top_opportunity,
+      row.section_opportunity_rank,
+      row.opportunity_rank,
+      row.execution_flag,
+      row.system_note,
+      row.note,
+      row.reason
+    ];
+    const txt = fields.map(v => String(v ?? "")).join(" ");
+
+    const m = txt.match(/TOP\s*([1-9]\d*)/i);
+    if (m) return Number(m[1]);
+
+    if (String(row.execution_flag || "").toUpperCase() === "TOP") return 99;
+
+    const flag = String(row.section_top_opportunity || row.top_opportunity || "").toLowerCase();
+    if (["1", "true", "yes", "y"].includes(flag)) {
+      return toNum(row.section_opportunity_rank || row.opportunity_rank, 99);
+    }
+
+    return 9999;
+  }
+
+  function getScore(row) {
+    return toNum(
+      row.score ||
+      row.opportunity_score ||
+      row.entry_score ||
+      row.rank_score ||
+      0,
+      0
+    );
+  }
+
+  function getLiquidity(row) {
+    return toNum(row.liquidity_score || row.turnover || row.volume || 0, 0);
+  }
+
+  function getPrice(row) {
+    return toNum(row.close || row.ref_price || row.price || 0, 0);
+  }
+
+  function betterRow(a, b) {
+    // 回傳比較好的那一筆
+    const at = getTopRank(a);
+    const bt = getTopRank(b);
+    if (at !== bt) return at < bt ? a : b;
+
+    const as = getScore(a);
+    const bs = getScore(b);
+    if (as !== bs) return as > bs ? a : b;
+
+    const al = getLiquidity(a);
+    const bl = getLiquidity(b);
+    if (al !== bl) return al > bl ? a : b;
+
+    const ap = getPrice(a);
+    const bp = getPrice(b);
+    if (ap !== bp) return ap > bp ? a : b;
+
+    return a;
+  }
+
+  function dedupeByStock(rows) {
+    const map = new Map();
+
+    (rows || []).forEach(row => {
+      const sid = String(row.stock_id || "").trim();
+      if (!sid) return;
+
+      if (!map.has(sid)) {
+        map.set(sid, row);
+      } else {
+        map.set(sid, betterRow(map.get(sid), row));
+      }
+    });
+
+    return Array.from(map.values());
+  }
+
+  function sortTopFirst(rows) {
+    return (rows || []).slice().sort((a, b) => {
+      const at = getTopRank(a);
+      const bt = getTopRank(b);
+      if (at !== bt) return at - bt;
+
+      const bs = getScore(b);
+      const as = getScore(a);
+      if (bs !== as) return bs - as;
+
+      const bl = getLiquidity(b);
+      const al = getLiquidity(a);
+      if (bl !== al) return bl - al;
+
+      return String(a.stock_id || "").localeCompare(String(b.stock_id || ""));
+    });
+  }
+
+  function dedupeAndSort(rows) {
+    return sortTopFirst(dedupeByStock(rows));
+  }
+
+  // 覆蓋 splitRows：各清單分區後再去重，避免同股票重複出現在同一區
+  window.splitRows = function (rows) {
+    const all = rows || [];
+
+    const mainRaw = all.filter(r => ["SELL", "REDUCE", "BUY"].includes(normAction(r)));
+    const testRaw = all.filter(r => normAction(r) === "TEST");
+    const watchRaw = all.filter(r => normAction(r) === "WATCH");
+    const blockRaw = all.filter(r => normAction(r) === "BLOCK");
+
+    return {
+      main: dedupeAndSort(mainRaw),
+      test: dedupeAndSort(testRaw),
+      watch: dedupeAndSort(watchRaw),
+      block: dedupeAndSort(blockRaw)
+    };
+  };
+
+  // 若舊版直接呼叫 sortRows，也一併套用 TOP 排序，但不在這裡跨區去重
+  window.sortRows = function (rows) {
+    return sortTopFirst(rows || []);
+  };
+
+  console.log("[v266.29E] 試單 / 觀察清單去重 + TOP優先排序已啟用");
+})();
