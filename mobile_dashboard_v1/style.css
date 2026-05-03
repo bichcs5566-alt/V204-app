@@ -2155,3 +2155,77 @@ button:disabled {
   }
 }
 
+/* ===== v266.29 追加補丁：原檔不動，只做持倉 UI 合併 + 中文提示 ===== */
+.position-basic-hidden-v26629 {
+  display: none !important;
+}
+
+.position-v26629-merged {
+  margin-top: 12px !important;
+}
+
+.position-v26629-merged .detail-grid,
+.position-v26629-merged .position-unified-grid-v26626,
+.position-v26629-merged .position-inline-risk-grid {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 8px !important;
+}
+
+.position-v26629-merged .detail-grid div,
+.position-v26629-merged .position-unified-grid-v26626 div,
+.position-v26629-merged .position-inline-risk-grid div {
+  min-height: 74px;
+  word-break: break-word;
+}
+
+.position-v26629-merged .detail-grid span,
+.position-v26629-merged .position-unified-grid-v26626 span,
+.position-v26629-merged .position-inline-risk-grid span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.position-v26629-merged .detail-grid b,
+.position-v26629-merged .position-unified-grid-v26626 b,
+.position-v26629-merged .position-inline-risk-grid b {
+  font-size: 17px;
+  line-height: 1.28;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.position-v26629-merged .detail-text b,
+.position-v26629-merged .position-unified-text-v26626 b,
+.position-v26629-merged .position-inline-risk-text b {
+  font-size: 20px;
+}
+
+.position-v26629-merged .detail-text p,
+.position-v26629-merged .position-unified-text-v26626 p,
+.position-v26629-merged .position-inline-risk-text p {
+  font-size: 17px;
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+@media (max-width: 430px) {
+  .position-v26629-merged .detail-grid,
+  .position-v26629-merged .position-unified-grid-v26626,
+  .position-v26629-merged .position-inline-risk-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 7px !important;
+  }
+
+  .position-v26629-merged .detail-grid div,
+  .position-v26629-merged .position-unified-grid-v26626 div,
+  .position-v26629-merged .position-inline-risk-grid div {
+    padding: 9px !important;
+  }
+
+  .position-v26629-merged .detail-grid b,
+  .position-v26629-merged .position-unified-grid-v26626 b,
+  .position-v26629-merged .position-inline-risk-grid b {
+    font-size: 15px;
+  }
+}
