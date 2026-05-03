@@ -750,7 +750,7 @@ def apply_top_opportunities_v26614(out):
 
 
 def main():
-    generated_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    generated_at = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
     lookup = make_lookup()
 
     trading = read_csv_any([
@@ -760,12 +760,30 @@ def main():
         DATA_DIR / "trade_plan.csv",
     ])
 
+    # v266.32D：日期權威來源固定看 trade_plan.csv。
+    # trade_plan.csv 已由策略引擎正確輸出 signal_date / trade_date，
+    # final_action_plan.csv 若來源列沒有日期，統一用這裡回填。
+    trade_plan_date_src = read_csv_any([
+        ROOT / "trade_plan.csv",
+        DATA_DIR / "trade_plan.csv",
+        ROOT / "mobile_dashboard_v1" / "data" / "trade_plan.csv",
+    ])
+
     exitp = read_csv_any([ROOT / "exit_risk_plan.csv", DATA_DIR / "exit_risk_plan.csv"])
 
-    # v266.32C：統一抓訊號日來源，避免 trade_date 被錯寫成 signal_date。
+    # v266.32D：統一抓訊號日/交易日來源，優先順序：
+    # 1. trade_plan.csv
+    # 2. trading_system_plan.csv / trade_plan fallback
+    # 3. exit_risk_plan.csv
     fallback_signal_date = ""
-    for src_df in [trading, exitp]:
+    fallback_trade_date = ""
+    for src_df in [trade_plan_date_src, trading, exitp]:
         if src_df is not None and not src_df.empty:
+            if "trade_date" in src_df.columns:
+                tvals = src_df["trade_date"].dropna().astype(str)
+                if len(tvals) > 0:
+                    fallback_trade_date = _date_text(tvals.iloc[0])
+
             for c in ["signal_date", "date", "asof_date", "run_date", "generated_date"]:
                 if c in src_df.columns:
                     vals = src_df[c].dropna().astype(str)
@@ -775,6 +793,9 @@ def main():
                             break
             if fallback_signal_date:
                 break
+
+    if fallback_signal_date and not fallback_trade_date:
+        fallback_trade_date = next_tw_trading_day(fallback_signal_date)
 
     rows = []
     holding_ids = set()
@@ -910,11 +931,18 @@ def main():
     if not out.empty:
         out["stock_id"] = out["stock_id"].apply(normalize_stock_id)
 
-        # v266.32C：最後保險，交易日永遠由訊號日推下一個台股交易日。
+        # v266.32D：最後保險，日期永遠優先由 trade_plan.csv 回填。
         if "signal_date" not in out.columns:
             out["signal_date"] = fallback_signal_date
+        if "trade_date" not in out.columns:
+            out["trade_date"] = fallback_trade_date
+
         out["signal_date"] = out["signal_date"].apply(lambda x: _date_text(x) or fallback_signal_date)
-        out["trade_date"] = out["signal_date"].apply(next_tw_trading_day)
+        out["trade_date"] = out["trade_date"].apply(lambda x: _date_text(x) or fallback_trade_date)
+        out["trade_date"] = out.apply(
+            lambda r: _date_text(r.get("trade_date", "")) or next_tw_trading_day(r.get("signal_date", "")),
+            axis=1
+        )
 
         # v266.10.1：最後保險補股票名稱
         # 來源順序：market_snapshot.csv → stock_basic_tw_full.csv → stock_basic.csv
@@ -981,19 +1009,26 @@ def main():
 
     out = add_chip_columns(out)
 
-    # v266.32C：籌碼欄位合併後再次保險，避免日期欄位遺失或被覆蓋。
+    # v266.32D：籌碼欄位合併後再次保險，避免日期欄位遺失或被覆蓋。
     if not out.empty:
         if "signal_date" not in out.columns:
             out["signal_date"] = fallback_signal_date
+        if "trade_date" not in out.columns:
+            out["trade_date"] = fallback_trade_date
+
         out["signal_date"] = out["signal_date"].apply(lambda x: _date_text(x) or fallback_signal_date)
-        out["trade_date"] = out["signal_date"].apply(next_tw_trading_day)
+        out["trade_date"] = out["trade_date"].apply(lambda x: _date_text(x) or fallback_trade_date)
+        out["trade_date"] = out.apply(
+            lambda r: _date_text(r.get("trade_date", "")) or next_tw_trading_day(r.get("signal_date", "")),
+            axis=1
+        )
 
     write_csv_both(out, "final_action_plan.csv")
     write_csv_both(top_opportunity_df, "top_opportunities.csv")
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v26632C_trade_date_locked",
+        "source": "final_decision_engine_v26632D_trade_plan_date_force_fill",
         "signal_date": str(out["signal_date"].iloc[0]) if not out.empty and "signal_date" in out.columns else "",
         "trade_date": str(out["trade_date"].iloc[0]) if not out.empty and "trade_date" in out.columns else "",
         "rows": int(len(out)),
