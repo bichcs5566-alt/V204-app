@@ -50,7 +50,7 @@ import pandas as pd
 DATA_DIR = Path("mobile_dashboard_v1/data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-VERSION = "v266.33B_ma_rescue_hotfix"
+VERSION = "v266.33C_ma_merge_coalesce"
 
 OUT_COLS = [
     "stock_id",
@@ -650,6 +650,62 @@ def load_chip() -> tuple[pd.DataFrame, str]:
     return chip, chip_path
 
 
+
+def coalesce_after_merge(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    v266.33C：merge 後欄位合併鎖定。
+    解決 manual_positions / 舊持倉檔本身有 close/ma5/ma20 空欄位，
+    merge price 後變成 close_x/close_y、ma5_x/ma5_y，導致程式讀到空白欄位。
+    """
+    out = df.copy()
+
+    def pick_numeric(base: str):
+        candidates = [f"{base}_y", base, f"{base}_x"]
+        existing = [c for c in candidates if c in out.columns]
+        if not existing:
+            out[base] = ""
+            return
+
+        s = out[existing[0]]
+        for c in existing[1:]:
+            s_num = pd.to_numeric(s, errors="coerce")
+            c_num = pd.to_numeric(out[c], errors="coerce")
+            s = s.where(s_num.notna(), out[c].where(c_num.notna(), s))
+        out[base] = s
+
+    def pick_text(base: str):
+        candidates = [base, f"{base}_x", f"{base}_y"]
+        existing = [c for c in candidates if c in out.columns]
+        if not existing:
+            out[base] = ""
+            return
+
+        s = out[existing[0]].astype(str)
+        for c in existing[1:]:
+            alt = out[c].astype(str)
+            bad = s.str.strip().isin(["", "nan", "None", "null", "--"])
+            s = s.where(~bad, alt)
+        out[base] = s
+
+    for base in ["close", "ma5", "ma20", "chip_score"]:
+        pick_numeric(base)
+
+    for base in ["chip_label", "chip_reason", "stock_name"]:
+        pick_text(base)
+
+    drop_cols = []
+    protected = {"close", "ma5", "ma20", "chip_score", "chip_label", "chip_reason", "stock_name"}
+    for c in out.columns:
+        if c.endswith("_x") or c.endswith("_y"):
+            if c[:-2] in protected:
+                drop_cols.append(c)
+
+    if drop_cols:
+        out = out.drop(columns=drop_cols, errors="ignore")
+
+    return out
+
+
 def decide_position(row: dict) -> tuple[str, str, str, str, str, float | None]:
     avg = to_num(row.get("avg_price"))
     close = to_num(row.get("close"))
@@ -799,6 +855,9 @@ def build_overlay() -> pd.DataFrame:
     df = positions.merge(price, on="stock_id", how="left")
     df = df.merge(chip, on="stock_id", how="left")
 
+    # v266.33C：合併 price/chip 後，把 close_x/close_y、ma5_x/ma5_y、ma20_x/ma20_y 合併回標準欄位。
+    df = coalesce_after_merge(df)
+
     # v266.33：持倉對接診斷，之後新增持倉若 MA 空白，可直接看 Actions log。
     missing_price_ids = df.loc[pd.to_numeric(df.get("close"), errors="coerce").isna(), "stock_id"].astype(str).tolist() if "close" in df.columns else []
     missing_ma5_ids = df.loc[pd.to_numeric(df.get("ma5"), errors="coerce").isna(), "stock_id"].astype(str).tolist() if "ma5" in df.columns else []
@@ -824,6 +883,12 @@ def build_overlay() -> pd.DataFrame:
         c_reason = row.get("chip_reason")
         if not isinstance(c_reason, str) or not c_reason or c_reason == "nan":
             c_reason = "籌碼資料有限"
+
+        # v266.33C：最終保底。若 MA 欄位仍空，但 close 有值，先用 close 當持倉觀察基準。
+        if to_num(row.get("ma5"), 0) <= 0 and to_num(row.get("close"), 0) > 0:
+            row["ma5"] = row.get("close")
+        if to_num(row.get("ma20"), 0) <= 0 and to_num(row.get("close"), 0) > 0:
+            row["ma20"] = row.get("close")
 
         action, risk, reason, hint, take_profit, pnl = decide_position({**row, "chip_score": chip_score})
 
