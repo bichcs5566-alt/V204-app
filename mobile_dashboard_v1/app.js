@@ -3019,3 +3019,208 @@ setTimeout(fixPositionDisplay,500);
 setTimeout(fixPositionDisplay,1500);
 
 })();
+/*
+v266.29G 修正補丁：持倉列表顯示代號 + 補回交易日
+貼到 mobile_dashboard_v1/app.js 最底部，不刪原本內容。
+
+修正：
+1. 持倉列表上方「友達 / 辛耘」改回股票代號「2409 / 3583」
+2. 不改展開後診斷卡內容
+3. 補回「交易日」欄位，避免只看到訊號日 / 最後更新
+4. 交易日來源優先：trade_date → next_trade_date → final_action_summary.trade_date → data_meta.trade_date
+*/
+
+(function () {
+  const DATA_DIR = "./data/";
+
+  function txt(el) {
+    return (el && el.textContent ? el.textContent : "").replace(/\s+/g, " ").trim();
+  }
+
+  function splitCsvLine(line) {
+    const out = [];
+    let cur = "";
+    let q = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') {
+        if (q && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          q = !q;
+        }
+      } else if (c === "," && !q) {
+        out.push(cur);
+        cur = "";
+      } else {
+        cur += c;
+      }
+    }
+    out.push(cur);
+    return out;
+  }
+
+  function csvParse(text) {
+    const lines = String(text || "").replace(/\r/g, "").split("\n").filter(x => x.trim());
+    if (lines.length < 2) return [];
+    const head = splitCsvLine(lines[0]);
+    return lines.slice(1).map(line => {
+      const vals = splitCsvLine(line);
+      const o = {};
+      head.forEach((h, i) => o[h.trim()] = vals[i] || "");
+      return o;
+    });
+  }
+
+  async function fetchTextSafe(url) {
+    try {
+      const r = await fetch(url + "?t=" + Date.now(), { cache: "no-store" });
+      if (!r.ok) return "";
+      return await r.text();
+    } catch (e) {
+      return "";
+    }
+  }
+
+  async function fetchJsonSafe(url) {
+    try {
+      const t = await fetchTextSafe(url);
+      return t ? JSON.parse(t) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  async function buildPositionNameToIdMap() {
+    const sources = [
+      DATA_DIR + "manual_positions.csv",
+      DATA_DIR + "position_overlay.csv",
+      DATA_DIR + "positions_manual.csv",
+      DATA_DIR + "current_positions.csv"
+    ];
+
+    const map = {};
+    for (const url of sources) {
+      const rows = csvParse(await fetchTextSafe(url));
+      rows.forEach(r => {
+        const id = String(r.stock_id || r.code || "").trim();
+        const name = String(r.stock_name || r.name || "").trim();
+        if (id && name) map[name] = id;
+      });
+    }
+    return map;
+  }
+
+  function fixPositionHeaderNames(nameToId) {
+    const positionBlocks = Array.from(document.querySelectorAll("section, .card, div, article"))
+      .filter(el => /持倉管理|同步持倉|持倉區已同步/.test(txt(el)));
+
+    positionBlocks.forEach(block => {
+      Object.entries(nameToId).forEach(([name, id]) => {
+        if (!name || !id) return;
+
+        Array.from(block.querySelectorAll("*")).forEach(el => {
+          if (txt(el) === name) {
+            el.textContent = id;
+          }
+        });
+      });
+    });
+
+    console.log("[v266.29G] 持倉列表名稱已改回股票代號");
+  }
+
+  function formatDateOnly(v) {
+    const s = String(v || "").trim();
+    const m = s.match(/\d{4}-\d{2}-\d{2}/);
+    return m ? m[0] : "";
+  }
+
+  async function getTradeDate() {
+    const summary = await fetchJsonSafe(DATA_DIR + "final_action_summary.json");
+    const meta = await fetchJsonSafe(DATA_DIR + "data_meta.json");
+    const regime = await fetchJsonSafe(DATA_DIR + "market_regime.json");
+
+    let d =
+      summary.trade_date ||
+      summary.next_trade_date ||
+      meta.trade_date ||
+      meta.next_trade_date ||
+      regime.trade_date ||
+      regime.next_trade_date ||
+      "";
+
+    if (!d) {
+      const tradePlan = csvParse(await fetchTextSafe(DATA_DIR + "trade_plan.csv"));
+      if (tradePlan.length) d = tradePlan[0].trade_date || tradePlan[0].signal_date || "";
+    }
+
+    if (!d) {
+      const finalPlan = csvParse(await fetchTextSafe(DATA_DIR + "final_action_plan.csv"));
+      if (finalPlan.length) d = finalPlan[0].trade_date || finalPlan[0].signal_date || "";
+    }
+
+    return formatDateOnly(d);
+  }
+
+  function addTradeDateCard(tradeDate) {
+    if (!tradeDate) return;
+    if (document.querySelector("[data-v26629g-trade-date='1']")) return;
+
+    const labels = Array.from(document.querySelectorAll("*")).filter(el => {
+      const t = txt(el);
+      return t === "訊號日" || t.includes("訊號日");
+    });
+
+    if (!labels.length) return;
+
+    const signalLabel = labels[0];
+    let signalCard = signalLabel;
+    for (let i = 0; i < 5 && signalCard; i++) {
+      if ((signalCard.className || "").toString().match(/mini|card|grid|item|box|stat/i)) break;
+      signalCard = signalCard.parentElement;
+    }
+
+    const newCard = signalCard ? signalCard.cloneNode(true) : document.createElement("div");
+    newCard.setAttribute("data-v26629g-trade-date", "1");
+
+    const all = Array.from(newCard.querySelectorAll("*"));
+    if (all.length >= 2) {
+      all[0].textContent = "交易日";
+      all[all.length - 1].textContent = tradeDate;
+    } else {
+      newCard.innerHTML = `<span>交易日</span><b>${tradeDate}</b>`;
+    }
+
+    if (signalCard && signalCard.parentElement) {
+      signalCard.parentElement.insertBefore(newCard, signalCard.nextSibling);
+    }
+
+    console.log("[v266.29G] 已補回交易日欄位:", tradeDate);
+  }
+
+  async function applyV26629G() {
+    const map = await buildPositionNameToIdMap();
+    fixPositionHeaderNames(map);
+
+    const tradeDate = await getTradeDate();
+    addTradeDateCard(tradeDate);
+  }
+
+  window.addEventListener("load", function () {
+    setTimeout(applyV26629G, 500);
+    setTimeout(applyV26629G, 1500);
+    setTimeout(applyV26629G, 3000);
+  });
+
+  let timer = null;
+  const observer = new MutationObserver(function () {
+    clearTimeout(timer);
+    timer = setTimeout(applyV26629G, 500);
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  window.applyV26629G = applyV26629G;
+})();
