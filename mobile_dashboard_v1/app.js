@@ -2794,3 +2794,227 @@ setTimeout(loadPositionOverlayV26627, 800);
 setTimeout(loadPositionOverlayV26627, 2400);
 setTimeout(patchPositionCardsV26627, 4000);
 
+// ===== v266.29 追加補丁：原檔不動，只做持倉 UI 合併 + 中文提示 =====
+// 使用方式：此段貼在 app.js 最底部；本覆蓋版已直接附加。
+(function(){
+  if (window.__v26629_position_ui_patch_loaded) return;
+  window.__v26629_position_ui_patch_loaded = true;
+
+  function qsa(sel, root){ return Array.from((root || document).querySelectorAll(sel)); }
+
+  function cleanText(v){
+    const s = String(v == null ? "" : v).trim();
+    if (!s || s === "nan" || s === "NaN" || s === "undefined" || s === "null") return "--";
+    return s;
+  }
+
+  function stockIdOnly(v){
+    const m = String(v || "").match(/(\d{4})/);
+    return m ? m[1] : cleanText(v);
+  }
+
+  function zhRiskV26629(v){
+    const s = cleanText(v).toUpperCase();
+    const map = {
+      STOP_LOSS: "🔴 停損出場",
+      HIGH: "🔴 高風險",
+      MEDIUM: "🟡 中風險",
+      LOW: "🟢 低風險",
+      HOLD_CHECK: "🟢 續抱觀察",
+      PROFIT_HOLD: "🟢 獲利續抱",
+      PROFIT_STRONG_HOLD: "🟢 強勢續抱",
+      PROFIT_WATCH: "🟡 獲利觀察",
+      TAKE_PROFIT: "🟠 停利觀察",
+      TAKE_PROFIT_20_WEAK: "🟠 高檔停利觀察",
+      TAKE_PROFIT_15_WEAK: "🟠 停利觀察",
+      BELOW_MA20: "🟡 跌破 MA20 觀察",
+      BELOW_MA5: "🟡 跌破五日線觀察",
+      CHIP_WEAK: "🟡 籌碼轉弱觀察",
+      NO_PRICE: "⚪ 價格資料不足",
+      NO_COST: "⚪ 成本資料不足"
+    };
+    return map[s] || cleanText(v);
+  }
+
+  function zhActionV26629(v){
+    const s = cleanText(v).toUpperCase();
+    if (s.includes("STOP") || s.includes("SELL") || s.includes("賣") || s.includes("出場")) return "🔴 出場";
+    if (s.includes("REDUCE") || s.includes("減")) return "🟠 減碼";
+    if (s.includes("TAKE") || s.includes("停利")) return "🟠 停利觀察";
+    if (s.includes("WATCH") || s.includes("觀察")) return "🟡 觀察";
+    if (s.includes("HOLD") || s.includes("抱")) return "🟢 抱住";
+    return cleanText(v);
+  }
+
+  function translateValueV26629(label, value){
+    const l = cleanText(label);
+    const v = cleanText(value);
+    if (l.includes("風險")) return zhRiskV26629(v);
+    if (l.includes("持倉型態") || l.includes("持倉提示")) return zhActionV26629(v);
+    if (l.includes("K棒型態")) {
+      if (v === "--") return "續抱觀察";
+      return v.replace(/STOP_LOSS/g, "停損出場").replace(/HOLD_CHECK/g, "續抱觀察");
+    }
+    return v;
+  }
+
+  function makeCellV26629(label, value){
+    const div = document.createElement("div");
+    const span = document.createElement("span");
+    const b = document.createElement("b");
+    span.textContent = label;
+    b.textContent = translateValueV26629(label, value);
+    div.appendChild(span);
+    div.appendChild(b);
+    return div;
+  }
+
+  function getCellValueV26629(grid, label){
+    if (!grid) return "--";
+    const found = qsa("div", grid).find(div => cleanText(div.querySelector("span")?.textContent).includes(label));
+    return cleanText(found?.querySelector("b")?.textContent);
+  }
+
+  function setCellLabelAndValueV26629(cell){
+    const span = cell.querySelector("span");
+    const b = cell.querySelector("b");
+    if (!span || !b) return;
+
+    let label = cleanText(span.textContent);
+    if (label === "個股") label = "股票代號";
+    if (label === "MA20觀察") label = "MA20 觀察";
+    if (label === "五日線觀察") label = "MA5 五日線觀察";
+    span.textContent = label;
+    b.textContent = translateValueV26629(label, b.textContent);
+  }
+
+  function normalizeTextBlocksV26629(card){
+    qsa(".detail-text b, .position-unified-text-v26626 b, .position-inline-risk-text b", card).forEach(b => {
+      const t = cleanText(b.textContent);
+      if (t === "中文籌碼提示") b.textContent = "籌碼提示";
+      if (t === "中文決策提示") b.textContent = "中文提示";
+    });
+
+    qsa("p, b, strong, span", card).forEach(el => {
+      if (!el.childElementCount) {
+        let t = cleanText(el.textContent, "");
+        if (!t || t === "--") return;
+        t = t
+          .replace(/STOP_LOSS/g, "停損出場")
+          .replace(/HOLD_CHECK/g, "續抱觀察")
+          .replace(/HIGH/g, "高風險")
+          .replace(/MEDIUM/g, "中風險")
+          .replace(/LOW/g, "低風險")
+          .replace(/SELL/g, "出場")
+          .replace(/REDUCE/g, "減碼")
+          .replace(/WATCH/g, "觀察")
+          .replace(/HOLD/g, "抱住");
+        el.textContent = t;
+      }
+    });
+  }
+
+  function findOverlayBoxV26629(detail){
+    return detail.querySelector(".position-v26627, .position-unified-v26626, .position-inline-risk, .position-inline-risk-v266254");
+  }
+
+  function mergePositionCardV26629(card){
+    const detail = card.querySelector(".scan-detail");
+    if (!detail) return;
+
+    const stock = stockIdOnly(card.querySelector(".scan-stock")?.textContent || "");
+    const firstGrid = detail.querySelector(":scope > .detail-grid");
+    const firstNote = detail.querySelector(":scope > .detail-text");
+    const overlay = findOverlayBoxV26629(detail);
+
+    // 先把原本「個股」改成「股票代號」，即使沒有 overlay 也要生效。
+    qsa(".detail-grid div", detail).forEach(setCellLabelAndValueV26629);
+
+    if (!overlay) {
+      normalizeTextBlocksV26629(detail);
+      return;
+    }
+
+    overlay.classList.add("position-v26629-merged");
+    const overlayGrid = overlay.querySelector(".detail-grid, .position-unified-grid-v26626, .position-inline-risk-grid");
+    if (!overlayGrid) return;
+
+    // 避免重複補。
+    if (!overlayGrid.dataset.v26629Merged) {
+      overlayGrid.dataset.v26629Merged = "1";
+
+      const stockName = getCellValueV26629(firstGrid, "股票名稱");
+      const avg = getCellValueV26629(firstGrid, "均價");
+      const lots = getCellValueV26629(firstGrid, "張數");
+      const shares = getCellValueV26629(firstGrid, "股數");
+      const cost = getCellValueV26629(firstGrid, "成本");
+      const updatedAt = getCellValueV26629(firstGrid, "更新時間");
+      const note = cleanText(firstNote?.querySelector("p")?.textContent, "手動持倉");
+
+      const insertCells = [
+        makeCellV26629("股票代號", stock),
+        makeCellV26629("股票名稱", stockName),
+        makeCellV26629("張數", lots),
+        makeCellV26629("股數", shares),
+        makeCellV26629("成本", cost),
+        makeCellV26629("更新時間", updatedAt),
+        makeCellV26629("備註", note)
+      ];
+
+      insertCells.reverse().forEach(cell => overlayGrid.insertBefore(cell, overlayGrid.firstChild));
+    }
+
+    // 隱藏原本上方基本資料格，保留同一張持倉提示卡內呈現。
+    if (firstGrid) firstGrid.classList.add("position-basic-hidden-v26629");
+    if (firstNote) firstNote.classList.add("position-basic-hidden-v26629");
+
+    qsa(".detail-grid div", overlay).forEach(setCellLabelAndValueV26629);
+    normalizeTextBlocksV26629(overlay);
+  }
+
+  function normalizePositionInputsV26629(){
+    const posStock = document.getElementById("posStock");
+    if (posStock && posStock.placeholder.includes("個股")) {
+      posStock.placeholder = "股票代號，例如 2330";
+    }
+
+    qsa(".position-form input").forEach(input => {
+      if (input.placeholder && input.placeholder.includes("個股")) {
+        input.placeholder = input.placeholder.replace("個股", "股票代號");
+      }
+    });
+  }
+
+  function applyPositionPatchV26629(){
+    normalizePositionInputsV26629();
+    qsa(".scan-item.position").forEach(mergePositionCardV26629);
+  }
+
+  // 包住原 renderPositions：不改原函式內容，只在它跑完後補 UI。
+  function patchRenderPositionsV26629(){
+    if (typeof window.renderPositions !== "function" && typeof renderPositions !== "function") return;
+    const current = window.renderPositions || renderPositions;
+    if (current.__v26629Patched) return;
+
+    const wrapped = function(){
+      const out = current.apply(this, arguments);
+      setTimeout(applyPositionPatchV26629, 0);
+      setTimeout(applyPositionPatchV26629, 250);
+      return out;
+    };
+    wrapped.__v26629Patched = true;
+
+    try { window.renderPositions = wrapped; } catch(e) {}
+    try { renderPositions = wrapped; } catch(e) {}
+  }
+
+  patchRenderPositionsV26629();
+  document.addEventListener("DOMContentLoaded", function(){
+    patchRenderPositionsV26629();
+    setTimeout(applyPositionPatchV26629, 300);
+    setTimeout(applyPositionPatchV26629, 1200);
+    setTimeout(applyPositionPatchV26629, 2800);
+  });
+  setTimeout(function(){ patchRenderPositionsV26629(); applyPositionPatchV26629(); }, 1000);
+  setTimeout(applyPositionPatchV26629, 3500);
+})();
