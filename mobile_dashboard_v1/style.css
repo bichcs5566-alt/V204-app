@@ -1956,151 +1956,65 @@ button:disabled {
   background: #fee2e2;
 }
 
-
-/* v266.26 追加：SELL / HOLD 持倉提示統一版 */
-.position-unified-v26626 {
-  margin-top: 12px;
-  padding: 12px;
-  border-radius: 14px;
-  border: 1.8px solid var(--line);
-  background: #fff;
+/* ===== v266.29 完整 UI 重構修正版：持倉欄位合併到下方提示卡 ===== */
+.position-card-v26629 .scan-detail > .detail-grid,
+.position-card-v26629 .scan-detail > .detail-text:not(.position-merged-text-v26629),
+.position-card-v26629 .position-unified-v26626,
+.position-card-v26629 .position-v26627,
+.position-card-v26629 .position-inline-risk {
+  display: none !important;
 }
 
-.position-unified-v26626.sell {
-  background: #fff7f7;
-  border-color: #fca5a5;
+.position-main-v26629 {
+  grid-template-columns: 76px minmax(70px, 1fr) 42px 22px 86px 70px !important;
 }
 
-.position-unified-v26626.reduce {
-  background: #fff7ed;
-  border-color: #fdba74;
-}
-
-.position-unified-v26626.watch {
-  background: #fffbeb;
-  border-color: #fde68a;
-}
-
-.position-unified-v26626.hold {
-  background: #f0fdf4;
-  border-color: #86efac;
-}
-
-.position-unified-head-v26626 {
-  display: grid;
-  grid-template-columns: 88px 1fr 64px;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.position-unified-head-v26626 b {
-  font-size: 22px;
-  font-weight: 950;
-  color: #334155;
+.position-name-v26629 {
+  font-size: 22px !important;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.position-unified-head-v26626 strong {
-  text-align: right;
-  font-size: 20px;
-  color: #334155;
-  font-weight: 950;
-}
-
-.position-unified-grid-v26626 {
-  margin-top: 8px;
-}
-
-.position-unified-text-v26626 b {
-  font-size: 20px;
-  color: #334155;
-}
-
-.position-unified-text-v26626 p {
-  font-size: 18px;
-  line-height: 1.5;
-  font-weight: 800;
-}
-
-.position-unified-v26626.sell .position-unified-text-v26626 b,
-.position-unified-v26626.reduce .position-unified-text-v26626 b {
-  color: #991b1b;
-}
-
-.position-unified-v26626.watch .position-unified-text-v26626 b {
-  color: #854d0e;
-}
-
-.position-unified-v26626.hold .position-unified-text-v26626 b {
-  color: #166534;
-}
-
-@media (max-width: 430px) {
-  .position-unified-head-v26626 {
-    grid-template-columns: 80px 1fr 54px;
-  }
-
-  .position-unified-head-v26626 b {
-    font-size: 20px;
-  }
-
-  .position-unified-head-v26626 strong {
-    font-size: 17px;
-  }
-
-  .position-unified-text-v26626 p {
-    font-size: 17px;
-  }
-}
-/* v266.27 持倉停利 + 籌碼提示樣式，貼到 style.css 最底部 */
-.position-v26627 {
-  margin-top: 14px;
-  padding: 12px;
-  border-radius: 16px;
+.position-merged-v26629 {
+  margin-top: 12px;
+  padding: 14px;
+  border-radius: 18px;
   border: 2px solid var(--line);
   background: #f8fafc;
 }
 
-.position-v26627.hold {
+.position-merged-v26629.hold {
   background: #f0fdf4;
   border-color: #86efac;
 }
 
-.position-v26627.watch {
+.position-merged-v26629.watch {
   background: #fffbeb;
   border-color: #fde68a;
 }
 
-.position-v26627.sell {
+.position-merged-v26629.reduce {
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+
+.position-merged-v26629.sell {
   background: #fff7f7;
   border-color: #fca5a5;
 }
 
-.position-v26627-head {
+.position-merged-head-v26629 {
   display: grid;
-  grid-template-columns: 90px 1fr 70px;
+  grid-template-columns: 90px minmax(0, 1fr) 72px;
+  align-items: center;
   gap: 8px;
-  align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
-.position-v26627-head span {
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 34px;
-  border-radius: 999px;
-  background: rgba(255,255,255,.7);
-  font-weight: 950;
-  font-size: 16px;
-  color: #334155;
-}
-
-.position-v26627-head b {
-  font-size: 22px;
+.position-merged-head-v26629 b {
+  font-size: 26px;
   font-weight: 950;
   color: #334155;
   white-space: nowrap;
@@ -2108,124 +2022,143 @@ button:disabled {
   text-overflow: ellipsis;
 }
 
-.position-v26627-head strong {
+.position-merged-head-v26629 strong {
   text-align: right;
-  font-size: 20px;
-  color: #334155;
+  font-size: 22px;
   font-weight: 950;
+  color: #334155;
 }
 
-.position-v26627 .detail-text b {
-  font-size: 20px;
+.position-merged-pill-v26629 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 7px 8px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 950;
+  white-space: nowrap;
 }
 
-.position-v26627 .detail-text p {
-  font-size: 18px;
-  line-height: 1.5;
-  font-weight: 800;
-}
-
-.position-v26627.hold .detail-text b {
+.position-merged-pill-v26629.hold {
   color: #166534;
+  background: #dcfce7;
 }
 
-.position-v26627.watch .detail-text b {
+.position-merged-pill-v26629.watch {
   color: #854d0e;
+  background: #fef3c7;
 }
 
-.position-v26627.sell .detail-text b {
+.position-merged-pill-v26629.reduce {
+  color: #c2410c;
+  background: #ffedd5;
+}
+
+.position-merged-pill-v26629.sell {
   color: #991b1b;
+  background: #fee2e2;
 }
 
-@media (max-width: 430px) {
-  .position-v26627-head {
-    grid-template-columns: 82px 1fr 58px;
-  }
-  .position-v26627-head span {
-    font-size: 14px;
-  }
-  .position-v26627-head b {
-    font-size: 20px;
-  }
-  .position-v26627-head strong {
-    font-size: 17px;
-  }
-  .position-v26627 .detail-text p {
-    font-size: 17px;
-  }
+.position-merged-grid-v26629 {
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
-/* ===== v266.29 追加補丁：原檔不動，只做持倉 UI 合併 + 中文提示 ===== */
-.position-basic-hidden-v26629 {
-  display: none !important;
+.position-merged-grid-v26629 div {
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  padding: 10px;
 }
 
-.position-v26629-merged {
-  margin-top: 12px !important;
-}
-
-.position-v26629-merged .detail-grid,
-.position-v26629-merged .position-unified-grid-v26626,
-.position-v26629-merged .position-inline-risk-grid {
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  gap: 8px !important;
-}
-
-.position-v26629-merged .detail-grid div,
-.position-v26629-merged .position-unified-grid-v26626 div,
-.position-v26629-merged .position-inline-risk-grid div {
-  min-height: 74px;
-  word-break: break-word;
-}
-
-.position-v26629-merged .detail-grid span,
-.position-v26629-merged .position-unified-grid-v26626 span,
-.position-v26629-merged .position-inline-risk-grid span {
-  font-size: 13px;
+.position-merged-grid-v26629 span {
+  font-size: 14px;
   color: var(--muted);
 }
 
-.position-v26629-merged .detail-grid b,
-.position-v26629-merged .position-unified-grid-v26626 b,
-.position-v26629-merged .position-inline-risk-grid b {
-  font-size: 17px;
-  line-height: 1.28;
-  white-space: normal;
+.position-merged-grid-v26629 b {
+  font-size: 18px;
+  line-height: 1.25;
+  color: var(--text);
   word-break: break-word;
 }
 
-.position-v26629-merged .detail-text b,
-.position-v26629-merged .position-unified-text-v26626 b,
-.position-v26629-merged .position-inline-risk-text b {
-  font-size: 20px;
+.position-merged-text-v26629 b {
+  font-size: 21px;
+  margin-top: 12px;
 }
 
-.position-v26629-merged .detail-text p,
-.position-v26629-merged .position-unified-text-v26626 p,
-.position-v26629-merged .position-inline-risk-text p {
-  font-size: 17px;
+.position-merged-v26629.sell .position-merged-text-v26629 b,
+.position-merged-v26629.reduce .position-merged-text-v26629 b {
+  color: #991b1b;
+}
+
+.position-merged-v26629.hold .position-merged-text-v26629 b {
+  color: #166534;
+}
+
+.position-merged-v26629.watch .position-merged-text-v26629 b {
+  color: #854d0e;
+}
+
+.position-merged-text-v26629 p {
+  font-size: 18px;
   line-height: 1.55;
+  font-weight: 800;
+  color: #334155;
   word-break: break-word;
 }
 
 @media (max-width: 430px) {
-  .position-v26629-merged .detail-grid,
-  .position-v26629-merged .position-unified-grid-v26626,
-  .position-v26629-merged .position-inline-risk-grid {
-    grid-template-columns: 1fr 1fr !important;
-    gap: 7px !important;
+  .position-main-v26629 {
+    grid-template-columns: 70px minmax(64px, 1fr) 38px 20px 74px 62px !important;
   }
 
-  .position-v26629-merged .detail-grid div,
-  .position-v26629-merged .position-unified-grid-v26626 div,
-  .position-v26629-merged .position-inline-risk-grid div {
-    padding: 9px !important;
+  .position-name-v26629 {
+    font-size: 20px !important;
   }
 
-  .position-v26629-merged .detail-grid b,
-  .position-v26629-merged .position-unified-grid-v26626 b,
-  .position-v26629-merged .position-inline-risk-grid b {
-    font-size: 15px;
+  .position-merged-head-v26629 {
+    grid-template-columns: 82px minmax(0, 1fr) 58px;
+  }
+
+  .position-merged-head-v26629 b {
+    font-size: 23px;
+  }
+
+  .position-merged-head-v26629 strong {
+    font-size: 18px;
+  }
+
+  .position-merged-pill-v26629 {
+    font-size: 14px;
+    padding: 6px 7px;
+  }
+
+  .position-merged-grid-v26629 div {
+    padding: 9px;
+  }
+
+  .position-merged-grid-v26629 span {
+    font-size: 13px;
+  }
+
+  .position-merged-grid-v26629 b {
+    font-size: 17px;
+  }
+
+  .position-merged-text-v26629 p {
+    font-size: 17px;
+  }
+}
+
+@media (max-width: 380px) {
+  .position-main-v26629 {
+    grid-template-columns: 66px minmax(58px, 1fr) 34px 66px 54px !important;
+  }
+  .position-main-v26629 .scan-top {
+    display: none;
   }
 }
