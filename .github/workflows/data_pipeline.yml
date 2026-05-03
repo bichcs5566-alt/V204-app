@@ -83,78 +83,94 @@ jobs:
         run: |
           python exit_risk_engine.py
 
-      - name: Run final decision engine
+      - name: Run position overlay engine
+        run: |
+          if [ -f position_overlay_engine.py ]; then
+            python position_overlay_engine.py
+          else
+            echo "position_overlay_engine.py not found, skip"
+          fi
+
+      # v266.31 LOCK:
+      # final_decision_engine.py 必須最後才跑。
+      # 這樣 signal_date / trade_date 不會被 bridge、overlay、allocator、exit_risk 後段覆蓋。
+      - name: Run final decision engine LAST
         run: |
           python final_decision_engine.py
 
-      - name: Sync dashboard
+      # 只同步 dashboard，不再重跑任何會改資料的 py。
+      # 原本 Keep dashboard files after bridge 會重跑 final_decision_engine.py / overlay，
+      # 造成 trade_date 被覆蓋回 signal_date，這版已鎖住。
+      - name: Sync dashboard files only
         run: |
-          if [ -f v3_1_dashboard_bridge.py ]; then
-            python v3_1_dashboard_bridge.py
-          else
-            echo "bridge not found, skip"
-          fi
-
-      - name: Keep dashboard files after bridge
-        run: |
-          if [ -f pre_move_dashboard_patch.py ]; then
-            python pre_move_dashboard_patch.py
-          fi
-          if [ -f feature_timing_engine.py ]; then
-            python feature_timing_engine.py
-          fi
-          if [ -f trading_system_allocator.py ]; then
-            python trading_system_allocator.py
-          fi
-          if [ -f exit_risk_engine.py ]; then
-            python exit_risk_engine.py
-          fi
-          if [ -f position_overlay_engine.py ]; then
-            python position_overlay_engine.py
-          fi
-          if [ -f final_decision_engine.py ]; then
-            python final_decision_engine.py
-          fi
-          if [ -f position_overlay.csv ]; then
-            cp -f position_overlay.csv mobile_dashboard_v1/data/position_overlay.csv
-          fi
-
-      - name: Force sync position overlay to dashboard
-        run: |
-          echo "==== FORCE POSITION OVERLAY SYNC START ===="
-
-          if [ -f position_overlay_engine.py ]; then
-            python position_overlay_engine.py
-          else
-            echo "position_overlay_engine.py not found"
-            exit 1
-          fi
-
-          echo "==== ROOT position_overlay.csv ===="
-          ls -lh position_overlay.csv || true
-          wc -l position_overlay.csv || true
-          head -5 position_overlay.csv || true
-
-          if [ ! -f position_overlay.csv ]; then
-            echo "ERROR: position_overlay.csv not generated"
-            exit 1
-          fi
-
-          LINE_COUNT=$(wc -l < position_overlay.csv)
-          if [ "$LINE_COUNT" -le 1 ]; then
-            echo "ERROR: position_overlay.csv only header, stop pipeline"
-            exit 1
-          fi
-
           mkdir -p mobile_dashboard_v1/data
-          cp -f position_overlay.csv mobile_dashboard_v1/data/position_overlay.csv
 
-          echo "==== DASHBOARD position_overlay.csv ===="
-          ls -lh mobile_dashboard_v1/data/position_overlay.csv || true
-          wc -l mobile_dashboard_v1/data/position_overlay.csv || true
-          head -5 mobile_dashboard_v1/data/position_overlay.csv || true
+          copy_if_exists () {
+            if [ -f "$1" ]; then
+              cp -f "$1" "$2"
+              echo "copied $1 -> $2"
+            else
+              echo "skip missing $1"
+            fi
+          }
 
-          echo "==== FORCE POSITION OVERLAY SYNC END ===="
+          copy_if_exists trade_plan.csv mobile_dashboard_v1/data/trade_plan.csv
+          copy_if_exists final_action_plan.csv mobile_dashboard_v1/data/final_action_plan.csv
+          copy_if_exists final_action_summary.json mobile_dashboard_v1/data/final_action_summary.json
+          copy_if_exists exit_risk_plan.csv mobile_dashboard_v1/data/exit_risk_plan.csv
+          copy_if_exists position_overlay.csv mobile_dashboard_v1/data/position_overlay.csv
+
+          copy_if_exists candidates.csv mobile_dashboard_v1/data/candidates.csv
+          copy_if_exists core_candidates.csv mobile_dashboard_v1/data/core_candidates.csv
+          copy_if_exists alpha_candidates.csv mobile_dashboard_v1/data/alpha_candidates.csv
+          copy_if_exists selection_debug.csv mobile_dashboard_v1/data/selection_debug.csv
+
+          copy_if_exists timing_candidates.csv mobile_dashboard_v1/data/timing_candidates.csv
+          copy_if_exists timing_summary.json mobile_dashboard_v1/data/timing_summary.json
+          copy_if_exists trading_system_plan.csv mobile_dashboard_v1/data/trading_system_plan.csv
+          copy_if_exists trading_system_summary.json mobile_dashboard_v1/data/trading_system_summary.json
+
+          copy_if_exists pre_move_candidates.csv mobile_dashboard_v1/data/pre_move_candidates.csv
+          copy_if_exists pre_move_summary.json mobile_dashboard_v1/data/pre_move_summary.json
+          copy_if_exists pre_move_cards.json mobile_dashboard_v1/data/pre_move_cards.json
+
+          copy_if_exists data_meta.json mobile_dashboard_v1/data/data_meta.json
+          copy_if_exists feature_meta.json mobile_dashboard_v1/data/feature_meta.json
+          copy_if_exists data_guard_report.json mobile_dashboard_v1/data/data_guard_report.json
+          copy_if_exists backfill_report.json mobile_dashboard_v1/data/backfill_report.json
+          copy_if_exists meta.json mobile_dashboard_v1/data/meta.json
+
+          copy_if_exists manual_positions.csv mobile_dashboard_v1/data/manual_positions.csv
+          copy_if_exists position_overlay_debug.csv mobile_dashboard_v1/data/position_overlay_debug.csv
+          copy_if_exists position_overlay_summary.txt mobile_dashboard_v1/data/position_overlay_summary.txt
+
+      - name: Verify locked dates
+        run: |
+          echo "==== VERIFY trade_plan date columns ===="
+          python - <<'PY'
+          import pandas as pd
+          from pathlib import Path
+
+          for p in [
+              "trade_plan.csv",
+              "final_action_plan.csv",
+              "mobile_dashboard_v1/data/trade_plan.csv",
+              "mobile_dashboard_v1/data/final_action_plan.csv",
+          ]:
+              path = Path(p)
+              print("\n==", p, "==")
+              if not path.exists():
+                  print("MISSING")
+                  continue
+              df = pd.read_csv(path, dtype=str)
+              print("rows=", len(df))
+              print("columns=", list(df.columns)[:20])
+              cols = [c for c in ["signal_date", "trade_date"] if c in df.columns]
+              if cols and len(df):
+                  print(df[cols].head(10).to_string(index=False))
+              else:
+                  print("NO signal_date/trade_date columns")
+          PY
 
       - name: Clean runtime big files
         run: |
@@ -173,22 +189,25 @@ jobs:
           echo "==== git status before add ===="
           git status --short
 
-          git add -f position_overlay.csv
-          git add -f mobile_dashboard_v1/data/position_overlay.csv
+          git add -f position_overlay.csv || true
+          git add -f mobile_dashboard_v1/data/position_overlay.csv || true
+          git add -f position_overlay_debug.csv || true
+          git add -f position_overlay_summary.txt || true
           git add -f mobile_dashboard_v1/data/position_overlay_debug.csv || true
           git add -f mobile_dashboard_v1/data/position_overlay_summary.txt || true
           git add -f manual_positions.csv || true
           git add -f mobile_dashboard_v1/data/manual_positions.csv || true
 
-          git add -f trade_plan.csv final_action_plan.csv exit_risk_plan.csv || true
+          git add -f trade_plan.csv final_action_plan.csv final_action_summary.json exit_risk_plan.csv || true
           git add -f mobile_dashboard_v1/data/trade_plan.csv || true
           git add -f mobile_dashboard_v1/data/final_action_plan.csv || true
+          git add -f mobile_dashboard_v1/data/final_action_summary.json || true
           git add -f mobile_dashboard_v1/data/exit_risk_plan.csv || true
 
           git add -f candidates.csv core_candidates.csv alpha_candidates.csv selection_debug.csv || true
           git add -f timing_candidates.csv timing_summary.json || true
           git add -f trading_system_plan.csv trading_system_summary.json || true
-          git add -f pre_move_candidates.csv pre_move_summary.json || true
+          git add -f pre_move_candidates.csv pre_move_summary.json pre_move_cards.json || true
           git add -f data_meta.json feature_meta.json data_guard_report.json backfill_report.json meta.json || true
 
           git add -f mobile_dashboard_v1/data/candidates.csv || true
@@ -218,12 +237,12 @@ jobs:
           echo "==== staged files ===="
           git diff --cached --name-only
 
-          echo "==== staged position overlay preview ===="
-          git diff --cached -- mobile_dashboard_v1/data/position_overlay.csv | head -120 || true
+          echo "==== staged date preview ===="
+          git diff --cached -- mobile_dashboard_v1/data/final_action_plan.csv | head -120 || true
 
           if git diff --cached --quiet; then
             echo "no update"
           else
-            git commit -m "force update position overlay"
+            git commit -m "lock pipeline final decision outputs"
             git push
           fi
