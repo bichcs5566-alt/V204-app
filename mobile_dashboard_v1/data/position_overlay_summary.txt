@@ -1,6 +1,6 @@
 {
-  "version": "v266.28B_full",
-  "updated_at": "2026-05-03 14:08:00",
+  "version": "v266.33B_ma_rescue_hotfix",
+  "updated_at": "2026-05-03 15:14:12",
   "rows": 2,
   "stocks": [
     "2409",
@@ -8,5 +8,7 @@
   ],
   "non_empty_close": 2,
   "non_empty_ma5": 2,
-  "non_empty_ma20": 2
+  "non_empty_ma20": 2,
+  "empty_ma5_ids": [],
+  "empty_ma20_ids": []
 }
