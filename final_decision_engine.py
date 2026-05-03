@@ -32,7 +32,7 @@ DATA_DIR = ROOT / "mobile_dashboard_v1" / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 OUTPUT_COLUMNS = [
-    "final_action", "stock_id", "stock_name", "source", "bucket", "strategy_type", "score", "entry_type",
+    "final_action", "signal_date", "trade_date", "stock_id", "stock_name", "source", "bucket", "strategy_type", "score", "entry_type",
     "execution_flag", "allowed", "close", "suggested_amount", "target_weight",
     "priority", "reason", "system_note",
     "opportunity_score", "opportunity_rank", "top_opportunity",
@@ -762,6 +762,20 @@ def main():
 
     exitp = read_csv_any([ROOT / "exit_risk_plan.csv", DATA_DIR / "exit_risk_plan.csv"])
 
+    # v266.32C：統一抓訊號日來源，避免 trade_date 被錯寫成 signal_date。
+    fallback_signal_date = ""
+    for src_df in [trading, exitp]:
+        if src_df is not None and not src_df.empty:
+            for c in ["signal_date", "date", "asof_date", "run_date", "generated_date"]:
+                if c in src_df.columns:
+                    vals = src_df[c].dropna().astype(str)
+                    if len(vals) > 0:
+                        fallback_signal_date = _date_text(vals.iloc[0])
+                        if fallback_signal_date:
+                            break
+            if fallback_signal_date:
+                break
+
     rows = []
     holding_ids = set()
 
@@ -801,8 +815,13 @@ def main():
             if lots:
                 reason_parts.append(f"張數 {lots}")
 
+            signal_date = pick_signal_date(r, fallback_signal_date)
+            trade_date = next_tw_trading_day(signal_date)
+
             rows.append({
                 "final_action": final_action,
+                "signal_date": signal_date,
+                "trade_date": trade_date,
                 "stock_id": sid,
                 "stock_name": pick({"stock_id": sid}, lookup, "stock_name", ""),
                 "source": "EXIT",
@@ -857,8 +876,13 @@ def main():
 
             priority = {"SELL": 0, "REDUCE": 1, "BUY": 2, "TEST": 3, "WATCH": 8, "BLOCK": 9}.get(final_action, 9)
 
+            signal_date = pick_signal_date(r, fallback_signal_date)
+            trade_date = next_tw_trading_day(signal_date)
+
             rows.append({
                 "final_action": final_action,
+                "signal_date": signal_date,
+                "trade_date": trade_date,
                 "stock_id": sid,
                 "stock_name": pick(r, lookup, "stock_name", ""),
                 "source": pick(r, lookup, "source", "ENTRY"),
@@ -885,6 +909,12 @@ def main():
 
     if not out.empty:
         out["stock_id"] = out["stock_id"].apply(normalize_stock_id)
+
+        # v266.32C：最後保險，交易日永遠由訊號日推下一個台股交易日。
+        if "signal_date" not in out.columns:
+            out["signal_date"] = fallback_signal_date
+        out["signal_date"] = out["signal_date"].apply(lambda x: _date_text(x) or fallback_signal_date)
+        out["trade_date"] = out["signal_date"].apply(next_tw_trading_day)
 
         # v266.10.1：最後保險補股票名稱
         # 來源順序：market_snapshot.csv → stock_basic_tw_full.csv → stock_basic.csv
@@ -951,12 +981,21 @@ def main():
 
     out = add_chip_columns(out)
 
+    # v266.32C：籌碼欄位合併後再次保險，避免日期欄位遺失或被覆蓋。
+    if not out.empty:
+        if "signal_date" not in out.columns:
+            out["signal_date"] = fallback_signal_date
+        out["signal_date"] = out["signal_date"].apply(lambda x: _date_text(x) or fallback_signal_date)
+        out["trade_date"] = out["signal_date"].apply(next_tw_trading_day)
+
     write_csv_both(out, "final_action_plan.csv")
     write_csv_both(top_opportunity_df, "top_opportunities.csv")
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v266_21_chip_usable",
+        "source": "final_decision_engine_v26632C_trade_date_locked",
+        "signal_date": str(out["signal_date"].iloc[0]) if not out.empty and "signal_date" in out.columns else "",
+        "trade_date": str(out["trade_date"].iloc[0]) if not out.empty and "trade_date" in out.columns else "",
         "rows": int(len(out)),
         "sell_count": int((out["final_action"] == "SELL").sum()) if not out.empty else 0,
         "reduce_count": int((out["final_action"] == "REDUCE").sum()) if not out.empty else 0,
