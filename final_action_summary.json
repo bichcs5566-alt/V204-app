@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-05-03 13:19:39",
-  "source": "final_decision_engine_v26632C_trade_date_locked",
-  "signal_date": "",
-  "trade_date": "",
+  "generated_at": "2026-05-03 22:08:00",
+  "source": "final_decision_engine_v26632D_trade_plan_date_force_fill",
+  "signal_date": "2026-05-01",
+  "trade_date": "2026-05-04",
   "rows": 449,
   "sell_count": 2,
   "reduce_count": 0,

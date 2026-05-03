@@ -1,6 +1,6 @@
 {
   "version": "v266.28B_full",
-  "updated_at": "2026-05-03 13:19:38",
+  "updated_at": "2026-05-03 14:08:00",
   "rows": 2,
   "stocks": [
     "2409",
