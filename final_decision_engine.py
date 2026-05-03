@@ -32,7 +32,7 @@ DATA_DIR = ROOT / "mobile_dashboard_v1" / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 OUTPUT_COLUMNS = [
-    "final_action", "stock_id", "stock_name", "signal_date", "trade_date", "source", "bucket", "strategy_type", "score", "entry_type",
+    "final_action", "stock_id", "stock_name", "source", "bucket", "strategy_type", "score", "entry_type",
     "execution_flag", "allowed", "close", "suggested_amount", "target_weight",
     "priority", "reason", "system_note",
     "opportunity_score", "opportunity_rank", "top_opportunity",
@@ -77,103 +77,72 @@ def read_csv_any(paths):
                 continue
     return pd.DataFrame()
 
-
-def normalize_date_text(v):
-    s = clean_text(v, "").strip()
-    if not s:
-        return ""
-    try:
-        dt = pd.to_datetime(s, errors="coerce")
-        if pd.isna(dt):
-            return ""
-        return dt.strftime("%Y-%m-%d")
-    except Exception:
-        m = __import__("re").search(r"\d{4}-\d{2}-\d{2}", s)
-        return m.group(0) if m else ""
-
-def next_business_day(date_text):
-    d = normalize_date_text(date_text)
-    if not d:
-        return ""
-    dt = datetime.strptime(d, "%Y-%m-%d") + timedelta(days=1)
-    while dt.weekday() >= 5:
-        dt += timedelta(days=1)
-    return dt.strftime("%Y-%m-%d")
-
-def resolve_dates_from_sources():
-    """
-    v266.31 date guard:
-    final_decision_engine 不能把 trade_date 洗掉。
-    優先沿用 trade_plan.csv 的 signal_date / trade_date。
-    若沒有 trade_date，才用 signal_date 推下一個營業日（先跳週末）。
-    """
-    sources = [
-        ROOT / "trade_plan.csv",
-        DATA_DIR / "trade_plan.csv",
-        ROOT / "trading_system_plan.csv",
-        DATA_DIR / "trading_system_plan.csv",
-        ROOT / "final_action_plan.csv",
-        DATA_DIR / "final_action_plan.csv",
-    ]
-
-    by_stock = {}
-    global_signal = ""
-    global_trade = ""
-
-    for path in sources:
-        df = read_csv_any([path])
-        if df.empty:
-            continue
-
-        if "stock_id" in df.columns:
-            df["stock_id"] = df["stock_id"].apply(normalize_stock_id)
-
-        for _, r in df.iterrows():
-            sig = normalize_date_text(r.get("signal_date", ""))
-            trd = normalize_date_text(r.get("trade_date", r.get("next_trade_date", "")))
-
-            if sig and not trd:
-                trd = next_business_day(sig)
-
-            if sig and not global_signal:
-                global_signal = sig
-            if trd and not global_trade:
-                global_trade = trd
-
-            sid = normalize_stock_id(r.get("stock_id", ""))
-            if sid:
-                old = by_stock.get(sid, {})
-                by_stock[sid] = {
-                    "signal_date": old.get("signal_date") or sig,
-                    "trade_date": old.get("trade_date") or trd,
-                }
-
-    if global_signal and not global_trade:
-        global_trade = next_business_day(global_signal)
-
-    return by_stock, global_signal, global_trade
-
-def pick_signal_trade_dates(row, sid, date_lookup, global_signal, global_trade):
-    sig = normalize_date_text(row.get("signal_date", ""))
-    trd = normalize_date_text(row.get("trade_date", row.get("next_trade_date", "")))
-
-    if not sig:
-        sig = date_lookup.get(sid, {}).get("signal_date", "") or global_signal
-    if not trd:
-        trd = date_lookup.get(sid, {}).get("trade_date", "") or global_trade
-
-    if sig and not trd:
-        trd = next_business_day(sig)
-
-    return sig, trd
-
-
 def write_csv_both(df, name):
     df.to_csv(ROOT / name, index=False, encoding="utf-8-sig")
     df.to_csv(DATA_DIR / name, index=False, encoding="utf-8-sig")
 
 def is_true(x):
     return str(x).strip().lower() in ["true", "1", "yes"] or x is True
+
+
+# v266.32 台股交易日引擎：只補日期邏輯，不動策略、分數、排序、資金控管。
+TW_MARKET_HOLIDAYS = {
+    "2026-01-01",
+    "2026-02-16", "2026-02-17", "2026-02-18", "2026-02-19", "2026-02-20",
+    "2026-02-27",
+    "2026-04-03", "2026-04-06",
+    "2026-05-01",
+    "2026-06-19",
+    "2026-09-25",
+    "2026-10-09",
+}
+
+
+def _date_text(v):
+    s = str(v).strip()
+    if not s or s.lower() in ["nan", "none", "null"]:
+        return ""
+    if len(s) >= 10:
+        s = s[:10]
+    try:
+        datetime.strptime(s, "%Y-%m-%d")
+        return s
+    except Exception:
+        return ""
+
+
+def next_tw_trading_day(signal_date):
+    """
+    訊號日後的下一個台股交易日。
+    例如 2026-05-01（五，勞動節休市）→ 2026-05-04。
+    """
+    s = _date_text(signal_date)
+    if not s:
+        return ""
+
+    d = datetime.strptime(s, "%Y-%m-%d").date()
+    while True:
+        d = d + timedelta(days=1)
+        ds = d.strftime("%Y-%m-%d")
+        if d.weekday() >= 5:
+            continue
+        if ds in TW_MARKET_HOLIDAYS:
+            continue
+        return ds
+
+
+def pick_signal_date(row, fallback=""):
+    """
+    從來源資料抓訊號日。
+    不用 trade_date 當 signal_date，避免把已算出的交易日反污染回訊號日。
+    """
+    for c in ["signal_date", "date", "asof_date", "run_date", "generated_date"]:
+        if c in row.index:
+            v = _date_text(row.get(c, ""))
+            if v:
+                return v
+    return _date_text(fallback)
+
 
 def pct_text(x):
     try:
@@ -791,8 +760,6 @@ def main():
         DATA_DIR / "trade_plan.csv",
     ])
 
-    date_lookup, global_signal_date, global_trade_date = resolve_dates_from_sources()
-
     exitp = read_csv_any([ROOT / "exit_risk_plan.csv", DATA_DIR / "exit_risk_plan.csv"])
 
     rows = []
@@ -816,7 +783,6 @@ def main():
                 continue
 
             sid = normalize_stock_id(r.get("stock_id", ""))
-            sig_date, trd_date = pick_signal_trade_dates(r, sid, date_lookup, global_signal_date, global_trade_date)
             reason_parts = []
 
             er = clean_text(r.get("exit_reason", ""))
@@ -839,8 +805,6 @@ def main():
                 "final_action": final_action,
                 "stock_id": sid,
                 "stock_name": pick({"stock_id": sid}, lookup, "stock_name", ""),
-                "signal_date": sig_date,
-                "trade_date": trd_date,
                 "source": "EXIT",
                 "bucket": "POSITION",
                 "strategy_type": "POSITION",
@@ -867,7 +831,6 @@ def main():
 
         for _, r in trading.iterrows():
             sid = normalize_stock_id(r.get("stock_id", ""))
-            sig_date, trd_date = pick_signal_trade_dates(r, sid, date_lookup, global_signal_date, global_trade_date)
             if not sid or sid in holding_ids:
                 continue
 
@@ -898,8 +861,6 @@ def main():
                 "final_action": final_action,
                 "stock_id": sid,
                 "stock_name": pick(r, lookup, "stock_name", ""),
-                "signal_date": sig_date,
-                "trade_date": trd_date,
                 "source": pick(r, lookup, "source", "ENTRY"),
                 "bucket": bucket,
                 "strategy_type": strategy_type,
@@ -995,9 +956,7 @@ def main():
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v266_31_trade_date_guard",
-        "signal_date": global_signal_date,
-        "trade_date": global_trade_date,
+        "source": "final_decision_engine_v266_21_chip_usable",
         "rows": int(len(out)),
         "sell_count": int((out["final_action"] == "SELL").sum()) if not out.empty else 0,
         "reduce_count": int((out["final_action"] == "REDUCE").sum()) if not out.empty else 0,
