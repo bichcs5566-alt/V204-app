@@ -441,11 +441,11 @@ function formatTWDateTime(input) {
   const s = String(input).trim();
   let d;
 
-  // GitHub Actions 常見輸出如果沒有時區，視為 UTC，再轉台灣時間。
+  // v266.30B：沒有時區的時間字串，直接視為後端已輸出的台灣時間，避免 +8 後跑到未來。
   if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s)) {
-    d = new Date(s.replace(" ", "T") + "Z");
-  } else if (/^\d{4}-\d{2}-\d{2}T/.test(s) && !/[zZ]|[+-]\d{2}:\d{2}$/.test(s)) {
-    d = new Date(s + "Z");
+    return s;
+  } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(s)) {
+    return s.replace("T", " ");
   } else {
     d = new Date(s);
   }
@@ -1492,15 +1492,12 @@ function renderMeta(regime, summary, macro, rows) {
   const marketText = `${safeText(regime.market_label || summary.market_label || regime.label || regime.regime, "--")} ${safeText(regime.index_change_pct_text || summary.index_change_pct_text, "")}`.trim();
   const macroText = `${safeText(macro.macro_label || summary.macro_label, "--")}｜分數 ${safeText(macro.macro_score ?? summary.macro_score, "--")}`;
   const signalDate = safeText(regime.date || regime.latest_date || summary.signal_date || summary.generated_at, "--");
-  const tradeDate = resolveTradeDateV26630(regime, summary);
-
   qs("metaBox").innerHTML = `
     <div class="mini"><span>來源版本</span><b>C 完整交易系統</b></div>
     <div class="mini"><span>市場狀態</span><b>${marketText}</b></div>
     <div class="mini"><span>總經狀態</span><b>${macroText}</b></div>
     <div class="mini"><span>風險模式</span><b>${zhRiskMode(summary, regime, macro)}</b></div>
     <div class="mini"><span>訊號日</span><b>${signalDate}</b></div>
-    <div class="mini"><span>交易日</span><b>${tradeDate}</b></div>
     <div class="mini"><span>最後更新</span><b>${backendUpdatedAt}</b></div>
     <div class="mini"><span>操作筆數</span><b>${rows.length}</b></div>
   `;
@@ -2695,3 +2692,76 @@ function chipHintV26621(row) {
   );
 }
 
+
+
+/* ===== v266.30B hotfix：只修正顯示，不再動原本區塊 ===== */
+function injectV26630BPositionColorStyle() {
+  if (document.getElementById("v26630b-position-color-style")) return;
+  const style = document.createElement("style");
+  style.id = "v26630b-position-color-style";
+  style.textContent = `
+    .position-merged-v26630.sell,
+    .position-merged-v26630.reduce {
+      background: #fff1f1 !important;
+      border: 3px solid #f0a3a3 !important;
+      border-radius: 24px !important;
+      padding: 18px !important;
+      margin-top: 14px !important;
+    }
+    .position-merged-v26630.hold,
+    .position-merged-v26630.watch {
+      background: #effcf3 !important;
+      border: 3px solid #89e5a4 !important;
+      border-radius: 24px !important;
+      padding: 18px !important;
+      margin-top: 14px !important;
+    }
+    .position-merged-pill-v26630.sell,
+    .position-merged-pill-v26630.reduce {
+      background: #fde2e2 !important;
+      color: #b91c1c !important;
+      border-radius: 999px !important;
+      padding: 8px 14px !important;
+      font-weight: 900 !important;
+    }
+    .position-merged-pill-v26630.hold,
+    .position-merged-pill-v26630.watch {
+      background: #dcfce7 !important;
+      color: #166534 !important;
+      border-radius: 999px !important;
+      padding: 8px 14px !important;
+      font-weight: 900 !important;
+    }
+    .position-merged-head-v26630 {
+      display: flex !important;
+      align-items: center !important;
+      gap: 12px !important;
+      margin-bottom: 16px !important;
+    }
+    .position-merged-head-v26630 b {
+      flex: 1 !important;
+      font-size: 1.28em !important;
+      font-weight: 900 !important;
+    }
+    .position-merged-head-v26630 strong {
+      font-size: 1.08em !important;
+      font-weight: 900 !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
+try { injectV26630BPositionColorStyle(); } catch(e) {}
+document.addEventListener("DOMContentLoaded", injectV26630BPositionColorStyle);
+
+// v266.30B：移除前一版額外插入的「交易日」資訊卡，避免日期錯誤與原版資訊區被改動。
+function removeExtraTradeDateCardV26630B() {
+  const meta = document.getElementById("metaBox");
+  if (!meta) return;
+  Array.from(meta.children || []).forEach(card => {
+    const label = (card.querySelector("span")?.textContent || "").trim();
+    if (label === "交易日") card.remove();
+  });
+}
+setTimeout(removeExtraTradeDateCardV26630B, 300);
+setTimeout(removeExtraTradeDateCardV26630B, 1200);
+setTimeout(removeExtraTradeDateCardV26630B, 2500);
