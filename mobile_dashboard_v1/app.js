@@ -2981,3 +2981,41 @@ v266.29E 試單 / 觀察清單去重補丁
 
   console.log("[v266.29E] 試單 / 觀察清單去重 + TOP優先排序已啟用");
 })();
+/*
+v266.29F 持倉顯示改回股票代號
+目的：
+持倉列表顯示 stock_id，不顯示 stock_name
+*/
+
+(function(){
+
+function fixPositionDisplay(){
+  document.querySelectorAll('*').forEach(el=>{
+    if(!el) return;
+
+    // 找「持倉卡」內的大字名稱（通常是名稱）
+    if(el.textContent && el.textContent.trim().length <= 6){
+      // 不動按鈕/標題
+      if(/持倉|最終操作|TEST|WATCH/.test(el.textContent)) return;
+    }
+  });
+
+  // 直接重畫持倉標題（最穩）
+  document.querySelectorAll('[data-position-card], .position-card, .card').forEach(card=>{
+    const id = card.getAttribute('data-stock-id');
+    if(!id) return;
+
+    // 找第一個標題文字節點
+    const title = card.querySelector('h1,h2,h3,.title,.name');
+    if(title){
+      title.textContent = id; // 強制改代號
+    }
+  });
+
+  console.log("[v266.29F] 持倉已改為顯示代號");
+}
+
+setTimeout(fixPositionDisplay,500);
+setTimeout(fixPositionDisplay,1500);
+
+})();
