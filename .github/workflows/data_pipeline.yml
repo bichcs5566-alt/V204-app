@@ -83,14 +83,6 @@ jobs:
         run: |
           python exit_risk_engine.py
 
-      - name: Run position overlay engine
-        run: |
-          if [ -f position_overlay_engine.py ]; then
-            python position_overlay_engine.py
-          else
-            echo "position_overlay_engine.py not found, skip"
-          fi
-
       - name: Run final decision engine
         run: |
           python final_decision_engine.py
@@ -103,18 +95,66 @@ jobs:
             echo "bridge not found, skip"
           fi
 
-      - name: Keep C complete dashboard files after bridge
+      - name: Keep dashboard files after bridge
         run: |
-          python pre_move_dashboard_patch.py
-          python feature_timing_engine.py
-          python trading_system_allocator.py
-          python exit_risk_engine.py
+          if [ -f pre_move_dashboard_patch.py ]; then
+            python pre_move_dashboard_patch.py
+          fi
+          if [ -f feature_timing_engine.py ]; then
+            python feature_timing_engine.py
+          fi
+          if [ -f trading_system_allocator.py ]; then
+            python trading_system_allocator.py
+          fi
+          if [ -f exit_risk_engine.py ]; then
+            python exit_risk_engine.py
+          fi
+          if [ -f position_overlay_engine.py ]; then
+            python position_overlay_engine.py
+          fi
+          if [ -f final_decision_engine.py ]; then
+            python final_decision_engine.py
+          fi
+          if [ -f position_overlay.csv ]; then
+            cp -f position_overlay.csv mobile_dashboard_v1/data/position_overlay.csv
+          fi
+
+      - name: Force sync position overlay to dashboard
+        run: |
+          echo "==== FORCE POSITION OVERLAY SYNC START ===="
+
           if [ -f position_overlay_engine.py ]; then
             python position_overlay_engine.py
           else
-            echo "position_overlay_engine.py not found, skip"
+            echo "position_overlay_engine.py not found"
+            exit 1
           fi
-          python final_decision_engine.py
+
+          echo "==== ROOT position_overlay.csv ===="
+          ls -lh position_overlay.csv || true
+          wc -l position_overlay.csv || true
+          head -5 position_overlay.csv || true
+
+          if [ ! -f position_overlay.csv ]; then
+            echo "ERROR: position_overlay.csv not generated"
+            exit 1
+          fi
+
+          LINE_COUNT=$(wc -l < position_overlay.csv)
+          if [ "$LINE_COUNT" -le 1 ]; then
+            echo "ERROR: position_overlay.csv only header, stop pipeline"
+            exit 1
+          fi
+
+          mkdir -p mobile_dashboard_v1/data
+          cp -f position_overlay.csv mobile_dashboard_v1/data/position_overlay.csv
+
+          echo "==== DASHBOARD position_overlay.csv ===="
+          ls -lh mobile_dashboard_v1/data/position_overlay.csv || true
+          wc -l mobile_dashboard_v1/data/position_overlay.csv || true
+          head -5 mobile_dashboard_v1/data/position_overlay.csv || true
+
+          echo "==== FORCE POSITION OVERLAY SYNC END ===="
 
       - name: Clean runtime big files
         run: |
@@ -130,58 +170,43 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
 
-          git add \
-            data_meta.json \
-            feature_meta.json \
-            data_guard_report.json \
-            backfill_report.json \
-            trade_plan.csv \
-            candidates.csv \
-            core_candidates.csv \
-            alpha_candidates.csv \
-            selection_debug.csv \
-            meta.json \
-            pre_move_candidates.csv \
-            pre_move_summary.json \
-            market_regime.json \
-            timing_candidates.csv \
-            timing_summary.json \
-            trading_system_plan.csv \
-            trading_system_summary.json \
-            exit_risk_plan.csv \
-            exit_risk_summary.json \
-            position_overlay.csv \
-            manual_positions.csv \
-            final_action_plan.csv \
-            final_action_summary.json \
-            bridge_debug.csv \
-            mobile_dashboard_v1/data/meta.json \
-            mobile_dashboard_v1/data/trade_plan.csv \
-            mobile_dashboard_v1/data/candidates.csv \
-            mobile_dashboard_v1/data/core_candidates.csv \
-            mobile_dashboard_v1/data/alpha_candidates.csv \
-            mobile_dashboard_v1/data/selection_debug.csv \
-            mobile_dashboard_v1/data/data_guard_report.json \
-            mobile_dashboard_v1/data/backfill_report.json \
-            mobile_dashboard_v1/data/data_meta.json \
-            mobile_dashboard_v1/data/feature_meta.json \
-            mobile_dashboard_v1/data/pre_move_candidates.csv \
-            mobile_dashboard_v1/data/pre_move_summary.json \
-            mobile_dashboard_v1/data/pre_move_cards.json \
-            mobile_dashboard_v1/data/market_regime.json \
-            mobile_dashboard_v1/data/timing_candidates.csv \
-            mobile_dashboard_v1/data/timing_summary.json \
-            mobile_dashboard_v1/data/trading_system_plan.csv \
-            mobile_dashboard_v1/data/trading_system_summary.json \
-            mobile_dashboard_v1/data/exit_risk_plan.csv \
-            mobile_dashboard_v1/data/exit_risk_summary.json \
-            mobile_dashboard_v1/data/position_overlay.csv \
-            mobile_dashboard_v1/data/position_overlay_summary.txt \
-            mobile_dashboard_v1/data/position_overlay_debug.csv \
-            mobile_dashboard_v1/data/manual_positions.csv \
-            mobile_dashboard_v1/data/final_action_plan.csv \
-            mobile_dashboard_v1/data/final_action_summary.json \
-            mobile_dashboard_v1/data/bridge_debug.csv || true
+          echo "==== git status before add ===="
+          git status --short
+
+          git add -f position_overlay.csv
+          git add -f mobile_dashboard_v1/data/position_overlay.csv
+          git add -f mobile_dashboard_v1/data/position_overlay_debug.csv || true
+          git add -f mobile_dashboard_v1/data/position_overlay_summary.txt || true
+          git add -f manual_positions.csv || true
+          git add -f mobile_dashboard_v1/data/manual_positions.csv || true
+
+          git add -f trade_plan.csv final_action_plan.csv exit_risk_plan.csv || true
+          git add -f mobile_dashboard_v1/data/trade_plan.csv || true
+          git add -f mobile_dashboard_v1/data/final_action_plan.csv || true
+          git add -f mobile_dashboard_v1/data/exit_risk_plan.csv || true
+
+          git add -f candidates.csv core_candidates.csv alpha_candidates.csv selection_debug.csv || true
+          git add -f timing_candidates.csv timing_summary.json || true
+          git add -f trading_system_plan.csv trading_system_summary.json || true
+          git add -f pre_move_candidates.csv pre_move_summary.json || true
+          git add -f data_meta.json feature_meta.json data_guard_report.json backfill_report.json meta.json || true
+
+          git add -f mobile_dashboard_v1/data/candidates.csv || true
+          git add -f mobile_dashboard_v1/data/core_candidates.csv || true
+          git add -f mobile_dashboard_v1/data/alpha_candidates.csv || true
+          git add -f mobile_dashboard_v1/data/selection_debug.csv || true
+          git add -f mobile_dashboard_v1/data/timing_candidates.csv || true
+          git add -f mobile_dashboard_v1/data/timing_summary.json || true
+          git add -f mobile_dashboard_v1/data/trading_system_plan.csv || true
+          git add -f mobile_dashboard_v1/data/trading_system_summary.json || true
+          git add -f mobile_dashboard_v1/data/pre_move_candidates.csv || true
+          git add -f mobile_dashboard_v1/data/pre_move_summary.json || true
+          git add -f mobile_dashboard_v1/data/pre_move_cards.json || true
+          git add -f mobile_dashboard_v1/data/data_meta.json || true
+          git add -f mobile_dashboard_v1/data/feature_meta.json || true
+          git add -f mobile_dashboard_v1/data/data_guard_report.json || true
+          git add -f mobile_dashboard_v1/data/backfill_report.json || true
+          git add -f mobile_dashboard_v1/data/meta.json || true
 
           git reset -- price_panel_daily.csv || true
           git reset -- feature_panel_daily.csv || true
@@ -190,9 +215,15 @@ jobs:
           git reset -- mobile_dashboard_v1/data/feature_panel_daily.csv || true
           git reset -- mobile_dashboard_v1/data/raw_market_daily.csv || true
 
+          echo "==== staged files ===="
+          git diff --cached --name-only
+
+          echo "==== staged position overlay preview ===="
+          git diff --cached -- mobile_dashboard_v1/data/position_overlay.csv | head -120 || true
+
           if git diff --cached --quiet; then
             echo "no update"
           else
-            git commit -m "complete trading system with exit risk"
-            git push origin main
+            git commit -m "force update position overlay"
+            git push
           fi
