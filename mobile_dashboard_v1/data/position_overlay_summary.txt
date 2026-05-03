@@ -1,1 +1,12 @@
-NO_POSITION: position file empty
+{
+  "version": "v266.28B_full",
+  "updated_at": "2026-05-03 03:05:10",
+  "rows": 2,
+  "stocks": [
+    "2409",
+    "3583"
+  ],
+  "non_empty_close": 2,
+  "non_empty_ma5": 2,
+  "non_empty_ma20": 2
+}
