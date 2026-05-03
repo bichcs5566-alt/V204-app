@@ -2714,3 +2714,117 @@ setTimeout(refreshPositionUIV26629, 300);
 setTimeout(refreshPositionUIV26629, 1200);
 setTimeout(refreshPositionUIV26629, 2600);
 setTimeout(refreshPositionUIV26629, 5000);
+/*
+v266.29C TOP優先排序補丁
+用途：
+1. 試單清單 / 觀察清單 / 主要清單，只要有列入 TOP，就永遠排在最前面。
+2. TOP1、TOP2、TOP3、TOP4、TOP5 依照名次排序。
+3. 沒有 TOP 的才接在後面，避免把 TOP 清單洗下去。
+
+使用方式：
+把這段貼到 mobile_dashboard_v1/app.js 最底部。
+不需要刪原本內容。
+*/
+
+(function () {
+  function toNumber(v, fallback) {
+    const n = Number(String(v ?? "").replace(/[^\d.-]/g, ""));
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function getTopRank(row) {
+    const fields = [
+      row.section_top_opportunity,
+      row.top_opportunity,
+      row.section_opportunity_rank,
+      row.opportunity_rank,
+      row.execution_flag,
+      row.system_note,
+      row.note,
+      row.reason
+    ];
+
+    const joined = fields.map(v => String(v ?? "")).join(" ");
+
+    const m = joined.match(/TOP\s*([1-9]\d*)/i);
+    if (m) return Number(m[1]);
+
+    if (String(row.execution_flag || "").toUpperCase() === "TOP") return 99;
+
+    const flag = String(row.section_top_opportunity || row.top_opportunity || "").toLowerCase();
+    if (["1", "true", "yes", "y"].includes(flag)) {
+      return toNumber(row.section_opportunity_rank || row.opportunity_rank, 99);
+    }
+
+    return 9999;
+  }
+
+  function getScore(row) {
+    return toNumber(
+      row.score ||
+      row.opportunity_score ||
+      row.entry_score ||
+      row.liquidity_score,
+      0
+    );
+  }
+
+  function getActionRank(row) {
+    const raw = String(row.final_action || row.action || "").toUpperCase();
+    const map = {
+      SELL: 1,
+      REDUCE: 2,
+      BUY: 3,
+      TEST: 4,
+      WATCH: 5,
+      BLOCK: 6
+    };
+    return map[raw] || 99;
+  }
+
+  window.v26629cTopFirstSort = function (rows) {
+    return (rows || []).slice().sort((a, b) => {
+      const ar = getActionRank(a);
+      const br = getActionRank(b);
+      if (ar !== br) return ar - br;
+
+      const at = getTopRank(a);
+      const bt = getTopRank(b);
+      if (at !== bt) return at - bt;
+
+      const bs = getScore(b);
+      const as = getScore(a);
+      if (bs !== as) return bs - as;
+
+      return String(a.stock_id || "").localeCompare(String(b.stock_id || ""));
+    });
+  };
+
+  if (typeof window.sortRows === "function") {
+    const oldSortRows = window.sortRows;
+    window.sortRows = function (rows) {
+      try {
+        return window.v26629cTopFirstSort(rows);
+      } catch (e) {
+        console.warn("[v266.29C] TOP sort fallback", e);
+        return oldSortRows(rows);
+      }
+    };
+  }
+
+  if (typeof window.splitRows === "function") {
+    window.splitRows = function (rows) {
+      const sorted = window.v26629cTopFirstSort(rows || []);
+      const norm = (r) => String(r.final_action || r.action || "").toUpperCase();
+
+      return {
+        main: sorted.filter(r => ["SELL", "REDUCE", "BUY"].includes(norm(r))),
+        test: sorted.filter(r => norm(r) === "TEST"),
+        watch: sorted.filter(r => norm(r) === "WATCH"),
+        block: sorted.filter(r => norm(r) === "BLOCK")
+      };
+    };
+  }
+
+  console.log("[v266.29C] TOP優先排序補丁已啟用");
+})();
