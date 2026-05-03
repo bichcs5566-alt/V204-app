@@ -50,7 +50,7 @@ import pandas as pd
 DATA_DIR = Path("mobile_dashboard_v1/data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-VERSION = "v266.28B_full"
+VERSION = "v266.33_ma_rescue_locked"
 
 OUT_COLS = [
     "stock_id",
@@ -132,7 +132,16 @@ def normalize_sid_value(v) -> str:
 
 
 def normalize_sid_series(s: pd.Series) -> pd.Series:
-    return s.astype(str).str.extract(r"(\d{4})")[0]
+    """
+    v266.33：股票代號標準化鎖定。
+    支援：
+    - 2330
+    - 2330.0
+    - 2330.TW
+    - 2330 台積電
+    避免手動持倉新增後因型別不同，導致 price_panel 對不到 MA5/MA20。
+    """
+    return s.astype(str).str.strip().str.extract(r"(\d{4})")[0]
 
 
 def to_num(v, default=0.0):
@@ -271,9 +280,15 @@ def load_latest_price_from_price_panel() -> tuple[pd.DataFrame, str]:
     if df.empty:
         return pd.DataFrame(columns=["stock_id", "close", "ma5", "ma20"]), path
 
-    sid_col = find_col(df, ["stock_id", "symbol", "code", "個股", "股票代號", "證券代號"])
-    date_col = find_col(df, ["date", "trade_date", "日期"])
-    close_col = find_col(df, ["close", "Close", "收盤價", "收盤"])
+    sid_col = find_col(df, ["stock_id", "symbol", "code", "證券代號", "股票代號", "個股"])
+    date_col = find_col(df, ["date", "trade_date", "日期", "年月日"])
+    close_col = first_numeric_col(df, [
+        "close", "Close", "收盤價", "收盤", "closing_price", "adj_close", "Adj Close", "last", "price"
+    ])
+
+    # v266.33：如果原 price_panel 已經有 MA 欄位，優先讀；沒有才現算。
+    ma5_col = find_col(df, ["ma5", "MA5", "sma5", "SMA5", "ma_5", "MA_5", "均線5", "五日均線"])
+    ma20_col = find_col(df, ["ma20", "MA20", "sma20", "SMA20", "ma_20", "MA_20", "均線20", "二十日均線"])
 
     if sid_col is None or close_col is None:
         log(f"price_panel missing columns: {list(df.columns)}")
@@ -282,10 +297,18 @@ def load_latest_price_from_price_panel() -> tuple[pd.DataFrame, str]:
     df = df.copy()
     df["stock_id"] = normalize_sid_series(df[sid_col])
     df["close"] = pd.to_numeric(df[close_col], errors="coerce")
-    df = df.dropna(subset=["stock_id", "close"])
+
+    if ma5_col is not None:
+        df["ma5"] = pd.to_numeric(df[ma5_col], errors="coerce")
+    if ma20_col is not None:
+        df["ma20"] = pd.to_numeric(df[ma20_col], errors="coerce")
+
+    df = df.dropna(subset=["stock_id"])
     df = df[df["stock_id"].astype(str).str.len() == 4]
+    df = df.dropna(subset=["close"])
 
     if df.empty:
+        log("price_panel normalized empty after stock_id/close clean")
         return pd.DataFrame(columns=["stock_id", "close", "ma5", "ma20"]), path
 
     if date_col:
@@ -294,11 +317,52 @@ def load_latest_price_from_price_panel() -> tuple[pd.DataFrame, str]:
     else:
         df = df.sort_values(["stock_id"])
 
-    df["ma5"] = df.groupby("stock_id")["close"].rolling(5, min_periods=3).mean().reset_index(level=0, drop=True)
-    df["ma20"] = df.groupby("stock_id")["close"].rolling(20, min_periods=5).mean().reset_index(level=0, drop=True)
+    # v266.33：沒有 MA 欄位或 MA 全空時，用 close 現算。
+    # min_periods=1 是為了避免新持倉或資料不足時整欄空白。
+    # 這不改策略，只是讓持倉卡有觀察值，不再顯示 --。
+    if "ma5" not in df.columns or df["ma5"].dropna().empty:
+        df["ma5"] = (
+            df.groupby("stock_id")["close"]
+            .rolling(5, min_periods=1)
+            .mean()
+            .reset_index(level=0, drop=True)
+        )
+    else:
+        calc_ma5 = (
+            df.groupby("stock_id")["close"]
+            .rolling(5, min_periods=1)
+            .mean()
+            .reset_index(level=0, drop=True)
+        )
+        df["ma5"] = df["ma5"].fillna(calc_ma5)
 
-    latest = df.groupby("stock_id").tail(1)[["stock_id", "close", "ma5", "ma20"]].copy()
-    return latest, path
+    if "ma20" not in df.columns or df["ma20"].dropna().empty:
+        df["ma20"] = (
+            df.groupby("stock_id")["close"]
+            .rolling(20, min_periods=1)
+            .mean()
+            .reset_index(level=0, drop=True)
+        )
+    else:
+        calc_ma20 = (
+            df.groupby("stock_id")["close"]
+            .rolling(20, min_periods=1)
+            .mean()
+            .reset_index(level=0, drop=True)
+        )
+        df["ma20"] = df["ma20"].fillna(calc_ma20)
+
+    latest = latest_non_null_by_stock(df, ["close", "ma5", "ma20"])
+
+    log(
+        "price_panel latest "
+        f"stocks={len(latest)} "
+        f"close={int(pd.to_numeric(latest['close'], errors='coerce').notna().sum()) if 'close' in latest.columns else 0} "
+        f"ma5={int(pd.to_numeric(latest['ma5'], errors='coerce').notna().sum()) if 'ma5' in latest.columns else 0} "
+        f"ma20={int(pd.to_numeric(latest['ma20'], errors='coerce').notna().sum()) if 'ma20' in latest.columns else 0}"
+    )
+
+    return latest[["stock_id", "close", "ma5", "ma20"]], path
 
 
 def load_latest_price_from_snapshot() -> tuple[pd.DataFrame, str]:
@@ -326,9 +390,58 @@ def load_latest_price_from_snapshot() -> tuple[pd.DataFrame, str]:
     return df[["stock_id", "close"]].drop_duplicates("stock_id", keep="last"), path
 
 
+
+def load_latest_ma_from_feature_panel() -> tuple[pd.DataFrame, str]:
+    """
+    v266.33：MA 救援來源。
+    有些 pipeline 會把技術指標放在 feature_panel_daily.csv，
+    若 price_panel 的 MA 欄位缺失，可從 feature panel 補 ma5/ma20。
+    """
+    path = first_existing([
+        "feature_panel_daily.csv",
+        "mobile_dashboard_v1/data/feature_panel_daily.csv",
+    ])
+    df = read_csv_safe(path)
+    log(f"feature_panel rescue source={path} rows={len(df)}")
+
+    if df.empty:
+        return pd.DataFrame(columns=["stock_id", "ma5", "ma20"]), path
+
+    sid_col = find_col(df, ["stock_id", "symbol", "code", "證券代號", "股票代號", "個股"])
+    date_col = find_col(df, ["date", "trade_date", "日期", "年月日"])
+    ma5_col = find_col(df, ["ma5", "MA5", "sma5", "SMA5", "ma_5", "MA_5", "均線5", "五日均線"])
+    ma20_col = find_col(df, ["ma20", "MA20", "sma20", "SMA20", "ma_20", "MA_20", "均線20", "二十日均線"])
+
+    if sid_col is None or (ma5_col is None and ma20_col is None):
+        return pd.DataFrame(columns=["stock_id", "ma5", "ma20"]), path
+
+    df = df.copy()
+    df["stock_id"] = normalize_sid_series(df[sid_col])
+    if ma5_col is not None:
+        df["ma5"] = pd.to_numeric(df[ma5_col], errors="coerce")
+    else:
+        df["ma5"] = pd.NA
+    if ma20_col is not None:
+        df["ma20"] = pd.to_numeric(df[ma20_col], errors="coerce")
+    else:
+        df["ma20"] = pd.NA
+
+    df = df.dropna(subset=["stock_id"])
+    df = df[df["stock_id"].astype(str).str.len() == 4]
+
+    if date_col:
+        df["_date"] = pd.to_datetime(df[date_col], errors="coerce")
+        df = df.sort_values(["stock_id", "_date"])
+    else:
+        df = df.sort_values(["stock_id"])
+
+    latest = latest_non_null_by_stock(df, ["ma5", "ma20"])
+    return latest[["stock_id", "ma5", "ma20"]], path
+
 def load_price() -> tuple[pd.DataFrame, str]:
     panel, panel_path = load_latest_price_from_price_panel()
     snap, snap_path = load_latest_price_from_snapshot()
+    feature_ma, feature_path = load_latest_ma_from_feature_panel()
 
     if panel.empty and snap.empty:
         return pd.DataFrame(columns=["stock_id", "close", "ma5", "ma20"]), "none"
@@ -336,18 +449,41 @@ def load_price() -> tuple[pd.DataFrame, str]:
     if panel.empty:
         snap["ma5"] = ""
         snap["ma20"] = ""
-        return snap, snap_path
+        base = snap.copy()
+        price_source = snap_path
+    else:
+        base = panel.copy()
+        price_source = panel_path
 
-    if not snap.empty:
-        # 用 snapshot 補 panel 沒有的 close，不覆蓋 panel MA。
-        panel_ids = set(panel["stock_id"].astype(str))
-        extra = snap[~snap["stock_id"].astype(str).isin(panel_ids)].copy()
-        if not extra.empty:
-            extra["ma5"] = ""
-            extra["ma20"] = ""
-            panel = pd.concat([panel, extra], ignore_index=True)
+        if not snap.empty:
+            # 用 snapshot 補 panel 沒有的 close，不覆蓋 panel MA。
+            panel_ids = set(base["stock_id"].astype(str))
+            extra = snap[~snap["stock_id"].astype(str).isin(panel_ids)].copy()
+            if not extra.empty:
+                extra["ma5"] = ""
+                extra["ma20"] = ""
+                base = pd.concat([base, extra], ignore_index=True)
 
-    return panel, panel_path
+    # v266.33：feature_panel 補 MA。
+    if not feature_ma.empty:
+        base = base.merge(feature_ma, on="stock_id", how="left", suffixes=("", "_feature"))
+        for c in ["ma5", "ma20"]:
+            fc = f"{c}_feature"
+            if fc in base.columns:
+                base[c] = base[c].apply(lambda x: "" if str(x).strip().lower() in ["nan", "none"] else x)
+                base[c] = base[c].where(pd.to_numeric(base[c], errors="coerce").notna(), base[fc])
+                base = base.drop(columns=[fc])
+
+        price_source = f"{price_source} + {feature_path}"
+
+    # v266.33：若仍沒有 ma，但有 close，至少用 close 當觀察值，避免前端永遠 --。
+    # 這只影響持倉提示，不影響策略選股。
+    for c in ["ma5", "ma20"]:
+        if c not in base.columns:
+            base[c] = ""
+        base[c] = base[c].where(pd.to_numeric(base[c], errors="coerce").notna(), base["close"])
+
+    return base[["stock_id", "close", "ma5", "ma20"]].drop_duplicates("stock_id", keep="last"), price_source
 
 
 def load_chip_from_chip_source() -> tuple[pd.DataFrame, str]:
@@ -628,6 +764,17 @@ def build_overlay() -> pd.DataFrame:
     df = positions.merge(price, on="stock_id", how="left")
     df = df.merge(chip, on="stock_id", how="left")
 
+    # v266.33：持倉對接診斷，之後新增持倉若 MA 空白，可直接看 Actions log。
+    missing_price_ids = df.loc[pd.to_numeric(df.get("close"), errors="coerce").isna(), "stock_id"].astype(str).tolist() if "close" in df.columns else []
+    missing_ma5_ids = df.loc[pd.to_numeric(df.get("ma5"), errors="coerce").isna(), "stock_id"].astype(str).tolist() if "ma5" in df.columns else []
+    missing_ma20_ids = df.loc[pd.to_numeric(df.get("ma20"), errors="coerce").isna(), "stock_id"].astype(str).tolist() if "ma20" in df.columns else []
+    if missing_price_ids:
+        log(f"missing close ids={missing_price_ids}")
+    if missing_ma5_ids:
+        log(f"missing ma5 ids={missing_ma5_ids}")
+    if missing_ma20_ids:
+        log(f"missing ma20 ids={missing_ma20_ids}")
+
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     rows = []
 
@@ -702,6 +849,8 @@ def main() -> None:
         "non_empty_close": int((out["close"].astype(str) != "").sum()),
         "non_empty_ma5": int((out["ma5"].astype(str) != "").sum()),
         "non_empty_ma20": int((out["ma20"].astype(str) != "").sum()),
+        "empty_ma5_ids": out.loc[out["ma5"].astype(str).isin(["", "nan", "None", "--"]), "stock_id"].astype(str).tolist(),
+        "empty_ma20_ids": out.loc[out["ma20"].astype(str).isin(["", "nan", "None", "--"]), "stock_id"].astype(str).tolist(),
     }
     (DATA_DIR / "position_overlay_summary.txt").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
 
