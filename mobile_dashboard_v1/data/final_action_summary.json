@@ -1,6 +1,8 @@
 {
-  "generated_at": "2026-05-02 14:35:18",
-  "source": "final_decision_engine_v266_21_chip_usable",
+  "generated_at": "2026-05-03 11:16:18",
+  "source": "final_decision_engine_v266_31_trade_date_guard",
+  "signal_date": "2026-05-01",
+  "trade_date": "2026-05-04",
   "rows": 449,
   "sell_count": 2,
   "reduce_count": 0,
