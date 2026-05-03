@@ -160,7 +160,7 @@ async function loadMacroDashboardV26614() {
 }
 
 /*
-app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20 顯示
+app.js - v266.30G 全台股 MA/Overlay 穩定版：保留原本功能 + 強化持倉 MA/代號對接
 
 保留：
 1. 原本卡片 UI / 列表 / CSV 讀取 / 排序 / 展開邏輯
@@ -173,7 +173,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.30E_ma_display_fix";
+const APP_PATCH_VERSION = "v266.30G_tw_stock_ma_overlay_stable";
 
 
 const FILES = {
@@ -766,7 +766,7 @@ function setPositionRiskMap(rows) {
     const source = String(r.source || "").toUpperCase();
     const bucket = String(r.bucket || "").toUpperCase();
     if (source === "EXIT" || source === "POSITION" || bucket === "POSITION") {
-      const sid = safeText(r.stock_id, "");
+      const sid = stockKeyV26630G(r.stock_id || r.stockId || r.symbol || r.code || r["股票代號"]);
       if (sid) map[sid] = r;
     }
   });
@@ -809,9 +809,121 @@ function renderPositionRiskInsideCard(stock) {
 window.__positionOverlayMapV26630 = window.__positionOverlayMapV26630 || {};
 window.__stockNameMapV26630 = window.__stockNameMapV26630 || {};
 
+
+// ===== v266.30G 全台股持倉 MA / Overlay 對接穩定層 =====
+function stockKeyV26630G(v) {
+  // 支援：2330 / "2330" / "2330.0" / "2330.TW" / "2330 台積電" / " 2330 "
+  const s = String(v ?? "").trim();
+  const m = s.match(/\d{4}/);
+  return m ? m[0] : s;
+}
+
+function hasDataV26630G(v) {
+  if (v === undefined || v === null) return false;
+  const s = String(v).trim();
+  if (!s) return false;
+  if (["--", "nan", "NaN", "undefined", "null", "None"].includes(s)) return false;
+  return true;
+}
+
+function pickFieldV26630G(row, keys, fallback = "") {
+  if (!row || typeof row !== "object") return fallback;
+  for (const k of keys) {
+    if (Object.prototype.hasOwnProperty.call(row, k) && hasDataV26630G(row[k])) {
+      return row[k];
+    }
+  }
+  return fallback;
+}
+
+function numberV26630G(v) {
+  if (!hasDataV26630G(v)) return null;
+  const s = String(v)
+    .trim()
+    .replace(/,/g, "")
+    .replace(/%/g, "")
+    .replace("張", "")
+    .replace("股", "")
+    .replace("元", "");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+function priceTextV26630G(v) {
+  const n = numberV26630G(v);
+  if (n === null) return "--";
+  return Number.isInteger(n) ? String(n) : n.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+function rebuildOverlayMapV26630G(rows) {
+  const map = {};
+  (rows || []).forEach(r => {
+    const sid = stockKeyV26630G(
+      pickFieldV26630G(r, ["stock_id", "stockId", "symbol", "code", "個股", "股票代號"], "")
+    );
+    if (sid) map[sid] = r;
+  });
+  return map;
+}
+
+function getOverlayRowV26630G(stock) {
+  const sid = stockKeyV26630G(stock);
+  const map = window.__positionOverlayMapV26630 || {};
+  return map[sid] || map[String(sid)] || {};
+}
+
+function getRiskRowV26630G(stock) {
+  const sid = stockKeyV26630G(stock);
+  const map = typeof getPositionRiskMap === "function" ? getPositionRiskMap() : {};
+  return map[sid] || map[String(sid)] || {};
+}
+
+function bestCloseRawV26630G(overlay, riskRow, posRow) {
+  return pickFieldV26630G(overlay, ["close", "Close", "收盤價", "price", "ref_price"], "") ||
+    pickFieldV26630G(riskRow, ["close", "Close", "ref_price", "price", "參考價"], "") ||
+    pickFieldV26630G(posRow, ["close", "Close", "ref_price", "price", "avg_price"], "");
+}
+
+function bestMaRawV26630G(label, overlay, riskRow, posRow) {
+  const keys = label === "MA5"
+    ? ["ma5", "MA5", "ma_5", "sma5", "five_ma", "五日線", "五日均線"]
+    : ["ma20", "MA20", "ma_20", "sma20", "twenty_ma", "二十日線", "二十日均線"];
+  return pickFieldV26630G(overlay, keys, "") ||
+    pickFieldV26630G(riskRow, keys, "") ||
+    pickFieldV26630G(posRow, keys, "");
+}
+
+function bestMaStatusRawV26630G(label, overlay, riskRow, posRow) {
+  const keys = label === "MA5"
+    ? ["ma5_status", "MA5_status", "five_ma_status", "五日線觀察", "MA5觀察"]
+    : ["ma20_status", "MA20_status", "twenty_ma_status", "MA20觀察", "二十日線觀察"];
+  return pickFieldV26630G(overlay, keys, "") ||
+    pickFieldV26630G(riskRow, keys, "") ||
+    pickFieldV26630G(posRow, keys, "");
+}
+
+function maStatusV26630G(label, closeRaw, maRaw, directRaw) {
+  // direct 有後端判斷時優先顯示；沒有 direct 才用 close/ma 自算。
+  const direct = cleanV26630(directRaw, "");
+  if (direct && direct !== "--") return direct.startsWith(label) ? direct : `${label}：${direct}`;
+
+  const ma = numberV26630G(maRaw);
+  if (ma === null) return `${label}：--`;
+
+  const close = numberV26630G(closeRaw);
+
+  // 沒有 close 不再讓 MA 消失，至少顯示 MA 數值。
+  if (close === null) return `${label}：${priceTextV26630G(ma)}`;
+
+  const diff = (close - ma) / ma;
+  if (diff > 0.02) return `${label}：站上｜↑ 強勢`;
+  if (diff < -0.02) return `${label}：跌破｜↓ 轉弱`;
+  return `${label}：貼近｜→ 盤整`;
+}
+
+
 function sidV26630(v) {
-  const m = String(v || "").match(/(\d{4})/);
-  return m ? m[1] : String(v || "").trim();
+  return stockKeyV26630G(v);
 }
 
 function cleanV26630(v, fallback = "--") {
@@ -821,8 +933,7 @@ function cleanV26630(v, fallback = "--") {
 }
 
 function nV26630(v) {
-  const n = Number(String(v ?? "").replace(/,/g, "").replace("%", ""));
-  return Number.isFinite(n) ? n : null;
+  return numberV26630G(v);
 }
 
 function priceV26630(v) {
@@ -875,24 +986,7 @@ function zhRiskV26630(v, actionLike = "") {
 }
 
 function maStatusV26630(label, close, ma, direct) {
-  // v266.30E：MA 顯示修補。
-  // 後端 position_overlay.csv 已有 ma5 / ma20，但 close 可能缺值。
-  // 舊版在 close 缺值時直接回傳 "--"，導致 MA5 / MA20 明明有資料卻不顯示。
-  const d = cleanV26630(direct, "");
-  if (d && d !== "--") return d.startsWith(label) ? d : `${label}：${d}`;
-
-  const m = nV26630(ma);
-  if (!m) return `${label}：--`;
-
-  const c = nV26630(close);
-
-  // 核心修補：允許沒有 close。至少把 MA 數值顯示出來。
-  if (!c) return `${label}：${priceV26630(m)}`;
-
-  const diff = (c - m) / m;
-  if (diff > 0.02) return `${label}：站上｜↑ 強勢`;
-  if (diff < -0.02) return `${label}：跌破｜↓ 轉弱`;
-  return `${label}：貼近｜→ 盤整`;
+  return maStatusV26630G(label, close, ma, direct);
 }
 
 function chipTextV26630(row) {
@@ -928,9 +1022,9 @@ async function loadPositionOverlayV26630() {
       const txt = await fetchText(url);
       const rows = parseCsv(txt);
       rows.forEach(r => {
-        const sid = sidV26630(r.stock_id || r.code);
+        const sid = stockKeyV26630G(r.stock_id || r.stockId || r.symbol || r.code || r["股票代號"]);
         if (!sid) return;
-        const name = cleanV26630(r.stock_name || r.name, "");
+        const name = cleanV26630(r.stock_name || r.name || r["股票名稱"], "");
         if (name) window.__stockNameMapV26630[sid] = name;
         if (url.includes("position_overlay")) window.__positionOverlayMapV26630[sid] = r;
       });
@@ -939,14 +1033,11 @@ async function loadPositionOverlayV26630() {
 }
 
 function getPositionOverlayRowV26630(stock) {
-  const sid = sidV26630(stock);
-  return window.__positionOverlayMapV26630[sid] || {};
+  return getOverlayRowV26630G(stock);
 }
 
 function getPositionRiskRowV26630(stock) {
-  const sid = sidV26630(stock);
-  const map = typeof getPositionRiskMap === "function" ? getPositionRiskMap() : {};
-  return map[sid] || {};
+  return getRiskRowV26630G(stock);
 }
 
 function renderMergedPositionHintV26630(stock, posRow) {
@@ -959,14 +1050,18 @@ function renderMergedPositionHintV26630(stock, posRow) {
   const avg = priceV26630(posRow.avg_price);
   const lots = lotsV26630(posRow.lots);
   const shares = sharesV26630(posRow.shares);
-  // v266.30E：close fallback 修補。
-  // position_overlay.csv 若沒有 close，至少用手動持倉均價避免 MA 判斷短路。
-  const close = priceV26630(overlay.close || riskRow.close || riskRow.ref_price || posRow.close || posRow.avg_price);
+  // v266.30G：全台股 close fallback。避免 overlay 缺 close 時讓 MA 判斷短路。
+  const closeRawV26630G = bestCloseRawV26630G(overlay, riskRow, posRow);
+  const close = priceV26630(closeRawV26630G);
   const cost = moneyV26630(nV26630(posRow.avg_price) && nV26630(posRow.shares) ? nV26630(posRow.avg_price) * nV26630(posRow.shares) : positionCost(posRow));
   const pnlRaw = overlay.pnl_pct || riskRow.pnl_pct;
   const pnl = cleanV26630(pnlRaw, (nV26630(close) && nV26630(posRow.avg_price)) ? pctV26630((nV26630(close) - nV26630(posRow.avg_price)) / nV26630(posRow.avg_price) * 100) : "--");
-  const ma5 = maStatusV26630("MA5", close, overlay.ma5 || riskRow.ma5, overlay.ma5_status || riskRow.ma5_status);
-  const ma20 = maStatusV26630("MA20", close, overlay.ma20 || riskRow.ma20, overlay.ma20_status || riskRow.ma20_status);
+  const ma5RawV26630G = bestMaRawV26630G("MA5", overlay, riskRow, posRow);
+  const ma20RawV26630G = bestMaRawV26630G("MA20", overlay, riskRow, posRow);
+  const ma5StatusRawV26630G = bestMaStatusRawV26630G("MA5", overlay, riskRow, posRow);
+  const ma20StatusRawV26630G = bestMaStatusRawV26630G("MA20", overlay, riskRow, posRow);
+  const ma5 = maStatusV26630("MA5", closeRawV26630G, ma5RawV26630G, ma5StatusRawV26630G);
+  const ma20 = maStatusV26630("MA20", closeRawV26630G, ma20RawV26630G, ma20StatusRawV26630G);
   const riskZh = zhRiskV26630(overlay.risk_flag || riskRow.risk_flag || riskRow.risk_level || riskRow.exit_risk_level, actionRaw);
   const chip = chipTextV26630({ ...riskRow, ...overlay });
   const name = positionNameV26630(sid, posRow, overlay, riskRow);
@@ -1094,9 +1189,9 @@ function addOrUpdatePosition() {
   }
 
   const rows = loadPositions();
-  const idx = rows.findIndex(r => String(r.stock_id) === stock);
+  const idx = rows.findIndex(r => stockKeyV26630G(r.stock_id) === stockKeyV26630G(stock));
   const item = {
-    stock_id: stock,
+    stock_id: stockKeyV26630G(stock),
     avg_price: String(price),
     lots: String(lots),
     shares: String(Math.round(lots * 1000)),
@@ -1124,7 +1219,7 @@ function bindPositionRowActions() {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const stock = btn.getAttribute("data-edit-position");
-      const row = loadPositions().find(r => String(r.stock_id) === stock);
+      const row = loadPositions().find(r => stockKeyV26630G(r.stock_id) === stockKeyV26630G(stock));
       if (!row) return;
       qs("posStock").value = row.stock_id || "";
       qs("posPrice").value = row.avg_price || "";
@@ -1140,7 +1235,7 @@ function bindPositionRowActions() {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const stock = btn.getAttribute("data-delete-position");
-      const rows = loadPositions().filter(r => String(r.stock_id) !== stock);
+      const rows = loadPositions().filter(r => stockKeyV26630G(r.stock_id) !== stockKeyV26630G(stock));
       savePositions(rows);
       renderPositions();
   refreshPositionStatus("持倉區已同步");
@@ -2703,78 +2798,4 @@ function chipDisplayV26621(row) {
 function chipReasonV26621(row) {
   return safeText(
     row.chip_reason ||
-    row.chip_concentration_reason ||
-    row["籌碼原因"],
-    "籌碼資料不足"
-  );
-}
-
-function chipHintV26621(row) {
-  return safeText(
-    row.chip_hint ||
-    row.chip_concentration_hint ||
-    row["籌碼提示"],
-    "籌碼資料不足，只能當輔助，不可重倉。"
-  );
-}
-
-
-
-/* ===== v266.30B hotfix：只修正顯示，不再動原本區塊 ===== */
-function injectV26630BPositionColorStyle() {
-  if (document.getElementById("v26630b-position-color-style")) return;
-  const style = document.createElement("style");
-  style.id = "v26630b-position-color-style";
-  style.textContent = `
-    .position-merged-v26630.sell,
-    .position-merged-v26630.reduce {
-      background: #fff1f1 !important;
-      border: 3px solid #f0a3a3 !important;
-      border-radius: 24px !important;
-      padding: 18px !important;
-      margin-top: 14px !important;
-    }
-    .position-merged-v26630.hold,
-    .position-merged-v26630.watch {
-      background: #effcf3 !important;
-      border: 3px solid #89e5a4 !important;
-      border-radius: 24px !important;
-      padding: 18px !important;
-      margin-top: 14px !important;
-    }
-    .position-merged-pill-v26630.sell,
-    .position-merged-pill-v26630.reduce {
-      background: #fde2e2 !important;
-      color: #b91c1c !important;
-      border-radius: 999px !important;
-      padding: 8px 14px !important;
-      font-weight: 900 !important;
-    }
-    .position-merged-pill-v26630.hold,
-    .position-merged-pill-v26630.watch {
-      background: #dcfce7 !important;
-      color: #166534 !important;
-      border-radius: 999px !important;
-      padding: 8px 14px !important;
-      font-weight: 900 !important;
-    }
-    .position-merged-head-v26630 {
-      display: flex !important;
-      align-items: center !important;
-      gap: 12px !important;
-      margin-bottom: 16px !important;
-    }
-    .position-merged-head-v26630 b {
-      flex: 1 !important;
-      font-size: 1.28em !important;
-      font-weight: 900 !important;
-    }
-    .position-merged-head-v26630 strong {
-      font-size: 1.08em !important;
-      font-weight: 900 !important;
-    }
-  `;
-  document.head.appendChild(style);
-}
-try { injectV26630BPositionColorStyle(); } catch(e) {}
-document.addEventListener("DOMContentLoaded", injectV26630BPositionColorStyle);
+    row.chip_concentration
