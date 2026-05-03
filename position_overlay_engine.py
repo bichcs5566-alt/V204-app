@@ -50,7 +50,7 @@ import pandas as pd
 DATA_DIR = Path("mobile_dashboard_v1/data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-VERSION = "v266.33_ma_rescue_locked"
+VERSION = "v266.33B_ma_rescue_hotfix"
 
 OUT_COLS = [
     "stock_id",
@@ -181,6 +181,41 @@ def status_price_vs_ma(close, ma, label: str) -> str:
     if diff < -0.02:
         return f"{label}：跌破｜↓ 轉弱"
     return f"{label}：貼近｜→ 盤整"
+
+
+
+def first_numeric_col(df: pd.DataFrame, candidates: list[str]) -> str | None:
+    """
+    v266.33B：找出第一個可用數值欄位。
+    price_panel 不同版本可能叫 close / Close / 收盤價 / adj_close。
+    """
+    c = find_col(df, candidates)
+    if c is not None:
+        return c
+    return None
+
+
+def latest_non_null_by_stock(df: pd.DataFrame, value_cols: list[str]) -> pd.DataFrame:
+    """
+    v266.33B：每檔取最後一筆，但避免最後一筆 ma5/ma20 是空值。
+    close / ma5 / ma20 都抓該股票最後一個有效值。
+    """
+    if df.empty:
+        return pd.DataFrame(columns=["stock_id"] + value_cols)
+
+    rows = []
+    for sid, g in df.groupby("stock_id", sort=False):
+        g = g.copy()
+        item = {"stock_id": sid}
+        for c in value_cols:
+            if c not in g.columns:
+                item[c] = ""
+                continue
+            vals = g[c].dropna()
+            item[c] = vals.iloc[-1] if len(vals) else ""
+        rows.append(item)
+
+    return pd.DataFrame(rows)
 
 
 def chip_label_from_score(score) -> str:
