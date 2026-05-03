@@ -801,7 +801,7 @@ function renderPositions() {
             <div><span>更新時間</span><b>${safeText(row.updated_at)}</b></div>
           </div>
           <div class="detail-text"><b>備註</b><p>${note}</p></div>
-          ${renderUnifiedPositionHintV26626(stock, row)}
+          ${renderPositionRiskInsideCard(stock)}
           <div class="position-row-actions">
             <button type="button" data-edit-position="${stock}">編輯</button>
             <button type="button" class="danger" data-delete-position="${stock}">刪除</button>
@@ -2449,45 +2449,97 @@ function chipHintV26621(row) {
   );
 }
 
+// ===== v266.29 完整 UI 重構修正版：持倉欄位下移合併 + 個股顯示名稱 + 風險中文化 =====
+// 說明：保留原本檔案不刪除，只覆蓋持倉卡的前端輸出邏輯。
 
-// ===== v266.26 追加：持倉提示統一版（SELL / HOLD 同欄位 + MA5中文提示） =====
-// 原則：不覆蓋 renderPositions，不改原本持倉卡，只把持倉卡內提示統一成同一套欄位。
-// 統一欄位：來源、策略層、持倉型態、K棒型態、參考價、均價、部位金額、損益%、MA20、MA5、風險等級、持倉提示。
-// 下方統一：原因、K棒判斷、建議動作、系統提示。
+window.__stockNameMapV26629 = window.__stockNameMapV26629 || {};
+window.__positionOverlayMapV26629 = window.__positionOverlayMapV26629 || {};
 
-window.__positionOverlayMapV26626 = window.__positionOverlayMapV26626 || {};
-
-function stockIdV26626(v) {
+function sidV26629(v) {
   const m = String(v || "").match(/(\d{4})/);
   return m ? m[1] : "";
 }
 
-function nV26626(v) {
-  const x = Number(String(v ?? "").replace(/,/g, "").replace("%", ""));
-  return Number.isFinite(x) ? x : null;
+function cleanV26629(v, fallback = "--") {
+  const s = String(v ?? "").trim();
+  if (!s || s === "nan" || s === "NaN" || s === "undefined" || s === "null") return fallback;
+  return s;
 }
 
-function showV26626(v, fallback="--") {
-  const s = safeText(v, "");
-  return s && s !== "nan" && s !== "NaN" ? s : fallback;
+function nV26629(v) {
+  const n = Number(String(v ?? "").replace(/,/g, "").replace("%", ""));
+  return Number.isFinite(n) ? n : null;
 }
 
-function priceTextV26626(v) {
-  const x = nV26626(v);
-  if (x === null) return "--";
-  return x.toFixed(2);
+function priceV26629(v) {
+  const n = nV26629(v);
+  if (n === null) return "--";
+  return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.00$/, "");
 }
 
-function pnlTextV26626(avg, close) {
-  const a = nV26626(avg);
-  const c = nV26626(close);
+function pctV26629(v) {
+  const n = nV26629(v);
+  if (n === null) return "--";
+  return n.toFixed(2).replace(/\.00$/, "") + "%";
+}
+
+function pnlFromAvgCloseV26629(avg, close) {
+  const a = nV26629(avg);
+  const c = nV26629(close);
   if (!a || !c) return "--";
-  return ((c - a) / a * 100).toFixed(2) + "%";
+  return ((c - a) / a * 100).toFixed(2).replace(/\.00$/, "") + "%";
 }
 
-function maStateV26626(close, ma, label) {
-  const c = nV26626(close);
-  const m = nV26626(ma);
+function lotTextV26629(v) {
+  const n = nV26629(v);
+  if (n === null) return "--";
+  return String(n).replace(/\.00$/, "");
+}
+
+function sharesTextV26629(v) {
+  const n = nV26629(v);
+  if (n === null) return "--";
+  return Math.round(n).toLocaleString("zh-TW");
+}
+
+function moneyTextV26629(v) {
+  const n = nV26629(v);
+  if (n === null) return "--";
+  return Math.round(n).toLocaleString("zh-TW");
+}
+
+function actionInfoV26629(actionLike) {
+  const s = String(actionLike || "").toUpperCase();
+  if (s.includes("SELL") || s.includes("賣") || s.includes("出場") || s.includes("STOP")) return { cls: "sell", pill: "🔴 出場", status: "出場" };
+  if (s.includes("REDUCE") || s.includes("減")) return { cls: "reduce", pill: "🟠 減碼", status: "減碼" };
+  if (s.includes("WATCH") || s.includes("觀察")) return { cls: "watch", pill: "🟡 觀察", status: "觀察" };
+  return { cls: "hold", pill: "🟢 抱住", status: "抱住" };
+}
+
+function zhRiskV26629(v, actionLike = "") {
+  const s = String(v || actionLike || "").toUpperCase();
+  if (s.includes("STOP_LOSS") || s.includes("STOP") || s.includes("停損")) return "🔴 停損風控";
+  if (s.includes("HIGH") || s.includes("高")) return "🔴 高風險";
+  if (s.includes("MEDIUM") || s.includes("MID") || s.includes("中")) return "🟠 中風險";
+  if (s.includes("LOW") || s.includes("低")) return "🟢 低風險";
+  if (s.includes("HOLD_CHECK") || s.includes("HOLD") || s.includes("抱")) return "🟢 續抱觀察";
+  if (s.includes("WATCH") || s.includes("觀察")) return "🟡 觀察確認";
+  return "🟢 續抱觀察";
+}
+
+function stockNameV26629(stock, posRow = {}, overlay = {}, riskRow = {}) {
+  const sid = sidV26629(stock || posRow.stock_id || overlay.stock_id || riskRow.stock_id);
+  return cleanV26629(
+    posRow.stock_name || overlay.stock_name || riskRow.stock_name || window.__stockNameMapV26629[sid],
+    sid || "--"
+  );
+}
+
+function maStatusV26629(label, close, ma, direct) {
+  const d = cleanV26629(direct, "");
+  if (d && d !== "--") return d.startsWith(label) ? d : `${label}：${d}`;
+  const c = nV26629(close);
+  const m = nV26629(ma);
   if (!c || !m) return `${label}：--`;
   const diff = (c - m) / m;
   if (diff > 0.02) return `${label}：站上｜↑ 強勢`;
@@ -2495,526 +2547,170 @@ function maStateV26626(close, ma, label) {
   return `${label}：貼近｜→ 盤整`;
 }
 
-function ma5HintV26626(close, ma5) {
-  const c = nV26626(close);
-  const m = nV26626(ma5);
-  if (!c || !m) return "--";
-  const diff = (c - m) / m;
-  if (diff > 0.02) return "↑ 強勢，短線仍有承接";
-  if (diff < -0.02) return "↓ 轉弱，短線需提高警覺";
-  return "→ 盤整，短線方向未明";
+function chipTextV26629(overlay = {}, riskRow = {}) {
+  const score = cleanV26629(overlay.chip_score || riskRow.chip_score, "--");
+  const label = cleanV26629(overlay.chip_label || riskRow.chip_label || riskRow.chip_display, "--");
+  if (score === "--" && label === "--") return "--｜籌碼資料有限";
+  return `${score}｜${label}`;
 }
 
-function riskClassV26626(type) {
-  const t = String(type || "").toUpperCase();
-  if (t.includes("SELL") || t.includes("賣") || t.includes("出場")) return "sell";
-  if (t.includes("REDUCE") || t.includes("減")) return "reduce";
-  if (t.includes("WATCH") || t.includes("觀察")) return "watch";
-  return "hold";
+function detailCellV26629(label, value) {
+  return `<div><span>${label}</span><b>${cleanV26629(value)}</b></div>`;
 }
 
-function actionLabelV26626(action) {
-  const a = String(action || "").toUpperCase();
-  if (a === "SELL" || a.includes("賣")) return "🔴 賣出";
-  if (a === "REDUCE" || a.includes("減")) return "🟠 減碼";
-  if (a === "WATCH" || a.includes("觀察")) return "🟡 觀察";
-  return "🟢 抱住";
-}
-
-function kbarTypeV26626(riskRow, actionLabel) {
-  if (riskRow) return inferExitKbarTypeV26616(riskRow);
-  if (String(actionLabel).includes("抱住")) return "--";
-  return "--";
-}
-
-function sourceV26626(riskRow) {
-  if (riskRow) return zhSource(riskRow.source || "POSITION");
-  return "手動持倉";
-}
-
-function strategyV26626(riskRow) {
-  if (riskRow) return zhStrategy(riskRow.bucket || riskRow.strategy_type || "POSITION");
-  return "持倉管理";
-}
-
-function typeV26626(riskRow, actionLabel) {
-  if (riskRow) return inferExitTypeV26616(riskRow);
-  return actionLabel;
-}
-
-function reasonV26626(riskRow, actionLabel, overlay) {
-  const ov = showV26626(overlay.position_reason, "");
-  if (ov) return ov;
-  if (riskRow) return inferExitReasonV26616(riskRow);
-  if (String(actionLabel).includes("抱住")) return "尚未出現明顯下跌或系統賣出訊號，趨勢未完全破壞。";
-  if (String(actionLabel).includes("觀察")) return "持倉開始轉弱，但尚未達到必須出場條件。";
-  return "持倉風險提高，需要優先保護本金。";
-}
-
-function kbarReasonV26626(riskRow, actionLabel, ma5Text, ma20Text) {
-  if (riskRow) return inferExitKbarReasonV26616(riskRow);
-  if (String(actionLabel).includes("抱住")) return `K棒尚未形成明確破壞；${ma5Text}；${ma20Text}。`;
-  return `短線或中線開始轉弱；${ma5Text}；${ma20Text}。`;
-}
-
-function adviceV26626(riskRow, actionLabel, overlay) {
-  const ov = showV26626(overlay.position_hint, "");
-  if (ov) return ov;
-  if (riskRow) return inferExitAdviceV26616(riskRow, normalizeAction(riskRow.final_action || riskRow.action));
-  if (String(actionLabel).includes("抱住")) return "在還沒有明顯下跌、未觸發風控前，以續抱觀察為主。";
-  if (String(actionLabel).includes("觀察")) return "先觀察或小幅減碼，不建議加碼追高。";
-  return "優先處理出場，不建議拖延或凹單。";
-}
-
-function systemHintV26626(actionLabel) {
-  if (String(actionLabel).includes("賣出")) {
-    return "持倉風控已轉為出場，先保護本金，不建議拖延。";
-  }
-  if (String(actionLabel).includes("減碼")) {
-    return "持倉風險升高，先降低部位，保留重新觀察空間。";
-  }
-  if (String(actionLabel).includes("觀察")) {
-    return "持倉已有轉弱跡象，先觀察，不要重倉加碼。";
-  }
-  return "在還沒有明顯下跌的狀況下，先以抱住觀察為主；若跌破關鍵防守再處理出場。";
-}
-
-function calcMAFromPanelV26626(stock, days) {
-  // 若前端已有 pricePanel 類資料，盡量兼容；沒有就回空，不影響畫面。
-  try {
-    const sid = String(stock);
-    const src = window.pricePanel || window.__pricePanel || window.priceRows || [];
-    if (!Array.isArray(src) || !src.length) return "";
-    const rows = src
-      .filter(r => stockIdV26626(r.stock_id || r.symbol || r.code) === sid)
-      .map(r => ({...r, close_num: nV26626(r.close || r.Close || r["收盤價"])}))
-      .filter(r => r.close_num)
-      .slice(-days);
-    if (rows.length < Math.min(3, days)) return "";
-    const avg = rows.reduce((s, r) => s + r.close_num, 0) / rows.length;
-    return avg.toFixed(2);
-  } catch (e) {
-    return "";
+async function loadStockNameMapV26629() {
+  const urls = ["./data/stock_basic_tw_full.csv", "./stock_basic_tw_full.csv"];
+  for (const url of urls) {
+    try {
+      const txt = await fetchText(url);
+      const rows = parseCsv(txt);
+      rows.forEach(r => {
+        const sid = sidV26629(r.stock_id || r.code || r.symbol || r["證券代號"]);
+        const name = cleanV26629(r.stock_name || r.name || r["證券名稱"], "");
+        if (sid && name) window.__stockNameMapV26629[sid] = name;
+      });
+      if (Object.keys(window.__stockNameMapV26629).length) break;
+    } catch (e) {}
   }
 }
 
-function renderUnifiedPositionHintV26626(stock, posRow) {
-  const sid = String(stock);
-  const riskRow = getPositionRiskMap()[sid] || null;
-  const overlay = window.__positionOverlayMapV26626[sid] || {};
-
-  const rawAction = riskRow ? normalizeAction(riskRow.final_action || riskRow.action) : showV26626(overlay.position_action, "HOLD");
-  const actionLabel = riskRow ? actionLabelV26626(rawAction) : actionLabelV26626(rawAction);
-  const cls = riskClassV26626(actionLabel);
-
-  const avg = priceTextV26626(posRow?.avg_price);
-  const close = priceTextV26626(riskRow?.close || riskRow?.ref_price || overlay.close);
-  const amount = riskRow?.suggested_amount ? money(riskRow.suggested_amount) : positionCost(posRow);
-  const pnl = showV26626(overlay.pnl_pct, pnlTextV26626(avg, close));
-  const ma20 = priceTextV26626(overlay.ma20);
-  const ma5Raw = showV26626(overlay.ma5, calcMAFromPanelV26626(stock, 5));
-  const ma5 = priceTextV26626(ma5Raw);
-  const ma20Text = maStateV26626(close, ma20, "MA20");
-  const ma5Text = ma5HintV26626(close, ma5);
-  const risk = riskRow ? inferExitRiskLevelV26616(riskRow) : showV26626(overlay.risk_flag, "HOLD_CHECK");
-  const kbar = kbarTypeV26626(riskRow, actionLabel);
-  const pType = typeV26626(riskRow, actionLabel);
-
-  return `
-    <div class="position-unified-v26626 ${cls}">
-      <div class="position-unified-head-v26626">
-        <span class="scan-action ${cls === "sell" ? "sell" : cls === "reduce" ? "reduce" : cls === "watch" ? "watch" : "buy"}">${actionLabel}</span>
-        <b>持倉提示</b>
-        <strong>${close}</strong>
-      </div>
-
-      <div class="detail-grid position-unified-grid-v26626">
-        ${detailCell("來源", sourceV26626(riskRow))}
-        ${detailCell("策略層", strategyV26626(riskRow))}
-        ${detailCell("持倉型態", pType)}
-        ${detailCell("K棒型態", kbar)}
-        ${detailCell("參考價", close)}
-        ${detailCell("均價", avg)}
-        ${detailCell("部位金額", amount)}
-        ${detailCell("損益%", pnl)}
-        ${detailCell("MA20觀察", ma20Text)}
-        ${detailCell("五日線觀察", ma5Text)}
-        ${detailCell("風險等級", risk)}
-        ${detailCell("持倉提示", actionLabel)}
-      </div>
-
-      <div class="detail-text position-unified-text-v26626"><b>原因</b><p>${reasonV26626(riskRow, actionLabel, overlay)}</p></div>
-      <div class="detail-text position-unified-text-v26626"><b>K棒判斷</b><p>${kbarReasonV26626(riskRow, actionLabel, ma5Text, ma20Text)}</p></div>
-      <div class="detail-text position-unified-text-v26626"><b>建議動作</b><p>${adviceV26626(riskRow, actionLabel, overlay)}</p></div>
-      <div class="detail-text position-unified-text-v26626"><b>系統提示</b><p>${systemHintV26626(actionLabel)}</p></div>
-    </div>
-  `;
-}
-
-async function loadPositionOverlayV26626() {
+async function loadPositionOverlayV26629() {
   try {
     const txt = await fetchText("./data/position_overlay.csv");
     const rows = parseCsv(txt);
     const map = {};
     rows.forEach(r => {
-      const sid = stockIdV26626(r.stock_id);
+      const sid = sidV26629(r.stock_id);
       if (sid) map[sid] = r;
     });
-    window.__positionOverlayMapV26626 = map;
-    if (typeof renderPositions === "function") renderPositions();
+    window.__positionOverlayMapV26629 = map;
   } catch (e) {
-    window.__positionOverlayMapV26626 = {};
-    console.log("position overlay v266.26 skipped", e);
+    window.__positionOverlayMapV26629 = {};
   }
 }
 
-setTimeout(loadPositionOverlayV26626, 700);
-setTimeout(loadPositionOverlayV26626, 2200);
-// v266.27 app.js 追加補丁
-// 貼到 app.js 最底部即可；不覆蓋原始 renderPositions。
-// 目的：讓持倉提示優先顯示 overlay 的 close / ma5 / ma20 / pnl / 籌碼 / 停利提示。
+function renderMergedPositionHintV26629(stock, posRow) {
+  const sid = sidV26629(stock);
+  const overlay = window.__positionOverlayMapV26629[sid] || window.__positionOverlayMapV26627?.[sid] || window.__positionOverlayMapV26626?.[sid] || {};
+  const riskMap = typeof getPositionRiskMap === "function" ? getPositionRiskMap() : {};
+  const riskRow = riskMap[sid] || {};
 
-window.__positionOverlayMapV26627 = window.__positionOverlayMapV26627 || {};
+  const rawAction = cleanV26629(overlay.position_action || riskRow.final_action || riskRow.action, "HOLD");
+  const info = actionInfoV26629(rawAction);
+  const name = stockNameV26629(sid, posRow, overlay, riskRow);
+  const avg = priceV26629(posRow.avg_price);
+  const lots = lotTextV26629(posRow.lots);
+  const shares = sharesTextV26629(posRow.shares);
+  const cost = moneyTextV26629(nV26629(posRow.avg_price) && nV26629(posRow.shares) ? nV26629(posRow.avg_price) * nV26629(posRow.shares) : positionCost(posRow));
+  const close = priceV26629(overlay.close || riskRow.close || riskRow.ref_price);
+  const pnl = cleanV26629(overlay.pnl_pct, pnlFromAvgCloseV26629(posRow.avg_price, close));
+  const pnlText = String(pnl).includes("%") || pnl === "--" ? pnl : pctV26629(pnl);
+  const ma5 = maStatusV26629("MA5", close, overlay.ma5, overlay.ma5_status);
+  const ma20 = maStatusV26629("MA20", close, overlay.ma20, overlay.ma20_status);
+  const riskZh = zhRiskV26629(overlay.risk_flag || riskRow.risk_flag || riskRow.risk_level || riskRow.exit_risk_level, rawAction);
+  const chip = chipTextV26629(overlay, riskRow);
 
-function sidV26627(v) {
-  const m = String(v || "").match(/(\d{4})/);
-  return m ? m[1] : "";
-}
+  let reason = cleanV26629(overlay.position_reason || riskRow.position_reason || riskRow.reason, "");
+  if (!reason) reason = info.cls === "sell" ? `觸發停損或趨勢防守，優先保護本金。` : `尚未出現明顯下跌或系統賣出訊號，趨勢未完全破壞。`;
 
-function txtV26627(v, fallback="--") {
-  const s = String(v ?? "").trim();
-  return s && s !== "nan" && s !== "NaN" ? s : fallback;
-}
-
-async function loadPositionOverlayV26627() {
-  try {
-    const csv = await fetchText("./data/position_overlay.csv");
-    const rows = parseCsv(csv);
-    const map = {};
-    rows.forEach(r => {
-      const sid = sidV26627(r.stock_id);
-      if (sid) map[sid] = r;
-    });
-    window.__positionOverlayMapV26627 = map;
-    patchPositionCardsV26627();
-  } catch(e) {
-    console.log("v266.27 overlay skipped", e);
-  }
-}
-
-function renderOverlayBoxV26627(stock, posRow, riskRow) {
-  const o = window.__positionOverlayMapV26627[String(stock)] || {};
-  const action = txtV26627(o.position_action, riskRow ? "🔴 賣出" : "🟢 抱住");
-  const cls = action.includes("賣") || action.includes("出場") ? "sell" : action.includes("觀察") || action.includes("停利") ? "watch" : "hold";
-  const close = txtV26627(o.close, riskRow?.close || riskRow?.ref_price || "--");
-  const ma5 = txtV26627(o.ma5_status, "MA5：--");
-  const ma20 = txtV26627(o.ma20_status, "MA20：--");
-  const pnl = txtV26627(o.pnl_pct, "--");
-  const chip = txtV26627(o.chip_label, "--");
-  const chipScore = txtV26627(o.chip_score, "--");
-  const risk = txtV26627(o.risk_flag, riskRow ? "HIGH" : "HOLD_CHECK");
-  const reason = txtV26627(o.position_reason, riskRow?.reason || "尚未出現明顯下跌或系統賣出訊號。");
-  const hint = txtV26627(o.position_hint, riskRow?.system_note || "續抱觀察。");
-  const takeProfit = txtV26627(o.take_profit_hint, "尚未達明確停利條件，先依趨勢與籌碼續抱觀察。");
-  const chipHint = txtV26627(o.chip_hint, "籌碼資料有限，搭配技術面確認。");
-  const chipReason = txtV26627(o.chip_reason, "--");
+  const kbar = cleanV26629(overlay.kbar_hint || riskRow.kbar_reason, `${ma5}；${ma20}。`);
+  const takeProfit = cleanV26629(overlay.take_profit_hint, info.cls === "sell" ? "目前不是停利情境，而是停損／風控優先。" : "尚未達明確停利條件，先依趨勢與籌碼續抱觀察。");
+  const chipHint = cleanV26629(overlay.chip_hint || riskRow.chip_hint, "籌碼資料有限，需搭配技術面確認。");
+  const chipReason = cleanV26629(overlay.chip_reason || riskRow.chip_reason, "籌碼資料有限");
+  const advice = cleanV26629(overlay.position_hint || riskRow.position_hint || riskRow.system_note, info.cls === "sell" ? "優先處理出場，不建議拖延或凹單。" : "在還沒有明顯下跌、未觸發風控前，以續抱觀察為主。");
+  const systemHint = info.cls === "sell"
+    ? "持倉已有風險或停損訊號，先控制部位，不要情緒化加碼。"
+    : "尚未跌破關鍵防守時續抱；若跌破五日線、MA20 或籌碼轉弱，再分批停利或出場。";
 
   return `
-    <div class="position-v26627 ${cls}">
-      <div class="position-v26627-head">
-        <span>${action}</span>
+    <div class="position-merged-v26629 ${info.cls}">
+      <div class="position-merged-head-v26629">
+        <span class="position-merged-pill-v26629 ${info.cls}">${info.pill}</span>
         <b>持倉提示</b>
         <strong>${close}</strong>
       </div>
-      <div class="detail-grid">
-        ${detailCell("來源", riskRow ? "策略出場" : "手動持倉")}
-        ${detailCell("策略層", riskRow ? "持倉風控" : "持倉管理")}
-        ${detailCell("持倉型態", action)}
-        ${detailCell("K棒型態", riskRow ? "跌破/風控K棒" : "續抱觀察")}
-        ${detailCell("參考價", close)}
-        ${detailCell("均價", txtV26627(posRow?.avg_price, "--"))}
-        ${detailCell("部位金額", positionCost(posRow))}
-        ${detailCell("損益%", pnl === "--" ? "--" : pnl + "%")}
-        ${detailCell("MA20觀察", ma20)}
-        ${detailCell("五日線觀察", ma5)}
-        ${detailCell("籌碼集中度", chipScore + "｜" + chip)}
-        ${detailCell("風險等級", risk)}
+      <div class="detail-grid position-merged-grid-v26629">
+        ${detailCellV26629("個股名稱", name)}
+        ${detailCellV26629("持倉狀態", info.status)}
+        ${detailCellV26629("來源", info.cls === "sell" ? "策略出場" : "手動持倉")}
+        ${detailCellV26629("策略層", info.cls === "sell" ? "持倉風控" : "持倉管理")}
+        ${detailCellV26629("參考價", close)}
+        ${detailCellV26629("均價", avg)}
+        ${detailCellV26629("張數", lots)}
+        ${detailCellV26629("股數", shares)}
+        ${detailCellV26629("部位金額", cost)}
+        ${detailCellV26629("損益%", pnlText)}
+        ${detailCellV26629("MA20觀察", ma20)}
+        ${detailCellV26629("五日線觀察", ma5)}
+        ${detailCellV26629("籌碼集中度", chip)}
+        ${detailCellV26629("風控提示", riskZh)}
+        ${detailCellV26629("更新時間", cleanV26629(posRow.updated_at))}
+        ${detailCellV26629("備註", cleanV26629(posRow.note, "手動持倉"))}
       </div>
-      <div class="detail-text"><b>原因</b><p>${reason}</p></div>
-      <div class="detail-text"><b>K棒判斷</b><p>${ma5}；${ma20}。</p></div>
-      <div class="detail-text"><b>停利提示</b><p>${takeProfit}</p></div>
-      <div class="detail-text"><b>籌碼提示</b><p>${chipReason}｜${chipHint}</p></div>
-      <div class="detail-text"><b>建議動作</b><p>${hint}</p></div>
-      <div class="detail-text"><b>系統提示</b><p>${action.includes("抱住") ? "尚未跌破關鍵防守時續抱；若跌破五日線、MA20 或籌碼轉弱，再分批停利或出場。" : "持倉已有風險或停利訊號，先控制部位，不要情緒化加碼。"}</p></div>
+      <div class="detail-text position-merged-text-v26629"><b>原因</b><p>${reason}</p></div>
+      <div class="detail-text position-merged-text-v26629"><b>K棒判斷</b><p>${kbar}</p></div>
+      <div class="detail-text position-merged-text-v26629"><b>停利提示</b><p>${takeProfit}</p></div>
+      <div class="detail-text position-merged-text-v26629"><b>籌碼提示</b><p>${chipReason}｜${chipHint}</p></div>
+      <div class="detail-text position-merged-text-v26629"><b>建議動作</b><p>${advice}</p></div>
+      <div class="detail-text position-merged-text-v26629"><b>系統提示</b><p>${systemHint}</p></div>
     </div>
   `;
 }
 
-function patchPositionCardsV26627() {
-  const cards = document.querySelectorAll(".scan-item.position");
-  if (!cards.length) return;
-  const risks = typeof getPositionRiskMap === "function" ? getPositionRiskMap() : {};
-  const positions = typeof loadPositions === "function" ? loadPositions() : [];
+// 關閉舊版 v266.27 追加卡，避免又插回重複欄位
+try { patchPositionCardsV26627 = function() {}; } catch (e) {}
 
-  cards.forEach(card => {
-    const stock = sidV26627(card.querySelector(".scan-stock")?.textContent);
-    if (!stock) return;
-    const detail = card.querySelector(".scan-detail");
-    if (!detail) return;
+renderPositions = function() {
+  const box = qs("positionList");
+  if (!box) return;
 
-    const old = detail.querySelector(".position-v26627");
-    if (old) old.remove();
+  const rows = loadPositions();
+  if (!rows.length) {
+    box.innerHTML = `<div class="empty">尚未建立持倉。請輸入個股、均價、張數後按「新增 / 更新」。</div>`;
+    return;
+  }
 
-    const posRow = positions.find(p => sidV26627(p.stock_id) === stock) || {};
-    const riskRow = risks[String(stock)] || null;
+  box.innerHTML = rows.map((row, idx) => {
+    const key = `pos-${idx}`;
+    const stock = sidV26629(row.stock_id) || cleanV26629(row.stock_id);
+    const overlay = window.__positionOverlayMapV26629[stock] || window.__positionOverlayMapV26627?.[stock] || window.__positionOverlayMapV26626?.[stock] || {};
+    const displayName = stockNameV26629(stock, row, overlay, {});
+    const avg = priceV26629(row.avg_price);
+    const lots = lotTextV26629(row.lots);
+    const cost = moneyTextV26629(nV26629(row.avg_price) && nV26629(row.shares) ? nV26629(row.avg_price) * nV26629(row.shares) : positionCost(row));
 
-    const existing = detail.querySelector(".position-unified-v26626, .position-inline-risk-v266254");
-    if (existing) existing.remove();
+    return `
+      <article class="scan-item position position-card-v26629">
+        <div class="scan-main position-main position-main-v26629" data-toggle="${key}">
+          <div class="scan-action position">📦 持倉</div>
+          <div class="scan-stock position-name-v26629">${displayName}</div>
+          <div class="scan-score">${lots}</div>
+          <div class="scan-top">張</div>
+          <div class="scan-entry">均價 ${avg}</div>
+          <div class="scan-close">${cost}</div>
+        </div>
+        <div class="scan-detail" id="${key}">
+          ${renderMergedPositionHintV26629(stock, row)}
+          <div class="position-row-actions">
+            <button type="button" data-edit-position="${stock}">編輯</button>
+            <button type="button" class="danger" data-delete-position="${stock}">刪除</button>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join("");
 
-    const actions = detail.querySelector(".position-row-actions");
-    const wrap = document.createElement("div");
-    wrap.innerHTML = renderOverlayBoxV26627(stock, posRow, riskRow);
-    const node = wrap.firstElementChild;
+  bindToggle();
+  bindPositionRowActions();
+};
 
-    if (actions) detail.insertBefore(node, actions);
-    else detail.appendChild(node);
-  });
+async function refreshPositionUIV26629() {
+  await loadStockNameMapV26629();
+  await loadPositionOverlayV26629();
+  if (typeof renderPositions === "function") renderPositions();
 }
 
-if (typeof renderPositions === "function" && !window.__renderPositionsPatchedV26627) {
-  window.__renderPositionsPatchedV26627 = true;
-  const oldRenderPositionsV26627 = renderPositions;
-  renderPositions = function() {
-    oldRenderPositionsV26627.apply(this, arguments);
-    setTimeout(patchPositionCardsV26627, 0);
-  };
-}
-
-setTimeout(loadPositionOverlayV26627, 800);
-setTimeout(loadPositionOverlayV26627, 2400);
-setTimeout(patchPositionCardsV26627, 4000);
-
-// ===== v266.29 追加補丁：原檔不動，只做持倉 UI 合併 + 中文提示 =====
-// 使用方式：此段貼在 app.js 最底部；本覆蓋版已直接附加。
-(function(){
-  if (window.__v26629_position_ui_patch_loaded) return;
-  window.__v26629_position_ui_patch_loaded = true;
-
-  function qsa(sel, root){ return Array.from((root || document).querySelectorAll(sel)); }
-
-  function cleanText(v){
-    const s = String(v == null ? "" : v).trim();
-    if (!s || s === "nan" || s === "NaN" || s === "undefined" || s === "null") return "--";
-    return s;
-  }
-
-  function stockIdOnly(v){
-    const m = String(v || "").match(/(\d{4})/);
-    return m ? m[1] : cleanText(v);
-  }
-
-  function zhRiskV26629(v){
-    const s = cleanText(v).toUpperCase();
-    const map = {
-      STOP_LOSS: "🔴 停損出場",
-      HIGH: "🔴 高風險",
-      MEDIUM: "🟡 中風險",
-      LOW: "🟢 低風險",
-      HOLD_CHECK: "🟢 續抱觀察",
-      PROFIT_HOLD: "🟢 獲利續抱",
-      PROFIT_STRONG_HOLD: "🟢 強勢續抱",
-      PROFIT_WATCH: "🟡 獲利觀察",
-      TAKE_PROFIT: "🟠 停利觀察",
-      TAKE_PROFIT_20_WEAK: "🟠 高檔停利觀察",
-      TAKE_PROFIT_15_WEAK: "🟠 停利觀察",
-      BELOW_MA20: "🟡 跌破 MA20 觀察",
-      BELOW_MA5: "🟡 跌破五日線觀察",
-      CHIP_WEAK: "🟡 籌碼轉弱觀察",
-      NO_PRICE: "⚪ 價格資料不足",
-      NO_COST: "⚪ 成本資料不足"
-    };
-    return map[s] || cleanText(v);
-  }
-
-  function zhActionV26629(v){
-    const s = cleanText(v).toUpperCase();
-    if (s.includes("STOP") || s.includes("SELL") || s.includes("賣") || s.includes("出場")) return "🔴 出場";
-    if (s.includes("REDUCE") || s.includes("減")) return "🟠 減碼";
-    if (s.includes("TAKE") || s.includes("停利")) return "🟠 停利觀察";
-    if (s.includes("WATCH") || s.includes("觀察")) return "🟡 觀察";
-    if (s.includes("HOLD") || s.includes("抱")) return "🟢 抱住";
-    return cleanText(v);
-  }
-
-  function translateValueV26629(label, value){
-    const l = cleanText(label);
-    const v = cleanText(value);
-    if (l.includes("風險")) return zhRiskV26629(v);
-    if (l.includes("持倉型態") || l.includes("持倉提示")) return zhActionV26629(v);
-    if (l.includes("K棒型態")) {
-      if (v === "--") return "續抱觀察";
-      return v.replace(/STOP_LOSS/g, "停損出場").replace(/HOLD_CHECK/g, "續抱觀察");
-    }
-    return v;
-  }
-
-  function makeCellV26629(label, value){
-    const div = document.createElement("div");
-    const span = document.createElement("span");
-    const b = document.createElement("b");
-    span.textContent = label;
-    b.textContent = translateValueV26629(label, value);
-    div.appendChild(span);
-    div.appendChild(b);
-    return div;
-  }
-
-  function getCellValueV26629(grid, label){
-    if (!grid) return "--";
-    const found = qsa("div", grid).find(div => cleanText(div.querySelector("span")?.textContent).includes(label));
-    return cleanText(found?.querySelector("b")?.textContent);
-  }
-
-  function setCellLabelAndValueV26629(cell){
-    const span = cell.querySelector("span");
-    const b = cell.querySelector("b");
-    if (!span || !b) return;
-
-    let label = cleanText(span.textContent);
-    if (label === "個股") label = "股票代號";
-    if (label === "MA20觀察") label = "MA20 觀察";
-    if (label === "五日線觀察") label = "MA5 五日線觀察";
-    span.textContent = label;
-    b.textContent = translateValueV26629(label, b.textContent);
-  }
-
-  function normalizeTextBlocksV26629(card){
-    qsa(".detail-text b, .position-unified-text-v26626 b, .position-inline-risk-text b", card).forEach(b => {
-      const t = cleanText(b.textContent);
-      if (t === "中文籌碼提示") b.textContent = "籌碼提示";
-      if (t === "中文決策提示") b.textContent = "中文提示";
-    });
-
-    qsa("p, b, strong, span", card).forEach(el => {
-      if (!el.childElementCount) {
-        let t = cleanText(el.textContent, "");
-        if (!t || t === "--") return;
-        t = t
-          .replace(/STOP_LOSS/g, "停損出場")
-          .replace(/HOLD_CHECK/g, "續抱觀察")
-          .replace(/HIGH/g, "高風險")
-          .replace(/MEDIUM/g, "中風險")
-          .replace(/LOW/g, "低風險")
-          .replace(/SELL/g, "出場")
-          .replace(/REDUCE/g, "減碼")
-          .replace(/WATCH/g, "觀察")
-          .replace(/HOLD/g, "抱住");
-        el.textContent = t;
-      }
-    });
-  }
-
-  function findOverlayBoxV26629(detail){
-    return detail.querySelector(".position-v26627, .position-unified-v26626, .position-inline-risk, .position-inline-risk-v266254");
-  }
-
-  function mergePositionCardV26629(card){
-    const detail = card.querySelector(".scan-detail");
-    if (!detail) return;
-
-    const stock = stockIdOnly(card.querySelector(".scan-stock")?.textContent || "");
-    const firstGrid = detail.querySelector(":scope > .detail-grid");
-    const firstNote = detail.querySelector(":scope > .detail-text");
-    const overlay = findOverlayBoxV26629(detail);
-
-    // 先把原本「個股」改成「股票代號」，即使沒有 overlay 也要生效。
-    qsa(".detail-grid div", detail).forEach(setCellLabelAndValueV26629);
-
-    if (!overlay) {
-      normalizeTextBlocksV26629(detail);
-      return;
-    }
-
-    overlay.classList.add("position-v26629-merged");
-    const overlayGrid = overlay.querySelector(".detail-grid, .position-unified-grid-v26626, .position-inline-risk-grid");
-    if (!overlayGrid) return;
-
-    // 避免重複補。
-    if (!overlayGrid.dataset.v26629Merged) {
-      overlayGrid.dataset.v26629Merged = "1";
-
-      const stockName = getCellValueV26629(firstGrid, "股票名稱");
-      const avg = getCellValueV26629(firstGrid, "均價");
-      const lots = getCellValueV26629(firstGrid, "張數");
-      const shares = getCellValueV26629(firstGrid, "股數");
-      const cost = getCellValueV26629(firstGrid, "成本");
-      const updatedAt = getCellValueV26629(firstGrid, "更新時間");
-      const note = cleanText(firstNote?.querySelector("p")?.textContent, "手動持倉");
-
-      const insertCells = [
-        makeCellV26629("股票代號", stock),
-        makeCellV26629("股票名稱", stockName),
-        makeCellV26629("張數", lots),
-        makeCellV26629("股數", shares),
-        makeCellV26629("成本", cost),
-        makeCellV26629("更新時間", updatedAt),
-        makeCellV26629("備註", note)
-      ];
-
-      insertCells.reverse().forEach(cell => overlayGrid.insertBefore(cell, overlayGrid.firstChild));
-    }
-
-    // 隱藏原本上方基本資料格，保留同一張持倉提示卡內呈現。
-    if (firstGrid) firstGrid.classList.add("position-basic-hidden-v26629");
-    if (firstNote) firstNote.classList.add("position-basic-hidden-v26629");
-
-    qsa(".detail-grid div", overlay).forEach(setCellLabelAndValueV26629);
-    normalizeTextBlocksV26629(overlay);
-  }
-
-  function normalizePositionInputsV26629(){
-    const posStock = document.getElementById("posStock");
-    if (posStock && posStock.placeholder.includes("個股")) {
-      posStock.placeholder = "股票代號，例如 2330";
-    }
-
-    qsa(".position-form input").forEach(input => {
-      if (input.placeholder && input.placeholder.includes("個股")) {
-        input.placeholder = input.placeholder.replace("個股", "股票代號");
-      }
-    });
-  }
-
-  function applyPositionPatchV26629(){
-    normalizePositionInputsV26629();
-    qsa(".scan-item.position").forEach(mergePositionCardV26629);
-  }
-
-  // 包住原 renderPositions：不改原函式內容，只在它跑完後補 UI。
-  function patchRenderPositionsV26629(){
-    if (typeof window.renderPositions !== "function" && typeof renderPositions !== "function") return;
-    const current = window.renderPositions || renderPositions;
-    if (current.__v26629Patched) return;
-
-    const wrapped = function(){
-      const out = current.apply(this, arguments);
-      setTimeout(applyPositionPatchV26629, 0);
-      setTimeout(applyPositionPatchV26629, 250);
-      return out;
-    };
-    wrapped.__v26629Patched = true;
-
-    try { window.renderPositions = wrapped; } catch(e) {}
-    try { renderPositions = wrapped; } catch(e) {}
-  }
-
-  patchRenderPositionsV26629();
-  document.addEventListener("DOMContentLoaded", function(){
-    patchRenderPositionsV26629();
-    setTimeout(applyPositionPatchV26629, 300);
-    setTimeout(applyPositionPatchV26629, 1200);
-    setTimeout(applyPositionPatchV26629, 2800);
-  });
-  setTimeout(function(){ patchRenderPositionsV26629(); applyPositionPatchV26629(); }, 1000);
-  setTimeout(applyPositionPatchV26629, 3500);
-})();
+setTimeout(refreshPositionUIV26629, 300);
+setTimeout(refreshPositionUIV26629, 1200);
+setTimeout(refreshPositionUIV26629, 2600);
+setTimeout(refreshPositionUIV26629, 5000);
