@@ -1,6 +1,6 @@
 {
-  "version": "v266.33B_ma_rescue_hotfix",
-  "updated_at": "2026-05-03 15:37:44",
+  "version": "v266.33C_ma_merge_coalesce",
+  "updated_at": "2026-05-03 16:03:56",
   "rows": 2,
   "stocks": [
     "2409",
