@@ -173,7 +173,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.30E_ma_display_fix";
+const APP_PATCH_VERSION = "v266.30E_patch2_safe_ma_pick";
 
 
 const FILES = {
@@ -874,6 +874,41 @@ function zhRiskV26630(v, actionLike = "") {
   return "🟢 續抱觀察";
 }
 
+
+function safeStockKeyPatch2(v) {
+  const s = String(v ?? "").trim();
+  const m = s.match(/\d{4}/);
+  return m ? m[0] : s;
+}
+
+function safePickPatch2(row, keys, fallback = "") {
+  if (!row || typeof row !== "object") return fallback;
+  for (const k of keys) {
+    if (Object.prototype.hasOwnProperty.call(row, k)) {
+      const v = row[k];
+      const s = String(v ?? "").trim();
+      if (s && s !== "--" && s.toLowerCase() !== "nan" && s !== "undefined" && s !== "null") {
+        return v;
+      }
+    }
+  }
+  return fallback;
+}
+
+function safeFindOverlayPatch2(stock, overlayMap) {
+  const sid = safeStockKeyPatch2(stock);
+  if (!sid) return {};
+  if (overlayMap && overlayMap[sid]) return overlayMap[sid];
+
+  // map key 若是 2330.0 / 2330.TW，也能救回來
+  if (overlayMap && typeof overlayMap === "object") {
+    for (const [k, v] of Object.entries(overlayMap)) {
+      if (safeStockKeyPatch2(k) === sid) return v || {};
+    }
+  }
+  return {};
+}
+
 function maStatusV26630(label, close, ma, direct) {
   // v266.30E：MA 顯示修補。
   // 後端 position_overlay.csv 已有 ma5 / ma20，但 close 可能缺值。
@@ -882,12 +917,12 @@ function maStatusV26630(label, close, ma, direct) {
   if (d && d !== "--") return d.startsWith(label) ? d : `${label}：${d}`;
 
   const m = nV26630(ma);
-  if (!m) return `${label}：--`;
+  if (m === null || m === undefined) return `${label}：--`;
 
   const c = nV26630(close);
 
   // 核心修補：允許沒有 close。至少把 MA 數值顯示出來。
-  if (!c) return `${label}：${priceV26630(m)}`;
+  if (c === null || c === undefined) return `${label}：${priceV26630(m)}`;
 
   const diff = (c - m) / m;
   if (diff > 0.02) return `${label}：站上｜↑ 強勢`;
@@ -939,14 +974,17 @@ async function loadPositionOverlayV26630() {
 }
 
 function getPositionOverlayRowV26630(stock) {
-  const sid = sidV26630(stock);
-  return window.__positionOverlayMapV26630[sid] || {};
+  return safeFindOverlayPatch2(stock, window.__positionOverlayMapV26630 || {});
 }
 
 function getPositionRiskRowV26630(stock) {
-  const sid = sidV26630(stock);
+  const sid = safeStockKeyPatch2(stock);
   const map = typeof getPositionRiskMap === "function" ? getPositionRiskMap() : {};
-  return map[sid] || {};
+  if (map[sid]) return map[sid];
+  for (const [k, v] of Object.entries(map || {})) {
+    if (safeStockKeyPatch2(k) === sid) return v || {};
+  }
+  return {};
 }
 
 function renderMergedPositionHintV26630(stock, posRow) {
@@ -965,8 +1003,27 @@ function renderMergedPositionHintV26630(stock, posRow) {
   const cost = moneyV26630(nV26630(posRow.avg_price) && nV26630(posRow.shares) ? nV26630(posRow.avg_price) * nV26630(posRow.shares) : positionCost(posRow));
   const pnlRaw = overlay.pnl_pct || riskRow.pnl_pct;
   const pnl = cleanV26630(pnlRaw, (nV26630(close) && nV26630(posRow.avg_price)) ? pctV26630((nV26630(close) - nV26630(posRow.avg_price)) / nV26630(posRow.avg_price) * 100) : "--");
-  const ma5 = maStatusV26630("MA5", close, overlay.ma5 || riskRow.ma5, overlay.ma5_status || riskRow.ma5_status);
-  const ma20 = maStatusV26630("MA20", close, overlay.ma20 || riskRow.ma20, overlay.ma20_status || riskRow.ma20_status);
+  // v266.30E_patch2：安全補丁，只強化 MA 欄位取值，不改 UI。
+  const ma5RawPatch2 =
+    safePickPatch2(overlay, ["ma5", "MA5", "ma_5", "sma5", "五日線", "五日均線"], "") ||
+    safePickPatch2(riskRow, ["ma5", "MA5", "ma_5", "sma5", "五日線", "五日均線"], "") ||
+    safePickPatch2(posRow, ["ma5", "MA5", "ma_5", "sma5", "五日線", "五日均線"], "");
+
+  const ma20RawPatch2 =
+    safePickPatch2(overlay, ["ma20", "MA20", "ma_20", "sma20", "二十日線", "二十日均線"], "") ||
+    safePickPatch2(riskRow, ["ma20", "MA20", "ma_20", "sma20", "二十日線", "二十日均線"], "") ||
+    safePickPatch2(posRow, ["ma20", "MA20", "ma_20", "sma20", "二十日線", "二十日均線"], "");
+
+  const ma5StatusPatch2 =
+    safePickPatch2(overlay, ["ma5_status", "MA5_status", "五日線觀察"], "") ||
+    safePickPatch2(riskRow, ["ma5_status", "MA5_status", "五日線觀察"], "");
+
+  const ma20StatusPatch2 =
+    safePickPatch2(overlay, ["ma20_status", "MA20_status", "MA20觀察", "二十日線觀察"], "") ||
+    safePickPatch2(riskRow, ["ma20_status", "MA20_status", "MA20觀察", "二十日線觀察"], "");
+
+  const ma5 = maStatusV26630("MA5", close, ma5RawPatch2, ma5StatusPatch2);
+  const ma20 = maStatusV26630("MA20", close, ma20RawPatch2, ma20StatusPatch2);
   const riskZh = zhRiskV26630(overlay.risk_flag || riskRow.risk_flag || riskRow.risk_level || riskRow.exit_risk_level, actionRaw);
   const chip = chipTextV26630({ ...riskRow, ...overlay });
   const name = positionNameV26630(sid, posRow, overlay, riskRow);
