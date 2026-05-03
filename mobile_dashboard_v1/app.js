@@ -160,7 +160,7 @@ async function loadMacroDashboardV26614() {
 }
 
 /*
-app.js - v266.21 籌碼可用版：保留原本功能 + SELL/REDUCE完整欄位
+app.js - v266.30D 交易日原生修補版：保留原本功能 + 只補回交易日欄位
 
 保留：
 1. 原本卡片 UI / 列表 / CSV 讀取 / 排序 / 展開邏輯
@@ -1481,7 +1481,17 @@ function zhRiskMode(summary, regime, macro) {
 
 
 function resolveTradeDateV26630(regime, summary) {
-  const raw = summary.trade_date || summary.next_trade_date || regime.trade_date || regime.next_trade_date || summary.signal_date || regime.date || regime.latest_date || "--";
+  // v266.30D：交易日只吃後端交易日欄位；不再用「最後更新」或前端時間推算。
+  // 優先順序：summary.trade_date / next_trade_date -> regime.trade_date / next_trade_date -> 訊號日備援。
+  const raw =
+    summary.trade_date ||
+    summary.next_trade_date ||
+    regime.trade_date ||
+    regime.next_trade_date ||
+    summary.signal_date ||
+    regime.date ||
+    regime.latest_date ||
+    "--";
   const m = String(raw || "").match(/\d{4}-\d{2}-\d{2}/);
   return m ? m[0] : safeText(raw, "--");
 }
@@ -1492,12 +1502,14 @@ function renderMeta(regime, summary, macro, rows) {
   const marketText = `${safeText(regime.market_label || summary.market_label || regime.label || regime.regime, "--")} ${safeText(regime.index_change_pct_text || summary.index_change_pct_text, "")}`.trim();
   const macroText = `${safeText(macro.macro_label || summary.macro_label, "--")}｜分數 ${safeText(macro.macro_score ?? summary.macro_score, "--")}`;
   const signalDate = safeText(regime.date || regime.latest_date || summary.signal_date || summary.generated_at, "--");
+  const tradeDate = resolveTradeDateV26630(regime, summary);
   qs("metaBox").innerHTML = `
     <div class="mini"><span>來源版本</span><b>C 完整交易系統</b></div>
     <div class="mini"><span>市場狀態</span><b>${marketText}</b></div>
     <div class="mini"><span>總經狀態</span><b>${macroText}</b></div>
     <div class="mini"><span>風險模式</span><b>${zhRiskMode(summary, regime, macro)}</b></div>
     <div class="mini"><span>訊號日</span><b>${signalDate}</b></div>
+    <div class="mini"><span>交易日</span><b>${tradeDate}</b></div>
     <div class="mini"><span>最後更新</span><b>${backendUpdatedAt}</b></div>
     <div class="mini"><span>操作筆數</span><b>${rows.length}</b></div>
   `;
@@ -2752,200 +2764,3 @@ function injectV26630BPositionColorStyle() {
 }
 try { injectV26630BPositionColorStyle(); } catch(e) {}
 document.addEventListener("DOMContentLoaded", injectV26630BPositionColorStyle);
-
-// v266.30B：移除前一版額外插入的「交易日」資訊卡，避免日期錯誤與原版資訊區被改動。
-function removeExtraTradeDateCardV26630B() {
-  const meta = document.getElementById("metaBox");
-  if (!meta) return;
-  Array.from(meta.children || []).forEach(card => {
-    const label = (card.querySelector("span")?.textContent || "").trim();
-    if (label === "交易日") card.remove();
-  });
-}
-setTimeout(removeExtraTradeDateCardV26630B, 300);
-setTimeout(removeExtraTradeDateCardV26630B, 1200);
-setTimeout(removeExtraTradeDateCardV26630B, 2500);
-/*
-v266.30C 交易日欄位補回（安全版）
-貼到 mobile_dashboard_v1/app.js 最底部，不刪原本內容。
-
-目的：
-1. 補回「交易日」欄位。
-2. 不使用 MutationObserver，不會亂跳、不會一直新增欄位。
-3. 如果原本畫面已經有交易日，就不重複新增。
-4. 交易日來源優先：
-   trade_plan.csv 的 trade_date
-   final_action_plan.csv 的 trade_date
-   若都沒有，才使用 signal_date
-*/
-
-(function () {
-  const DATA_DIR = "./data/";
-
-  function cleanText(el) {
-    return (el && el.textContent ? el.textContent : "").replace(/\s+/g, " ").trim();
-  }
-
-  function splitCsvLine(line) {
-    const out = [];
-    let cur = "";
-    let q = false;
-
-    for (let i = 0; i < line.length; i++) {
-      const c = line[i];
-
-      if (c === '"') {
-        if (q && line[i + 1] === '"') {
-          cur += '"';
-          i++;
-        } else {
-          q = !q;
-        }
-      } else if (c === "," && !q) {
-        out.push(cur);
-        cur = "";
-      } else {
-        cur += c;
-      }
-    }
-
-    out.push(cur);
-    return out;
-  }
-
-  function parseCsv(text) {
-    const lines = String(text || "").replace(/\r/g, "").split("\n").filter(x => x.trim());
-    if (lines.length < 2) return [];
-
-    const headers = splitCsvLine(lines[0]).map(x => x.trim());
-    return lines.slice(1).map(line => {
-      const vals = splitCsvLine(line);
-      const row = {};
-      headers.forEach((h, i) => row[h] = vals[i] || "");
-      return row;
-    });
-  }
-
-  async function fetchTextSafe(url) {
-    try {
-      const res = await fetch(url + "?t=" + Date.now(), { cache: "no-store" });
-      if (!res.ok) return "";
-      return await res.text();
-    } catch (e) {
-      return "";
-    }
-  }
-
-  function dateOnly(v) {
-    const s = String(v || "").trim();
-    const m = s.match(/\d{4}-\d{2}-\d{2}/);
-    return m ? m[0] : "";
-  }
-
-  async function resolveTradeDate() {
-    let rows = parseCsv(await fetchTextSafe(DATA_DIR + "trade_plan.csv"));
-    if (rows.length) {
-      const d = dateOnly(rows[0].trade_date || rows[0].next_trade_date);
-      if (d) return d;
-    }
-
-    rows = parseCsv(await fetchTextSafe(DATA_DIR + "final_action_plan.csv"));
-    if (rows.length) {
-      const d = dateOnly(rows[0].trade_date || rows[0].next_trade_date);
-      if (d) return d;
-    }
-
-    rows = parseCsv(await fetchTextSafe(DATA_DIR + "trading_system_plan.csv"));
-    if (rows.length) {
-      const d = dateOnly(rows[0].trade_date || rows[0].next_trade_date);
-      if (d) return d;
-    }
-
-    rows = parseCsv(await fetchTextSafe(DATA_DIR + "trade_plan.csv"));
-    if (rows.length) {
-      const d = dateOnly(rows[0].signal_date);
-      if (d) return d;
-    }
-
-    return "";
-  }
-
-  function findSystemInfoBlock() {
-    const blocks = Array.from(document.querySelectorAll("section, article, div")).filter(el => {
-      const t = cleanText(el);
-      return (
-        t.includes("來源版本") &&
-        t.includes("市場狀態") &&
-        t.includes("訊號日") &&
-        t.includes("最後更新")
-      );
-    });
-
-    // 選最小的那個，避免選到整個 body
-    blocks.sort((a, b) => cleanText(a).length - cleanText(b).length);
-    return blocks[0] || null;
-  }
-
-  function findFieldCard(block, labelText) {
-    const labels = Array.from(block.querySelectorAll("*")).filter(el => cleanText(el) === labelText);
-
-    if (!labels.length) return null;
-
-    let cur = labels[0];
-    for (let i = 0; i < 6 && cur; i++) {
-      const t = cleanText(cur);
-      if (t.includes(labelText) && (/\d{4}-\d{2}-\d{2}/.test(t) || labelText === "最後更新")) {
-        return cur;
-      }
-      cur = cur.parentElement;
-    }
-
-    return labels[0].parentElement || labels[0];
-  }
-
-  function setCardLabelValue(card, label, value) {
-    const nodes = Array.from(card.querySelectorAll("*"));
-
-    const labelNode = nodes.find(el => cleanText(el) === "訊號日" || cleanText(el) === "交易日");
-    if (labelNode) labelNode.textContent = label;
-
-    const valueNode = nodes.slice().reverse().find(el => /\d{4}-\d{2}-\d{2}/.test(cleanText(el)));
-    if (valueNode) valueNode.textContent = value;
-
-    if (!labelNode || !valueNode) {
-      card.innerHTML = `
-        <div style="font-size:0.9em;color:#6b7280;font-weight:800;">${label}</div>
-        <div style="font-size:1.35em;color:#111827;font-weight:900;">${value}</div>
-      `;
-    }
-  }
-
-  async function addTradeDateOnce() {
-    const tradeDate = await resolveTradeDate();
-    if (!tradeDate) return;
-
-    const block = findSystemInfoBlock();
-    if (!block) return;
-
-    // 已經有交易日就不要再加
-    if (Array.from(block.querySelectorAll("*")).some(el => cleanText(el) === "交易日")) return;
-
-    const signalCard = findFieldCard(block, "訊號日");
-    if (!signalCard || !signalCard.parentElement) return;
-
-    const tradeCard = signalCard.cloneNode(true);
-    tradeCard.setAttribute("data-v26630c-trade-date", "1");
-    setCardLabelValue(tradeCard, "交易日", tradeDate);
-
-    signalCard.parentElement.insertBefore(tradeCard, signalCard.nextSibling);
-
-    console.log("[v266.30C] 交易日已補回:", tradeDate);
-  }
-
-  window.addEventListener("load", function () {
-    setTimeout(addTradeDateOnce, 800);
-    setTimeout(addTradeDateOnce, 1800);
-  });
-
-  window.addTradeDateOnceV26630C = addTradeDateOnce;
-})();
