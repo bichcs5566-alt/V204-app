@@ -3224,3 +3224,430 @@ v266.29G 修正補丁：持倉列表顯示代號 + 補回交易日
 
   window.applyV26629G = applyV26629G;
 })();
+/*
+v266.29H 持倉欄位修正版
+貼到 mobile_dashboard_v1/app.js 最底部，不刪原本內容。
+
+修正目標：
+1. 持倉卡上方大字：顯示股票代號 stock_id
+2. 展開卡第一格：股票代號
+3. 展開卡第二格：股票名稱
+4. 不再把「個股名稱」誤改成代號
+5. 補丁會在畫面 render 後強制修正 DOM
+*/
+
+(function () {
+  const DATA_DIR = "./data/";
+
+  function cleanText(el) {
+    return (el && el.textContent ? el.textContent : "").replace(/\s+/g, " ").trim();
+  }
+
+  function splitCsvLine(line) {
+    const out = [];
+    let cur = "";
+    let q = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') {
+        if (q && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          q = !q;
+        }
+      } else if (c === "," && !q) {
+        out.push(cur);
+        cur = "";
+      } else {
+        cur += c;
+      }
+    }
+
+    out.push(cur);
+    return out;
+  }
+
+  function parseCsv(text) {
+    const lines = String(text || "").replace(/\r/g, "").split("\n").filter(x => x.trim());
+    if (lines.length < 2) return [];
+
+    const headers = splitCsvLine(lines[0]).map(x => x.trim());
+    return lines.slice(1).map(line => {
+      const vals = splitCsvLine(line);
+      const row = {};
+      headers.forEach((h, i) => row[h] = vals[i] || "");
+      return row;
+    });
+  }
+
+  async function fetchTextSafe(url) {
+    try {
+      const res = await fetch(url + "?t=" + Date.now(), { cache: "no-store" });
+      if (!res.ok) return "";
+      return await res.text();
+    } catch (e) {
+      return "";
+    }
+  }
+
+  async function loadPositionMap() {
+    const urls = [
+      DATA_DIR + "position_overlay.csv",
+      DATA_DIR + "manual_positions.csv",
+      DATA_DIR + "positions_manual.csv",
+      DATA_DIR + "current_positions.csv"
+    ];
+
+    const byId = {};
+    const byName = {};
+
+    for (const url of urls) {
+      const rows = parseCsv(await fetchTextSafe(url));
+      rows.forEach(r => {
+        const id = String(r.stock_id || r.code || "").trim();
+        const name = String(r.stock_name || r.name || "").trim();
+
+        if (!id) return;
+
+        const data = {
+          id,
+          name: name || byId[id]?.name || ""
+        };
+
+        byId[id] = { ...(byId[id] || {}), ...data };
+        if (name) byName[name] = id;
+      });
+    }
+
+    return { byId, byName };
+  }
+
+  function findClosestCard(el) {
+    let cur = el;
+    for (let i = 0; i < 8 && cur; i++) {
+      const t = cleanText(cur);
+      if (
+        /持倉提示|手動持倉|持倉管理|同步持倉/.test(t) &&
+        /均價|張數|股數|成本|部位金額/.test(t)
+      ) {
+        return cur;
+      }
+      cur = cur.parentElement;
+    }
+    return null;
+  }
+
+  function fixOnePositionCard(card, id, name) {
+    if (!card || !id) return;
+
+    // 1. 修正上方折疊列的大字名稱：只改看起來像標題的名稱，不改欄位值
+    Array.from(card.querySelectorAll("*")).forEach(el => {
+      const t = cleanText(el);
+      if (name && t === name) {
+        el.textContent = id;
+      }
+    });
+
+    // 2. 修正展開卡第一格：個股名稱 / 個股 / 股票名稱 → 股票代號 + id
+    const labels = Array.from(card.querySelectorAll("*")).filter(el => {
+      const t = cleanText(el);
+      return t === "個股名稱" || t === "個股" || t === "股票名稱";
+    });
+
+    labels.forEach((label, idx) => {
+      const box = label.parentElement;
+      if (!box) return;
+
+      // 第一個欄位一定改股票代號
+      if (idx === 0) {
+        label.textContent = "股票代號";
+        const values = Array.from(box.querySelectorAll("*")).filter(x => x !== label);
+        const valueEl = values.find(x => cleanText(x) && cleanText(x) !== "股票代號");
+        if (valueEl) valueEl.textContent = id;
+        else box.appendChild(document.createTextNode(id));
+      }
+    });
+
+    // 3. 確保有第二格「股票名稱」
+    const alreadyName = Array.from(card.querySelectorAll("*")).some(el => cleanText(el) === "股票名稱");
+    if (!alreadyName && name) {
+      const firstGrid = Array.from(card.querySelectorAll("div")).find(el => {
+        const t = cleanText(el);
+        return /股票代號/.test(t) && new RegExp(id).test(t);
+      });
+
+      if (firstGrid && firstGrid.parentElement) {
+        const clone = firstGrid.cloneNode(true);
+        const nodes = Array.from(clone.querySelectorAll("*"));
+        if (nodes.length >= 2) {
+          nodes[0].textContent = "股票名稱";
+          nodes[nodes.length - 1].textContent = name;
+        } else {
+          clone.innerHTML = `<span>股票名稱</span><b>${name}</b>`;
+        }
+        firstGrid.parentElement.insertBefore(clone, firstGrid.nextSibling);
+      }
+    }
+  }
+
+  async function applyV26629H() {
+    const { byId, byName } = await loadPositionMap();
+
+    // 從畫面找目前持倉卡：用代號或名稱反推
+    const all = Array.from(document.querySelectorAll("*"));
+    const handled = new Set();
+
+    all.forEach(el => {
+      const t = cleanText(el);
+
+      let id = "";
+      let name = "";
+
+      if (byId[t]) {
+        id = t;
+        name = byId[t].name || "";
+      } else if (byName[t]) {
+        id = byName[t];
+        name = t;
+      }
+
+      if (!id) return;
+
+      const card = findClosestCard(el);
+      if (!card || handled.has(card)) return;
+
+      handled.add(card);
+      fixOnePositionCard(card, id, name);
+    });
+
+    console.log("[v266.29H] 持倉欄位已修正：1=股票代號，2=股票名稱");
+  }
+
+  window.addEventListener("load", function () {
+    setTimeout(applyV26629H, 500);
+    setTimeout(applyV26629H, 1500);
+    setTimeout(applyV26629H, 3000);
+  });
+
+  let timer = null;
+  const observer = new MutationObserver(function () {
+    clearTimeout(timer);
+    timer = setTimeout(applyV26629H, 500);
+  });
+
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+
+  window.applyV26629H = applyV26629H;
+})();
+/*
+v266.29I 交易日欄位強制補回版
+貼到 mobile_dashboard_v1/app.js 最底部，不刪原本內容。
+
+修正：
+1. 在「訊號日」下面強制補一格「交易日」
+2. 交易日來源優先：
+   trade_plan.csv.trade_date
+   final_action_plan.csv.trade_date
+   final_action_summary.json.trade_date / next_trade_date
+   data_meta.json.trade_date / next_trade_date
+3. 若畫面已經 render 完，仍會重新掃描並補上。
+*/
+
+(function () {
+  const DATA_DIR = "./data/";
+
+  function txt(el) {
+    return (el && el.textContent ? el.textContent : "").replace(/\s+/g, " ").trim();
+  }
+
+  function splitCsvLine(line) {
+    const out = [];
+    let cur = "";
+    let q = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') {
+        if (q && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          q = !q;
+        }
+      } else if (c === "," && !q) {
+        out.push(cur);
+        cur = "";
+      } else {
+        cur += c;
+      }
+    }
+    out.push(cur);
+    return out;
+  }
+
+  function parseCsv(text) {
+    const lines = String(text || "").replace(/\r/g, "").split("\n").filter(x => x.trim());
+    if (lines.length < 2) return [];
+    const headers = splitCsvLine(lines[0]).map(x => x.trim());
+    return lines.slice(1).map(line => {
+      const vals = splitCsvLine(line);
+      const row = {};
+      headers.forEach((h, i) => row[h] = vals[i] || "");
+      return row;
+    });
+  }
+
+  async function fetchTextSafe(url) {
+    try {
+      const r = await fetch(url + "?t=" + Date.now(), { cache: "no-store" });
+      if (!r.ok) return "";
+      return await r.text();
+    } catch (e) {
+      return "";
+    }
+  }
+
+  async function fetchJsonSafe(url) {
+    try {
+      const t = await fetchTextSafe(url);
+      return t ? JSON.parse(t) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function dateOnly(v) {
+    const s = String(v || "").trim();
+    const m = s.match(/\d{4}-\d{2}-\d{2}/);
+    return m ? m[0] : "";
+  }
+
+  async function resolveTradeDate() {
+    let rows = parseCsv(await fetchTextSafe(DATA_DIR + "trade_plan.csv"));
+    if (rows.length) {
+      const d = dateOnly(rows[0].trade_date || rows[0].next_trade_date);
+      if (d) return d;
+    }
+
+    rows = parseCsv(await fetchTextSafe(DATA_DIR + "final_action_plan.csv"));
+    if (rows.length) {
+      const d = dateOnly(rows[0].trade_date || rows[0].next_trade_date);
+      if (d) return d;
+    }
+
+    const summary = await fetchJsonSafe(DATA_DIR + "final_action_summary.json");
+    let d = dateOnly(summary.trade_date || summary.next_trade_date);
+    if (d) return d;
+
+    const meta = await fetchJsonSafe(DATA_DIR + "data_meta.json");
+    d = dateOnly(meta.trade_date || meta.next_trade_date);
+    if (d) return d;
+
+    const regime = await fetchJsonSafe(DATA_DIR + "market_regime.json");
+    d = dateOnly(regime.trade_date || regime.next_trade_date);
+    if (d) return d;
+
+    return "";
+  }
+
+  function findInfoGrid() {
+    const candidates = Array.from(document.querySelectorAll("section, div, article")).filter(el => {
+      const t = txt(el);
+      return /來源版本/.test(t) && /市場狀態/.test(t) && /訊號日/.test(t);
+    });
+
+    candidates.sort((a, b) => txt(a).length - txt(b).length);
+    return candidates[0] || null;
+  }
+
+  function findSignalCard(root) {
+    if (!root) return null;
+
+    const labels = Array.from(root.querySelectorAll("*")).filter(el => txt(el) === "訊號日");
+    if (!labels.length) return null;
+
+    let cur = labels[0];
+    for (let i = 0; i < 6 && cur; i++) {
+      const t = txt(cur);
+      if (/訊號日/.test(t) && /\d{4}-\d{2}-\d{2}/.test(t)) return cur;
+      cur = cur.parentElement;
+    }
+    return labels[0].parentElement || labels[0];
+  }
+
+  function makeTradeDateCardFrom(signalCard, tradeDate) {
+    const card = signalCard ? signalCard.cloneNode(true) : document.createElement("div");
+    card.setAttribute("data-v26629i-trade-date", "1");
+
+    const nodes = Array.from(card.querySelectorAll("*"));
+    const label = nodes.find(el => txt(el) === "訊號日") || nodes[0];
+    const value = nodes.reverse().find(el => /\d{4}-\d{2}-\d{2}/.test(txt(el)));
+
+    if (label) label.textContent = "交易日";
+    if (value) value.textContent = tradeDate;
+
+    if (!label || !value) {
+      card.innerHTML = `
+        <div style="font-size:0.88em;color:#6b7280;font-weight:800;">交易日</div>
+        <div style="font-size:1.35em;font-weight:900;color:#111827;">${tradeDate}</div>
+      `;
+    }
+
+    return card;
+  }
+
+  function insertTradeDate(tradeDate) {
+    if (!tradeDate) return false;
+
+    const root = findInfoGrid();
+    if (!root) return false;
+
+    const old = root.querySelector("[data-v26629i-trade-date='1']");
+    if (old) {
+      old.querySelectorAll("*").forEach(el => {
+        if (/\d{4}-\d{2}-\d{2}/.test(txt(el))) el.textContent = tradeDate;
+      });
+      return true;
+    }
+
+    const already = Array.from(root.querySelectorAll("*")).some(el => txt(el) === "交易日");
+    if (already) return true;
+
+    const signalCard = findSignalCard(root);
+    const tradeCard = makeTradeDateCardFrom(signalCard, tradeDate);
+
+    if (signalCard && signalCard.parentElement) {
+      signalCard.parentElement.insertBefore(tradeCard, signalCard.nextSibling);
+    } else {
+      root.appendChild(tradeCard);
+    }
+
+    console.log("[v266.29I] 交易日已補回:", tradeDate);
+    return true;
+  }
+
+  async function applyTradeDateFix() {
+    const tradeDate = await resolveTradeDate();
+    insertTradeDate(tradeDate);
+  }
+
+  window.addEventListener("load", function () {
+    setTimeout(applyTradeDateFix, 500);
+    setTimeout(applyTradeDateFix, 1500);
+    setTimeout(applyTradeDateFix, 3000);
+  });
+
+  let timer = null;
+  const observer = new MutationObserver(function () {
+    clearTimeout(timer);
+    timer = setTimeout(applyTradeDateFix, 500);
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  window.applyTradeDateFixV26629I = applyTradeDateFix;
+})();
