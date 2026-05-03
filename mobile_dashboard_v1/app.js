@@ -533,6 +533,48 @@ function groupCounts(rows) {
   return counts;
 }
 
+
+function getTopRankV26630(row) {
+  const fields = [
+    row.section_top_opportunity,
+    row.top_opportunity,
+    row.section_opportunity_rank,
+    row.opportunity_rank,
+    row.execution_flag,
+    row.system_note,
+    row.note,
+    row.reason
+  ];
+  const text = fields.map(v => String(v ?? "")).join(" ");
+  const m = text.match(/TOP\s*([1-9]\d*)/i);
+  if (m) return Number(m[1]);
+  if (String(row.execution_flag || "").toUpperCase() === "TOP") return 99;
+  return 9999;
+}
+
+function rowScoreV26630(row) {
+  const n = Number(row.score || row.opportunity_score || row.entry_score || row.rank_score || row.liquidity_score || 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function dedupeByStockV26630(rows) {
+  const map = new Map();
+  (rows || []).forEach(row => {
+    const sid = String(row.stock_id || "").trim();
+    if (!sid) return;
+    if (!map.has(sid)) {
+      map.set(sid, row);
+      return;
+    }
+    const old = map.get(sid);
+    const aTop = getTopRankV26630(row);
+    const bTop = getTopRankV26630(old);
+    if (aTop < bTop) map.set(sid, row);
+    else if (aTop === bTop && rowScoreV26630(row) > rowScoreV26630(old)) map.set(sid, row);
+  });
+  return Array.from(map.values());
+}
+
 function sortRows(rows) {
   return rows.slice().sort((a, b) => {
     const aa = normalizeAction(a.final_action || a.action);
@@ -541,12 +583,12 @@ function sortRows(rows) {
     const pb = ACTION_PRIORITY[bb] || 99;
     if (pa !== pb) return pa - pb;
 
-    const at = isTop(a) ? 1 : 0;
-    const bt = isTop(b) ? 1 : 0;
-    if (bt !== at) return bt - at;
+    const ta = getTopRankV26630(a);
+    const tb = getTopRankV26630(b);
+    if (ta !== tb) return ta - tb;
 
-    const sa = Number(a.score || a.entry_score || 0);
-    const sb = Number(b.score || b.entry_score || 0);
+    const sb = rowScoreV26630(b);
+    const sa = rowScoreV26630(a);
     if (sb !== sa) return sb - sa;
 
     const la = liquiditySortRank(a);
@@ -561,13 +603,15 @@ function sortRows(rows) {
   });
 }
 
+
 function splitRows(rows) {
   const sorted = sortRows(rows);
+  const byAction = (actions) => sorted.filter(r => actions.includes(normalizeAction(r.final_action || r.action)));
   return {
-    main: sorted.filter(r => ["SELL", "REDUCE", "BUY"].includes(normalizeAction(r.final_action || r.action))),
-    test: sorted.filter(r => normalizeAction(r.final_action || r.action) === "TEST"),
-    watch: sorted.filter(r => normalizeAction(r.final_action || r.action) === "WATCH"),
-    block: sorted.filter(r => normalizeAction(r.final_action || r.action) === "BLOCK")
+    main: dedupeByStockV26630(byAction(["SELL", "REDUCE", "BUY"])),
+    test: dedupeByStockV26630(byAction(["TEST"])),
+    watch: dedupeByStockV26630(byAction(["WATCH"])),
+    block: dedupeByStockV26630(byAction(["BLOCK"]))
   };
 }
 
@@ -757,6 +801,212 @@ function renderPositionRiskInsideCard(stock) {
 }
 
 
+
+// ===== v266.30 Clean Position UI Helpers / 持倉乾淨整合層 =====
+window.__positionOverlayMapV26630 = window.__positionOverlayMapV26630 || {};
+window.__stockNameMapV26630 = window.__stockNameMapV26630 || {};
+
+function sidV26630(v) {
+  const m = String(v || "").match(/(\d{4})/);
+  return m ? m[1] : String(v || "").trim();
+}
+
+function cleanV26630(v, fallback = "--") {
+  const s = String(v ?? "").trim();
+  if (!s || s === "nan" || s === "NaN" || s === "undefined" || s === "null") return fallback;
+  return s;
+}
+
+function nV26630(v) {
+  const n = Number(String(v ?? "").replace(/,/g, "").replace("%", ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+function priceV26630(v) {
+  const n = nV26630(v);
+  if (n === null) return "--";
+  return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.00$/, "");
+}
+
+function pctV26630(v) {
+  const n = nV26630(v);
+  if (n === null) return "--";
+  return n.toFixed(2).replace(/\.00$/, "") + "%";
+}
+
+function moneyV26630(v) {
+  const n = nV26630(v);
+  if (n === null) return "--";
+  return Math.round(n).toLocaleString("zh-TW");
+}
+
+function lotsV26630(v) {
+  const n = nV26630(v);
+  if (n === null) return "--";
+  return String(n).replace(/\.00$/, "");
+}
+
+function sharesV26630(v) {
+  const n = nV26630(v);
+  if (n === null) return "--";
+  return Math.round(n).toLocaleString("zh-TW");
+}
+
+function zhPositionActionV26630(v) {
+  const s = String(v || "").toUpperCase();
+  if (s.includes("SELL") || s.includes("STOP") || s.includes("出場") || s.includes("賣")) return { key: "SELL", cls: "sell", pill: "🔴 出場", text: "出場" };
+  if (s.includes("REDUCE") || s.includes("減")) return { key: "REDUCE", cls: "reduce", pill: "🟠 減碼", text: "減碼" };
+  if (s.includes("WATCH") || s.includes("觀察")) return { key: "WATCH", cls: "watch", pill: "🟡 觀察", text: "觀察" };
+  return { key: "HOLD", cls: "hold", pill: "🟢 抱住", text: "抱住" };
+}
+
+function zhRiskV26630(v, actionLike = "") {
+  const s = String(v || actionLike || "").toUpperCase();
+  if (s.includes("STOP_LOSS") || s.includes("STOP") || s.includes("停損")) return "🔴 停損風控";
+  if (s.includes("HIGH") || s.includes("高")) return "🔴 高風險";
+  if (s.includes("MEDIUM") || s.includes("MID") || s.includes("中")) return "🟠 中風險";
+  if (s.includes("LOW") || s.includes("低")) return "🟢 低風險";
+  if (s.includes("HOLD_CHECK") || s.includes("HOLD") || s.includes("抱")) return "🟢 續抱觀察";
+  if (s.includes("WATCH") || s.includes("觀察")) return "🟡 觀察確認";
+  return "🟢 續抱觀察";
+}
+
+function maStatusV26630(label, close, ma, direct) {
+  const d = cleanV26630(direct, "");
+  if (d && d !== "--") return d.startsWith(label) ? d : `${label}：${d}`;
+  const c = nV26630(close);
+  const m = nV26630(ma);
+  if (!c || !m) return `${label}：--`;
+  const diff = (c - m) / m;
+  if (diff > 0.02) return `${label}：站上｜↑ 強勢`;
+  if (diff < -0.02) return `${label}：跌破｜↓ 轉弱`;
+  return `${label}：貼近｜→ 盤整`;
+}
+
+function chipTextV26630(row) {
+  const score = cleanV26630(row.chip_score || row.chip_concentration_score, "--");
+  const label = cleanV26630(row.chip_label || row.chip_display || row.chip_confidence, "--");
+  if (score === "--" && label === "--") return "--｜籌碼資料有限";
+  return `${score}｜${label}`;
+}
+
+function positionNameV26630(stock, posRow = {}, overlay = {}, riskRow = {}) {
+  const sid = sidV26630(stock || posRow.stock_id || overlay.stock_id || riskRow.stock_id);
+  return cleanV26630(posRow.stock_name || overlay.stock_name || riskRow.stock_name || window.__stockNameMapV26630[sid], "--");
+}
+
+function positionDetailCellV26630(label, value) {
+  return `<div><span>${label}</span><b>${cleanV26630(value)}</b></div>`;
+}
+
+async function loadPositionOverlayV26630() {
+  window.__positionOverlayMapV26630 = {};
+  window.__stockNameMapV26630 = {};
+
+  const files = [
+    "./data/position_overlay.csv",
+    "./data/positions_manual.csv",
+    "./data/manual_positions.csv",
+    "./data/final_action_plan.csv",
+    "./data/trade_plan.csv"
+  ];
+
+  for (const url of files) {
+    try {
+      const txt = await fetchText(url);
+      const rows = parseCsv(txt);
+      rows.forEach(r => {
+        const sid = sidV26630(r.stock_id || r.code);
+        if (!sid) return;
+        const name = cleanV26630(r.stock_name || r.name, "");
+        if (name) window.__stockNameMapV26630[sid] = name;
+        if (url.includes("position_overlay")) window.__positionOverlayMapV26630[sid] = r;
+      });
+    } catch (e) {}
+  }
+}
+
+function getPositionOverlayRowV26630(stock) {
+  const sid = sidV26630(stock);
+  return window.__positionOverlayMapV26630[sid] || {};
+}
+
+function getPositionRiskRowV26630(stock) {
+  const sid = sidV26630(stock);
+  const map = typeof getPositionRiskMap === "function" ? getPositionRiskMap() : {};
+  return map[sid] || {};
+}
+
+function renderMergedPositionHintV26630(stock, posRow) {
+  const sid = sidV26630(stock);
+  const overlay = getPositionOverlayRowV26630(sid);
+  const riskRow = getPositionRiskRowV26630(sid);
+  const actionRaw = overlay.position_action || riskRow.final_action || riskRow.action || "HOLD";
+  const actionInfo = zhPositionActionV26630(actionRaw);
+
+  const avg = priceV26630(posRow.avg_price);
+  const lots = lotsV26630(posRow.lots);
+  const shares = sharesV26630(posRow.shares);
+  const close = priceV26630(overlay.close || riskRow.close || riskRow.ref_price || posRow.close);
+  const cost = moneyV26630(nV26630(posRow.avg_price) && nV26630(posRow.shares) ? nV26630(posRow.avg_price) * nV26630(posRow.shares) : positionCost(posRow));
+  const pnlRaw = overlay.pnl_pct || riskRow.pnl_pct;
+  const pnl = cleanV26630(pnlRaw, (nV26630(close) && nV26630(posRow.avg_price)) ? pctV26630((nV26630(close) - nV26630(posRow.avg_price)) / nV26630(posRow.avg_price) * 100) : "--");
+  const ma5 = maStatusV26630("MA5", close, overlay.ma5 || riskRow.ma5, overlay.ma5_status || riskRow.ma5_status);
+  const ma20 = maStatusV26630("MA20", close, overlay.ma20 || riskRow.ma20, overlay.ma20_status || riskRow.ma20_status);
+  const riskZh = zhRiskV26630(overlay.risk_flag || riskRow.risk_flag || riskRow.risk_level || riskRow.exit_risk_level, actionRaw);
+  const chip = chipTextV26630({ ...riskRow, ...overlay });
+  const name = positionNameV26630(sid, posRow, overlay, riskRow);
+
+  const reason = cleanV26630(
+    overlay.position_reason || riskRow.position_reason || riskRow.reason,
+    actionInfo.key === "SELL" ? "觸發停損或趨勢防守，優先保護本金。" : "尚未出現明顯下跌或系統賣出訊號，趨勢未完全破壞。"
+  );
+  const kbar = cleanV26630(overlay.kbar_hint || riskRow.kbar_reason || riskRow.exit_kbar_reason, `${ma5}；${ma20}。`);
+  const takeProfit = cleanV26630(overlay.take_profit_hint || riskRow.take_profit_hint, actionInfo.key === "SELL" ? "目前不是停利情境，而是停損／風控優先。" : "尚未達明確停利條件，先依趨勢與籌碼續抱觀察。");
+  const chipHint = cleanV26630(overlay.chip_hint || riskRow.chip_hint, "籌碼資料有限，需搭配技術面確認。");
+  const chipReason = cleanV26630(overlay.chip_reason || riskRow.chip_reason, "籌碼資料有限");
+  const advice = cleanV26630(overlay.position_hint || riskRow.position_hint || riskRow.system_note, actionInfo.key === "SELL" ? "優先處理出場，不建議拖延或凹單。" : "在還沒有明顯下跌、未觸發風控前，以續抱觀察為主。");
+  const systemHint = actionInfo.key === "SELL"
+    ? "持倉已有風險或停損訊號，先控制部位，不要情緒化加碼。"
+    : "尚未跌破關鍵防守時續抱；若跌破五日線、MA20 或籌碼轉弱，再分批停利或出場。";
+
+  return `
+    <div class="position-merged-v26630 ${actionInfo.cls}">
+      <div class="position-merged-head-v26630">
+        <span class="position-merged-pill-v26630 ${actionInfo.cls}">${actionInfo.pill}</span>
+        <b>持倉提示</b>
+        <strong>${close}</strong>
+      </div>
+      <div class="detail-grid position-merged-grid-v26630">
+        ${positionDetailCellV26630("股票代號", sid)}
+        ${positionDetailCellV26630("股票名稱", name)}
+        ${positionDetailCellV26630("持倉狀態", actionInfo.text)}
+        ${positionDetailCellV26630("來源", actionInfo.key === "SELL" ? "策略出場" : "手動持倉")}
+        ${positionDetailCellV26630("策略層", actionInfo.key === "SELL" ? "持倉風控" : "持倉管理")}
+        ${positionDetailCellV26630("參考價", close)}
+        ${positionDetailCellV26630("均價", avg)}
+        ${positionDetailCellV26630("張數", lots)}
+        ${positionDetailCellV26630("股數", shares)}
+        ${positionDetailCellV26630("部位金額", cost)}
+        ${positionDetailCellV26630("損益%", pnl)}
+        ${positionDetailCellV26630("MA20觀察", ma20)}
+        ${positionDetailCellV26630("五日線觀察", ma5)}
+        ${positionDetailCellV26630("籌碼集中度", chip)}
+        ${positionDetailCellV26630("風控提示", riskZh)}
+        ${positionDetailCellV26630("更新時間", cleanV26630(posRow.updated_at))}
+        ${positionDetailCellV26630("備註", cleanV26630(posRow.note, "手動持倉"))}
+      </div>
+      <div class="detail-text position-merged-text-v26630"><b>原因</b><p>${reason}</p></div>
+      <div class="detail-text position-merged-text-v26630"><b>K棒判斷</b><p>${kbar}</p></div>
+      <div class="detail-text position-merged-text-v26630"><b>停利提示</b><p>${takeProfit}</p></div>
+      <div class="detail-text position-merged-text-v26630"><b>籌碼提示</b><p>${chipReason}｜${chipHint}</p></div>
+      <div class="detail-text position-merged-text-v26630"><b>建議動作</b><p>${advice}</p></div>
+      <div class="detail-text position-merged-text-v26630"><b>系統提示</b><p>${systemHint}</p></div>
+    </div>
+  `;
+}
+
+
 function renderPositions() {
   const box = qs("positionList");
   if (!box) return;
@@ -770,15 +1020,10 @@ function renderPositions() {
 
   box.innerHTML = rows.map((row, idx) => {
     const key = `pos-${idx}`;
-    let stock = safeText(row.stock_id);
-  if (stock.endsWith(".0")) stock = stock.slice(0, -2);
-  const stockName = safeText(row.stock_name, "");
-  const topBadge = getTopBadge(row);
-    const avg = num(row.avg_price);
-    const lots = num(row.lots, 2);
-    const shares = money(row.shares);
-    const cost = positionCost(row);
-    const note = safeText(row.note, "手動持倉");
+    const stock = sidV26630(row.stock_id);
+    const avg = priceV26630(row.avg_price);
+    const lots = lotsV26630(row.lots);
+    const cost = moneyV26630(nV26630(row.avg_price) && nV26630(row.shares) ? nV26630(row.avg_price) * nV26630(row.shares) : positionCost(row));
 
     return `
       <article class="scan-item position">
@@ -792,16 +1037,7 @@ function renderPositions() {
         </div>
 
         <div class="scan-detail" id="${key}">
-          <div class="detail-grid">
-            <div><span>個股</span><b>${stock}</b></div>
-            <div><span>均價</span><b>${avg}</b></div>
-            <div><span>張數</span><b>${lots}</b></div>
-            <div><span>股數</span><b>${shares}</b></div>
-            <div><span>成本</span><b>${cost}</b></div>
-            <div><span>更新時間</span><b>${safeText(row.updated_at)}</b></div>
-          </div>
-          <div class="detail-text"><b>備註</b><p>${note}</p></div>
-          ${renderPositionRiskInsideCard(stock)}
+          ${renderMergedPositionHintV26630(stock, row)}
           <div class="position-row-actions">
             <button type="button" data-edit-position="${stock}">編輯</button>
             <button type="button" class="danger" data-delete-position="${stock}">刪除</button>
@@ -1243,12 +1479,20 @@ function zhRiskMode(summary, regime, macro) {
   return parts.length ? parts.join("｜") : "--";
 }
 
+
+function resolveTradeDateV26630(regime, summary) {
+  const raw = summary.trade_date || summary.next_trade_date || regime.trade_date || regime.next_trade_date || summary.signal_date || regime.date || regime.latest_date || "--";
+  const m = String(raw || "").match(/\d{4}-\d{2}-\d{2}/);
+  return m ? m[0] : safeText(raw, "--");
+}
+
 function renderMeta(regime, summary, macro, rows) {
   const backendUpdatedAt = formatTWDateTime(summary.generated_at || regime.generated_at);
 
   const marketText = `${safeText(regime.market_label || summary.market_label || regime.label || regime.regime, "--")} ${safeText(regime.index_change_pct_text || summary.index_change_pct_text, "")}`.trim();
   const macroText = `${safeText(macro.macro_label || summary.macro_label, "--")}｜分數 ${safeText(macro.macro_score ?? summary.macro_score, "--")}`;
-  const signalDate = safeText(regime.date || regime.latest_date || summary.generated_at, "--");
+  const signalDate = safeText(regime.date || regime.latest_date || summary.signal_date || summary.generated_at, "--");
+  const tradeDate = resolveTradeDateV26630(regime, summary);
 
   qs("metaBox").innerHTML = `
     <div class="mini"><span>來源版本</span><b>C 完整交易系統</b></div>
@@ -1256,6 +1500,7 @@ function renderMeta(regime, summary, macro, rows) {
     <div class="mini"><span>總經狀態</span><b>${macroText}</b></div>
     <div class="mini"><span>風險模式</span><b>${zhRiskMode(summary, regime, macro)}</b></div>
     <div class="mini"><span>訊號日</span><b>${signalDate}</b></div>
+    <div class="mini"><span>交易日</span><b>${tradeDate}</b></div>
     <div class="mini"><span>最後更新</span><b>${backendUpdatedAt}</b></div>
     <div class="mini"><span>操作筆數</span><b>${rows.length}</b></div>
   `;
@@ -1711,6 +1956,7 @@ async function init() {
       loadFinalRows()
     ]);
 
+    await loadPositionOverlayV26630();
     const groups = splitRows(rows);
 
     renderMeta(regime, summary, macro, rows);
@@ -2449,1205 +2695,3 @@ function chipHintV26621(row) {
   );
 }
 
-// ===== v266.29 完整 UI 重構修正版：持倉欄位下移合併 + 個股顯示名稱 + 風險中文化 =====
-// 說明：保留原本檔案不刪除，只覆蓋持倉卡的前端輸出邏輯。
-
-window.__stockNameMapV26629 = window.__stockNameMapV26629 || {};
-window.__positionOverlayMapV26629 = window.__positionOverlayMapV26629 || {};
-
-function sidV26629(v) {
-  const m = String(v || "").match(/(\d{4})/);
-  return m ? m[1] : "";
-}
-
-function cleanV26629(v, fallback = "--") {
-  const s = String(v ?? "").trim();
-  if (!s || s === "nan" || s === "NaN" || s === "undefined" || s === "null") return fallback;
-  return s;
-}
-
-function nV26629(v) {
-  const n = Number(String(v ?? "").replace(/,/g, "").replace("%", ""));
-  return Number.isFinite(n) ? n : null;
-}
-
-function priceV26629(v) {
-  const n = nV26629(v);
-  if (n === null) return "--";
-  return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.00$/, "");
-}
-
-function pctV26629(v) {
-  const n = nV26629(v);
-  if (n === null) return "--";
-  return n.toFixed(2).replace(/\.00$/, "") + "%";
-}
-
-function pnlFromAvgCloseV26629(avg, close) {
-  const a = nV26629(avg);
-  const c = nV26629(close);
-  if (!a || !c) return "--";
-  return ((c - a) / a * 100).toFixed(2).replace(/\.00$/, "") + "%";
-}
-
-function lotTextV26629(v) {
-  const n = nV26629(v);
-  if (n === null) return "--";
-  return String(n).replace(/\.00$/, "");
-}
-
-function sharesTextV26629(v) {
-  const n = nV26629(v);
-  if (n === null) return "--";
-  return Math.round(n).toLocaleString("zh-TW");
-}
-
-function moneyTextV26629(v) {
-  const n = nV26629(v);
-  if (n === null) return "--";
-  return Math.round(n).toLocaleString("zh-TW");
-}
-
-function actionInfoV26629(actionLike) {
-  const s = String(actionLike || "").toUpperCase();
-  if (s.includes("SELL") || s.includes("賣") || s.includes("出場") || s.includes("STOP")) return { cls: "sell", pill: "🔴 出場", status: "出場" };
-  if (s.includes("REDUCE") || s.includes("減")) return { cls: "reduce", pill: "🟠 減碼", status: "減碼" };
-  if (s.includes("WATCH") || s.includes("觀察")) return { cls: "watch", pill: "🟡 觀察", status: "觀察" };
-  return { cls: "hold", pill: "🟢 抱住", status: "抱住" };
-}
-
-function zhRiskV26629(v, actionLike = "") {
-  const s = String(v || actionLike || "").toUpperCase();
-  if (s.includes("STOP_LOSS") || s.includes("STOP") || s.includes("停損")) return "🔴 停損風控";
-  if (s.includes("HIGH") || s.includes("高")) return "🔴 高風險";
-  if (s.includes("MEDIUM") || s.includes("MID") || s.includes("中")) return "🟠 中風險";
-  if (s.includes("LOW") || s.includes("低")) return "🟢 低風險";
-  if (s.includes("HOLD_CHECK") || s.includes("HOLD") || s.includes("抱")) return "🟢 續抱觀察";
-  if (s.includes("WATCH") || s.includes("觀察")) return "🟡 觀察確認";
-  return "🟢 續抱觀察";
-}
-
-function stockNameV26629(stock, posRow = {}, overlay = {}, riskRow = {}) {
-  const sid = sidV26629(stock || posRow.stock_id || overlay.stock_id || riskRow.stock_id);
-  return cleanV26629(
-    posRow.stock_name || overlay.stock_name || riskRow.stock_name || window.__stockNameMapV26629[sid],
-    sid || "--"
-  );
-}
-
-function maStatusV26629(label, close, ma, direct) {
-  const d = cleanV26629(direct, "");
-  if (d && d !== "--") return d.startsWith(label) ? d : `${label}：${d}`;
-  const c = nV26629(close);
-  const m = nV26629(ma);
-  if (!c || !m) return `${label}：--`;
-  const diff = (c - m) / m;
-  if (diff > 0.02) return `${label}：站上｜↑ 強勢`;
-  if (diff < -0.02) return `${label}：跌破｜↓ 轉弱`;
-  return `${label}：貼近｜→ 盤整`;
-}
-
-function chipTextV26629(overlay = {}, riskRow = {}) {
-  const score = cleanV26629(overlay.chip_score || riskRow.chip_score, "--");
-  const label = cleanV26629(overlay.chip_label || riskRow.chip_label || riskRow.chip_display, "--");
-  if (score === "--" && label === "--") return "--｜籌碼資料有限";
-  return `${score}｜${label}`;
-}
-
-function detailCellV26629(label, value) {
-  return `<div><span>${label}</span><b>${cleanV26629(value)}</b></div>`;
-}
-
-async function loadStockNameMapV26629() {
-  const urls = ["./data/stock_basic_tw_full.csv", "./stock_basic_tw_full.csv"];
-  for (const url of urls) {
-    try {
-      const txt = await fetchText(url);
-      const rows = parseCsv(txt);
-      rows.forEach(r => {
-        const sid = sidV26629(r.stock_id || r.code || r.symbol || r["證券代號"]);
-        const name = cleanV26629(r.stock_name || r.name || r["證券名稱"], "");
-        if (sid && name) window.__stockNameMapV26629[sid] = name;
-      });
-      if (Object.keys(window.__stockNameMapV26629).length) break;
-    } catch (e) {}
-  }
-}
-
-async function loadPositionOverlayV26629() {
-  try {
-    const txt = await fetchText("./data/position_overlay.csv");
-    const rows = parseCsv(txt);
-    const map = {};
-    rows.forEach(r => {
-      const sid = sidV26629(r.stock_id);
-      if (sid) map[sid] = r;
-    });
-    window.__positionOverlayMapV26629 = map;
-  } catch (e) {
-    window.__positionOverlayMapV26629 = {};
-  }
-}
-
-function renderMergedPositionHintV26629(stock, posRow) {
-  const sid = sidV26629(stock);
-  const overlay = window.__positionOverlayMapV26629[sid] || window.__positionOverlayMapV26627?.[sid] || window.__positionOverlayMapV26626?.[sid] || {};
-  const riskMap = typeof getPositionRiskMap === "function" ? getPositionRiskMap() : {};
-  const riskRow = riskMap[sid] || {};
-
-  const rawAction = cleanV26629(overlay.position_action || riskRow.final_action || riskRow.action, "HOLD");
-  const info = actionInfoV26629(rawAction);
-  const name = stockNameV26629(sid, posRow, overlay, riskRow);
-  const avg = priceV26629(posRow.avg_price);
-  const lots = lotTextV26629(posRow.lots);
-  const shares = sharesTextV26629(posRow.shares);
-  const cost = moneyTextV26629(nV26629(posRow.avg_price) && nV26629(posRow.shares) ? nV26629(posRow.avg_price) * nV26629(posRow.shares) : positionCost(posRow));
-  const close = priceV26629(overlay.close || riskRow.close || riskRow.ref_price);
-  const pnl = cleanV26629(overlay.pnl_pct, pnlFromAvgCloseV26629(posRow.avg_price, close));
-  const pnlText = String(pnl).includes("%") || pnl === "--" ? pnl : pctV26629(pnl);
-  const ma5 = maStatusV26629("MA5", close, overlay.ma5, overlay.ma5_status);
-  const ma20 = maStatusV26629("MA20", close, overlay.ma20, overlay.ma20_status);
-  const riskZh = zhRiskV26629(overlay.risk_flag || riskRow.risk_flag || riskRow.risk_level || riskRow.exit_risk_level, rawAction);
-  const chip = chipTextV26629(overlay, riskRow);
-
-  let reason = cleanV26629(overlay.position_reason || riskRow.position_reason || riskRow.reason, "");
-  if (!reason) reason = info.cls === "sell" ? `觸發停損或趨勢防守，優先保護本金。` : `尚未出現明顯下跌或系統賣出訊號，趨勢未完全破壞。`;
-
-  const kbar = cleanV26629(overlay.kbar_hint || riskRow.kbar_reason, `${ma5}；${ma20}。`);
-  const takeProfit = cleanV26629(overlay.take_profit_hint, info.cls === "sell" ? "目前不是停利情境，而是停損／風控優先。" : "尚未達明確停利條件，先依趨勢與籌碼續抱觀察。");
-  const chipHint = cleanV26629(overlay.chip_hint || riskRow.chip_hint, "籌碼資料有限，需搭配技術面確認。");
-  const chipReason = cleanV26629(overlay.chip_reason || riskRow.chip_reason, "籌碼資料有限");
-  const advice = cleanV26629(overlay.position_hint || riskRow.position_hint || riskRow.system_note, info.cls === "sell" ? "優先處理出場，不建議拖延或凹單。" : "在還沒有明顯下跌、未觸發風控前，以續抱觀察為主。");
-  const systemHint = info.cls === "sell"
-    ? "持倉已有風險或停損訊號，先控制部位，不要情緒化加碼。"
-    : "尚未跌破關鍵防守時續抱；若跌破五日線、MA20 或籌碼轉弱，再分批停利或出場。";
-
-  return `
-    <div class="position-merged-v26629 ${info.cls}">
-      <div class="position-merged-head-v26629">
-        <span class="position-merged-pill-v26629 ${info.cls}">${info.pill}</span>
-        <b>持倉提示</b>
-        <strong>${close}</strong>
-      </div>
-      <div class="detail-grid position-merged-grid-v26629">
-        ${detailCellV26629("個股名稱", name)}
-        ${detailCellV26629("持倉狀態", info.status)}
-        ${detailCellV26629("來源", info.cls === "sell" ? "策略出場" : "手動持倉")}
-        ${detailCellV26629("策略層", info.cls === "sell" ? "持倉風控" : "持倉管理")}
-        ${detailCellV26629("參考價", close)}
-        ${detailCellV26629("均價", avg)}
-        ${detailCellV26629("張數", lots)}
-        ${detailCellV26629("股數", shares)}
-        ${detailCellV26629("部位金額", cost)}
-        ${detailCellV26629("損益%", pnlText)}
-        ${detailCellV26629("MA20觀察", ma20)}
-        ${detailCellV26629("五日線觀察", ma5)}
-        ${detailCellV26629("籌碼集中度", chip)}
-        ${detailCellV26629("風控提示", riskZh)}
-        ${detailCellV26629("更新時間", cleanV26629(posRow.updated_at))}
-        ${detailCellV26629("備註", cleanV26629(posRow.note, "手動持倉"))}
-      </div>
-      <div class="detail-text position-merged-text-v26629"><b>原因</b><p>${reason}</p></div>
-      <div class="detail-text position-merged-text-v26629"><b>K棒判斷</b><p>${kbar}</p></div>
-      <div class="detail-text position-merged-text-v26629"><b>停利提示</b><p>${takeProfit}</p></div>
-      <div class="detail-text position-merged-text-v26629"><b>籌碼提示</b><p>${chipReason}｜${chipHint}</p></div>
-      <div class="detail-text position-merged-text-v26629"><b>建議動作</b><p>${advice}</p></div>
-      <div class="detail-text position-merged-text-v26629"><b>系統提示</b><p>${systemHint}</p></div>
-    </div>
-  `;
-}
-
-// 關閉舊版 v266.27 追加卡，避免又插回重複欄位
-try { patchPositionCardsV26627 = function() {}; } catch (e) {}
-
-renderPositions = function() {
-  const box = qs("positionList");
-  if (!box) return;
-
-  const rows = loadPositions();
-  if (!rows.length) {
-    box.innerHTML = `<div class="empty">尚未建立持倉。請輸入個股、均價、張數後按「新增 / 更新」。</div>`;
-    return;
-  }
-
-  box.innerHTML = rows.map((row, idx) => {
-    const key = `pos-${idx}`;
-    const stock = sidV26629(row.stock_id) || cleanV26629(row.stock_id);
-    const overlay = window.__positionOverlayMapV26629[stock] || window.__positionOverlayMapV26627?.[stock] || window.__positionOverlayMapV26626?.[stock] || {};
-    const displayName = stockNameV26629(stock, row, overlay, {});
-    const avg = priceV26629(row.avg_price);
-    const lots = lotTextV26629(row.lots);
-    const cost = moneyTextV26629(nV26629(row.avg_price) && nV26629(row.shares) ? nV26629(row.avg_price) * nV26629(row.shares) : positionCost(row));
-
-    return `
-      <article class="scan-item position position-card-v26629">
-        <div class="scan-main position-main position-main-v26629" data-toggle="${key}">
-          <div class="scan-action position">📦 持倉</div>
-          <div class="scan-stock position-name-v26629">${displayName}</div>
-          <div class="scan-score">${lots}</div>
-          <div class="scan-top">張</div>
-          <div class="scan-entry">均價 ${avg}</div>
-          <div class="scan-close">${cost}</div>
-        </div>
-        <div class="scan-detail" id="${key}">
-          ${renderMergedPositionHintV26629(stock, row)}
-          <div class="position-row-actions">
-            <button type="button" data-edit-position="${stock}">編輯</button>
-            <button type="button" class="danger" data-delete-position="${stock}">刪除</button>
-          </div>
-        </div>
-      </article>
-    `;
-  }).join("");
-
-  bindToggle();
-  bindPositionRowActions();
-};
-
-async function refreshPositionUIV26629() {
-  await loadStockNameMapV26629();
-  await loadPositionOverlayV26629();
-  if (typeof renderPositions === "function") renderPositions();
-}
-
-setTimeout(refreshPositionUIV26629, 300);
-setTimeout(refreshPositionUIV26629, 1200);
-setTimeout(refreshPositionUIV26629, 2600);
-setTimeout(refreshPositionUIV26629, 5000);
-/*
-v266.29C TOP優先排序補丁
-用途：
-1. 試單清單 / 觀察清單 / 主要清單，只要有列入 TOP，就永遠排在最前面。
-2. TOP1、TOP2、TOP3、TOP4、TOP5 依照名次排序。
-3. 沒有 TOP 的才接在後面，避免把 TOP 清單洗下去。
-
-使用方式：
-把這段貼到 mobile_dashboard_v1/app.js 最底部。
-不需要刪原本內容。
-*/
-
-(function () {
-  function toNumber(v, fallback) {
-    const n = Number(String(v ?? "").replace(/[^\d.-]/g, ""));
-    return Number.isFinite(n) ? n : fallback;
-  }
-
-  function getTopRank(row) {
-    const fields = [
-      row.section_top_opportunity,
-      row.top_opportunity,
-      row.section_opportunity_rank,
-      row.opportunity_rank,
-      row.execution_flag,
-      row.system_note,
-      row.note,
-      row.reason
-    ];
-
-    const joined = fields.map(v => String(v ?? "")).join(" ");
-
-    const m = joined.match(/TOP\s*([1-9]\d*)/i);
-    if (m) return Number(m[1]);
-
-    if (String(row.execution_flag || "").toUpperCase() === "TOP") return 99;
-
-    const flag = String(row.section_top_opportunity || row.top_opportunity || "").toLowerCase();
-    if (["1", "true", "yes", "y"].includes(flag)) {
-      return toNumber(row.section_opportunity_rank || row.opportunity_rank, 99);
-    }
-
-    return 9999;
-  }
-
-  function getScore(row) {
-    return toNumber(
-      row.score ||
-      row.opportunity_score ||
-      row.entry_score ||
-      row.liquidity_score,
-      0
-    );
-  }
-
-  function getActionRank(row) {
-    const raw = String(row.final_action || row.action || "").toUpperCase();
-    const map = {
-      SELL: 1,
-      REDUCE: 2,
-      BUY: 3,
-      TEST: 4,
-      WATCH: 5,
-      BLOCK: 6
-    };
-    return map[raw] || 99;
-  }
-
-  window.v26629cTopFirstSort = function (rows) {
-    return (rows || []).slice().sort((a, b) => {
-      const ar = getActionRank(a);
-      const br = getActionRank(b);
-      if (ar !== br) return ar - br;
-
-      const at = getTopRank(a);
-      const bt = getTopRank(b);
-      if (at !== bt) return at - bt;
-
-      const bs = getScore(b);
-      const as = getScore(a);
-      if (bs !== as) return bs - as;
-
-      return String(a.stock_id || "").localeCompare(String(b.stock_id || ""));
-    });
-  };
-
-  if (typeof window.sortRows === "function") {
-    const oldSortRows = window.sortRows;
-    window.sortRows = function (rows) {
-      try {
-        return window.v26629cTopFirstSort(rows);
-      } catch (e) {
-        console.warn("[v266.29C] TOP sort fallback", e);
-        return oldSortRows(rows);
-      }
-    };
-  }
-
-  if (typeof window.splitRows === "function") {
-    window.splitRows = function (rows) {
-      const sorted = window.v26629cTopFirstSort(rows || []);
-      const norm = (r) => String(r.final_action || r.action || "").toUpperCase();
-
-      return {
-        main: sorted.filter(r => ["SELL", "REDUCE", "BUY"].includes(norm(r))),
-        test: sorted.filter(r => norm(r) === "TEST"),
-        watch: sorted.filter(r => norm(r) === "WATCH"),
-        block: sorted.filter(r => norm(r) === "BLOCK")
-      };
-    };
-  }
-
-  console.log("[v266.29C] TOP優先排序補丁已啟用");
-})();
-/*
-v266.29E 試單 / 觀察清單去重補丁
-目的：
-1. 同一檔股票在 TEST 試單清單、WATCH 觀察清單只保留一張卡。
-2. 保留優先順序：
-   TOP名次優先 → 分數較高優先 → 流動性分數較高優先 → 參考價較新/較高者優先。
-3. 不動原本策略資料，只在前端顯示層去重。
-4. 可直接貼到 mobile_dashboard_v1/app.js 最底部。
-
-注意：
-如果同一檔同時出現在「賣出 / 買進 / 試單 / 觀察」，不跨區刪除。
-只針對各區塊內部同股票去重。
-*/
-
-(function () {
-  function toNum(v, fallback = 0) {
-    const n = Number(String(v ?? "").replace(/[^\d.-]/g, ""));
-    return Number.isFinite(n) ? n : fallback;
-  }
-
-  function normAction(row) {
-    return String(row.final_action || row.action || "").trim().toUpperCase();
-  }
-
-  function getTopRank(row) {
-    const fields = [
-      row.section_top_opportunity,
-      row.top_opportunity,
-      row.section_opportunity_rank,
-      row.opportunity_rank,
-      row.execution_flag,
-      row.system_note,
-      row.note,
-      row.reason
-    ];
-    const txt = fields.map(v => String(v ?? "")).join(" ");
-
-    const m = txt.match(/TOP\s*([1-9]\d*)/i);
-    if (m) return Number(m[1]);
-
-    if (String(row.execution_flag || "").toUpperCase() === "TOP") return 99;
-
-    const flag = String(row.section_top_opportunity || row.top_opportunity || "").toLowerCase();
-    if (["1", "true", "yes", "y"].includes(flag)) {
-      return toNum(row.section_opportunity_rank || row.opportunity_rank, 99);
-    }
-
-    return 9999;
-  }
-
-  function getScore(row) {
-    return toNum(
-      row.score ||
-      row.opportunity_score ||
-      row.entry_score ||
-      row.rank_score ||
-      0,
-      0
-    );
-  }
-
-  function getLiquidity(row) {
-    return toNum(row.liquidity_score || row.turnover || row.volume || 0, 0);
-  }
-
-  function getPrice(row) {
-    return toNum(row.close || row.ref_price || row.price || 0, 0);
-  }
-
-  function betterRow(a, b) {
-    // 回傳比較好的那一筆
-    const at = getTopRank(a);
-    const bt = getTopRank(b);
-    if (at !== bt) return at < bt ? a : b;
-
-    const as = getScore(a);
-    const bs = getScore(b);
-    if (as !== bs) return as > bs ? a : b;
-
-    const al = getLiquidity(a);
-    const bl = getLiquidity(b);
-    if (al !== bl) return al > bl ? a : b;
-
-    const ap = getPrice(a);
-    const bp = getPrice(b);
-    if (ap !== bp) return ap > bp ? a : b;
-
-    return a;
-  }
-
-  function dedupeByStock(rows) {
-    const map = new Map();
-
-    (rows || []).forEach(row => {
-      const sid = String(row.stock_id || "").trim();
-      if (!sid) return;
-
-      if (!map.has(sid)) {
-        map.set(sid, row);
-      } else {
-        map.set(sid, betterRow(map.get(sid), row));
-      }
-    });
-
-    return Array.from(map.values());
-  }
-
-  function sortTopFirst(rows) {
-    return (rows || []).slice().sort((a, b) => {
-      const at = getTopRank(a);
-      const bt = getTopRank(b);
-      if (at !== bt) return at - bt;
-
-      const bs = getScore(b);
-      const as = getScore(a);
-      if (bs !== as) return bs - as;
-
-      const bl = getLiquidity(b);
-      const al = getLiquidity(a);
-      if (bl !== al) return bl - al;
-
-      return String(a.stock_id || "").localeCompare(String(b.stock_id || ""));
-    });
-  }
-
-  function dedupeAndSort(rows) {
-    return sortTopFirst(dedupeByStock(rows));
-  }
-
-  // 覆蓋 splitRows：各清單分區後再去重，避免同股票重複出現在同一區
-  window.splitRows = function (rows) {
-    const all = rows || [];
-
-    const mainRaw = all.filter(r => ["SELL", "REDUCE", "BUY"].includes(normAction(r)));
-    const testRaw = all.filter(r => normAction(r) === "TEST");
-    const watchRaw = all.filter(r => normAction(r) === "WATCH");
-    const blockRaw = all.filter(r => normAction(r) === "BLOCK");
-
-    return {
-      main: dedupeAndSort(mainRaw),
-      test: dedupeAndSort(testRaw),
-      watch: dedupeAndSort(watchRaw),
-      block: dedupeAndSort(blockRaw)
-    };
-  };
-
-  // 若舊版直接呼叫 sortRows，也一併套用 TOP 排序，但不在這裡跨區去重
-  window.sortRows = function (rows) {
-    return sortTopFirst(rows || []);
-  };
-
-  console.log("[v266.29E] 試單 / 觀察清單去重 + TOP優先排序已啟用");
-})();
-/*
-v266.29F 持倉顯示改回股票代號
-目的：
-持倉列表顯示 stock_id，不顯示 stock_name
-*/
-
-(function(){
-
-function fixPositionDisplay(){
-  document.querySelectorAll('*').forEach(el=>{
-    if(!el) return;
-
-    // 找「持倉卡」內的大字名稱（通常是名稱）
-    if(el.textContent && el.textContent.trim().length <= 6){
-      // 不動按鈕/標題
-      if(/持倉|最終操作|TEST|WATCH/.test(el.textContent)) return;
-    }
-  });
-
-  // 直接重畫持倉標題（最穩）
-  document.querySelectorAll('[data-position-card], .position-card, .card').forEach(card=>{
-    const id = card.getAttribute('data-stock-id');
-    if(!id) return;
-
-    // 找第一個標題文字節點
-    const title = card.querySelector('h1,h2,h3,.title,.name');
-    if(title){
-      title.textContent = id; // 強制改代號
-    }
-  });
-
-  console.log("[v266.29F] 持倉已改為顯示代號");
-}
-
-setTimeout(fixPositionDisplay,500);
-setTimeout(fixPositionDisplay,1500);
-
-})();
-/*
-v266.29G 修正補丁：持倉列表顯示代號 + 補回交易日
-貼到 mobile_dashboard_v1/app.js 最底部，不刪原本內容。
-
-修正：
-1. 持倉列表上方「友達 / 辛耘」改回股票代號「2409 / 3583」
-2. 不改展開後診斷卡內容
-3. 補回「交易日」欄位，避免只看到訊號日 / 最後更新
-4. 交易日來源優先：trade_date → next_trade_date → final_action_summary.trade_date → data_meta.trade_date
-*/
-
-(function () {
-  const DATA_DIR = "./data/";
-
-  function txt(el) {
-    return (el && el.textContent ? el.textContent : "").replace(/\s+/g, " ").trim();
-  }
-
-  function splitCsvLine(line) {
-    const out = [];
-    let cur = "";
-    let q = false;
-    for (let i = 0; i < line.length; i++) {
-      const c = line[i];
-      if (c === '"') {
-        if (q && line[i + 1] === '"') {
-          cur += '"';
-          i++;
-        } else {
-          q = !q;
-        }
-      } else if (c === "," && !q) {
-        out.push(cur);
-        cur = "";
-      } else {
-        cur += c;
-      }
-    }
-    out.push(cur);
-    return out;
-  }
-
-  function csvParse(text) {
-    const lines = String(text || "").replace(/\r/g, "").split("\n").filter(x => x.trim());
-    if (lines.length < 2) return [];
-    const head = splitCsvLine(lines[0]);
-    return lines.slice(1).map(line => {
-      const vals = splitCsvLine(line);
-      const o = {};
-      head.forEach((h, i) => o[h.trim()] = vals[i] || "");
-      return o;
-    });
-  }
-
-  async function fetchTextSafe(url) {
-    try {
-      const r = await fetch(url + "?t=" + Date.now(), { cache: "no-store" });
-      if (!r.ok) return "";
-      return await r.text();
-    } catch (e) {
-      return "";
-    }
-  }
-
-  async function fetchJsonSafe(url) {
-    try {
-      const t = await fetchTextSafe(url);
-      return t ? JSON.parse(t) : {};
-    } catch (e) {
-      return {};
-    }
-  }
-
-  async function buildPositionNameToIdMap() {
-    const sources = [
-      DATA_DIR + "manual_positions.csv",
-      DATA_DIR + "position_overlay.csv",
-      DATA_DIR + "positions_manual.csv",
-      DATA_DIR + "current_positions.csv"
-    ];
-
-    const map = {};
-    for (const url of sources) {
-      const rows = csvParse(await fetchTextSafe(url));
-      rows.forEach(r => {
-        const id = String(r.stock_id || r.code || "").trim();
-        const name = String(r.stock_name || r.name || "").trim();
-        if (id && name) map[name] = id;
-      });
-    }
-    return map;
-  }
-
-  function fixPositionHeaderNames(nameToId) {
-    const positionBlocks = Array.from(document.querySelectorAll("section, .card, div, article"))
-      .filter(el => /持倉管理|同步持倉|持倉區已同步/.test(txt(el)));
-
-    positionBlocks.forEach(block => {
-      Object.entries(nameToId).forEach(([name, id]) => {
-        if (!name || !id) return;
-
-        Array.from(block.querySelectorAll("*")).forEach(el => {
-          if (txt(el) === name) {
-            el.textContent = id;
-          }
-        });
-      });
-    });
-
-    console.log("[v266.29G] 持倉列表名稱已改回股票代號");
-  }
-
-  function formatDateOnly(v) {
-    const s = String(v || "").trim();
-    const m = s.match(/\d{4}-\d{2}-\d{2}/);
-    return m ? m[0] : "";
-  }
-
-  async function getTradeDate() {
-    const summary = await fetchJsonSafe(DATA_DIR + "final_action_summary.json");
-    const meta = await fetchJsonSafe(DATA_DIR + "data_meta.json");
-    const regime = await fetchJsonSafe(DATA_DIR + "market_regime.json");
-
-    let d =
-      summary.trade_date ||
-      summary.next_trade_date ||
-      meta.trade_date ||
-      meta.next_trade_date ||
-      regime.trade_date ||
-      regime.next_trade_date ||
-      "";
-
-    if (!d) {
-      const tradePlan = csvParse(await fetchTextSafe(DATA_DIR + "trade_plan.csv"));
-      if (tradePlan.length) d = tradePlan[0].trade_date || tradePlan[0].signal_date || "";
-    }
-
-    if (!d) {
-      const finalPlan = csvParse(await fetchTextSafe(DATA_DIR + "final_action_plan.csv"));
-      if (finalPlan.length) d = finalPlan[0].trade_date || finalPlan[0].signal_date || "";
-    }
-
-    return formatDateOnly(d);
-  }
-
-  function addTradeDateCard(tradeDate) {
-    if (!tradeDate) return;
-    if (document.querySelector("[data-v26629g-trade-date='1']")) return;
-
-    const labels = Array.from(document.querySelectorAll("*")).filter(el => {
-      const t = txt(el);
-      return t === "訊號日" || t.includes("訊號日");
-    });
-
-    if (!labels.length) return;
-
-    const signalLabel = labels[0];
-    let signalCard = signalLabel;
-    for (let i = 0; i < 5 && signalCard; i++) {
-      if ((signalCard.className || "").toString().match(/mini|card|grid|item|box|stat/i)) break;
-      signalCard = signalCard.parentElement;
-    }
-
-    const newCard = signalCard ? signalCard.cloneNode(true) : document.createElement("div");
-    newCard.setAttribute("data-v26629g-trade-date", "1");
-
-    const all = Array.from(newCard.querySelectorAll("*"));
-    if (all.length >= 2) {
-      all[0].textContent = "交易日";
-      all[all.length - 1].textContent = tradeDate;
-    } else {
-      newCard.innerHTML = `<span>交易日</span><b>${tradeDate}</b>`;
-    }
-
-    if (signalCard && signalCard.parentElement) {
-      signalCard.parentElement.insertBefore(newCard, signalCard.nextSibling);
-    }
-
-    console.log("[v266.29G] 已補回交易日欄位:", tradeDate);
-  }
-
-  async function applyV26629G() {
-    const map = await buildPositionNameToIdMap();
-    fixPositionHeaderNames(map);
-
-    const tradeDate = await getTradeDate();
-    addTradeDateCard(tradeDate);
-  }
-
-  window.addEventListener("load", function () {
-    setTimeout(applyV26629G, 500);
-    setTimeout(applyV26629G, 1500);
-    setTimeout(applyV26629G, 3000);
-  });
-
-  let timer = null;
-  const observer = new MutationObserver(function () {
-    clearTimeout(timer);
-    timer = setTimeout(applyV26629G, 500);
-  });
-
-  observer.observe(document.body, { childList: true, subtree: true });
-
-  window.applyV26629G = applyV26629G;
-})();
-/*
-v266.29H 持倉欄位修正版
-貼到 mobile_dashboard_v1/app.js 最底部，不刪原本內容。
-
-修正目標：
-1. 持倉卡上方大字：顯示股票代號 stock_id
-2. 展開卡第一格：股票代號
-3. 展開卡第二格：股票名稱
-4. 不再把「個股名稱」誤改成代號
-5. 補丁會在畫面 render 後強制修正 DOM
-*/
-
-(function () {
-  const DATA_DIR = "./data/";
-
-  function cleanText(el) {
-    return (el && el.textContent ? el.textContent : "").replace(/\s+/g, " ").trim();
-  }
-
-  function splitCsvLine(line) {
-    const out = [];
-    let cur = "";
-    let q = false;
-
-    for (let i = 0; i < line.length; i++) {
-      const c = line[i];
-      if (c === '"') {
-        if (q && line[i + 1] === '"') {
-          cur += '"';
-          i++;
-        } else {
-          q = !q;
-        }
-      } else if (c === "," && !q) {
-        out.push(cur);
-        cur = "";
-      } else {
-        cur += c;
-      }
-    }
-
-    out.push(cur);
-    return out;
-  }
-
-  function parseCsv(text) {
-    const lines = String(text || "").replace(/\r/g, "").split("\n").filter(x => x.trim());
-    if (lines.length < 2) return [];
-
-    const headers = splitCsvLine(lines[0]).map(x => x.trim());
-    return lines.slice(1).map(line => {
-      const vals = splitCsvLine(line);
-      const row = {};
-      headers.forEach((h, i) => row[h] = vals[i] || "");
-      return row;
-    });
-  }
-
-  async function fetchTextSafe(url) {
-    try {
-      const res = await fetch(url + "?t=" + Date.now(), { cache: "no-store" });
-      if (!res.ok) return "";
-      return await res.text();
-    } catch (e) {
-      return "";
-    }
-  }
-
-  async function loadPositionMap() {
-    const urls = [
-      DATA_DIR + "position_overlay.csv",
-      DATA_DIR + "manual_positions.csv",
-      DATA_DIR + "positions_manual.csv",
-      DATA_DIR + "current_positions.csv"
-    ];
-
-    const byId = {};
-    const byName = {};
-
-    for (const url of urls) {
-      const rows = parseCsv(await fetchTextSafe(url));
-      rows.forEach(r => {
-        const id = String(r.stock_id || r.code || "").trim();
-        const name = String(r.stock_name || r.name || "").trim();
-
-        if (!id) return;
-
-        const data = {
-          id,
-          name: name || byId[id]?.name || ""
-        };
-
-        byId[id] = { ...(byId[id] || {}), ...data };
-        if (name) byName[name] = id;
-      });
-    }
-
-    return { byId, byName };
-  }
-
-  function findClosestCard(el) {
-    let cur = el;
-    for (let i = 0; i < 8 && cur; i++) {
-      const t = cleanText(cur);
-      if (
-        /持倉提示|手動持倉|持倉管理|同步持倉/.test(t) &&
-        /均價|張數|股數|成本|部位金額/.test(t)
-      ) {
-        return cur;
-      }
-      cur = cur.parentElement;
-    }
-    return null;
-  }
-
-  function fixOnePositionCard(card, id, name) {
-    if (!card || !id) return;
-
-    // 1. 修正上方折疊列的大字名稱：只改看起來像標題的名稱，不改欄位值
-    Array.from(card.querySelectorAll("*")).forEach(el => {
-      const t = cleanText(el);
-      if (name && t === name) {
-        el.textContent = id;
-      }
-    });
-
-    // 2. 修正展開卡第一格：個股名稱 / 個股 / 股票名稱 → 股票代號 + id
-    const labels = Array.from(card.querySelectorAll("*")).filter(el => {
-      const t = cleanText(el);
-      return t === "個股名稱" || t === "個股" || t === "股票名稱";
-    });
-
-    labels.forEach((label, idx) => {
-      const box = label.parentElement;
-      if (!box) return;
-
-      // 第一個欄位一定改股票代號
-      if (idx === 0) {
-        label.textContent = "股票代號";
-        const values = Array.from(box.querySelectorAll("*")).filter(x => x !== label);
-        const valueEl = values.find(x => cleanText(x) && cleanText(x) !== "股票代號");
-        if (valueEl) valueEl.textContent = id;
-        else box.appendChild(document.createTextNode(id));
-      }
-    });
-
-    // 3. 確保有第二格「股票名稱」
-    const alreadyName = Array.from(card.querySelectorAll("*")).some(el => cleanText(el) === "股票名稱");
-    if (!alreadyName && name) {
-      const firstGrid = Array.from(card.querySelectorAll("div")).find(el => {
-        const t = cleanText(el);
-        return /股票代號/.test(t) && new RegExp(id).test(t);
-      });
-
-      if (firstGrid && firstGrid.parentElement) {
-        const clone = firstGrid.cloneNode(true);
-        const nodes = Array.from(clone.querySelectorAll("*"));
-        if (nodes.length >= 2) {
-          nodes[0].textContent = "股票名稱";
-          nodes[nodes.length - 1].textContent = name;
-        } else {
-          clone.innerHTML = `<span>股票名稱</span><b>${name}</b>`;
-        }
-        firstGrid.parentElement.insertBefore(clone, firstGrid.nextSibling);
-      }
-    }
-  }
-
-  async function applyV26629H() {
-    const { byId, byName } = await loadPositionMap();
-
-    // 從畫面找目前持倉卡：用代號或名稱反推
-    const all = Array.from(document.querySelectorAll("*"));
-    const handled = new Set();
-
-    all.forEach(el => {
-      const t = cleanText(el);
-
-      let id = "";
-      let name = "";
-
-      if (byId[t]) {
-        id = t;
-        name = byId[t].name || "";
-      } else if (byName[t]) {
-        id = byName[t];
-        name = t;
-      }
-
-      if (!id) return;
-
-      const card = findClosestCard(el);
-      if (!card || handled.has(card)) return;
-
-      handled.add(card);
-      fixOnePositionCard(card, id, name);
-    });
-
-    console.log("[v266.29H] 持倉欄位已修正：1=股票代號，2=股票名稱");
-  }
-
-  window.addEventListener("load", function () {
-    setTimeout(applyV26629H, 500);
-    setTimeout(applyV26629H, 1500);
-    setTimeout(applyV26629H, 3000);
-  });
-
-  let timer = null;
-  const observer = new MutationObserver(function () {
-    clearTimeout(timer);
-    timer = setTimeout(applyV26629H, 500);
-  });
-
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-
-  window.applyV26629H = applyV26629H;
-})();
-/*
-v266.29I 交易日欄位強制補回版
-貼到 mobile_dashboard_v1/app.js 最底部，不刪原本內容。
-
-修正：
-1. 在「訊號日」下面強制補一格「交易日」
-2. 交易日來源優先：
-   trade_plan.csv.trade_date
-   final_action_plan.csv.trade_date
-   final_action_summary.json.trade_date / next_trade_date
-   data_meta.json.trade_date / next_trade_date
-3. 若畫面已經 render 完，仍會重新掃描並補上。
-*/
-
-(function () {
-  const DATA_DIR = "./data/";
-
-  function txt(el) {
-    return (el && el.textContent ? el.textContent : "").replace(/\s+/g, " ").trim();
-  }
-
-  function splitCsvLine(line) {
-    const out = [];
-    let cur = "";
-    let q = false;
-    for (let i = 0; i < line.length; i++) {
-      const c = line[i];
-      if (c === '"') {
-        if (q && line[i + 1] === '"') {
-          cur += '"';
-          i++;
-        } else {
-          q = !q;
-        }
-      } else if (c === "," && !q) {
-        out.push(cur);
-        cur = "";
-      } else {
-        cur += c;
-      }
-    }
-    out.push(cur);
-    return out;
-  }
-
-  function parseCsv(text) {
-    const lines = String(text || "").replace(/\r/g, "").split("\n").filter(x => x.trim());
-    if (lines.length < 2) return [];
-    const headers = splitCsvLine(lines[0]).map(x => x.trim());
-    return lines.slice(1).map(line => {
-      const vals = splitCsvLine(line);
-      const row = {};
-      headers.forEach((h, i) => row[h] = vals[i] || "");
-      return row;
-    });
-  }
-
-  async function fetchTextSafe(url) {
-    try {
-      const r = await fetch(url + "?t=" + Date.now(), { cache: "no-store" });
-      if (!r.ok) return "";
-      return await r.text();
-    } catch (e) {
-      return "";
-    }
-  }
-
-  async function fetchJsonSafe(url) {
-    try {
-      const t = await fetchTextSafe(url);
-      return t ? JSON.parse(t) : {};
-    } catch (e) {
-      return {};
-    }
-  }
-
-  function dateOnly(v) {
-    const s = String(v || "").trim();
-    const m = s.match(/\d{4}-\d{2}-\d{2}/);
-    return m ? m[0] : "";
-  }
-
-  async function resolveTradeDate() {
-    let rows = parseCsv(await fetchTextSafe(DATA_DIR + "trade_plan.csv"));
-    if (rows.length) {
-      const d = dateOnly(rows[0].trade_date || rows[0].next_trade_date);
-      if (d) return d;
-    }
-
-    rows = parseCsv(await fetchTextSafe(DATA_DIR + "final_action_plan.csv"));
-    if (rows.length) {
-      const d = dateOnly(rows[0].trade_date || rows[0].next_trade_date);
-      if (d) return d;
-    }
-
-    const summary = await fetchJsonSafe(DATA_DIR + "final_action_summary.json");
-    let d = dateOnly(summary.trade_date || summary.next_trade_date);
-    if (d) return d;
-
-    const meta = await fetchJsonSafe(DATA_DIR + "data_meta.json");
-    d = dateOnly(meta.trade_date || meta.next_trade_date);
-    if (d) return d;
-
-    const regime = await fetchJsonSafe(DATA_DIR + "market_regime.json");
-    d = dateOnly(regime.trade_date || regime.next_trade_date);
-    if (d) return d;
-
-    return "";
-  }
-
-  function findInfoGrid() {
-    const candidates = Array.from(document.querySelectorAll("section, div, article")).filter(el => {
-      const t = txt(el);
-      return /來源版本/.test(t) && /市場狀態/.test(t) && /訊號日/.test(t);
-    });
-
-    candidates.sort((a, b) => txt(a).length - txt(b).length);
-    return candidates[0] || null;
-  }
-
-  function findSignalCard(root) {
-    if (!root) return null;
-
-    const labels = Array.from(root.querySelectorAll("*")).filter(el => txt(el) === "訊號日");
-    if (!labels.length) return null;
-
-    let cur = labels[0];
-    for (let i = 0; i < 6 && cur; i++) {
-      const t = txt(cur);
-      if (/訊號日/.test(t) && /\d{4}-\d{2}-\d{2}/.test(t)) return cur;
-      cur = cur.parentElement;
-    }
-    return labels[0].parentElement || labels[0];
-  }
-
-  function makeTradeDateCardFrom(signalCard, tradeDate) {
-    const card = signalCard ? signalCard.cloneNode(true) : document.createElement("div");
-    card.setAttribute("data-v26629i-trade-date", "1");
-
-    const nodes = Array.from(card.querySelectorAll("*"));
-    const label = nodes.find(el => txt(el) === "訊號日") || nodes[0];
-    const value = nodes.reverse().find(el => /\d{4}-\d{2}-\d{2}/.test(txt(el)));
-
-    if (label) label.textContent = "交易日";
-    if (value) value.textContent = tradeDate;
-
-    if (!label || !value) {
-      card.innerHTML = `
-        <div style="font-size:0.88em;color:#6b7280;font-weight:800;">交易日</div>
-        <div style="font-size:1.35em;font-weight:900;color:#111827;">${tradeDate}</div>
-      `;
-    }
-
-    return card;
-  }
-
-  function insertTradeDate(tradeDate) {
-    if (!tradeDate) return false;
-
-    const root = findInfoGrid();
-    if (!root) return false;
-
-    const old = root.querySelector("[data-v26629i-trade-date='1']");
-    if (old) {
-      old.querySelectorAll("*").forEach(el => {
-        if (/\d{4}-\d{2}-\d{2}/.test(txt(el))) el.textContent = tradeDate;
-      });
-      return true;
-    }
-
-    const already = Array.from(root.querySelectorAll("*")).some(el => txt(el) === "交易日");
-    if (already) return true;
-
-    const signalCard = findSignalCard(root);
-    const tradeCard = makeTradeDateCardFrom(signalCard, tradeDate);
-
-    if (signalCard && signalCard.parentElement) {
-      signalCard.parentElement.insertBefore(tradeCard, signalCard.nextSibling);
-    } else {
-      root.appendChild(tradeCard);
-    }
-
-    console.log("[v266.29I] 交易日已補回:", tradeDate);
-    return true;
-  }
-
-  async function applyTradeDateFix() {
-    const tradeDate = await resolveTradeDate();
-    insertTradeDate(tradeDate);
-  }
-
-  window.addEventListener("load", function () {
-    setTimeout(applyTradeDateFix, 500);
-    setTimeout(applyTradeDateFix, 1500);
-    setTimeout(applyTradeDateFix, 3000);
-  });
-
-  let timer = null;
-  const observer = new MutationObserver(function () {
-    clearTimeout(timer);
-    timer = setTimeout(applyTradeDateFix, 500);
-  });
-
-  observer.observe(document.body, { childList: true, subtree: true });
-
-  window.applyTradeDateFixV26629I = applyTradeDateFix;
-})();
