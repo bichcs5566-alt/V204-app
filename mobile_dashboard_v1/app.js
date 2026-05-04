@@ -188,7 +188,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.40_stable_guarded_test";
+const APP_PATCH_VERSION = "v266.41_unified_k_tech_cards";
 
 
 const FILES = {
@@ -2475,18 +2475,85 @@ function inferMaLabelV26635(row, maKey, label) {
   return `${label}：貼近｜→ 盤整`;
 }
 
+function numV26641(v) {
+  const n = Number(String(v ?? "").replace(/,/g, "").replace("億", ""));
+  return Number.isFinite(n) ? n : NaN;
+}
+
+function inferKbarFromPriceV26641(row) {
+  const merged = mergeTechRowV26637(row || {});
+  const o = numV26641(merged.open);
+  const h = numV26641(merged.high);
+  const l = numV26641(merged.low);
+  const c = numV26641(merged.close || merged.ref_price || merged.price);
+  const ma20 = numV26641(merged.ma20);
+
+  if (![o, h, l, c].every(Number.isFinite) || h <= l) {
+    const action = normalizeAction(merged.final_action || merged.action || merged.status || "");
+    const reason = String(merged.reason || merged.exit_reason || merged.system_note || "");
+    if (/停損|跌破|出場|SELL|賣/.test(reason + action)) return "跌破型K棒";
+    if (/突破|強勢|試單|BUY|買/.test(reason + action)) return "突破確認K";
+    if (/觀察|整理|收斂|WATCH/.test(reason + action)) return "整理觀察K";
+    return "依策略判斷K";
+  }
+
+  const range = Math.max(h - l, 0.0001);
+  const body = Math.abs(c - o);
+  const upper = h - Math.max(o, c);
+  const lower = Math.min(o, c) - l;
+  const bodyRatio = body / range;
+  const upperRatio = upper / range;
+  const lowerRatio = lower / range;
+
+  if (bodyRatio <= 0.18) return "十字K／猶豫";
+  if (upperRatio >= 0.45) return "上影壓力K";
+  if (lowerRatio >= 0.45) return "下影支撐K";
+  if (c > o && (!Number.isFinite(ma20) || c >= ma20)) return "突破長紅K";
+  if (c < o && (!Number.isFinite(ma20) || c < ma20)) return "跌破型K棒";
+  if (c > o) return "陽K續強";
+  if (c < o) return "陰K轉弱";
+  return "一般K棒";
+}
+
+function inferKStructureFromMaV26641(row) {
+  const merged = mergeTechRowV26637(row || {});
+  const c = numV26641(merged.close || merged.ref_price || merged.price);
+  const ma5 = numV26641(merged.ma5);
+  const ma10 = numV26641(merged.ma10);
+  const ma20 = numV26641(merged.ma20);
+  const reason = String(merged.reason || merged.system_note || merged.tech_reason || "");
+  const action = normalizeAction(merged.final_action || merged.action || merged.status || "");
+
+  if ([c, ma5, ma10, ma20].every(Number.isFinite)) {
+    if (ma5 > ma10 && ma10 > ma20 && c > ma20) return "多頭排列";
+    if (ma5 < ma10 && ma10 < ma20 && c < ma20) return "空頭排列";
+    if (c > ma20 && ma5 >= ma10) return "整理後轉強";
+    if (c < ma20) return "短線轉弱";
+    return "震盪整理";
+  }
+
+  if (/停損|跌破|出場|SELL|賣/.test(reason + action)) return "短線轉弱";
+  if (/突破|強勢|試單|BUY|買/.test(reason + action)) return "整理後轉強";
+  if (/觀察|收斂|安靜|吸籌|WATCH/.test(reason + action)) return "整理收斂";
+  return "依策略結構";
+}
+
 function inferKbarTypeV26635(row) {
-  return pickFieldV26635(row, [
+  const direct = pickFieldV26635(row, [
     "kbar_type", "k_bar_type", "K棒型態", "k棒型態",
     "exit_kbar_type"
-  ], "資料不足");
+  ], "");
+  if (usefulV26637(direct)) return cleanTechV26637(direct);
+  return inferKbarFromPriceV26641(row);
 }
 
 function inferKStructureV26635(row) {
-  return pickFieldV26635(row, [
+  const direct = pickFieldV26635(row, [
     "k_structure", "kline_structure", "K線結構", "k線結構",
     "tech_structure", "structure_label"
-  ], "資料不足");
+  ], "");
+  if (usefulV26637(direct)) return cleanTechV26637(direct);
+  return inferKStructureFromMaV26641(row);
 }
 
 function techGridCellsV26635(row) {
@@ -2501,21 +2568,20 @@ function techGridCellsV26635(row) {
 
 function techTextBlockV26635(row, isExit = false) {
   const merged = mergeTechRowV26637(row || {});
-  const techReason = pickFieldV26635(merged, ["tech_reason", "technical_reason", "技術原因"], "");
-  const kReason = pickFieldV26635(merged, ["kbar_reason", "k_bar_reason", "kline_reason", "K棒判斷原因"], "");
-  const hint = pickFieldV26635(merged, ["tech_decision_hint", "technical_hint", "技術提示"], "");
-
-  const fallback = [
+  const techReason = [
     inferMaLabelV26635(merged, "ma5", "MA5"),
     inferMaLabelV26635(merged, "ma10", "MA10"),
     inferMaLabelV26635(merged, "ma20", "MA20"),
-    "K棒型態：" + inferKbarTypeV26635(merged),
-    "K線結構：" + inferKStructureV26635(merged)
-  ].map(x => cleanTechV26637(x)).filter(x => usefulV26637(x)).join("｜") || "技術資料不足";
+    "K棒：" + inferKbarTypeV26635(merged),
+    "K線：" + inferKStructureV26635(merged)
+  ].map(x => cleanTechV26637(x)).join("｜");
+
+  const kReason = "K棒型態：" + inferKbarTypeV26635(merged) + "｜K線結構：" + inferKStructureV26635(merged);
+  const hint = pickFieldV26635(merged, ["tech_decision_hint", "technical_hint", "技術提示"], "");
 
   return `
-        <div class="detail-text ${isExit ? "exit-detail-text" : ""}"><b>技術補充</b><p>${cleanTechV26637(techReason || fallback)}</p></div>
-        <div class="detail-text ${isExit ? "exit-detail-text" : ""}"><b>K線／型態提示</b><p>${cleanTechV26637(kReason || fallback)}</p></div>
+        <div class="detail-text ${isExit ? "exit-detail-text" : ""}"><b>技術補充</b><p>${cleanTechV26637(techReason)}</p></div>
+        <div class="detail-text ${isExit ? "exit-detail-text" : ""}"><b>K線／型態提示</b><p>${cleanTechV26637(kReason)}</p></div>
         <div class="detail-text ${isExit ? "exit-detail-text" : ""}"><b>技術決策提示</b><p>${cleanTechV26637(hint || (isExit ? "若 MA5/MA20 轉弱，優先控風險；若站回均線再觀察。" : "依原策略執行，技術欄位用於確認節奏與風險。"))}</p></div>
       `;
 }
