@@ -173,7 +173,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.30M_active_run_priority";
+const APP_PATCH_VERSION = "v266.30N_persistent_backend_timer";
 
 
 const FILES = {
@@ -359,6 +359,50 @@ function showBackendRunCompleteIfAnyV26630K() {
   const duration = last.duration_text || "--";
   const doneAt = last.done_at || formatTWClock(new Date());
   setSyncStatus(`✅ 後端策略已完成｜耗時 ${duration}｜完成時間 ${doneAt}`, "sync ok");
+  return true;
+}
+
+function saveActiveBackendRunV26630N(createdAfterIso) {
+  try {
+    localStorage.setItem("v26630_active_backend_run", JSON.stringify({
+      created_after_iso: createdAfterIso,
+      started_at_ms: Date.now(),
+      saved_at: new Date().toISOString()
+    }));
+  } catch (e) {}
+}
+
+function getActiveBackendRunV26630N() {
+  try {
+    const raw = localStorage.getItem("v26630_active_backend_run");
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj || !obj.created_after_iso || !obj.started_at_ms) return null;
+
+    // 超過 2 小時視為過期，避免永久卡住。
+    if (Date.now() - Number(obj.started_at_ms) > 2 * 60 * 60 * 1000) {
+      localStorage.removeItem("v26630_active_backend_run");
+      return null;
+    }
+    return obj;
+  } catch (e) {
+    return null;
+  }
+}
+
+function clearActiveBackendRunV26630N() {
+  try { localStorage.removeItem("v26630_active_backend_run"); } catch (e) {}
+}
+
+function resumeBackendRunIfActiveV26630N() {
+  const active = getActiveBackendRunV26630N();
+  if (!active) return false;
+  const elapsedText = formatRunDurationV26630K(Date.now() - Number(active.started_at_ms));
+  setSyncStatus(`⏳ 後端策略仍在追蹤｜已跑 ${elapsedText}｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync");
+  setPositionStatus?.(`⏳ 後端策略仍在追蹤｜已跑 ${elapsedText}｜現在時間 <span id="positionLiveClock">${formatTWClock(new Date())}</span>`, "position-status");
+  startLiveClock();
+  startPositionClock?.();
+  pollWorkflowRun(active.created_after_iso, Number(active.started_at_ms));
   return true;
 }
 
@@ -1612,10 +1656,10 @@ async function getLatestWorkflowRun(createdAfterIso) {
   return candidates[0] || null;
 }
 
-async function pollWorkflowRun(createdAfterIso) {
+async function pollWorkflowRun(createdAfterIso, startedAtMs = null) {
   if (pollingTimer) clearTimeout(pollingTimer);
 
-  const started = Date.now();
+  const started = Number(startedAtMs || Date.now());
   const timeoutMs = 60 * 60 * 1000;
 
   const loop = async () => {
@@ -1642,6 +1686,7 @@ async function pollWorkflowRun(createdAfterIso) {
         if (status === "completed") {
           if (conclusion === "success") {
             const doneClock = formatTWClock(new Date());
+            clearActiveBackendRunV26630N();
             rememberBackendRunV26630K({
               status: "success",
               duration_text: elapsedText,
@@ -1650,7 +1695,7 @@ async function pollWorkflowRun(createdAfterIso) {
             });
             setSyncStatus(`✅ 後端策略完成 ${runNumber}｜耗時 ${elapsedText}｜完成時間 ${doneClock}｜重新整理中...`, "sync ok");
             setPositionStatus?.(`✅ 後端策略完成 ${runNumber}｜耗時 ${elapsedText}｜完成時間 ${doneClock}｜重新整理中...`, "position-status ok");
-            setTimeout(() => location.reload(), 1800);
+            setTimeout(() => { location.href = location.pathname + '?v=' + Date.now() + location.hash; }, 1800);
             return;
           }
 
@@ -1663,6 +1708,7 @@ async function pollWorkflowRun(createdAfterIso) {
             return;
           }
 
+          clearActiveBackendRunV26630N();
           setSyncStatus(`❌ 後端策略失敗 ${runNumber}：${safeText(conclusion)}｜耗時 ${elapsedText}｜請到 Actions 查看`, "sync error");
           setPositionStatus?.(`❌ 後端策略失敗 ${runNumber}：${safeText(conclusion)}｜耗時 ${elapsedText}`, "position-status error");
           return;
@@ -1675,6 +1721,7 @@ async function pollWorkflowRun(createdAfterIso) {
       }
 
       if (Date.now() - started > timeoutMs) {
+        clearActiveBackendRunV26630N();
         setSyncStatus("⚠️ 後端策略等待超過 60 分鐘，請到 GitHub Actions 查看狀態。", "sync error");
         setPositionStatus?.("⚠️ 後端策略等待超過 60 分鐘，請到 GitHub Actions 查看狀態。", "position-status error");
         return;
@@ -1706,6 +1753,7 @@ async function triggerDataPipeline() {
     startPositionClock?.();
 
     const createdAfterIso = new Date().toISOString();
+    saveActiveBackendRunV26630N(createdAfterIso);
 
     const res = await githubApi(`/actions/workflows/${encodeURIComponent(gh.workflow)}/dispatches`, {
       method: "POST",
@@ -1723,7 +1771,7 @@ async function triggerDataPipeline() {
     setPositionStatus?.(`✅ 後端策略已觸發｜開始計時 0分00秒｜現在時間 <span id="positionLiveClock">${formatTWClock(new Date())}</span>`, "position-status ok");
     startLiveClock();
     startPositionClock?.();
-    pollWorkflowRun(createdAfterIso);
+    pollWorkflowRun(createdAfterIso, Date.now());
   } catch (e) {
     setSyncStatus(`❌ 觸發失敗：${e.message}`, "sync error");
   }
@@ -2252,6 +2300,8 @@ async function init() {
     const groups = splitRows(rows);
 
     renderMeta(regime, summary, macro, rows);
+    // v266.30N：若後端還在跑，重新整理後要接回計時，不讓「最終操作表已同步」洗掉狀態。
+    resumeBackendRunIfActiveV26630N();
     renderPositionRiskHints(rows);
     renderPositions();
     renderDecision(rows);
