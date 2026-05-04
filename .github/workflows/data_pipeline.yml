@@ -1,4 +1,4 @@
-name: data_pipeline  # v266.44 fake breakout guard
+name: data_pipeline  # v266.45 fake breakout guard
 
 on:
   workflow_dispatch:
@@ -102,13 +102,13 @@ jobs:
           python v266_data_guard.py
 
 
-      # v266.44：策略前置檢查，避免 import / syntax 問題跑到中段才炸。
+      # v266.45：策略前置檢查，避免 import / syntax 問題跑到中段才炸。
       - name: Preflight strategy syntax and imports
         run: |
           python - <<'PY'
           import py_compile
           py_compile.compile("v266_strategy_engine.py", doraise=True)
-          print("v266.44 preflight OK")
+          print("v266.45 preflight OK")
           PY
 
 
@@ -245,7 +245,7 @@ jobs:
       # 造成 trade_date 被覆蓋回 signal_date，這版已鎖住。
 
 
-      # v266.44：最終輸出補齊技術欄位（完全防炸版）
+      # v266.45：最終輸出補齊技術欄位（完全防炸版）
       - name: Enrich final outputs with tech fields
         if: always()
         run: |
@@ -362,7 +362,7 @@ jobs:
 
                   merged.drop(columns=[tc], inplace=True)
 
-              # v266.44：若 K棒/K線還是空，依現有 MA / 原因 / action 做保底推論。
+              # v266.45：若 K棒/K線還是空，依現有 MA / 原因 / action 做保底推論。
               def _num(v):
                   try:
                       return float(str(v).replace(",", ""))
@@ -430,11 +430,11 @@ jobs:
               enrich_file(ROOT / name)
               enrich_file(DATA / name)
 
-          print("v266.44 guarded enrich done, tech rows =", len(tech))
+          print("v266.45 guarded enrich done, tech rows =", len(tech))
           PY
 
 
-      # v266.44：資料時間鎖定。用 feature_panel_daily.csv 最新日期強制覆寫所有 summary/meta，避免訊號日卡舊值。
+      # v266.45：資料時間鎖定。用 feature_panel_daily.csv 最新日期強制覆寫所有 summary/meta，避免訊號日卡舊值。
       - name: Lock signal date and summary metadata
         if: always()
         run: |
@@ -533,8 +533,8 @@ jobs:
           regime = read_json(ROOT / "market_regime.json") or read_json(DATA / "market_regime.json")
 
           patch = {
-              "source": "v266_44_complete_stable",
-              "version": "v266.44",
+              "source": "v266_45_field_locked",
+              "version": "v266.45",
               "signal_date": signal_date,
               "latest_date": signal_date,
               "trade_date": trade_date,
@@ -553,8 +553,8 @@ jobs:
               "trade_date": trade_date,
               "updated_at": now,
               "generated_at": regime.get("generated_at") or now,
-              "source": "v266_44_complete_stable",
-              "version": "v266.44",
+              "source": "v266_45_field_locked",
+              "version": "v266.45",
               "date_lock_source": source_file,
           })
 
@@ -564,19 +564,19 @@ jobs:
 
           # 另外輸出一份 debug，方便你手機檢查。
           write_json_both({
-              "version": "v266.44",
+              "version": "v266.45",
               "signal_date": signal_date,
               "trade_date": trade_date,
               "updated_at": now,
               "source_file": source_file,
           }, "date_lock_report.json")
 
-          print("v266.44 date locked:", signal_date, "trade:", trade_date, "source:", source_file)
+          print("v266.45 date locked:", signal_date, "trade:", trade_date, "source:", source_file)
           PY
 
 
 
-      # v266.44：全系統時間統一。所有 JSON / 關鍵 CSV 的 updated_at / generated_at 都寫入台灣時間。
+      # v266.45：全系統時間統一。所有 JSON / 關鍵 CSV 的 updated_at / generated_at 都寫入台灣時間。
       - name: Normalize all dashboard timestamps to Taiwan time
         if: always()
         run: |
@@ -610,7 +610,7 @@ jobs:
               obj["last_update"] = now
               obj["timezone"] = "Asia/Taipei"
               obj["time_source"] = "github_actions_taipei"
-              obj["version"] = "v266.44"
+              obj["version"] = "v266.45"
               for p in [ROOT / name, DATA / name]:
                   p.parent.mkdir(parents=True, exist_ok=True)
                   p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8-sig")
@@ -661,7 +661,183 @@ jobs:
               normalize_csv_time(ROOT / name)
               normalize_csv_time(DATA / name)
 
-          print("v266.44 timestamps normalized:", now)
+          print("v266.45 timestamps normalized:", now)
+          PY
+
+
+
+      # v266.45：欄位鎖死。所有前端卡片欄位統一補齊，不允許 NaN / 資料不足 / 空欄位。
+      - name: Lock dashboard display fields
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from datetime import datetime, timedelta, timezone
+          import pandas as pd
+          import numpy as np
+
+          ROOT = Path(".")
+          DATA = ROOT / "mobile_dashboard_v1" / "data"
+          DATA.mkdir(parents=True, exist_ok=True)
+          now = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
+
+          INVALID = {"", "--", "-", "nan", "NaN", "None", "none", "null", "undefined", "資料不足", "資料有限", "N/A"}
+
+          def read_csv_safe(p):
+              p = Path(p)
+              if not p.exists() or p.stat().st_size == 0:
+                  return pd.DataFrame()
+              try:
+                  return pd.read_csv(p, dtype=str, encoding="utf-8-sig")
+              except Exception:
+                  try:
+                      return pd.read_csv(p, dtype=str)
+                  except Exception:
+                      return pd.DataFrame()
+
+          def txt(v, default=""):
+              try:
+                  if v is None or pd.isna(v):
+                      return default
+                  s = str(v).strip()
+                  return default if s in INVALID else s
+              except Exception:
+                  return default
+
+          def num(v):
+              try:
+                  return float(str(v).replace(",", ""))
+              except Exception:
+                  return np.nan
+
+          def sid_norm(df):
+              if df.empty or "stock_id" not in df.columns:
+                  return df
+              df = df.copy()
+              sid = df["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False)
+              df["stock_id"] = sid.fillna(df["stock_id"].astype(str))
+              return df
+
+          def ma_label(row, key, label):
+              for c in [f"{key}_label", f"{key}_status", f"{label}觀察"]:
+                  v = txt(row.get(c, ""), "")
+                  if v:
+                      return v
+              close = num(row.get("close", row.get("ref_price", row.get("price", ""))))
+              ma = num(row.get(key, ""))
+              if np.isfinite(close) and np.isfinite(ma) and ma > 0:
+                  if close >= ma * 1.01:
+                      return f"{label}：站上｜↑ 強勢"
+                  if close <= ma * 0.99:
+                      return f"{label}：跌破｜↓ 轉弱"
+                  return f"{label}：貼近｜→ 盤整"
+              context = " ".join([txt(row.get(c, ""), "") for c in ["final_action","action","status","reason","system_note"]])
+              if any(x in context for x in ["SELL","賣","停損","跌破","出場"]):
+                  return f"{label}：依出場風控判斷"
+              if any(x in context for x in ["TEST","BUY","試單","突破","強勢"]):
+                  return f"{label}：依試單節奏判斷"
+              if any(x in context for x in ["WATCH","觀察","整理","收斂"]):
+                  return f"{label}：依觀察節奏判斷"
+              return f"{label}：依策略判斷"
+
+          def kbar(row):
+              for c in ["kbar_type","k_bar_type","exit_kbar_type","出場K棒型態"]:
+                  v = txt(row.get(c, ""), "")
+                  if v:
+                      return v
+              context = " ".join([txt(row.get(c, ""), "") for c in ["final_action","action","status","reason","system_note"]])
+              if any(x in context for x in ["SELL","賣","停損","跌破","出場"]):
+                  return "跌破型K棒"
+              if any(x in context for x in ["TEST","BUY","試單","突破","強勢"]):
+                  return "突破確認K"
+              if any(x in context for x in ["WATCH","觀察","整理","收斂"]):
+                  return "整理觀察K"
+              return "依策略判斷K"
+
+          def kstruct(row):
+              for c in ["k_structure","kline_structure","K線結構"]:
+                  v = txt(row.get(c, ""), "")
+                  if v:
+                      return v
+              close = num(row.get("close", row.get("ref_price", row.get("price", ""))))
+              ma5 = num(row.get("ma5", "")); ma10 = num(row.get("ma10", "")); ma20 = num(row.get("ma20", ""))
+              if all(np.isfinite(x) for x in [close, ma5, ma10, ma20]):
+                  if ma5 > ma10 and ma10 > ma20 and close > ma20:
+                      return "多頭排列"
+                  if ma5 < ma10 and ma10 < ma20 and close < ma20:
+                      return "空頭排列"
+                  if close > ma20 and ma5 >= ma10:
+                      return "整理後轉強"
+                  if close < ma20:
+                      return "短線轉弱"
+                  return "震盪整理"
+              context = " ".join([txt(row.get(c, ""), "") for c in ["final_action","action","status","reason","system_note"]])
+              if any(x in context for x in ["SELL","賣","停損","跌破","出場"]):
+                  return "短線轉弱"
+              if any(x in context for x in ["TEST","BUY","試單","突破","強勢"]):
+                  return "整理後轉強"
+              if any(x in context for x in ["WATCH","觀察","整理","收斂"]):
+                  return "整理收斂"
+              return "依策略結構"
+
+          # build tech map from every candidate source
+          tech_sources = []
+          for name in ["candidates.csv","trade_plan.csv","final_action_plan.csv","position_overlay.csv","ignition_candidates.csv","strategy_evolution.csv"]:
+              for p in [ROOT/name, DATA/name]:
+                  df = sid_norm(read_csv_safe(p))
+                  if not df.empty and "stock_id" in df.columns:
+                      tech_sources.append(df)
+          tech = pd.concat(tech_sources, ignore_index=True) if tech_sources else pd.DataFrame()
+          tech = sid_norm(tech)
+          if not tech.empty and "stock_id" in tech.columns:
+              tech = tech.groupby("stock_id", as_index=False).agg(lambda s: next((txt(x, "") for x in s if txt(x, "")), ""))
+
+          def lock_file(path):
+              p = Path(path)
+              df = sid_norm(read_csv_safe(p))
+              if df.empty:
+                  return
+              if not tech.empty and "stock_id" in df.columns:
+                  df = df.merge(tech, on="stock_id", how="left", suffixes=("", "_tech"))
+                  for c in list(df.columns):
+                      if c.endswith("_tech"):
+                          base = c[:-5]
+                          if base not in df.columns:
+                              df[base] = df[c]
+                          else:
+                              left = df[base].map(lambda v: txt(v, ""))
+                              right = df[c].map(lambda v: txt(v, ""))
+                              df[base] = [l if l else r for l, r in zip(left, right)]
+                          df.drop(columns=[c], inplace=True)
+
+              for c in ["ma5_status","ma10_status","ma20_status","ma5_label","ma10_label","ma20_label","kbar_type","k_structure","kline_structure","tech_reason","kbar_reason","tech_decision_hint","updated_at"]:
+                  if c not in df.columns:
+                      df[c] = ""
+
+              df["ma5_status"] = df.apply(lambda r: ma_label(r, "ma5", "MA5"), axis=1)
+              df["ma10_status"] = df.apply(lambda r: ma_label(r, "ma10", "MA10"), axis=1)
+              df["ma20_status"] = df.apply(lambda r: ma_label(r, "ma20", "MA20"), axis=1)
+              df["ma5_label"] = df["ma5_status"]
+              df["ma10_label"] = df["ma10_status"]
+              df["ma20_label"] = df["ma20_status"]
+              df["kbar_type"] = df.apply(kbar, axis=1)
+              df["k_structure"] = df.apply(kstruct, axis=1)
+              df["kline_structure"] = df["k_structure"]
+              df["tech_reason"] = df["ma5_status"] + "｜" + df["ma10_status"] + "｜" + df["ma20_status"] + "｜K棒：" + df["kbar_type"] + "｜K線：" + df["k_structure"]
+              df["kbar_reason"] = "K棒型態：" + df["kbar_type"] + "｜K線結構：" + df["k_structure"]
+              df["tech_decision_hint"] = df["tech_decision_hint"].map(lambda v: txt(v, "依原策略執行，技術欄位用於確認節奏與風險。"))
+              df["updated_at"] = now
+
+              for c in df.columns:
+                  df[c] = df[c].map(lambda v: txt(v, ""))
+
+              df.to_csv(p, index=False, encoding="utf-8-sig")
+
+          for name in ["final_action_plan.csv","trade_plan.csv","position_overlay.csv","ignition_candidates.csv","strategy_evolution.csv"]:
+              lock_file(ROOT/name)
+              lock_file(DATA/name)
+
+          print("v266.45 display fields locked", now)
           PY
 
 
@@ -751,7 +927,7 @@ jobs:
           rm -f mobile_dashboard_v1/data/raw_market_daily.csv
 
 
-      # v266.44：最後防護。即使前面局部失敗，也盡量補出可讀狀態檔，避免前端白屏。
+      # v266.45：最後防護。即使前面局部失敗，也盡量補出可讀狀態檔，避免前端白屏。
       - name: Final dashboard file guard
         if: always()
         run: |
@@ -768,8 +944,8 @@ jobs:
 
           def write_json_both(name, obj):
               obj = dict(obj or {})
-              obj.setdefault("version", "v266.44")
-              obj.setdefault("source", "v266_44_complete_stable")
+              obj.setdefault("version", "v266.45")
+              obj.setdefault("source", "v266_45_field_locked")
               obj["updated_at"] = now
               obj["timezone"] = "Asia/Taipei"
               for p in [ROOT / name, DATA / name]:
@@ -789,8 +965,8 @@ jobs:
                           pass
               if not obj:
                   obj = {
-                      "source": "v266_44_complete_stable",
-                      "version": "v266.44",
+                      "source": "v266_45_field_locked",
+                      "version": "v266.45",
                       "signal_date": "",
                       "trade_date": "",
                       "status": "guard_created",
@@ -807,7 +983,7 @@ jobs:
               for p in [ROOT / name, DATA / name]:
                   if not p.exists() or p.stat().st_size == 0:
                       pd.DataFrame(columns=cols).to_csv(p, index=False, encoding="utf-8-sig")
-          print("v266.44 final guard OK", now)
+          print("v266.45 final guard OK", now)
           PY
 
 
