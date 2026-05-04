@@ -173,7 +173,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.34_fake_breakout_guard";
+const APP_PATCH_VERSION = "v266.35_append_tech_fields";
 
 
 const FILES = {
@@ -1350,12 +1350,17 @@ function renderMergedPositionHintV26630(stock, posRow) {
   const posH = normalizeRowV26630H(posRow);
 
   const ma5RawH = pickV26630H(overlayH, ["ma5"], "") || pickV26630H(riskH, ["ma5"], "") || pickV26630H(posH, ["ma5"], "");
+  const ma10RawH = pickV26630H(overlayH, ["ma10"], "") || pickV26630H(riskH, ["ma10"], "") || pickV26630H(posH, ["ma10"], "");
   const ma20RawH = pickV26630H(overlayH, ["ma20"], "") || pickV26630H(riskH, ["ma20"], "") || pickV26630H(posH, ["ma20"], "");
-  const ma5StatusH = pickV26630H(overlayH, ["ma5_status"], "") || pickV26630H(riskH, ["ma5_status"], "");
-  const ma20StatusH = pickV26630H(overlayH, ["ma20_status"], "") || pickV26630H(riskH, ["ma20_status"], "");
+  const ma5StatusH = pickV26630H(overlayH, ["ma5_status", "ma5_label"], "") || pickV26630H(riskH, ["ma5_status", "ma5_label"], "");
+  const ma10StatusH = pickV26630H(overlayH, ["ma10_status", "ma10_label"], "") || pickV26630H(riskH, ["ma10_status", "ma10_label"], "");
+  const ma20StatusH = pickV26630H(overlayH, ["ma20_status", "ma20_label"], "") || pickV26630H(riskH, ["ma20_status", "ma20_label"], "");
 
   const ma5 = maStatusV26630("MA5", close, ma5RawH, ma5StatusH);
+  const ma10 = maStatusV26630("MA10", close, ma10RawH, ma10StatusH);
   const ma20 = maStatusV26630("MA20", close, ma20RawH, ma20StatusH);
+  const positionKbarTypeV26635 = pickFieldV26635({...riskRow, ...overlay}, ["kbar_type", "k_bar_type", "exit_kbar_type"], "--");
+  const positionKStructureV26635 = pickFieldV26635({...riskRow, ...overlay}, ["k_structure", "kline_structure"], "--");
   const riskZh = zhRiskV26630(overlay.risk_flag || riskRow.risk_flag || riskRow.risk_level || riskRow.exit_risk_level, actionRaw);
   const chip = chipTextV26630({ ...riskRow, ...overlay });
   const name = positionNameV26630(sid, posRow, overlay, riskRow);
@@ -1392,15 +1397,18 @@ function renderMergedPositionHintV26630(stock, posRow) {
         ${positionDetailCellV26630("股數", shares)}
         ${positionDetailCellV26630("部位金額", cost)}
         ${positionDetailCellV26630("損益%", pnl)}
+        ${positionDetailCellV26630("MA5觀察", ma5)}
+        ${positionDetailCellV26630("MA10觀察", ma10)}
         ${positionDetailCellV26630("MA20觀察", ma20)}
-        ${positionDetailCellV26630("五日線觀察", ma5)}
+        ${positionDetailCellV26630("K棒型態", positionKbarTypeV26635)}
+        ${positionDetailCellV26630("K線結構", positionKStructureV26635)}
         ${positionDetailCellV26630("籌碼集中度", chip)}
         ${positionDetailCellV26630("風控提示", riskZh)}
         ${positionDetailCellV26630("更新時間", cleanV26630(posRow.updated_at))}
         ${positionDetailCellV26630("備註", cleanV26630(posRow.note, "手動持倉"))}
       </div>
       <div class="detail-text position-merged-text-v26630"><b>原因</b><p>${reason}</p></div>
-      <div class="detail-text position-merged-text-v26630"><b>K棒判斷</b><p>${kbar}</p></div>
+      <div class="detail-text position-merged-text-v26630"><b>K線／原因提示</b><p>${kbar}｜${positionKbarTypeV26635}｜${positionKStructureV26635}</p></div>
       <div class="detail-text position-merged-text-v26630"><b>停利提示</b><p>${takeProfit}</p></div>
       <div class="detail-text position-merged-text-v26630"><b>籌碼提示</b><p>${chipReason}｜${chipHint}</p></div>
       <div class="detail-text position-merged-text-v26630"><b>建議動作</b><p>${advice}</p></div>
@@ -2383,6 +2391,72 @@ function evolutionChinesePromptV26634(row) {
   `;
 }
 
+
+function pickFieldV26635(row, keys, fallback = "--") {
+  for (const k of keys) {
+    const v = row?.[k];
+    if (v !== undefined && v !== null && String(v).trim() !== "" && String(v).trim() !== "nan" && String(v).trim() !== "NaN") {
+      return safeText(v, fallback);
+    }
+  }
+  return fallback;
+}
+
+function inferMaLabelV26635(row, maKey, label) {
+  const close = Number(String(row.close || row.ref_price || "").replace(/,/g, ""));
+  const ma = Number(String(row[maKey] || "").replace(/,/g, ""));
+  const existing = pickFieldV26635(row, [`${maKey}_label`, `${maKey}_status`, `${label}觀察`, `${label}_status`], "");
+  if (existing) return existing;
+  if (!Number.isFinite(close) || !Number.isFinite(ma) || ma <= 0) return `${label}：--`;
+  if (close >= ma) return `${label}：站上｜↑ 強勢`;
+  return `${label}：跌破｜↓ 轉弱`;
+}
+
+function inferKbarTypeV26635(row) {
+  return pickFieldV26635(row, [
+    "kbar_type", "k_bar_type", "K棒型態", "k棒型態",
+    "exit_kbar_type", "exit_kbar_reason"
+  ], "--");
+}
+
+function inferKStructureV26635(row) {
+  return pickFieldV26635(row, [
+    "k_structure", "kline_structure", "K線結構", "k線結構",
+    "tech_structure", "structure_label"
+  ], "--");
+}
+
+function techGridCellsV26635(row) {
+  return `
+          ${detailCell("MA5觀察", inferMaLabelV26635(row, "ma5", "MA5"))}
+          ${detailCell("MA10觀察", inferMaLabelV26635(row, "ma10", "MA10"))}
+          ${detailCell("MA20觀察", inferMaLabelV26635(row, "ma20", "MA20"))}
+          ${detailCell("K棒型態", inferKbarTypeV26635(row))}
+          ${detailCell("K線結構", inferKStructureV26635(row))}
+        `;
+}
+
+function techTextBlockV26635(row, isExit = false) {
+  const techReason = pickFieldV26635(row, ["tech_reason", "technical_reason", "技術原因"], "");
+  const kReason = pickFieldV26635(row, ["kbar_reason", "k_bar_reason", "kline_reason", "K棒判斷原因"], "");
+  const hint = pickFieldV26635(row, ["tech_decision_hint", "technical_hint", "技術提示"], "");
+
+  const fallback = `
+MA5：${inferMaLabelV26635(row, "ma5", "MA5")}
+MA10：${inferMaLabelV26635(row, "ma10", "MA10")}
+MA20：${inferMaLabelV26635(row, "ma20", "MA20")}
+K棒型態：${inferKbarTypeV26635(row)}
+K線結構：${inferKStructureV26635(row)}
+  `.trim();
+
+  return `
+        <div class="detail-text ${isExit ? "exit-detail-text" : ""}"><b>技術補充</b><p>${safeText(techReason || fallback)}</p></div>
+        <div class="detail-text ${isExit ? "exit-detail-text" : ""}"><b>K線／型態提示</b><p>${safeText(kReason || fallback)}</p></div>
+        <div class="detail-text ${isExit ? "exit-detail-text" : ""}"><b>技術決策提示</b><p>${safeText(hint || (isExit ? "若 MA5/MA20 轉弱，優先控風險；若站回均線再觀察。" : "依原策略執行，技術欄位用於確認節奏與風險。"))}</p></div>
+      `;
+}
+
+
 function renderScanRow(row, key) {
   const action = normalizeAction(row.final_action || row.action);
   const cls = ACTION_CLASS[action] || "watch";
@@ -2432,6 +2506,7 @@ function renderScanRow(row, key) {
           ${detailCell("成交量", formatLotsFromShares(row.volume))}
           ${detailCell("成交金額", formatTurnoverTW(row.turnover))}
           ${detailCell("風險等級", exitRisk)}
+          ${techGridCellsV26635(row)}
           ${detailCell("籌碼集中度", chipDisplayV26621(row))}
         ` : `
           ${detailCell("股票名稱", stockName)}
@@ -2448,6 +2523,7 @@ function renderScanRow(row, key) {
           ${detailCell("流動性分數", liqScore)}
           ${String(row.strategy_type || row.bucket || "").toUpperCase() === "IGNITION" ? detailCell("假起漲分數", fakeScoreLabelV26634(row)) : ""}
           ${String(row.strategy_type || row.bucket || "").toUpperCase() === "IGNITION" ? detailCell("假起漲風險", row.fake_risk_tag || row.fake_risk_level || "--") : ""}
+          ${techGridCellsV26635(row)}
           ${detailCell("籌碼集中度", chipDisplayV26621(row))}
         `;
 
@@ -2458,6 +2534,7 @@ function renderScanRow(row, key) {
         <div class="detail-text exit-detail-text"><b>籌碼原因</b><p>${chipReasonV26621(row)}</p></div>
         <div class="detail-text exit-detail-text"><b>中文籌碼提示</b><p>${chipHintV26621(row)}</p></div>
         <div class="detail-text exit-detail-text"><b>系統提示</b><p>${note}</p></div>
+        ${techTextBlockV26635(row, true)}
       ` : `
         ${String(row.strategy_type || row.bucket || "").toUpperCase() === "IGNITION" ? ignitionChinesePromptV26634(row) : ""}
         ${String(row.strategy_type || row.bucket || "").toUpperCase() === "EVOLUTION" ? evolutionChinesePromptV26634(row) : ""}
@@ -2466,6 +2543,7 @@ function renderScanRow(row, key) {
         <div class="detail-text"><b>籌碼原因</b><p>${chipReasonV26621(row)}</p></div>
         <div class="detail-text"><b>中文籌碼提示</b><p>${chipHintV26621(row)}</p></div>
         <div class="detail-text"><b>系統提示</b><p>${note}</p></div>
+        ${techTextBlockV26635(row, false)}
       `;
 
   return `
