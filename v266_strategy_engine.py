@@ -1,6 +1,6 @@
 """
 v266_strategy_engine.py
-雙策略版：CORE 早期卡位 + ALPHA 高流動性強勢延續
+v266.33 策略進化版：CORE + ALPHA + IGNITION + EVOLUTION
 
 設計原則：
 1. 保留原本輸出檔名，不影響後面 pipeline：
@@ -327,6 +327,222 @@ def alpha_engine(x):
     return d.sort_values(["entry_score", "liquidity_score", "mom20"], ascending=False)
 
 
+def ignition_engine(x):
+    """
+    IGNITION：起漲 / 啟動節奏策略。
+    目的：抓「低檔盤整 → 均線糾結 → 放量突破 → 準備啟動」的股票。
+    只做獨立清單，不直接改動原本 final 操作邏輯，避免影響已穩定的主策略。
+    """
+    d = x.copy()
+    d["strategy_type"] = "IGNITION"
+    d["strategy_name"] = "IGNITION 起漲啟動"
+    d["entry_score"] = 0.0
+
+    mid_or_high = d["liquidity_level"].isin(["MEDIUM", "HIGH"])
+    high_liq = d["liquidity_level"].eq("HIGH")
+
+    # 1) 低檔 / 盤整 / 均線糾結
+    d["entry_score"] += (d["ma_converge_pct"] <= 0.08).astype(int) * 14
+    d["entry_score"] += (d["ma_converge_pct"] <= 0.12).astype(int) * 6
+    d["entry_score"] += (d["range_20"] <= 0.22).astype(int) * 8
+    d["entry_score"] += (d["close"] >= d["ma20"] * 0.98).astype(int) * 10
+    d["entry_score"] += (d["close"] >= d["ma60"] * 0.95).astype(int) * 6
+
+    # 2) 啟動 / 突破 / 量能回溫
+    d["entry_score"] += (d["close"] > d["ma20"]).astype(int) * 10
+    d["entry_score"] += (d["ma5"] >= d["ma20"] * 0.995).astype(int) * 8
+    d["entry_score"] += (d["ma20_slope"] >= 0).astype(int) * 8
+    d["entry_score"] += d["volume_ratio"].between(1.20, 4.80).astype(int) * 14
+    d["entry_score"] += (d["volume"] >= 1000).astype(int) * 8
+    d["entry_score"] += (d["volume"] >= 3000).astype(int) * 5
+
+    # 3) 動能剛轉強，不追極端過熱
+    d["entry_score"] += (d["mom5"] > 0).astype(int) * 8
+    d["entry_score"] += (d["mom10"] > 0.01).astype(int) * 8
+    d["entry_score"] += d["mom20"].between(-0.05, 0.22).astype(int) * 8
+    d["entry_score"] += (d["close"] >= d["high_20"] * 0.965).astype(int) * 8
+    d["entry_score"] += (d["low_non_down_count_5"] >= 3).astype(int) * 6
+
+    # 4) KD / MACD / OBV 輔助
+    d["entry_score"] += (d["kd_cross"] > 0).astype(int) * 6
+    d["entry_score"] += (d["macd_cross"] > 0).astype(int) * 6
+    d["entry_score"] += (d["macd_diff"] > 0).astype(int) * 5
+    d["entry_score"] += (d["obv_mom5"] > 0).astype(int) * 5
+
+    # 5) 流動性與風險控管
+    d["entry_score"] += mid_or_high.astype(int) * 10
+    d["entry_score"] += high_liq.astype(int) * 5
+
+    d["entry_score"] -= (d["close"] < 15).astype(int) * 18
+    d["entry_score"] -= (d["volume"] < 800).astype(int) * 22
+    d["entry_score"] -= (d["liquidity_level"].eq("LOW")).astype(int) * 14
+    d["entry_score"] -= (d["mom20"] > 0.35).astype(int) * 14
+    d["entry_score"] -= (d["volume_ratio"] > 6.5).astype(int) * 10
+
+    test = (
+        (d["entry_score"] >= 64)
+        & (d["close"] > d["ma20"] * 0.995)
+        & (d["volume"] >= 1000)
+        & mid_or_high
+    )
+
+    watch = (d["entry_score"] >= 50) & ~test
+
+    # 起漲清單以 TEST / WATCH 呈現，不直接 BUY，避免假突破重倉。
+    set_action(d, False, test, watch, "", "起漲試單", "起漲觀察")
+
+    d["section_opportunity_rank"] = d["entry_score"].rank(method="first", ascending=False).astype(int)
+    d["section_top_opportunity"] = np.where(
+        d["section_opportunity_rank"] <= 5,
+        "起漲TOP" + d["section_opportunity_rank"].astype(str),
+        ""
+    )
+
+    d["ignition_phase"] = np.select(
+        [
+            (d["entry_score"] >= 72),
+            (d["entry_score"] >= 64),
+            (d["entry_score"] >= 50),
+        ],
+        ["啟動確認", "突破觀察", "預備布局"],
+        default="條件不足"
+    )
+
+    d["note"] = (
+        "IGNITION起漲啟動｜均線糾結/收斂｜放量轉強｜突破節奏｜"
+        + d["ignition_phase"].astype(str)
+        + "｜"
+        + d["liquidity_tag"].astype(str)
+    )
+    d["reason"] = d["note"]
+    d["system_note"] = "起漲清單：適合小量試單或優先觀察，不建議一次重倉。"
+
+    return d.sort_values(["entry_score", "liquidity_score", "volume_ratio"], ascending=False)
+
+
+def evolution_engine(core, alpha, ignition):
+    """
+    v266.33 EVOLUTION：策略進化鏈。
+    目的：把 IGNITION → TEST → ALPHA → CORE 的升級路徑獨立成一張清單。
+    不直接改變原本 final trade_plan；只提供決策提示與優先級。
+    """
+    parts = []
+
+    def base_take(df, phase, promote_label, min_score=0, action_filter=None, n=40):
+        if df is None or df.empty:
+            return pd.DataFrame()
+        d = df.copy()
+        if action_filter is not None and 'action' in d.columns:
+            d = d[d['action'].astype(str).str.upper().isin(action_filter)].copy()
+        d = d[pd.to_numeric(d.get('entry_score', 0), errors='coerce').fillna(0) >= min_score].copy()
+        if d.empty:
+            return d
+        d['evolution_phase'] = phase
+        d['promote_label'] = promote_label
+        d['strategy_type'] = d.get('strategy_type', phase.split('→')[-1])
+        d['strategy_name'] = d.get('strategy_name', promote_label)
+        return d.head(n)
+
+    # 1) IGNITION → TEST：起漲條件已到位，適合小量試單。
+    p1 = base_take(
+        ignition,
+        'IGNITION→TEST',
+        '起漲轉試單',
+        min_score=64,
+        action_filter=['TEST'],
+        n=30,
+    )
+    if not p1.empty:
+        p1['evolution_score'] = pd.to_numeric(p1['entry_score'], errors='coerce').fillna(0) + 8
+        p1['final_action'] = 'TEST'
+        p1['action'] = 'TEST'
+        p1['action_label'] = '試單'
+        p1['action_sub'] = '起漲確認，允許小量試單'
+        parts.append(p1)
+
+    # 2) TEST → ALPHA：強勢動能與流動性更完整，可升級成主升段候選。
+    p2 = base_take(
+        alpha,
+        'TEST→ALPHA',
+        '試單轉強勢',
+        min_score=58,
+        action_filter=['TEST', 'BUY'],
+        n=30,
+    )
+    if not p2.empty:
+        p2['evolution_score'] = pd.to_numeric(p2['entry_score'], errors='coerce').fillna(0) + 14
+        p2['final_action'] = np.where(p2['action'].astype(str).str.upper().eq('BUY'), 'BUY', 'TEST')
+        p2['action'] = p2['final_action']
+        p2['action_label'] = np.where(p2['final_action'].eq('BUY'), '買進', '試單')
+        p2['action_sub'] = np.where(p2['final_action'].eq('BUY'), '強勢確認，可列主升段', '強勢試單，等待確認')
+        parts.append(p2)
+
+    # 3) ALPHA → CORE：趨勢站穩，進入核心持有/穩定觀察池。
+    p3 = base_take(
+        core,
+        'ALPHA→CORE',
+        '強勢轉核心',
+        min_score=62,
+        action_filter=['BUY', 'TEST', 'WATCH'],
+        n=25,
+    )
+    if not p3.empty:
+        p3['evolution_score'] = pd.to_numeric(p3['entry_score'], errors='coerce').fillna(0) + 10
+        p3['final_action'] = p3['action'].astype(str).str.upper().replace({'WATCH':'WATCH', 'TEST':'TEST', 'BUY':'BUY'})
+        p3['action'] = p3['final_action']
+        p3['action_label'] = p3['final_action'].map({'BUY':'買進','TEST':'試單','WATCH':'觀察'}).fillna('觀察')
+        p3['action_sub'] = '趨勢穩定，進入核心觀察/持有池'
+        parts.append(p3)
+
+    if not parts:
+        return pd.DataFrame()
+
+    out = pd.concat(parts, ignore_index=True, sort=False)
+    out['stock_id'] = out['stock_id'].astype(str).str.zfill(4)
+    out['evolution_score'] = pd.to_numeric(out['evolution_score'], errors='coerce').fillna(pd.to_numeric(out.get('entry_score', 0), errors='coerce').fillna(0))
+
+    # 同一檔只保留最高進化分數，避免重複洗版。
+    phase_priority = {'TEST→ALPHA': 1, 'ALPHA→CORE': 2, 'IGNITION→TEST': 3}
+    out['evolution_priority'] = out['evolution_phase'].map(phase_priority).fillna(9)
+    out = (
+        out.sort_values(['evolution_priority', 'evolution_score', 'liquidity_score'], ascending=[True, False, False])
+           .drop_duplicates('stock_id')
+           .head(80)
+           .copy()
+    )
+
+    out['section_opportunity_rank'] = out['evolution_score'].rank(method='first', ascending=False).astype(int)
+    out['section_top_opportunity'] = np.where(
+        out['section_opportunity_rank'] <= 5,
+        '進化TOP' + out['section_opportunity_rank'].astype(str),
+        ''
+    )
+    out['source'] = 'EVOLUTION'
+    out['bucket'] = 'EVOLUTION'
+    out['strategy_type'] = 'EVOLUTION'
+    out['strategy_name'] = 'EVOLUTION 策略進化鏈'
+    out['reason'] = (
+        '策略進化鏈｜' + out['evolution_phase'].astype(str) + '｜' +
+        out.get('note', '').astype(str)
+    )
+    out['system_note'] = np.select(
+        [
+            out['evolution_phase'].eq('IGNITION→TEST'),
+            out['evolution_phase'].eq('TEST→ALPHA'),
+            out['evolution_phase'].eq('ALPHA→CORE'),
+        ],
+        [
+            '起漲已成形，僅適合小量試單，不建議重倉。',
+            '試單轉強勢，可優先追蹤是否進入主升段。',
+            '強勢轉穩定，適合放入核心持有/觀察池。',
+        ],
+        default='策略進化提示：依分數與流動性分批確認。'
+    )
+    out['entry_type'] = out['evolution_phase']
+    out['execution_flag'] = out['section_top_opportunity']
+    out['score'] = out['evolution_score'].round(2)
+    return out
+
 def build_trade_plan(core, alpha, regime, signal_date):
     """
     雙策略資金邏輯：
@@ -436,6 +652,8 @@ def main():
 
     core = core_engine(latest).head(60)
     alpha = alpha_engine(latest).head(60)
+    ignition = ignition_engine(latest).head(80)
+    evolution = evolution_engine(core, alpha, ignition).head(80)
 
     plan = build_trade_plan(core, alpha, regime, signal_date)
 
@@ -449,6 +667,15 @@ def main():
         "low_liquidity_count": int((latest["liquidity_level"] == "LOW").sum()),
         "core_count": len(core),
         "alpha_count": len(alpha),
+        "ignition_count": len(ignition),
+        "ignition_test_count": int((ignition.action == "TEST").sum()),
+        "ignition_watch_count": int((ignition.action == "WATCH").sum()),
+        "evolution_count": len(evolution),
+        "evolution_test_count": int((evolution.action == "TEST").sum()) if not evolution.empty else 0,
+        "evolution_buy_count": int((evolution.action == "BUY").sum()) if not evolution.empty else 0,
+        "evolution_count": len(evolution),
+        "evolution_test_count": int((evolution.action == "TEST").sum()) if not evolution.empty else 0,
+        "evolution_buy_count": int((evolution.action == "BUY").sum()) if not evolution.empty else 0,
         "core_buy_count": int((core.action == "BUY").sum()),
         "core_test_count": int((core.action == "TEST").sum()),
         "alpha_buy_count": int((alpha.action == "BUY").sum()),
@@ -464,10 +691,14 @@ def main():
     candidates = pd.concat([
         core.assign(engine="CORE"),
         alpha.assign(engine="ALPHA"),
+        ignition.assign(engine="IGNITION"),
+        evolution.assign(engine="EVOLUTION"),
     ], ignore_index=True)
 
     write_both(core, "core_candidates.csv")
     write_both(alpha, "alpha_candidates.csv")
+    write_both(ignition, "ignition_candidates.csv")
+    write_both(evolution, "strategy_evolution.csv")
     write_both(candidates, "candidates.csv")
     write_both(plan, "trade_plan.csv")
     write_both(debug, "selection_debug.csv")
@@ -484,9 +715,14 @@ def main():
         "buy_count": int((plan.action == "BUY").sum()) if not plan.empty else 0,
         "test_count": int((plan.action == "TEST").sum()) if not plan.empty else 0,
         "watch_count": int((plan.action == "WATCH").sum()) if not plan.empty else 0,
+        "ignition_count": len(ignition),
+        "ignition_test_count": int((ignition.action == "TEST").sum()),
+        "ignition_watch_count": int((ignition.action == "WATCH").sum()),
         "dual_strategy": {
             "CORE": "早期卡位 / 1000張以上小倉",
             "ALPHA": "高流動性強勢延續 / 3000張以上主力倉位",
+            "IGNITION": "起漲啟動 / 均線糾結放量突破 / 小量試單",
+            "EVOLUTION": "策略進化鏈 / IGNITION→TEST→ALPHA→CORE / 升級提示",
         },
     }
 
