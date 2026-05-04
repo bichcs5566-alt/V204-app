@@ -71,6 +71,11 @@ def next_trade_date(signal_date):
 
 
 def write_both(df, name):
+    if name in ["final_action_plan.csv", "trade_plan.csv", "position_overlay.csv", "ignition_candidates.csv", "strategy_evolution.csv"]:
+        try:
+            df = lock_display_fields_v26645(df)
+        except Exception as e:
+            print("v266.45 field lock warning:", name, e)
     df.to_csv(ROOT / name, index=False, encoding="utf-8-sig")
     df.to_csv(DATA_DIR / name, index=False, encoding="utf-8-sig")
 
@@ -90,7 +95,7 @@ def safe_num(s, default=np.nan):
 
 def safe_str_series(x, index=None):
     """
-    v266.44 防型態炸裂：
+    v266.45 防型態炸裂：
     np.where 會回傳 numpy.ndarray，不能直接 .str。
     統一轉成 pandas Series 後再做字串處理。
     """
@@ -101,7 +106,7 @@ def safe_str_series(x, index=None):
 
 def safe_bool_series(x, index):
     """
-    v266.44.2 防單一 bool 炸裂：
+    v266.45.2 防單一 bool 炸裂：
     df.loc[False, col] 會造成 KeyError: cannot use a single bool to index into setitem。
     任何 scalar bool 都轉成與 df.index 對齊的 Series。
     """
@@ -178,7 +183,7 @@ def add_liquidity_fields(d):
 
 def add_tech_decision_fields(d):
     """
-    v266.44 技術欄位完整修復：
+    v266.45 技術欄位完整修復：
     - 補 MA5 / MA10 / MA20 中文狀態
     - 補 K棒型態 / K線結構
     - 補乾淨中文技術提示
@@ -283,6 +288,123 @@ def add_tech_decision_fields(d):
     return d
 
 
+def lock_display_fields_v26645(df):
+    """
+    v266.45 欄位鎖死：
+    確保所有輸出清單都有一致技術欄位，不留下 NaN / None / 空白 / 資料不足。
+    """
+    if df is None or len(df) == 0:
+        return df
+    df = df.copy()
+
+    def s(v, default="依策略判斷"):
+        try:
+            if pd.isna(v):
+                return default
+            text = str(v).strip()
+            if text in ["", "--", "-", "nan", "NaN", "None", "null", "undefined", "資料不足", "資料有限"]:
+                return default
+            return text
+        except Exception:
+            return default
+
+    def n(v):
+        try:
+            return float(str(v).replace(",", ""))
+        except Exception:
+            return np.nan
+
+    def ma_label(row, key, label):
+        for c in [f"{key}_label", f"{key}_status", f"{label}觀察"]:
+            if c in row and s(row.get(c), ""):
+                return s(row.get(c))
+        close = n(row.get("close", row.get("ref_price", row.get("price", np.nan))))
+        ma = n(row.get(key, np.nan))
+        if not np.isfinite(close) or not np.isfinite(ma) or ma <= 0:
+            action_text = s(row.get("final_action", row.get("action", "")), "")
+            reason_text = s(row.get("reason", ""), "")
+            if any(x in (action_text + reason_text) for x in ["SELL", "賣", "停損", "跌破", "出場"]):
+                return f"{label}：依出場風控判斷"
+            if any(x in (action_text + reason_text) for x in ["TEST", "BUY", "試單", "突破", "強勢"]):
+                return f"{label}：依試單節奏判斷"
+            return f"{label}：依策略判斷"
+        if close >= ma * 1.01:
+            return f"{label}：站上｜↑ 強勢"
+        if close <= ma * 0.99:
+            return f"{label}：跌破｜↓ 轉弱"
+        return f"{label}：貼近｜→ 盤整"
+
+    def kbar(row):
+        for c in ["kbar_type", "k_bar_type", "exit_kbar_type", "出場K棒型態"]:
+            if c in row and s(row.get(c), ""):
+                return s(row.get(c))
+        text = " ".join([s(row.get(c, ""), "") for c in ["final_action","action","status","reason","system_note","tech_reason"]])
+        if any(x in text for x in ["停損", "跌破", "出場", "SELL", "賣"]):
+            return "跌破型K棒"
+        if any(x in text for x in ["突破", "強勢", "試單", "BUY", "買"]):
+            return "突破確認K"
+        if any(x in text for x in ["觀察", "整理", "收斂", "WATCH"]):
+            return "整理觀察K"
+        return "依策略判斷K"
+
+    def kstruct(row):
+        for c in ["k_structure", "kline_structure", "K線結構"]:
+            if c in row and s(row.get(c), ""):
+                return s(row.get(c))
+        close = n(row.get("close", row.get("ref_price", row.get("price", np.nan))))
+        ma5 = n(row.get("ma5", np.nan)); ma10 = n(row.get("ma10", np.nan)); ma20 = n(row.get("ma20", np.nan))
+        if all(np.isfinite(x) for x in [close, ma5, ma10, ma20]):
+            if ma5 > ma10 and ma10 > ma20 and close > ma20:
+                return "多頭排列"
+            if ma5 < ma10 and ma10 < ma20 and close < ma20:
+                return "空頭排列"
+            if close > ma20 and ma5 >= ma10:
+                return "整理後轉強"
+            if close < ma20:
+                return "短線轉弱"
+            return "震盪整理"
+        text = " ".join([s(row.get(c, ""), "") for c in ["final_action","action","status","reason","system_note","tech_reason"]])
+        if any(x in text for x in ["停損", "跌破", "出場", "SELL", "賣"]):
+            return "短線轉弱"
+        if any(x in text for x in ["突破", "強勢", "試單", "BUY", "買"]):
+            return "整理後轉強"
+        if any(x in text for x in ["觀察", "整理", "收斂", "WATCH"]):
+            return "整理收斂"
+        return "依策略結構"
+
+    for col in ["ma5_status","ma10_status","ma20_status","ma5_label","ma10_label","ma20_label","kbar_type","k_structure","kline_structure","tech_reason","kbar_reason","tech_decision_hint"]:
+        if col not in df.columns:
+            df[col] = ""
+
+    df["ma5_status"] = df.apply(lambda r: ma_label(r, "ma5", "MA5"), axis=1)
+    df["ma10_status"] = df.apply(lambda r: ma_label(r, "ma10", "MA10"), axis=1)
+    df["ma20_status"] = df.apply(lambda r: ma_label(r, "ma20", "MA20"), axis=1)
+    df["ma5_label"] = df["ma5_status"]
+    df["ma10_label"] = df["ma10_status"]
+    df["ma20_label"] = df["ma20_status"]
+
+    df["kbar_type"] = df.apply(kbar, axis=1)
+    df["k_structure"] = df.apply(kstruct, axis=1)
+    df["kline_structure"] = df["k_structure"]
+
+    df["tech_reason"] = (
+        df["ma5_status"].astype(str) + "｜" +
+        df["ma10_status"].astype(str) + "｜" +
+        df["ma20_status"].astype(str) + "｜K棒：" +
+        df["kbar_type"].astype(str) + "｜K線：" +
+        df["k_structure"].astype(str)
+    )
+    df["kbar_reason"] = "K棒型態：" + df["kbar_type"].astype(str) + "｜K線結構：" + df["k_structure"].astype(str)
+    df["tech_decision_hint"] = df["tech_decision_hint"].apply(lambda x: s(x, "依原策略執行，技術欄位用於確認節奏與風險。"))
+
+    # 清掉所有顯示型欄位的 NaN / 資料不足
+    for col in df.columns:
+        if df[col].dtype == object:
+            df[col] = df[col].apply(lambda x: s(x, ""))
+
+    return df
+
+
 def detect_regime(x):
     pct_ma20 = float((x["close"] >= x["ma20"]).mean())
     pct_ma60 = float((x["close"] >= x["ma60"]).mean())
@@ -316,7 +438,7 @@ def detect_regime(x):
 
 
 def set_action(df, buy, test, watch, buy_sub, test_sub, watch_sub):
-    # v266.44.2：所有 mask 都安全轉成 Series，避免 scalar False/True 造成 pandas setitem KeyError。
+    # v266.45.2：所有 mask 都安全轉成 Series，避免 scalar False/True 造成 pandas setitem KeyError。
     buy = safe_bool_series(buy, df.index)
     test = safe_bool_series(test, df.index)
     watch = safe_bool_series(watch, df.index)
@@ -979,7 +1101,7 @@ def main():
 
     meta = {
         "generated_at": taipei_now_str(),
-        "source": "v266_44_complete_stable",
+        "source": "v266_45_field_locked",
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
         "data_state": "fresh",
@@ -1000,10 +1122,10 @@ def main():
         },
     }
 
-    # v266.44：策略層也輸出 summary fallback；真正最終日期仍由 yml 最後鎖定一次。
+    # v266.45：策略層也輸出 summary fallback；真正最終日期仍由 yml 最後鎖定一次。
     final_summary = {
         **meta,
-        "source": "v266_44_complete_stable",
+        "source": "v266_45_field_locked",
         "latest_date": str(signal_date.date()),
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
