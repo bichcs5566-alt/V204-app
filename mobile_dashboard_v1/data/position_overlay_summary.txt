@@ -1,14 +1,17 @@
 {
   "version": "v266.33C_ma_merge_coalesce",
-  "updated_at": "2026-05-04 00:38:45",
-  "rows": 2,
+  "updated_at": "2026-05-04 02:17:24",
+  "rows": 5,
   "stocks": [
+    "2317",
+    "2330",
     "2409",
+    "3051",
     "3583"
   ],
-  "non_empty_close": 2,
-  "non_empty_ma5": 2,
-  "non_empty_ma20": 2,
+  "non_empty_close": 5,
+  "non_empty_ma5": 5,
+  "non_empty_ma20": 5,
   "empty_ma5_ids": [],
   "empty_ma20_ids": []
 }
