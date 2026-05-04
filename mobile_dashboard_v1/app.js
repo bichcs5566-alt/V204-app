@@ -173,7 +173,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.30H_final_overlay_key_lock";
+const APP_PATCH_VERSION = "v266.30I_position_sync_reliable";
 
 
 const FILES = {
@@ -734,7 +734,10 @@ function savePositions(rows) {
 }
 
 function positionToCsv(rows) {
-  const headers = ["stock_id", "avg_price", "shares", "lots", "note", "updated_at"];
+  // v266.30I：同步修復版。
+  // 後端 position_overlay_engine 主要吃 manual_positions.csv，且格式需包含 stock_name。
+  // 這裡統一輸出 stock_id,stock_name,avg_price,shares,lots,note,updated_at。
+  const headers = ["stock_id", "stock_name", "avg_price", "shares", "lots", "note", "updated_at"];
   const esc = (v) => {
     const s = String(v ?? "");
     if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
@@ -742,8 +745,18 @@ function positionToCsv(rows) {
   };
 
   const lines = [headers.join(",")];
-  rows.forEach(r => {
-    lines.push(headers.map(h => esc(r[h])).join(","));
+  (rows || []).forEach(r => {
+    const sid = typeof stockKeyV26630H === "function" ? stockKeyV26630H(r.stock_id) : sidV26630(r.stock_id);
+    const item = {
+      stock_id: sid,
+      stock_name: r.stock_name || "",
+      avg_price: r.avg_price || "",
+      shares: r.shares || "",
+      lots: r.lots || "",
+      note: r.note || "手動持倉",
+      updated_at: r.updated_at || formatTWDateTime(new Date().toISOString())
+    };
+    lines.push(headers.map(h => esc(item[h])).join(","));
   });
   return lines.join("\n") + "\n";
 }
@@ -1173,9 +1186,11 @@ function addOrUpdatePosition() {
   }
 
   const rows = loadPositions();
-  const idx = rows.findIndex(r => String(r.stock_id) === stock);
+  const sid = typeof stockKeyV26630H === "function" ? stockKeyV26630H(stock) : sidV26630(stock);
+  const idx = rows.findIndex(r => (typeof stockKeyV26630H === "function" ? stockKeyV26630H(r.stock_id) : sidV26630(r.stock_id)) === sid);
   const item = {
-    stock_id: stock,
+    stock_id: sid,
+    stock_name: window.__stockNameMapV26630?.[sid] || "",
     avg_price: String(price),
     lots: String(lots),
     shares: String(Math.round(lots * 1000)),
@@ -1203,7 +1218,7 @@ function bindPositionRowActions() {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const stock = btn.getAttribute("data-edit-position");
-      const row = loadPositions().find(r => String(r.stock_id) === stock);
+      const row = loadPositions().find(r => (typeof stockKeyV26630H === "function" ? stockKeyV26630H(r.stock_id) : sidV26630(r.stock_id)) === (typeof stockKeyV26630H === "function" ? stockKeyV26630H(stock) : sidV26630(stock)));
       if (!row) return;
       qs("posStock").value = row.stock_id || "";
       qs("posPrice").value = row.avg_price || "";
@@ -1219,7 +1234,7 @@ function bindPositionRowActions() {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const stock = btn.getAttribute("data-delete-position");
-      const rows = loadPositions().filter(r => String(r.stock_id) !== stock);
+      const rows = loadPositions().filter(r => (typeof stockKeyV26630H === "function" ? stockKeyV26630H(r.stock_id) : sidV26630(r.stock_id)) !== (typeof stockKeyV26630H === "function" ? stockKeyV26630H(stock) : sidV26630(stock)));
       savePositions(rows);
       renderPositions();
   refreshPositionStatus("持倉區已同步");
@@ -1275,6 +1290,43 @@ async function putRepoFile(path, content, message) {
   return JSON.parse(text);
 }
 
+async function readRepoFileText(path) {
+  const res = await githubApi(`/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}?t=${Date.now()}`, {
+    method: "GET",
+    headers: { "Cache-Control": "no-cache" }
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`驗證讀取 ${path} 失敗 ${res.status}：${compactErrorText(text)}`);
+  }
+  const data = JSON.parse(text);
+  const content = String(data.content || "").replace(/\n/g, "");
+  try {
+    return decodeURIComponent(escape(atob(content)));
+  } catch (e) {
+    return atob(content);
+  }
+}
+
+function assertPositionsSyncedV26630I(csvText, rows) {
+  const syncedRows = parseCsv(csvText);
+  const syncedIds = new Set((syncedRows || []).map(r => {
+    const raw = r.stock_id || r.stockId || r.symbol || r.code || r["股票代號"];
+    return typeof stockKeyV26630H === "function" ? stockKeyV26630H(raw) : sidV26630(raw);
+  }).filter(Boolean));
+
+  const localIds = (rows || []).map(r => {
+    const raw = r.stock_id || r.stockId || r.symbol || r.code || r["股票代號"];
+    return typeof stockKeyV26630H === "function" ? stockKeyV26630H(raw) : sidV26630(raw);
+  }).filter(Boolean);
+
+  const missing = localIds.filter(id => !syncedIds.has(id));
+  if (missing.length) {
+    throw new Error(`同步驗證失敗，GitHub 檔案缺少：${missing.join(", ")}`);
+  }
+  return true;
+}
+
 async function syncPositionsToRepo() {
   const rows = loadPositions();
   const csv = positionToCsv(rows);
@@ -1289,12 +1341,27 @@ async function syncPositionsToRepo() {
   setPositionStatus(`📦 持倉同步到 GitHub 中｜現在時間 <span id="positionLiveClock">${formatTWClock(new Date())}</span>`, "position-status");
   startPositionClock();
 
-  await putRepoFile("positions_manual.csv", csv, "update manual positions");
-  await putRepoFile("mobile_dashboard_v1/data/positions_manual.csv", csv, "update dashboard manual positions");
+  // v266.30I：同步修復版。
+  // 同時寫入後端真正吃的 manual_positions.csv，以及舊版相容的 positions_manual.csv。
+  const targets = [
+    "manual_positions.csv",
+    "mobile_dashboard_v1/data/manual_positions.csv",
+    "positions_manual.csv",
+    "mobile_dashboard_v1/data/positions_manual.csv"
+  ];
 
-  setSyncStatus(`✅ 持倉已同步到 GitHub｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync ok");
+  for (const path of targets) {
+    await putRepoFile(path, csv, `update manual positions sync ${formatTWDateTime(new Date().toISOString())}`);
+  }
+
+  // 寫完後立刻讀回 dashboard 的 manual_positions.csv 驗證。
+  // 驗證失敗就不准顯示同步成功，避免假成功。
+  const verifyText = await readRepoFileText("mobile_dashboard_v1/data/manual_positions.csv");
+  assertPositionsSyncedV26630I(verifyText, rows);
+
+  setSyncStatus(`✅ 持倉已同步到 GitHub｜已驗證 ${rows.length} 檔｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync ok");
   startLiveClock();
-  setPositionStatus(`✅ 持倉已同步到 GitHub｜同步時間 ${formatTWDateTime(new Date().toISOString())}｜現在時間 <span id="positionLiveClock">${formatTWClock(new Date())}</span>`, "position-status ok");
+  setPositionStatus(`✅ 持倉已同步到 GitHub｜已驗證 ${rows.length} 檔｜同步時間 ${formatTWDateTime(new Date().toISOString())}｜現在時間 <span id="positionLiveClock">${formatTWClock(new Date())}</span>`, "position-status ok");
   startPositionClock();
   return true;
 }
