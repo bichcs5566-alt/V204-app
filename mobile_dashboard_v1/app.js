@@ -188,7 +188,8 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.45_field_locked";
+const APP_PATCH_VERSION = "v266.46_force_refresh";
+const FORCE_REFRESH_NONCE_V26646 = Date.now();
 
 
 const FILES = {
