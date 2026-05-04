@@ -1,11 +1,14 @@
-{
-  "version": "v266.31.1_true_timer_stock_name_map",
+﻿{
+  "version": "v266.44",
   "status": "running",
   "run_id": "25326672534",
   "run_number": "107",
   "workflow": "data_pipeline",
   "branch": "main",
   "start_time": "2026-05-04T15:05:53.286254+00:00",
-  "updated_at": "2026-05-04T15:05:53.286254+00:00",
-  "source": "github_actions"
+  "updated_at": "2026-05-04 23:22:21",
+  "source": "github_actions",
+  "last_update": "2026-05-04 23:22:21",
+  "timezone": "Asia/Taipei",
+  "time_source": "github_actions_taipei"
 }

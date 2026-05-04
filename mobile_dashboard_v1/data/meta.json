@@ -1,6 +1,6 @@
 ﻿{
-  "generated_at": "2026-05-04 20:51:21",
-  "source": "v266_41_unified_k_tech_cards",
+  "generated_at": "2026-05-04 23:21:32",
+  "source": "v266_44_complete_stable",
   "signal_date": "2026-05-04",
   "trade_date": "2026-05-05",
   "data_state": "fresh",
@@ -26,9 +26,12 @@
     "IGNITION": "起漲啟動 / 均線糾結放量突破 / 小量試單",
     "EVOLUTION": "策略進化鏈 / IGNITION→TEST→ALPHA→CORE / 升級提示"
   },
-  "version": "v266.41",
+  "version": "v266.44",
   "latest_date": "2026-05-04",
-  "updated_at": "2026-05-04 12:52:17",
+  "updated_at": "2026-05-04 23:22:23",
   "date_lock_source": "feature_panel_daily.csv",
-  "date_state": "locked_from_latest_feature"
+  "date_state": "locked_from_latest_feature",
+  "last_update": "2026-05-04 23:22:21",
+  "timezone": "Asia/Taipei",
+  "time_source": "github_actions_taipei"
 }
