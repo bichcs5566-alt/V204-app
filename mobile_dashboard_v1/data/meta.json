@@ -1,22 +1,22 @@
 ﻿{
-  "generated_at": "2026-05-04 03:41:16",
+  "generated_at": "2026-05-04 04:14:20",
   "source": "v266_9_strategy_engine_stable",
-  "signal_date": "2026-05-04",
-  "trade_date": "2026-05-05",
+  "signal_date": "2026-05-01",
+  "trade_date": "2026-05-04",
   "data_state": "fresh",
   "market_regime": "RANGE",
   "regime_info": {
-    "pct_above_ma20": 0.4353,
-    "pct_above_ma60": 0.4538,
-    "pct_mom20_pos": 0.5681,
-    "pct_strong": 0.1109,
-    "median_mom20": 0.0139,
-    "regime_score": 2
+    "pct_above_ma20": 0.4665,
+    "pct_above_ma60": 0.448,
+    "pct_mom20_pos": 0.597,
+    "pct_strong": 0.1005,
+    "median_mom20": 0.0217,
+    "regime_score": 3
   },
-  "trade_plan_count": 19,
-  "buy_count": 8,
-  "test_count": 5,
-  "watch_count": 6,
+  "trade_plan_count": 15,
+  "buy_count": 7,
+  "test_count": 8,
+  "watch_count": 0,
   "dual_strategy": {
     "CORE": "早期卡位 / 1000張以上小倉",
     "ALPHA": "高流動性強勢延續 / 3000張以上主力倉位"
