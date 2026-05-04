@@ -1,6 +1,6 @@
 ﻿{
-  "generated_at": "2026-05-04 23:21:32",
-  "source": "v266_44_complete_stable",
+  "generated_at": "2026-05-05 00:19:05",
+  "source": "v266_45_field_locked",
   "signal_date": "2026-05-04",
   "trade_date": "2026-05-05",
   "data_state": "fresh",
@@ -26,12 +26,12 @@
     "IGNITION": "起漲啟動 / 均線糾結放量突破 / 小量試單",
     "EVOLUTION": "策略進化鏈 / IGNITION→TEST→ALPHA→CORE / 升級提示"
   },
-  "version": "v266.44",
+  "version": "v266.45",
   "latest_date": "2026-05-04",
-  "updated_at": "2026-05-04 23:22:23",
+  "updated_at": "2026-05-05 00:20:02",
   "date_lock_source": "feature_panel_daily.csv",
   "date_state": "locked_from_latest_feature",
-  "last_update": "2026-05-04 23:22:21",
+  "last_update": "2026-05-05 00:19:56",
   "timezone": "Asia/Taipei",
   "time_source": "github_actions_taipei"
 }
