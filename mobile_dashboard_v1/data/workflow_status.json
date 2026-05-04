@@ -1,13 +1,11 @@
 {
   "version": "v266.31.1_true_timer_stock_name_map",
-  "status": "failed",
-  "job_status": "failure",
-  "run_id": "25324520599",
-  "run_number": "106",
+  "status": "running",
+  "run_id": "25326672534",
+  "run_number": "107",
   "workflow": "data_pipeline",
   "branch": "main",
-  "start_time": "2026-05-04T14:37:46.001886+00:00",
-  "end_time": "2026-05-04T14:37:46.001886+00:00",
-  "updated_at": "2026-05-04T14:37:46.001886+00:00",
+  "start_time": "2026-05-04T15:05:53.286254+00:00",
+  "updated_at": "2026-05-04T15:05:53.286254+00:00",
   "source": "github_actions"
 }
