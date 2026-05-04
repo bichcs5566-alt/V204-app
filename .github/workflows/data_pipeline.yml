@@ -1,4 +1,4 @@
-name: data_pipeline  # v266.43 fake breakout guard
+name: data_pipeline  # v266.44 fake breakout guard
 
 on:
   workflow_dispatch:
@@ -100,6 +100,17 @@ jobs:
       - name: Run data guard
         run: |
           python v266_data_guard.py
+
+
+      # v266.44：策略前置檢查，避免 import / syntax 問題跑到中段才炸。
+      - name: Preflight strategy syntax and imports
+        run: |
+          python - <<'PY'
+          import py_compile
+          py_compile.compile("v266_strategy_engine.py", doraise=True)
+          print("v266.44 preflight OK")
+          PY
+
 
       - name: Run strategy
         run: |
@@ -234,7 +245,7 @@ jobs:
       # 造成 trade_date 被覆蓋回 signal_date，這版已鎖住。
 
 
-      # v266.43：最終輸出補齊技術欄位（完全防炸版）
+      # v266.44：最終輸出補齊技術欄位（完全防炸版）
       - name: Enrich final outputs with tech fields
         if: always()
         run: |
@@ -351,7 +362,7 @@ jobs:
 
                   merged.drop(columns=[tc], inplace=True)
 
-              # v266.43：若 K棒/K線還是空，依現有 MA / 原因 / action 做保底推論。
+              # v266.44：若 K棒/K線還是空，依現有 MA / 原因 / action 做保底推論。
               def _num(v):
                   try:
                       return float(str(v).replace(",", ""))
@@ -419,11 +430,11 @@ jobs:
               enrich_file(ROOT / name)
               enrich_file(DATA / name)
 
-          print("v266.43 guarded enrich done, tech rows =", len(tech))
+          print("v266.44 guarded enrich done, tech rows =", len(tech))
           PY
 
 
-      # v266.43：資料時間鎖定。用 feature_panel_daily.csv 最新日期強制覆寫所有 summary/meta，避免訊號日卡舊值。
+      # v266.44：資料時間鎖定。用 feature_panel_daily.csv 最新日期強制覆寫所有 summary/meta，避免訊號日卡舊值。
       - name: Lock signal date and summary metadata
         if: always()
         run: |
@@ -522,8 +533,8 @@ jobs:
           regime = read_json(ROOT / "market_regime.json") or read_json(DATA / "market_regime.json")
 
           patch = {
-              "source": "v266_43_time_unified",
-              "version": "v266.43",
+              "source": "v266_44_complete_stable",
+              "version": "v266.44",
               "signal_date": signal_date,
               "latest_date": signal_date,
               "trade_date": trade_date,
@@ -542,8 +553,8 @@ jobs:
               "trade_date": trade_date,
               "updated_at": now,
               "generated_at": regime.get("generated_at") or now,
-              "source": "v266_43_time_unified",
-              "version": "v266.43",
+              "source": "v266_44_complete_stable",
+              "version": "v266.44",
               "date_lock_source": source_file,
           })
 
@@ -553,19 +564,19 @@ jobs:
 
           # 另外輸出一份 debug，方便你手機檢查。
           write_json_both({
-              "version": "v266.43",
+              "version": "v266.44",
               "signal_date": signal_date,
               "trade_date": trade_date,
               "updated_at": now,
               "source_file": source_file,
           }, "date_lock_report.json")
 
-          print("v266.43 date locked:", signal_date, "trade:", trade_date, "source:", source_file)
+          print("v266.44 date locked:", signal_date, "trade:", trade_date, "source:", source_file)
           PY
 
 
 
-      # v266.43：全系統時間統一。所有 JSON / 關鍵 CSV 的 updated_at / generated_at 都寫入台灣時間。
+      # v266.44：全系統時間統一。所有 JSON / 關鍵 CSV 的 updated_at / generated_at 都寫入台灣時間。
       - name: Normalize all dashboard timestamps to Taiwan time
         if: always()
         run: |
@@ -599,7 +610,7 @@ jobs:
               obj["last_update"] = now
               obj["timezone"] = "Asia/Taipei"
               obj["time_source"] = "github_actions_taipei"
-              obj["version"] = "v266.43"
+              obj["version"] = "v266.44"
               for p in [ROOT / name, DATA / name]:
                   p.parent.mkdir(parents=True, exist_ok=True)
                   p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8-sig")
@@ -650,7 +661,7 @@ jobs:
               normalize_csv_time(ROOT / name)
               normalize_csv_time(DATA / name)
 
-          print("v266.43 timestamps normalized:", now)
+          print("v266.44 timestamps normalized:", now)
           PY
 
 
@@ -738,6 +749,67 @@ jobs:
           rm -f mobile_dashboard_v1/data/price_panel_daily.csv
           rm -f mobile_dashboard_v1/data/feature_panel_daily.csv
           rm -f mobile_dashboard_v1/data/raw_market_daily.csv
+
+
+      # v266.44：最後防護。即使前面局部失敗，也盡量補出可讀狀態檔，避免前端白屏。
+      - name: Final dashboard file guard
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from datetime import datetime, timedelta, timezone
+          import json
+          import pandas as pd
+
+          ROOT = Path(".")
+          DATA = ROOT / "mobile_dashboard_v1" / "data"
+          DATA.mkdir(parents=True, exist_ok=True)
+          now = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
+
+          def write_json_both(name, obj):
+              obj = dict(obj or {})
+              obj.setdefault("version", "v266.44")
+              obj.setdefault("source", "v266_44_complete_stable")
+              obj["updated_at"] = now
+              obj["timezone"] = "Asia/Taipei"
+              for p in [ROOT / name, DATA / name]:
+                  p.parent.mkdir(parents=True, exist_ok=True)
+                  p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+
+          for name in ["final_action_summary.json", "meta.json", "market_regime.json"]:
+              src = ROOT / name
+              src2 = DATA / name
+              obj = {}
+              for p in [src, src2]:
+                  if p.exists():
+                      try:
+                          obj = json.loads(p.read_text(encoding="utf-8-sig"))
+                          break
+                      except Exception:
+                          pass
+              if not obj:
+                  obj = {
+                      "source": "v266_44_complete_stable",
+                      "version": "v266.44",
+                      "signal_date": "",
+                      "trade_date": "",
+                      "status": "guard_created",
+                  }
+              write_json_both(name, obj)
+
+          # 若關鍵 CSV 不存在，建立空表頭，避免前端 fetch/parse 掛掉。
+          csv_headers = {
+              "final_action_plan.csv": ["stock_id","stock_name","action","ref_price","reason","updated_at"],
+              "trade_plan.csv": ["stock_id","stock_name","action","ref_price","reason","updated_at"],
+              "position_overlay.csv": ["stock_id","stock_name","status","ref_price","reason","updated_at"],
+          }
+          for name, cols in csv_headers.items():
+              for p in [ROOT / name, DATA / name]:
+                  if not p.exists() or p.stat().st_size == 0:
+                      pd.DataFrame(columns=cols).to_csv(p, index=False, encoding="utf-8-sig")
+          print("v266.44 final guard OK", now)
+          PY
+
 
       - name: Commit small files only
         run: |
