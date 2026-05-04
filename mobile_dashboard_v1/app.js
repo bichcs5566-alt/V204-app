@@ -1,4 +1,4 @@
-// ===== v266.36.1 Blank Screen Guard / 空白頁防護 =====
+// ===== v266.36.2.2 Blank Screen Guard / 空白頁防護 =====
 window.__APP_BOOT_ERROR__ = "";
 window.addEventListener("error", function(e) {
   window.__APP_BOOT_ERROR__ = e && e.message ? e.message : String(e || "");
@@ -188,7 +188,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.36.1_blank_screen_guard";
+const APP_PATCH_VERSION = "v266.36.2.2_safe_bool_guard";
 
 
 const FILES = {
@@ -2767,7 +2767,7 @@ async function init() {
 
 document.addEventListener("DOMContentLoaded", init);
 
-// v266.36.1：如果 Safari / GitHub Pages 快取或早期錯誤導致畫面空白，至少強制渲染外殼，避免整頁空白。
+// v266.36.2.2：如果 Safari / GitHub Pages 快取或早期錯誤導致畫面空白，至少強制渲染外殼，避免整頁空白。
 document.addEventListener("DOMContentLoaded", function blankScreenGuardV266361() {
   setTimeout(function() {
     try {
