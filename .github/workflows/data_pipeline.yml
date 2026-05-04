@@ -1,4 +1,4 @@
-name: data_pipeline  # v266.35 fake breakout guard
+name: data_pipeline  # v266.36 fake breakout guard
 
 on:
   workflow_dispatch:
