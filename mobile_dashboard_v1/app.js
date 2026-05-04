@@ -173,7 +173,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.30J_sync_verify_safe";
+const APP_PATCH_VERSION = "v266.30K_backend_run_status_timer";
 
 
 const FILES = {
@@ -324,6 +324,42 @@ function setSyncStatus(message, cls = "sync") {
   if (!el) return;
   el.innerHTML = message;
   el.className = cls;
+}
+
+function formatRunDurationV26630K(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}分${String(s).padStart(2, "0")}秒`;
+}
+
+function rememberBackendRunV26630K(payload) {
+  try {
+    localStorage.setItem("v26630_backend_run_status", JSON.stringify({
+      ...payload,
+      saved_at: new Date().toISOString()
+    }));
+  } catch (e) {}
+}
+
+function consumeBackendRunV26630K() {
+  try {
+    const raw = localStorage.getItem("v26630_backend_run_status");
+    if (!raw) return null;
+    localStorage.removeItem("v26630_backend_run_status");
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+
+function showBackendRunCompleteIfAnyV26630K() {
+  const last = consumeBackendRunV26630K();
+  if (!last || last.status !== "success") return false;
+  const duration = last.duration_text || "--";
+  const doneAt = last.done_at || formatTWClock(new Date());
+  setSyncStatus(`✅ 後端策略已完成｜耗時 ${duration}｜完成時間 ${doneAt}`, "sync ok");
+  return true;
 }
 
 function compactErrorText(text) {
@@ -1567,40 +1603,63 @@ async function pollWorkflowRun(createdAfterIso) {
   const timeoutMs = 60 * 60 * 1000;
 
   const loop = async () => {
+    const elapsedText = formatRunDurationV26630K(Date.now() - started);
+
     try {
       const run = await getLatestWorkflowRun(createdAfterIso);
 
       if (!run) {
-        setSyncStatus(`⏳ 已觸發，等待 GitHub 建立任務｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync");
+        setSyncStatus(`⏳ 後端策略已送出｜等待 GitHub 建立任務｜已等 ${elapsedText}｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync");
+        setPositionStatus?.(`⏳ 後端策略已送出｜等待建立任務｜已等 ${elapsedText}｜現在時間 <span id="positionLiveClock">${formatTWClock(new Date())}</span>`, "position-status");
         startLiveClock();
+        startPositionClock?.();
       } else {
         const status = run.status || "";
         const conclusion = run.conclusion || "";
-        const elapsedSec = Math.floor((Date.now() - started) / 1000);
+        const runNumber = run.run_number ? `#${run.run_number}` : "";
+        const phase =
+          status === "queued" ? "排隊中" :
+          status === "in_progress" ? "執行中" :
+          status === "completed" ? "已完成" :
+          safeText(status, "更新中");
 
         if (status === "completed") {
           if (conclusion === "success") {
-            setSyncStatus(`✅ 後端更新完成｜${formatTWClock(new Date())}｜重新整理中...`, "sync ok");
+            const doneClock = formatTWClock(new Date());
+            rememberBackendRunV26630K({
+              status: "success",
+              duration_text: elapsedText,
+              done_at: doneClock,
+              run_number: runNumber
+            });
+            setSyncStatus(`✅ 後端策略完成 ${runNumber}｜耗時 ${elapsedText}｜完成時間 ${doneClock}｜重新整理中...`, "sync ok");
+            setPositionStatus?.(`✅ 後端策略完成 ${runNumber}｜耗時 ${elapsedText}｜完成時間 ${doneClock}｜重新整理中...`, "position-status ok");
             setTimeout(() => location.reload(), 1800);
             return;
           }
 
-          setSyncStatus(`❌ 後端更新失敗：${safeText(conclusion)}｜請到 Actions 查看`, "sync error");
+          setSyncStatus(`❌ 後端策略失敗 ${runNumber}：${safeText(conclusion)}｜耗時 ${elapsedText}｜請到 Actions 查看`, "sync error");
+          setPositionStatus?.(`❌ 後端策略失敗 ${runNumber}：${safeText(conclusion)}｜耗時 ${elapsedText}`, "position-status error");
           return;
         }
 
-        setSyncStatus(`⏳ 後端更新中：${safeText(status)}｜已等 ${elapsedSec} 秒｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync");
+        setSyncStatus(`⏳ 後端策略${phase} ${runNumber}｜已跑 ${elapsedText}｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync");
+        setPositionStatus?.(`⏳ 後端策略${phase} ${runNumber}｜已跑 ${elapsedText}｜現在時間 <span id="positionLiveClock">${formatTWClock(new Date())}</span>`, "position-status");
         startLiveClock();
+        startPositionClock?.();
       }
 
       if (Date.now() - started > timeoutMs) {
-        setSyncStatus("⚠️ 等待超過 60 分鐘，請到 GitHub Actions 查看狀態。", "sync error");
+        setSyncStatus("⚠️ 後端策略等待超過 60 分鐘，請到 GitHub Actions 查看狀態。", "sync error");
+        setPositionStatus?.("⚠️ 後端策略等待超過 60 分鐘，請到 GitHub Actions 查看狀態。", "position-status error");
         return;
       }
 
-      pollingTimer = setTimeout(loop, 8000);
+      pollingTimer = setTimeout(loop, 5000);
     } catch (e) {
-      setSyncStatus(`❌ 進度查詢失敗：${e.message}`, "sync error");
+      setSyncStatus(`⚠️ 後端進度查詢暫時失敗｜已跑 ${elapsedText}｜${e.message}`, "sync");
+      setPositionStatus?.(`⚠️ 後端進度查詢暫時失敗｜已跑 ${elapsedText}`, "position-status");
+      pollingTimer = setTimeout(loop, 8000);
     }
   };
 
@@ -1616,8 +1675,10 @@ async function triggerDataPipeline() {
       return;
     }
 
-    setSyncStatus(`🚀 觸發中｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync");
+    setSyncStatus(`🚀 正在觸發後端策略｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync");
+    setPositionStatus?.(`🚀 正在觸發後端策略｜現在時間 <span id="positionLiveClock">${formatTWClock(new Date())}</span>`, "position-status");
     startLiveClock();
+    startPositionClock?.();
 
     const createdAfterIso = new Date().toISOString();
 
@@ -1633,8 +1694,10 @@ async function triggerDataPipeline() {
       return;
     }
 
-    setSyncStatus(`✅ 已觸發 data_pipeline｜等待後端完成｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync ok");
+    setSyncStatus(`✅ 後端策略已觸發｜開始計時 0分00秒｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync ok");
+    setPositionStatus?.(`✅ 後端策略已觸發｜開始計時 0分00秒｜現在時間 <span id="positionLiveClock">${formatTWClock(new Date())}</span>`, "position-status ok");
     startLiveClock();
+    startPositionClock?.();
     pollWorkflowRun(createdAfterIso);
   } catch (e) {
     setSyncStatus(`❌ 觸發失敗：${e.message}`, "sync error");
@@ -2150,6 +2213,7 @@ async function loadFinalRows() {
 
 async function init() {
   renderAppShell();
+  showBackendRunCompleteIfAnyV26630K();
 
   try {
     const [regime, summary, macro, rows] = await Promise.all([
