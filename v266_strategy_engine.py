@@ -110,7 +110,7 @@ def latest_valid(df):
     x = x.dropna(subset=["close", "volume", "mom20", "ma20", "ma60"])
     x = x[(x["close"] > 0) & (x["volume"] > 0)].copy()
 
-    return latest_date, add_liquidity_fields(x)
+    return latest_date, add_tech_decision_fields(add_liquidity_fields(x))
 
 
 def add_liquidity_fields(d):
@@ -133,6 +133,93 @@ def add_liquidity_fields(d):
         "MEDIUM": "中流動性",
         "LOW": "低流動性",
     })
+
+    return d
+
+
+def add_tech_decision_fields(d):
+    """
+    v266.35 append-only:
+    補齊前端卡片需要的小欄位，不覆蓋既有欄位。
+    所有欄位都可安全缺省；缺資料時顯示 --。
+    """
+    d = d.copy()
+
+    def _num(col):
+        return pd.to_numeric(d.get(col), errors="coerce")
+
+    close = _num("close")
+    open_ = _num("open")
+    high = _num("high")
+    low = _num("low")
+    ma5 = _num("ma5")
+    ma10 = _num("ma10")
+    ma20 = _num("ma20")
+    mom5 = _num("mom5")
+    mom10 = _num("mom10")
+    mom20 = _num("mom20")
+    volume_ratio = _num("volume_ratio")
+    ma_converge = _num("ma_converge_pct")
+    ma20_slope = _num("ma20_slope")
+
+    # MA 狀態：盡量用中文直接給前端顯示。
+    d["ma5_label"] = np.where(close >= ma5, "MA5：站上｜↑ 強勢", "MA5：跌破｜↓ 轉弱")
+    d["ma10_label"] = np.where(close >= ma10, "MA10：站上｜↑ 偏強", "MA10：跌破｜↓ 偏弱")
+    d["ma20_label"] = np.where(close >= ma20, "MA20：站上｜↑ 多頭", "MA20：跌破｜↓ 轉弱")
+
+    d["ma5_status"] = d["ma5_label"]
+    d["ma10_status"] = d["ma10_label"]
+    d["ma20_status"] = d["ma20_label"]
+
+    # 單根 K 棒型態。
+    candle_range = (high - low).replace(0, np.nan)
+    body = (close - open_).abs()
+    upper_shadow = high - pd.concat([open_, close], axis=1).max(axis=1)
+    lower_shadow = pd.concat([open_, close], axis=1).min(axis=1) - low
+    body_ratio = (body / candle_range).replace([np.inf, -np.inf], np.nan).fillna(0)
+    upper_ratio = (upper_shadow / candle_range).replace([np.inf, -np.inf], np.nan).fillna(0)
+    lower_ratio = (lower_shadow / candle_range).replace([np.inf, -np.inf], np.nan).fillna(0)
+
+    kbar = np.full(len(d), "一般K棒", dtype=object)
+    kbar = np.where((close > open_) & (body_ratio >= 0.55) & (close >= ma20), "突破長紅K", kbar)
+    kbar = np.where((close < open_) & (body_ratio >= 0.50) & (close < ma20), "跌破型K棒", kbar)
+    kbar = np.where((upper_ratio >= 0.45) & (close < high * 0.98), "上影壓力K", kbar)
+    kbar = np.where((lower_ratio >= 0.45) & (close > low * 1.02), "下影支撐K", kbar)
+    kbar = np.where((body_ratio <= 0.18), "十字K／猶豫", kbar)
+    kbar = np.where((volume_ratio > 3.5) & (upper_ratio >= 0.40), "疑似假突破K", kbar)
+    d["kbar_type"] = kbar
+    d["k_bar_type"] = kbar
+
+    # 多日 K 線 / 均線結構。
+    structure = np.full(len(d), "震盪整理", dtype=object)
+    structure = np.where((ma5 > ma10) & (ma10 > ma20) & (close > ma20), "多頭排列", structure)
+    structure = np.where((ma_converge <= 0.08), "整理收斂", structure)
+    structure = np.where((close > ma20) & (ma20_slope >= 0) & (mom5 > 0), "整理後轉強", structure)
+    structure = np.where((close < ma20) & (mom5 < 0), "短線轉弱", structure)
+    structure = np.where((volume_ratio > 3.5) & (upper_ratio >= 0.40), "假突破風險", structure)
+    structure = np.where((mom20 > 0.35) & (upper_ratio >= 0.35), "高檔出貨疑慮", structure)
+    d["k_structure"] = structure
+    d["kline_structure"] = structure
+    d["k線結構"] = structure
+
+    # 中文原因補充：不覆蓋 reason，只新增 extra hints。
+    d["tech_reason"] = (
+        d["ma5_label"].astype(str) + "｜" +
+        d["ma10_label"].astype(str) + "｜" +
+        d["ma20_label"].astype(str)
+    )
+    d["kbar_reason"] = (
+        "K棒：" + d["kbar_type"].astype(str) + "｜K線結構：" + d["k_structure"].astype(str)
+    )
+    d["tech_decision_hint"] = np.where(
+        (close > ma20) & (mom5 > 0),
+        "技術面偏強，可依原策略小量試單或續抱觀察。",
+        np.where(
+            close < ma20,
+            "技術面轉弱，需優先控風險，不建議追價。",
+            "技術面仍在整理，等待更明確方向。"
+        )
+    )
 
     return d
 
@@ -735,6 +822,22 @@ def build_trade_plan(core, alpha, regime, signal_date):
             "liquidity_score": round(float(r.get("liquidity_score", 0)), 2),
             "volume": round(float(r.get("volume", 0)), 0),
             "turnover": round(float(r.get("turnover", 0)), 0),
+            "ma5": round(float(r.get("ma5", np.nan)), 4) if pd.notna(r.get("ma5", np.nan)) else "",
+            "ma10": round(float(r.get("ma10", np.nan)), 4) if pd.notna(r.get("ma10", np.nan)) else "",
+            "ma20": round(float(r.get("ma20", np.nan)), 4) if pd.notna(r.get("ma20", np.nan)) else "",
+            "ma5_label": r.get("ma5_label", ""),
+            "ma10_label": r.get("ma10_label", ""),
+            "ma20_label": r.get("ma20_label", ""),
+            "ma5_status": r.get("ma5_status", ""),
+            "ma10_status": r.get("ma10_status", ""),
+            "ma20_status": r.get("ma20_status", ""),
+            "kbar_type": r.get("kbar_type", ""),
+            "k_bar_type": r.get("k_bar_type", ""),
+            "k_structure": r.get("k_structure", ""),
+            "kline_structure": r.get("kline_structure", ""),
+            "tech_reason": r.get("tech_reason", ""),
+            "kbar_reason": r.get("kbar_reason", ""),
+            "tech_decision_hint": r.get("tech_decision_hint", ""),
             "source": "V266_DUAL",
             "reason": r.get("reason", r["note"]),
             "system_note": r.get("system_note", r["note"]),
@@ -807,7 +910,7 @@ def main():
 
     meta = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "source": "v266_9_strategy_engine_stable",
+        "source": "v266_35_tech_fields_append_only",
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
         "data_state": "fresh",
