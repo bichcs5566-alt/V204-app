@@ -173,7 +173,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.30L_workflow_poll_lock";
+const APP_PATCH_VERSION = "v266.30M_active_run_priority";
 
 
 const FILES = {
@@ -1566,7 +1566,7 @@ async function githubApi(path, options = {}) {
 
 async function getLatestWorkflowRun(createdAfterIso) {
   const gh = loadGithubSettings();
-  const res = await githubApi(`/actions/workflows/${encodeURIComponent(gh.workflow)}/runs?branch=${encodeURIComponent(gh.branch)}&per_page=20`, {
+  const res = await githubApi(`/actions/workflows/${encodeURIComponent(gh.workflow)}/runs?branch=${encodeURIComponent(gh.branch)}&per_page=30`, {
     method: "GET"
   });
 
@@ -1590,22 +1590,24 @@ async function getLatestWorkflowRun(createdAfterIso) {
   const runs = Array.isArray(data.workflow_runs) ? data.workflow_runs : [];
   const after = new Date(createdAfterIso).getTime();
 
-  // v266.30L：只追蹤本次按下更新後建立的 workflow。
-  // 避免抓到上一筆 cancelled / failed 任務，造成前端誤報失敗。
-  const candidates = runs
-    .filter(run => {
-      const t = new Date(run.created_at).getTime();
-      return Number.isFinite(t) && t >= after - 10000;
-    })
+  const sorted = runs
+    .filter(run => String(run.head_branch || gh.branch) === String(gh.branch))
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-  if (!candidates.length) return null;
-
-  const active = candidates.find(run =>
+  // v266.30M：優先抓「目前正在跑」的 data_pipeline。
+  // 避免剛剛被 cancel 的 #88 蓋過真正正在跑的 #89。
+  const active = sorted.find(run =>
     ["queued", "in_progress", "waiting", "requested"].includes(String(run.status || ""))
   );
-
   if (active) return active;
+
+  // 沒有 active 才看本次按下後的 completed。
+  const candidates = sorted.filter(run => {
+    const t = new Date(run.created_at).getTime();
+    return Number.isFinite(t) && t >= after - 10000;
+  });
+
+  if (!candidates.length) return null;
 
   return candidates[0] || null;
 }
@@ -1649,6 +1651,15 @@ async function pollWorkflowRun(createdAfterIso) {
             setSyncStatus(`✅ 後端策略完成 ${runNumber}｜耗時 ${elapsedText}｜完成時間 ${doneClock}｜重新整理中...`, "sync ok");
             setPositionStatus?.(`✅ 後端策略完成 ${runNumber}｜耗時 ${elapsedText}｜完成時間 ${doneClock}｜重新整理中...`, "position-status ok");
             setTimeout(() => location.reload(), 1800);
+            return;
+          }
+
+          if (String(conclusion).toLowerCase() === "cancelled" && Date.now() - started < 90 * 1000) {
+            setSyncStatus(`⏳ 偵測到舊任務取消 ${runNumber}｜等待新的後端任務接手｜已跑 ${elapsedText}｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync");
+            setPositionStatus?.(`⏳ 偵測到舊任務取消 ${runNumber}｜等待新任務｜已跑 ${elapsedText}`, "position-status");
+            startLiveClock();
+            startPositionClock?.();
+            pollingTimer = setTimeout(loop, 5000);
             return;
           }
 
