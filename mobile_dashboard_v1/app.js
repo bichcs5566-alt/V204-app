@@ -173,7 +173,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.33_strategy_evolution";
+const APP_PATCH_VERSION = "v266.34_fake_breakout_guard";
 
 
 const FILES = {
@@ -1756,16 +1756,16 @@ function renderAppShell() {
 
       <section class="card compact-card ignition-card">
         <details open>
-          <summary>🧪 IGNITION 起漲清單</summary>
-          <div class="hint">均線糾結／收斂／放量轉強／突破節奏，TOP5 會排在最前面。</div>
+          <summary>🧪 IGNITION 起漲訊號（防假突破）</summary>
+          <div class="hint">只顯示市場起漲雷達，不自動丟入 TEST / WATCH；已加入 FakeScore 假起漲過濾，TOP5 會排在最前面。</div>
           <div id="ignitionList"></div>
         </details>
       </section>
 
       <section class="card compact-card evolution-card">
         <details open>
-          <summary>🧬 EVOLUTION 策略進化清單</summary>
-          <div class="hint">IGNITION→TEST→ALPHA→CORE 升級提示，TOP5 會排在最前面。</div>
+          <summary>🧬 EVOLUTION 策略進化訊號</summary>
+          <div class="hint">只顯示升級提示，不自動丟入原本清單；用來判斷可否加碼或提高優先級。</div>
           <div id="evolutionList"></div>
         </details>
       </section>
@@ -2114,7 +2114,7 @@ function renderSectionList(targetId, rows, prefix, limit = 80) {
   const container = qs(targetId);
 
   if (!rows.length) {
-    container.innerHTML = `<div class="empty">沒有資料</div>`;
+    container.innerHTML = sectionEmptyHintV26634(prefix);
     return;
   }
 
@@ -2333,6 +2333,56 @@ function chipHintV26621(row) {
 }
 
 
+
+function sectionEmptyHintV26634(prefix) {
+  if (prefix === "ignition") {
+    return `
+      <div class="empty signal-empty">
+        <b>今日未偵測到乾淨起漲訊號</b>
+        <p>市場狀態：目前沒有同時符合「收斂、放量、站穩均線、假突破痕跡低」的標的。</p>
+        <p>操作建議：暫停開新倉，不要為了交易而交易；等待明確突破與延續K棒。</p>
+      </div>`;
+  }
+  if (prefix === "evolution") {
+    return `
+      <div class="empty signal-empty">
+        <b>目前無策略進化標的</b>
+        <p>市場結構：暫時沒有從起漲、試單、強勢到核心的明確升級訊號。</p>
+        <p>操作建議：不加碼，先維持原持倉風控。</p>
+      </div>`;
+  }
+  return `<div class="empty">沒有資料</div>`;
+}
+
+function fakeScoreLabelV26634(row) {
+  const fs = Number(row.fake_score);
+  if (!Number.isFinite(fs)) return "--";
+  if (fs <= 1) return `${fs}｜✅ 乾淨`;
+  if (fs <= 2) return `${fs}｜⚠️ 需確認`;
+  if (fs <= 3) return `${fs}｜⚠️ 偏疑慮`;
+  return `${fs}｜❌ 疑似假起漲`;
+}
+
+function ignitionChinesePromptV26634(row) {
+  const hint = safeText(row.ignition_hint_zh || row.reason, "起漲訊號：後端尚未提供完整中文提示。");
+  const fake = safeText(row.fake_reason_zh || row.fake_flags, "假起漲檢查：資料不足。");
+  const advice = safeText(row.operation_advice_zh || row.system_note, "操作建議：僅小量觀察，不建議重倉。");
+  return `
+    <div class="detail-text"><b>中文起漲提示</b><p>${hint}</p></div>
+    <div class="detail-text"><b>假起漲 / 主力假K檢查</b><p>${fake}</p></div>
+    <div class="detail-text"><b>操作建議</b><p>${advice}</p></div>
+  `;
+}
+
+function evolutionChinesePromptV26634(row) {
+  const phase = safeText(row.evolution_phase || row.entry_type, "策略進化");
+  const note = safeText(row.system_note || row.reason || row.note, "策略進化提示：等待後續確認。");
+  return `
+    <div class="detail-text"><b>中文進化提示</b><p>${phase}｜${note}</p></div>
+    <div class="detail-text"><b>操作建議</b><p>這是升級提示，不代表自動進場；若已持有，可評估是否續抱或分批加碼。</p></div>
+  `;
+}
+
 function renderScanRow(row, key) {
   const action = normalizeAction(row.final_action || row.action);
   const cls = ACTION_CLASS[action] || "watch";
@@ -2396,6 +2446,8 @@ function renderScanRow(row, key) {
           ${detailCell("成交量", formatLotsFromShares(row.volume))}
           ${detailCell("成交金額", formatTurnoverTW(row.turnover))}
           ${detailCell("流動性分數", liqScore)}
+          ${String(row.strategy_type || row.bucket || "").toUpperCase() === "IGNITION" ? detailCell("假起漲分數", fakeScoreLabelV26634(row)) : ""}
+          ${String(row.strategy_type || row.bucket || "").toUpperCase() === "IGNITION" ? detailCell("假起漲風險", row.fake_risk_tag || row.fake_risk_level || "--") : ""}
           ${detailCell("籌碼集中度", chipDisplayV26621(row))}
         `;
 
@@ -2407,6 +2459,8 @@ function renderScanRow(row, key) {
         <div class="detail-text exit-detail-text"><b>中文籌碼提示</b><p>${chipHintV26621(row)}</p></div>
         <div class="detail-text exit-detail-text"><b>系統提示</b><p>${note}</p></div>
       ` : `
+        ${String(row.strategy_type || row.bucket || "").toUpperCase() === "IGNITION" ? ignitionChinesePromptV26634(row) : ""}
+        ${String(row.strategy_type || row.bucket || "").toUpperCase() === "EVOLUTION" ? evolutionChinesePromptV26634(row) : ""}
         <div class="detail-text"><b>原因</b><p>${reason}</p></div>
         <div class="detail-text"><b>中文決策提示</b><p>${finalAdvice}</p></div>
         <div class="detail-text"><b>籌碼原因</b><p>${chipReasonV26621(row)}</p></div>
@@ -2535,7 +2589,14 @@ async function loadIgnitionRows() {
         execution_flag: r.section_top_opportunity || r.execution_flag || "",
         close: r.close || r.ref_price || "",
         reason: r.reason || r.note || "起漲啟動清單",
-        system_note: r.system_note || "起漲清單：小量試單 / 優先觀察，不建議一次重倉。"
+        system_note: r.system_note || r.operation_advice_zh || "起漲清單：小量試單 / 優先觀察，不建議一次重倉。",
+        fake_score: r.fake_score || "",
+        fake_risk_tag: r.fake_risk_tag || "",
+        fake_risk_level: r.fake_risk_level || "",
+        fake_flags: r.fake_flags || "",
+        fake_reason_zh: r.fake_reason_zh || "",
+        ignition_hint_zh: r.ignition_hint_zh || "",
+        operation_advice_zh: r.operation_advice_zh || ""
       }));
   } catch (e) {
     console.warn("ignition_candidates load fail", e);
