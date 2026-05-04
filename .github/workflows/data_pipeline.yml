@@ -1,4 +1,4 @@
-name: data_pipeline  # v266.41 fake breakout guard
+name: data_pipeline  # v266.42 fake breakout guard
 
 on:
   workflow_dispatch:
@@ -38,7 +38,7 @@ jobs:
         run: |
           python - <<'PY'
           import json
-          from datetime import datetime, timezone
+          from datetime import datetime, timedelta, timezone, timezone
           from pathlib import Path
 
           now = datetime.now(timezone.utc).isoformat()
@@ -234,7 +234,7 @@ jobs:
       # 造成 trade_date 被覆蓋回 signal_date，這版已鎖住。
 
 
-      # v266.41：最終輸出補齊技術欄位（完全防炸版）
+      # v266.42：最終輸出補齊技術欄位（完全防炸版）
       - name: Enrich final outputs with tech fields
         if: always()
         run: |
@@ -275,7 +275,7 @@ jobs:
                   if pd.isna(x):
                       return default
                   s = str(x).strip()
-                  if s.lower() in ["nan", "none", "null", "undefined"]:
+                  if s.lower() in ["nan", "none", "null", "undefined", "n/a"] or s in ["資料不足", "資料有限", "--", "-"]:
                       return default
                   return s
               except Exception:
@@ -351,7 +351,7 @@ jobs:
 
                   merged.drop(columns=[tc], inplace=True)
 
-              # v266.41：若 K棒/K線還是空，依現有 MA / 原因 / action 做保底推論。
+              # v266.42：若 K棒/K線還是空，依現有 MA / 原因 / action 做保底推論。
               def _num(v):
                   try:
                       return float(str(v).replace(",", ""))
@@ -360,7 +360,7 @@ jobs:
 
               def _infer_kbar(r):
                   current = safe_text(r.get("kbar_type", ""), "")
-                  if current and current != "--":
+                  if current and current not in ["--", "資料不足", "資料有限", "-"]:
                       return current
                   reason = safe_text(r.get("reason", ""), "") + " " + safe_text(r.get("system_note", ""), "") + " " + safe_text(r.get("action", ""), "") + " " + safe_text(r.get("final_action", ""), "")
                   if any(x in reason for x in ["停損", "跌破", "出場", "SELL", "賣"]):
@@ -369,11 +369,11 @@ jobs:
                       return "突破確認K"
                   if any(x in reason for x in ["觀察", "整理", "收斂", "WATCH"]):
                       return "整理觀察K"
-                  return "依策略判斷K"
+                  return "整理觀察K"
 
               def _infer_kstruct(r):
                   current = safe_text(r.get("k_structure", ""), "")
-                  if current and current != "--":
+                  if current and current not in ["--", "資料不足", "資料有限", "-"]:
                       return current
                   c = _num(r.get("close", r.get("ref_price", "")))
                   ma5 = _num(r.get("ma5", ""))
@@ -395,7 +395,7 @@ jobs:
                       return "整理後轉強"
                   if any(x in reason for x in ["觀察", "整理", "收斂", "WATCH"]):
                       return "整理收斂"
-                  return "依策略結構"
+                  return "整理收斂"
 
               merged["kbar_type"] = merged.apply(_infer_kbar, axis=1)
               merged["k_bar_type"] = merged["kbar_type"]
@@ -419,11 +419,11 @@ jobs:
               enrich_file(ROOT / name)
               enrich_file(DATA / name)
 
-          print("v266.41 guarded enrich done, tech rows =", len(tech))
+          print("v266.42 guarded enrich done, tech rows =", len(tech))
           PY
 
 
-      # v266.41：資料時間鎖定。用 feature_panel_daily.csv 最新日期強制覆寫所有 summary/meta，避免訊號日卡舊值。
+      # v266.42：資料時間鎖定。用 feature_panel_daily.csv 最新日期強制覆寫所有 summary/meta，避免訊號日卡舊值。
       - name: Lock signal date and summary metadata
         if: always()
         run: |
@@ -513,7 +513,7 @@ jobs:
 
           signal_date = latest_date.strftime("%Y-%m-%d")
           trade_date = next_trade_date(latest_date).strftime("%Y-%m-%d")
-          now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+          now = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
 
           # 讀取目前 summary/meta，保留原本欄位，只覆蓋日期與版本。
           summary = read_json(ROOT / "final_action_summary.json") or read_json(DATA / "final_action_summary.json")
@@ -521,8 +521,8 @@ jobs:
           regime = read_json(ROOT / "market_regime.json") or read_json(DATA / "market_regime.json")
 
           patch = {
-              "source": "v266_41_unified_k_tech_cards",
-              "version": "v266.41",
+              "source": "v266_42_no_insufficient_timefix",
+              "version": "v266.42",
               "signal_date": signal_date,
               "latest_date": signal_date,
               "trade_date": trade_date,
@@ -541,8 +541,8 @@ jobs:
               "trade_date": trade_date,
               "updated_at": now,
               "generated_at": regime.get("generated_at") or now,
-              "source": "v266_41_unified_k_tech_cards",
-              "version": "v266.41",
+              "source": "v266_42_no_insufficient_timefix",
+              "version": "v266.42",
               "date_lock_source": source_file,
           })
 
@@ -552,14 +552,14 @@ jobs:
 
           # 另外輸出一份 debug，方便你手機檢查。
           write_json_both({
-              "version": "v266.41",
+              "version": "v266.42",
               "signal_date": signal_date,
               "trade_date": trade_date,
               "updated_at": now,
               "source_file": source_file,
           }, "date_lock_report.json")
 
-          print("v266.41 date locked:", signal_date, "trade:", trade_date, "source:", source_file)
+          print("v266.42 date locked:", signal_date, "trade:", trade_date, "source:", source_file)
           PY
 
 
