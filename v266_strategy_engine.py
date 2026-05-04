@@ -73,6 +73,17 @@ def safe_num(s, default=np.nan):
         return default
 
 
+def safe_str_series(x, index=None):
+    """
+    v266.36 防型態炸裂：
+    np.where 會回傳 numpy.ndarray，不能直接 .str。
+    統一轉成 pandas Series 後再做字串處理。
+    """
+    if isinstance(x, pd.Series):
+        return x.astype(str)
+    return pd.Series(x, index=index).astype(str)
+
+
 def load_feature():
     p = ROOT / "feature_panel_daily.csv"
     if not p.exists() or p.stat().st_size == 0:
@@ -139,7 +150,7 @@ def add_liquidity_fields(d):
 
 def add_tech_decision_fields(d):
     """
-    v266.35 append-only:
+    v266.36 append-only:
     補齊前端卡片需要的小欄位，不覆蓋既有欄位。
     所有欄位都可安全缺省；缺資料時顯示 --。
     """
@@ -497,7 +508,7 @@ def ignition_engine(x):
         + fake_low_liq.astype(int)
     )
 
-    d["fake_flags"] = (
+    fake_flags_raw = (
         np.where(fake_no_volume, "量能不足｜", "")
         + np.where(fake_long_upper, "上影線偏長｜", "")
         + np.where(fake_weak_body, "實體不足｜", "")
@@ -506,7 +517,8 @@ def ignition_engine(x):
         + np.where(fake_overheat, "過熱或爆量異常｜", "")
         + np.where(fake_kd_not_confirm, "KD/MACD未確認｜", "")
         + np.where(fake_low_liq, "流動性不足｜", "")
-    ).str.rstrip("｜")
+    )
+    d["fake_flags"] = safe_str_series(fake_flags_raw, index=d.index).str.rstrip("｜")
 
     d["fake_risk_level"] = np.select(
         [d["fake_score"] >= 4, d["fake_score"] >= 2, d["fake_score"] <= 1],
@@ -910,7 +922,7 @@ def main():
 
     meta = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "source": "v266_35_tech_fields_append_only",
+        "source": "v266_36_safe_type_guard",
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
         "data_state": "fresh",
