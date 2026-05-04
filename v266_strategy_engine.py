@@ -75,13 +75,26 @@ def safe_num(s, default=np.nan):
 
 def safe_str_series(x, index=None):
     """
-    v266.36 防型態炸裂：
+    v266.36.2 防型態炸裂：
     np.where 會回傳 numpy.ndarray，不能直接 .str。
     統一轉成 pandas Series 後再做字串處理。
     """
     if isinstance(x, pd.Series):
         return x.astype(str)
     return pd.Series(x, index=index).astype(str)
+
+
+def safe_bool_series(x, index):
+    """
+    v266.36.2.2 防單一 bool 炸裂：
+    df.loc[False, col] 會造成 KeyError: cannot use a single bool to index into setitem。
+    任何 scalar bool 都轉成與 df.index 對齊的 Series。
+    """
+    if isinstance(x, pd.Series):
+        return x.reindex(index).fillna(False).astype(bool)
+    if isinstance(x, (np.ndarray, list, tuple)):
+        return pd.Series(x, index=index).fillna(False).astype(bool)
+    return pd.Series(bool(x), index=index)
 
 
 def load_feature():
@@ -150,7 +163,7 @@ def add_liquidity_fields(d):
 
 def add_tech_decision_fields(d):
     """
-    v266.36 append-only:
+    v266.36.2 append-only:
     補齊前端卡片需要的小欄位，不覆蓋既有欄位。
     所有欄位都可安全缺省；缺資料時顯示 --。
     """
@@ -268,6 +281,11 @@ def detect_regime(x):
 
 
 def set_action(df, buy, test, watch, buy_sub, test_sub, watch_sub):
+    # v266.36.2.2：所有 mask 都安全轉成 Series，避免 scalar False/True 造成 pandas setitem KeyError。
+    buy = safe_bool_series(buy, df.index)
+    test = safe_bool_series(test, df.index)
+    watch = safe_bool_series(watch, df.index)
+
     df["action"] = "SKIP"
     df.loc[watch, "action"] = "WATCH"
     df.loc[test, "action"] = "TEST"
@@ -551,7 +569,7 @@ def ignition_engine(x):
     watch = (d["entry_score"] >= 50) & ~test & (d["fake_score"] <= 3)
 
     # 起漲清單以 TEST / WATCH 呈現，不直接 BUY，避免假突破重倉。
-    set_action(d, False, test, watch, "", "起漲試單", "起漲觀察")
+    set_action(d, pd.Series(False, index=d.index), test, watch, "", "起漲試單", "起漲觀察")
 
     d["section_opportunity_rank"] = d["entry_score"].rank(method="first", ascending=False).astype(int)
     d["section_top_opportunity"] = np.where(
