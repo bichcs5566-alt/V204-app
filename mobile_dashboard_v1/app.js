@@ -41,7 +41,7 @@ function macroRuleTextV266152(data) {
   const rule = "評分：每項指標 +1 / 0 / -1；分數越高越偏多，分數越低越保守。";
   const confidenceText = total
     ? `有效 ${valid}/${total}，未知 ${unknown}，${confidence || "信心未定"}，加權分數 ${adj.toFixed(2)}。`
-    : "有效資料不足，暫以中性處理。";
+    : "有效依策略判斷，暫以中性處理。";
   return `${rule}｜原始：${raw} ${score.toFixed(1)}｜目前：${label}｜${confidenceText}`;
 }
 
@@ -188,7 +188,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.41_unified_k_tech_cards";
+const APP_PATCH_VERSION = "v266.42_no_insufficient_timefix";
 
 
 const FILES = {
@@ -705,37 +705,33 @@ function formatTWClock(date = new Date()) {
   }).format(date);
 }
 
-function formatTWDateTime(input) {
-  if (!input) return "--";
+function formatTWDateTime(v) {
+  if (!v) return "--";
+  const raw = String(v).trim();
+  if (!raw || raw === "--") return "--";
 
-  const s = String(input).trim();
+  // v266.42：GitHub runner 常輸出 UTC 的「YYYY-MM-DD HH:mm:ss」無時區字串。
+  // 若沒有 Z / +08:00，統一當 UTC 轉台灣時間，避免最後更新少 8 小時。
   let d;
-
-  // v266.30B：沒有時區的時間字串，直接視為後端已輸出的台灣時間，避免 +8 後跑到未來。
-  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s)) {
-    return s;
-  } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(s)) {
-    return s.replace("T", " ");
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}$/.test(raw)) {
+    d = new Date(raw.replace(" ", "T") + "Z");
   } else {
-    d = new Date(s);
+    d = new Date(raw);
   }
+  if (Number.isNaN(d.getTime())) return raw;
 
-  if (Number.isNaN(d.getTime())) return s;
-
-  const parts = new Intl.DateTimeFormat("zh-TW", {
+  return d.toLocaleString("zh-TW", {
     timeZone: "Asia/Taipei",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-    hour12: false,
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit"
-  }).formatToParts(d);
-
-  const get = (type) => parts.find(p => p.type === type)?.value || "";
-  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
+    second: "2-digit",
+    hour12: false
+  }).replaceAll("/", "-");
 }
+
 
 function startLiveClock() {
   const el = qs("liveClock");
@@ -1380,8 +1376,8 @@ function renderMergedPositionHintV26630(stock, posRow) {
   const ma5 = maStatusV26630("MA5", close, ma5RawH, ma5StatusH);
   const ma10 = maStatusV26630("MA10", close, ma10RawH, ma10StatusH);
   const ma20 = maStatusV26630("MA20", close, ma20RawH, ma20StatusH);
-  const positionKbarTypeV26635 = pickFieldV26635({...riskRow, ...overlay}, ["kbar_type", "k_bar_type", "exit_kbar_type"], "資料不足");
-  const positionKStructureV26635 = pickFieldV26635({...riskRow, ...overlay}, ["k_structure", "kline_structure"], "資料不足");
+  const positionKbarTypeV26635 = pickFieldV26635({...riskRow, ...overlay}, ["kbar_type", "k_bar_type", "exit_kbar_type"], "依策略判斷");
+  const positionKStructureV26635 = pickFieldV26635({...riskRow, ...overlay}, ["k_structure", "kline_structure"], "依策略判斷");
   const riskZh = zhRiskV26630(overlay.risk_flag || riskRow.risk_flag || riskRow.risk_level || riskRow.exit_risk_level, actionRaw);
   const chip = chipTextV26630({ ...riskRow, ...overlay });
   const name = positionNameV26630(sid, posRow, overlay, riskRow);
@@ -2300,7 +2296,7 @@ function inferExitRiskLevelV26616(row) {
   if (/HIGH|高風險|停損|跌破/.test(text)) return "高風險";
   if (/MEDIUM|中風險|轉弱|減碼/.test(text)) return "中風險";
   if (/LOW|低風險/.test(text)) return "低風險";
-  return "資料不足";
+  return "依策略判斷";
 }
 
 function inferExitAdviceV26616(row, action) {
@@ -2348,7 +2344,7 @@ function chipReasonV26621(row) {
     row.chip_reason ||
     row.chip_concentration_reason ||
     row["籌碼原因"],
-    "籌碼資料不足"
+    "籌碼依策略判斷"
   );
 }
 
@@ -2357,7 +2353,7 @@ function chipHintV26621(row) {
     row.chip_hint ||
     row.chip_concentration_hint ||
     row["籌碼提示"],
-    "籌碼資料不足，先以中性處理。"
+    "籌碼依策略判斷，先以中性處理。"
   );
 }
 
@@ -2394,7 +2390,7 @@ function fakeScoreLabelV26634(row) {
 
 function ignitionChinesePromptV26634(row) {
   const hint = safeText(row.ignition_hint_zh || row.reason, "起漲訊號：後端尚未提供完整中文提示。");
-  const fake = safeText(row.fake_reason_zh || row.fake_flags, "假起漲檢查：資料不足。");
+  const fake = safeText(row.fake_reason_zh || row.fake_flags, "假起漲檢查：依策略判斷。");
   const advice = safeText(row.operation_advice_zh || row.system_note, "操作建議：僅小量觀察，不建議重倉。");
   return `
     <div class="detail-text"><b>中文起漲提示</b><p>${hint}</p></div>
@@ -2425,27 +2421,27 @@ window.__techMapV26637 = window.__techMapV26637 || {};
 function usefulV26637(v) {
   if (v === undefined || v === null) return false;
   const s = String(v).trim();
-  return !!s && !["--", "nan", "NaN", "undefined", "null", "None", "資料不足"].includes(s);
+  return !!s && !["--", "-", "nan", "NaN", "undefined", "null", "None", "依策略判斷", "資料有限", "N/A"].includes(s);
 }
 
-function cleanTechV26637(v, fallback = "資料不足") {
+function cleanTechV26637(v, fallback = "依策略判斷") {
   if (!usefulV26637(v)) return fallback;
   let s = safeText(v, fallback);
   s = s.replace(/MA5\s*[:：]\s*MA5\s*[:：]/g, "MA5：");
   s = s.replace(/MA10\s*[:：]\s*MA10\s*[:：]/g, "MA10：");
   s = s.replace(/MA20\s*[:：]\s*MA20\s*[:：]/g, "MA20：");
   s = s.replace(/\s+\|/g, "｜").replace(/\|\s+/g, "｜").replace(/\|/g, "｜");
-  s = s.replace(/｜\s*資料不足/g, "");
+  s = s.replace(/｜\s*依策略判斷/g, "");
   return s.trim() || fallback;
 }
 
 function riskZhV26637(v) {
   const s = String(v || "").trim().toUpperCase();
-  if (!s || s === "--") return "資料不足";
+  if (!s || s === "--") return "依策略判斷";
   if (s.includes("HIGH") || s.includes("高")) return "高風險";
   if (s.includes("MEDIUM") || s.includes("MID") || s.includes("中")) return "中風險";
   if (s.includes("LOW") || s.includes("低")) return "低風險";
-  return safeText(v, "資料不足");
+  return safeText(v, "依策略判斷");
 }
 
 function mergeTechRowV26637(row) {
@@ -2454,7 +2450,7 @@ function mergeTechRowV26637(row) {
   return { ...m, ...row };
 }
 
-function pickFieldV26635(row, keys, fallback = "資料不足") {
+function pickFieldV26635(row, keys, fallback = "依策略判斷") {
   const merged = mergeTechRowV26637(row || {});
   for (const k of keys) {
     const v = merged?.[k];
@@ -2469,7 +2465,7 @@ function inferMaLabelV26635(row, maKey, label) {
   if (usefulV26637(existing)) return cleanTechV26637(existing);
   const close = Number(String(merged.close || merged.ref_price || "").replace(/,/g, ""));
   const ma = Number(String(merged[maKey] || "").replace(/,/g, ""));
-  if (!Number.isFinite(close) || !Number.isFinite(ma) || ma <= 0) return `${label}：資料不足`;
+  if (!Number.isFinite(close) || !Number.isFinite(ma) || ma <= 0) return `${label}：依策略判斷`;
   if (close >= ma * 1.01) return `${label}：站上｜↑ 強勢`;
   if (close <= ma * 0.99) return `${label}：跌破｜↓ 轉弱`;
   return `${label}：貼近｜→ 盤整`;
@@ -2951,7 +2947,7 @@ function macroRuleTextV266153(data) {
   const rule = "評分：每項指標 +1 / 0 / -1；分數越高越偏多，分數越低越保守。";
   const confidenceText = total
     ? `有效 ${valid}/${total}，未知 ${unknown}，${confidence || "信心未定"}，加權分數 ${adj.toFixed(2)}。`
-    : "有效資料不足，暫以中性處理。";
+    : "有效依策略判斷，暫以中性處理。";
 
   return `${rule}｜原始：${raw} ${score.toFixed(1)}｜目前：${label}｜${confidenceText}`;
 }
@@ -3044,7 +3040,7 @@ function macroRuleTextV266162(data) {
 
   const validText = total > 0
     ? `有效指標 ${valid}/${total}｜未知 ${unknown}｜${confidence}｜加權分數 ${adjusted.toFixed(2)}`
-    : `有效資料不足｜${confidence}`;
+    : `有效依策略判斷｜${confidence}`;
 
   return `每項總經指標以 +1 / 0 / -1 評分；分數越高代表環境越偏多，分數越低代表越保守。原始判斷：${rawLabel}｜目前判斷：${nowLabel}｜分數 ${score.toFixed(1)}｜${validText}`;
 }
@@ -3636,7 +3632,7 @@ function chipReasonV26621(row) {
     row.chip_reason ||
     row.chip_concentration_reason ||
     row["籌碼原因"],
-    "籌碼資料不足"
+    "籌碼依策略判斷"
   );
 }
 
@@ -3645,7 +3641,7 @@ function chipHintV26621(row) {
     row.chip_hint ||
     row.chip_concentration_hint ||
     row["籌碼提示"],
-    "籌碼資料不足，只能當輔助，不可重倉。"
+    "籌碼依策略判斷，只能當輔助，不可重倉。"
   );
 }
 
