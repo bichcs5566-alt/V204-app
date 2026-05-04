@@ -173,7 +173,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.30N_persistent_backend_timer";
+const APP_PATCH_VERSION = "v266.30O_detect_active_workflow_on_load";
 
 
 const FILES = {
@@ -404,6 +404,62 @@ function resumeBackendRunIfActiveV26630N() {
   startPositionClock?.();
   pollWorkflowRun(active.created_after_iso, Number(active.started_at_ms));
   return true;
+}
+
+async function detectActiveWorkflowOnLoadV26630O() {
+  // v266.30O：不只靠 localStorage。
+  // 頁面重新整理後，直接查 GitHub Actions 是否有 data_pipeline 正在跑。
+  // 有正在跑就立刻接回計時，避免被 renderMeta 的「最終操作表已同步」洗掉。
+  try {
+    const gh = loadGithubSettings();
+    const res = await githubApi(`/actions/workflows/${encodeURIComponent(gh.workflow)}/runs?branch=${encodeURIComponent(gh.branch)}&per_page=20`, {
+      method: "GET"
+    });
+
+    const text = await res.text();
+    if (!res.ok) return false;
+
+    const trimmed = String(text || "").trim();
+    if (trimmed.startsWith("<")) return false;
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      return false;
+    }
+
+    const runs = Array.isArray(data.workflow_runs) ? data.workflow_runs : [];
+    const active = runs
+      .filter(run => String(run.head_branch || gh.branch) === String(gh.branch))
+      .filter(run => ["queued", "in_progress", "waiting", "requested"].includes(String(run.status || "")))
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+
+    if (!active) return false;
+
+    const createdAt = active.created_at || new Date().toISOString();
+    const startedMs = new Date(createdAt).getTime();
+    const safeStartedMs = Number.isFinite(startedMs) ? startedMs : Date.now();
+    const elapsedText = formatRunDurationV26630K(Date.now() - safeStartedMs);
+    const runNumber = active.run_number ? `#${active.run_number}` : "";
+
+    saveActiveBackendRunV26630N(createdAt);
+
+    setSyncStatus(`⏳ 後端策略執行中 ${runNumber}｜已跑 ${elapsedText}｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync");
+    setPositionStatus?.(`⏳ 後端策略執行中 ${runNumber}｜已跑 ${elapsedText}｜現在時間 <span id="positionLiveClock">${formatTWClock(new Date())}</span>`, "position-status");
+    startLiveClock();
+    startPositionClock?.();
+
+    pollWorkflowRun(createdAt, safeStartedMs);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function resumeOrDetectBackendRunV26630O() {
+  if (resumeBackendRunIfActiveV26630N()) return true;
+  return await detectActiveWorkflowOnLoadV26630O();
 }
 
 function compactErrorText(text) {
@@ -2300,8 +2356,8 @@ async function init() {
     const groups = splitRows(rows);
 
     renderMeta(regime, summary, macro, rows);
-    // v266.30N：若後端還在跑，重新整理後要接回計時，不讓「最終操作表已同步」洗掉狀態。
-    resumeBackendRunIfActiveV26630N();
+    // v266.30O：若後端還在跑，重新整理後直接查 GitHub Actions 接回計時。
+    await resumeOrDetectBackendRunV26630O();
     renderPositionRiskHints(rows);
     renderPositions();
     renderDecision(rows);
