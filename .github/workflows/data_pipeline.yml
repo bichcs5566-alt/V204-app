@@ -1,4 +1,4 @@
-name: data_pipeline  # v266.36.2 fake breakout guard
+name: data_pipeline  # v266.38 fake breakout guard
 
 on:
   workflow_dispatch:
@@ -232,6 +232,230 @@ jobs:
       # 只同步 dashboard，不再重跑任何會改資料的 py。
       # 原本 Keep dashboard files after bridge 會重跑 final_decision_engine.py / overlay，
       # 造成 trade_date 被覆蓋回 signal_date，這版已鎖住。
+
+      # v266.38：最終輸出補齊技術欄位，讓前端最終操作 / 試單 / 觀察 / 持倉都有 MA / K棒 / K線。
+      - name: Enrich final outputs with tech fields
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import pandas as pd
+
+          ROOT = Path(".")
+          DATA = ROOT / "mobile_dashboard_v1" / "data"
+          DATA.mkdir(parents=True, exist_ok=True)
+
+          tech_cols = [
+              "stock_id","close","open","high","low","ma5","ma10","ma20",
+              "ma5_label","ma10_label","ma20_label",
+              "ma5_status","ma10_status","ma20_status",
+              "kbar_type","k_bar_type","k_structure","kline_structure",
+              "tech_reason","kbar_reason","tech_decision_hint"
+          ]
+
+          def read_csv_safe(p):
+              p = Path(p)
+              if not p.exists():
+                  return pd.DataFrame()
+              try:
+                  return pd.read_csv(p, dtype=str)
+              except Exception:
+                  return pd.DataFrame()
+
+          sources = []
+          for name in [
+              "candidates.csv",
+              "trade_plan.csv",
+              "core_candidates.csv",
+              "alpha_candidates.csv",
+              "ignition_candidates.csv",
+              "strategy_evolution.csv",
+              "position_overlay.csv",
+          ]:
+              for p in [ROOT / name, DATA / name]:
+                  df = read_csv_safe(p)
+                  if not df.empty and "stock_id" in df.columns:
+                      keep = [c for c in tech_cols if c in df.columns]
+                      if keep:
+                          sources.append(df[keep].copy())
+
+          if sources:
+              tech = pd.concat(sources, ignore_index=True)
+              tech["stock_id"] = tech["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False).fillna(tech["stock_id"].astype(str))
+              tech = tech.replace({"nan": "", "None": "", "--": ""})
+              tech = tech.groupby("stock_id", as_index=False).agg(lambda s: next((x for x in s.astype(str) if x.strip()), ""))
+          else:
+              tech = pd.DataFrame(columns=["stock_id"])
+
+          def enrich_file(path):
+              p = Path(path)
+              df = read_csv_safe(p)
+              if df.empty or "stock_id" not in df.columns or tech.empty:
+                  return
+              df["stock_id"] = df["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False).fillna(df["stock_id"].astype(str))
+              merged = df.merge(tech, on="stock_id", how="left", suffixes=("", "_tech"))
+              for c in tech_cols:
+                  if c == "stock_id":
+                      continue
+                  tc = c + "_tech"
+                  if tc in merged.columns:
+                      if c not in merged.columns:
+                          merged[c] = merged[tc]
+                      else:
+                          merged[c] = merged[c].fillna("").astype(str)
+                          merged[c] = merged[c].where(merged[c].str.strip().ne(""), merged[tc].fillna(""))
+                      merged.drop(columns=[tc], inplace=True)
+              merged.to_csv(p, index=False, encoding="utf-8-sig")
+
+          for name in ["final_action_plan.csv","trade_plan.csv","position_overlay.csv","ignition_candidates.csv","strategy_evolution.csv"]:
+              enrich_file(ROOT / name)
+              enrich_file(DATA / name)
+
+          print("v266.38 enrich done")
+          PY
+
+
+
+      # v266.38：資料時間鎖定。用 feature_panel_daily.csv 最新日期強制覆寫所有 summary/meta，避免訊號日卡舊值。
+      - name: Lock signal date and summary metadata
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from datetime import datetime
+          import json
+          import pandas as pd
+
+          ROOT = Path(".")
+          DATA = ROOT / "mobile_dashboard_v1" / "data"
+          DATA.mkdir(parents=True, exist_ok=True)
+
+          def read_json(p):
+              p = Path(p)
+              if not p.exists():
+                  return {}
+              try:
+                  return json.loads(p.read_text(encoding="utf-8-sig"))
+              except Exception:
+                  try:
+                      return json.loads(p.read_text(encoding="utf-8"))
+                  except Exception:
+                      return {}
+
+          def write_json_both(obj, name):
+              obj = dict(obj or {})
+              for p in [ROOT / name, DATA / name]:
+                  p.parent.mkdir(parents=True, exist_ok=True)
+                  p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+
+          def next_trade_date(signal_date):
+              d = pd.to_datetime(signal_date) + pd.Timedelta(days=1)
+              # 跳過六日；台股特殊休市日後續可再接行事曆。
+              if d.weekday() == 5:
+                  d += pd.Timedelta(days=2)
+              elif d.weekday() == 6:
+                  d += pd.Timedelta(days=1)
+              return d
+
+          feature_paths = [
+              ROOT / "feature_panel_daily.csv",
+              DATA / "feature_panel_daily.csv",
+              ROOT / "price_panel_daily.csv",
+              DATA / "price_panel_daily.csv",
+          ]
+
+          latest_date = None
+          source_file = ""
+          for p in feature_paths:
+              if not p.exists() or p.stat().st_size == 0:
+                  continue
+              try:
+                  df = pd.read_csv(p, usecols=lambda c: c in ["date"], dtype=str)
+                  if "date" not in df.columns or df.empty:
+                      continue
+                  d = pd.to_datetime(df["date"], errors="coerce").dropna()
+                  if not d.empty:
+                      latest_date = d.max()
+                      source_file = str(p)
+                      break
+              except Exception as e:
+                  print("skip date source", p, e)
+
+          # fallback：從 trade_plan / final_action_plan 找 date 欄
+          if latest_date is None:
+              for p in [ROOT / "trade_plan.csv", ROOT / "final_action_plan.csv", DATA / "trade_plan.csv", DATA / "final_action_plan.csv"]:
+                  if not p.exists() or p.stat().st_size == 0:
+                      continue
+                  try:
+                      df = pd.read_csv(p, dtype=str)
+                      date_cols = [c for c in df.columns if c.lower() in ["date","signal_date","latest_date"]]
+                      for c in date_cols:
+                          d = pd.to_datetime(df[c], errors="coerce").dropna()
+                          if not d.empty:
+                              latest_date = d.max()
+                              source_file = str(p) + ":" + c
+                              break
+                      if latest_date is not None:
+                          break
+                  except Exception as e:
+                      print("skip csv fallback", p, e)
+
+          if latest_date is None:
+              latest_date = pd.Timestamp.today().normalize()
+              source_file = "fallback_today"
+
+          signal_date = latest_date.strftime("%Y-%m-%d")
+          trade_date = next_trade_date(latest_date).strftime("%Y-%m-%d")
+          now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+          # 讀取目前 summary/meta，保留原本欄位，只覆蓋日期與版本。
+          summary = read_json(ROOT / "final_action_summary.json") or read_json(DATA / "final_action_summary.json")
+          meta = read_json(ROOT / "meta.json") or read_json(DATA / "meta.json")
+          regime = read_json(ROOT / "market_regime.json") or read_json(DATA / "market_regime.json")
+
+          patch = {
+              "source": "v266_38_stable_integrated",
+              "version": "v266.38",
+              "signal_date": signal_date,
+              "latest_date": signal_date,
+              "trade_date": trade_date,
+              "updated_at": now,
+              "generated_at": summary.get("generated_at") or meta.get("generated_at") or now,
+              "date_lock_source": source_file,
+              "date_state": "locked_from_latest_feature",
+          }
+
+          summary.update(patch)
+          meta.update(patch)
+          regime.update({
+              "signal_date": signal_date,
+              "latest_date": signal_date,
+              "date": signal_date,
+              "trade_date": trade_date,
+              "updated_at": now,
+              "generated_at": regime.get("generated_at") or now,
+              "source": "v266_38_stable_integrated",
+              "version": "v266.38",
+              "date_lock_source": source_file,
+          })
+
+          write_json_both(summary, "final_action_summary.json")
+          write_json_both(meta, "meta.json")
+          write_json_both(regime, "market_regime.json")
+
+          # 另外輸出一份 debug，方便你手機檢查。
+          write_json_both({
+              "version": "v266.38",
+              "signal_date": signal_date,
+              "trade_date": trade_date,
+              "updated_at": now,
+              "source_file": source_file,
+          }, "date_lock_report.json")
+
+          print("v266.38 date locked:", signal_date, "trade:", trade_date, "source:", source_file)
+          PY
+
+
       - name: Sync dashboard files only
         run: |
           mkdir -p mobile_dashboard_v1/data
