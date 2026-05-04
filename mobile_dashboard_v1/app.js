@@ -188,7 +188,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.42_no_insufficient_timefix";
+const APP_PATCH_VERSION = "v266.43_time_unified";
 
 
 const FILES = {
@@ -705,31 +705,33 @@ function formatTWClock(date = new Date()) {
   }).format(date);
 }
 
-function formatTWDateTime(v) {
-  if (!v) return "--";
+function parseAsTaipeiDateV26643(v) {
+  if (!v) return null;
   const raw = String(v).trim();
-  if (!raw || raw === "--") return "--";
+  if (!raw || raw === "--") return null;
 
-  // v266.42：GitHub runner 常輸出 UTC 的「YYYY-MM-DD HH:mm:ss」無時區字串。
-  // 若沒有 Z / +08:00，統一當 UTC 轉台灣時間，避免最後更新少 8 小時。
-  let d;
-  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}$/.test(raw)) {
-    d = new Date(raw.replace(" ", "T") + "Z");
-  } else {
-    d = new Date(raw);
+  // 已帶 Z 或 +08:00 的時間，直接讓 Date 解析。
+  if (/[zZ]$|[+-]\d{2}:\d{2}$/.test(raw)) {
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d;
   }
-  if (Number.isNaN(d.getTime())) return raw;
 
-  return d.toLocaleString("zh-TW", {
-    timeZone: "Asia/Taipei",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false
-  }).replaceAll("/", "-");
+  // GitHub / Python 常輸出 YYYY-MM-DD HH:mm:ss；若沒有時區，視為台灣時間顯示，不再硬加 8 小時。
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (m) {
+    const [, yy, mo, dd, hh, mi, ss = "00"] = m;
+    return new Date(Number(yy), Number(mo) - 1, Number(dd), Number(hh), Number(mi), Number(ss));
+  }
+
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatTWDateTime(v) {
+  const d = parseAsTaipeiDateV26643(v);
+  if (!d) return v ? String(v) : "--";
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 
