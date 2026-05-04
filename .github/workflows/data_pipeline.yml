@@ -1,4 +1,4 @@
-name: data_pipeline  # v266.42 fake breakout guard
+name: data_pipeline  # v266.43 fake breakout guard
 
 on:
   workflow_dispatch:
@@ -234,7 +234,7 @@ jobs:
       # 造成 trade_date 被覆蓋回 signal_date，這版已鎖住。
 
 
-      # v266.42：最終輸出補齊技術欄位（完全防炸版）
+      # v266.43：最終輸出補齊技術欄位（完全防炸版）
       - name: Enrich final outputs with tech fields
         if: always()
         run: |
@@ -351,7 +351,7 @@ jobs:
 
                   merged.drop(columns=[tc], inplace=True)
 
-              # v266.42：若 K棒/K線還是空，依現有 MA / 原因 / action 做保底推論。
+              # v266.43：若 K棒/K線還是空，依現有 MA / 原因 / action 做保底推論。
               def _num(v):
                   try:
                       return float(str(v).replace(",", ""))
@@ -419,17 +419,17 @@ jobs:
               enrich_file(ROOT / name)
               enrich_file(DATA / name)
 
-          print("v266.42 guarded enrich done, tech rows =", len(tech))
+          print("v266.43 guarded enrich done, tech rows =", len(tech))
           PY
 
 
-      # v266.42：資料時間鎖定。用 feature_panel_daily.csv 最新日期強制覆寫所有 summary/meta，避免訊號日卡舊值。
+      # v266.43：資料時間鎖定。用 feature_panel_daily.csv 最新日期強制覆寫所有 summary/meta，避免訊號日卡舊值。
       - name: Lock signal date and summary metadata
         if: always()
         run: |
           python - <<'PY'
           from pathlib import Path
-          from datetime import datetime
+          from datetime import datetime, timedelta, timezone
           import json
           import pandas as pd
 
@@ -513,7 +513,8 @@ jobs:
 
           signal_date = latest_date.strftime("%Y-%m-%d")
           trade_date = next_trade_date(latest_date).strftime("%Y-%m-%d")
-          now = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
+          TW_TZ = timezone(timedelta(hours=8))
+          now = datetime.now(TW_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
           # 讀取目前 summary/meta，保留原本欄位，只覆蓋日期與版本。
           summary = read_json(ROOT / "final_action_summary.json") or read_json(DATA / "final_action_summary.json")
@@ -521,8 +522,8 @@ jobs:
           regime = read_json(ROOT / "market_regime.json") or read_json(DATA / "market_regime.json")
 
           patch = {
-              "source": "v266_42_no_insufficient_timefix",
-              "version": "v266.42",
+              "source": "v266_43_time_unified",
+              "version": "v266.43",
               "signal_date": signal_date,
               "latest_date": signal_date,
               "trade_date": trade_date,
@@ -541,8 +542,8 @@ jobs:
               "trade_date": trade_date,
               "updated_at": now,
               "generated_at": regime.get("generated_at") or now,
-              "source": "v266_42_no_insufficient_timefix",
-              "version": "v266.42",
+              "source": "v266_43_time_unified",
+              "version": "v266.43",
               "date_lock_source": source_file,
           })
 
@@ -552,14 +553,104 @@ jobs:
 
           # 另外輸出一份 debug，方便你手機檢查。
           write_json_both({
-              "version": "v266.42",
+              "version": "v266.43",
               "signal_date": signal_date,
               "trade_date": trade_date,
               "updated_at": now,
               "source_file": source_file,
           }, "date_lock_report.json")
 
-          print("v266.42 date locked:", signal_date, "trade:", trade_date, "source:", source_file)
+          print("v266.43 date locked:", signal_date, "trade:", trade_date, "source:", source_file)
+          PY
+
+
+
+      # v266.43：全系統時間統一。所有 JSON / 關鍵 CSV 的 updated_at / generated_at 都寫入台灣時間。
+      - name: Normalize all dashboard timestamps to Taiwan time
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from datetime import datetime, timedelta, timezone
+          import json
+          import pandas as pd
+
+          ROOT = Path(".")
+          DATA = ROOT / "mobile_dashboard_v1" / "data"
+          DATA.mkdir(parents=True, exist_ok=True)
+          TW_TZ = timezone(timedelta(hours=8))
+          now = datetime.now(TW_TZ).strftime("%Y-%m-%d %H:%M:%S")
+
+          def read_json(p):
+              p = Path(p)
+              if not p.exists():
+                  return {}
+              try:
+                  return json.loads(p.read_text(encoding="utf-8-sig"))
+              except Exception:
+                  try:
+                      return json.loads(p.read_text(encoding="utf-8"))
+                  except Exception:
+                      return {}
+
+          def write_json_both(obj, name):
+              obj = dict(obj or {})
+              obj["updated_at"] = now
+              obj["last_update"] = now
+              obj["timezone"] = "Asia/Taipei"
+              obj["time_source"] = "github_actions_taipei"
+              obj["version"] = "v266.43"
+              for p in [ROOT / name, DATA / name]:
+                  p.parent.mkdir(parents=True, exist_ok=True)
+                  p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+
+          for name in [
+              "final_action_summary.json",
+              "meta.json",
+              "market_regime.json",
+              "date_lock_report.json",
+              "workflow_status.json",
+              "position_overlay_summary.txt",
+          ]:
+              if name.endswith(".json"):
+                  obj = read_json(ROOT / name) or read_json(DATA / name)
+                  if obj:
+                      write_json_both(obj, name)
+
+          def normalize_csv_time(path):
+              p = Path(path)
+              if not p.exists() or p.stat().st_size == 0:
+                  return
+              try:
+                  df = pd.read_csv(p, dtype=str)
+              except Exception:
+                  return
+              if df.empty:
+                  return
+              for col in ["updated_at", "update_time", "last_update", "generated_at"]:
+                  if col in df.columns:
+                      df[col] = now
+              # 若完全沒有時間欄，不強行新增到所有檔，避免破壞原欄位；position/final 例外。
+              if p.name in ["final_action_plan.csv", "position_overlay.csv", "trade_plan.csv"]:
+                  if "updated_at" not in df.columns:
+                      df["updated_at"] = now
+                  else:
+                      df["updated_at"] = now
+              df.to_csv(p, index=False, encoding="utf-8-sig")
+
+          for name in [
+              "final_action_plan.csv",
+              "position_overlay.csv",
+              "trade_plan.csv",
+              "ignition_candidates.csv",
+              "strategy_evolution.csv",
+              "current_positions.csv",
+              "manual_positions.csv",
+          ]:
+              normalize_csv_time(ROOT / name)
+              normalize_csv_time(DATA / name)
+
+          print("v266.43 timestamps normalized:", now)
           PY
 
 
