@@ -32,6 +32,40 @@ jobs:
           git fetch origin main
           git pull --ff-only origin main
 
+      # v266.31 TRUE TIMER:
+      # 後端任務一開始就寫 workflow_status.json，讓前端用後端 start_time 跑秒數。
+      - name: Write workflow running status
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          now = datetime.now(timezone.utc).isoformat()
+          status = {
+              "version": "v266.31.1_true_timer_stock_name_map",
+              "status": "running",
+              "run_id": "${{ github.run_id }}",
+              "run_number": "${{ github.run_number }}",
+              "workflow": "${{ github.workflow }}",
+              "branch": "${{ github.ref_name }}",
+              "start_time": now,
+              "updated_at": now,
+              "source": "github_actions"
+          }
+
+          for p in [
+              Path("workflow_status.json"),
+              Path("mobile_dashboard_v1/data/workflow_status.json"),
+          ]:
+              p.parent.mkdir(parents=True, exist_ok=True)
+              p.write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
+          PY
+
+          git add -f workflow_status.json mobile_dashboard_v1/data/workflow_status.json
+          git commit -m "workflow status running ${{ github.run_number }}" || echo "no running status change"
+          git push || echo "running status push skipped"
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -91,6 +125,103 @@ jobs:
             echo "position_overlay_engine.py not found, skip"
           fi
 
+      # v266.31.1:
+      # 建立 stock_id -> stock_name 對照表，讓手動持倉卡片也能顯示名稱。
+      - name: Build stock name map for dashboard
+        run: |
+          python - <<'PY'
+          import json, re
+          from pathlib import Path
+
+          try:
+              import pandas as pd
+          except Exception:
+              pd = None
+
+          name_cols = [
+              "stock_name", "stockName", "name", "Name",
+              "股票名稱", "證券名稱", "證券簡稱", "公司簡稱", "公司名稱",
+              "security_name", "SecurityName", "short_name"
+          ]
+          id_cols = ["stock_id", "stockId", "symbol", "code", "股票代號", "證券代號"]
+
+          files = [
+              "position_overlay.csv",
+              "manual_positions.csv",
+              "trade_plan.csv",
+              "final_action_plan.csv",
+              "full_summary.csv",
+              "selection_debug.csv",
+              "watchlist_monitor.csv",
+              "candidates.csv",
+              "core_candidates.csv",
+              "alpha_candidates.csv",
+              "mobile_dashboard_v1/data/position_overlay.csv",
+              "mobile_dashboard_v1/data/trade_plan.csv",
+              "mobile_dashboard_v1/data/final_action_plan.csv",
+              "mobile_dashboard_v1/data/selection_debug.csv",
+          ]
+
+          def sid_of(v):
+              s = str(v or "").strip()
+              m = re.search(r"\d{4}", s)
+              return m.group(0) if m else ""
+
+          def clean(v):
+              s = str(v or "").strip()
+              if not s or s.lower() in {"nan", "none", "null", "undefined", "--"}:
+                  return ""
+              return s
+
+          out = {}
+
+          if pd is not None:
+              for f in files:
+                  p = Path(f)
+                  if not p.exists():
+                      continue
+                  try:
+                      df = pd.read_csv(p, dtype=str)
+                  except Exception:
+                      continue
+
+                  cols = list(df.columns)
+                  sid_col = next((c for c in id_cols if c in cols), None)
+                  name_col = next((c for c in name_cols if c in cols), None)
+                  if not sid_col or not name_col:
+                      continue
+
+                  for _, r in df.iterrows():
+                      sid = sid_of(r.get(sid_col))
+                      name = clean(r.get(name_col))
+                      if sid and name:
+                          out[sid] = name
+
+          # 目前持倉常見台股備援；後續有資料檔名稱時會自動覆蓋。
+          fallback = {
+              "2317": "鴻海",
+              "2330": "台積電",
+              "2409": "友達",
+              "3051": "力特",
+              "3583": "辛耘"
+          }
+          for k, v in fallback.items():
+              out.setdefault(k, v)
+
+          Path("stock_name_map.json").write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
+          Path("mobile_dashboard_v1/data").mkdir(parents=True, exist_ok=True)
+          Path("mobile_dashboard_v1/data/stock_name_map.json").write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
+
+          # csv 備用
+          lines = ["stock_id,stock_name"]
+          for k in sorted(out):
+              lines.append(f"{k},{out[k]}")
+          Path("stock_name_map.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          Path("mobile_dashboard_v1/data/stock_name_map.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+          print("stock_name_map rows =", len(out))
+          PY
+
       # v266.31 LOCK:
       # final_decision_engine.py 必須最後才跑。
       # 這樣 signal_date / trade_date 不會被 bridge、overlay、allocator、exit_risk 後段覆蓋。
@@ -143,6 +274,9 @@ jobs:
           copy_if_exists manual_positions.csv mobile_dashboard_v1/data/manual_positions.csv
           copy_if_exists position_overlay_debug.csv mobile_dashboard_v1/data/position_overlay_debug.csv
           copy_if_exists position_overlay_summary.txt mobile_dashboard_v1/data/position_overlay_summary.txt
+          copy_if_exists workflow_status.json mobile_dashboard_v1/data/workflow_status.json
+          copy_if_exists stock_name_map.json mobile_dashboard_v1/data/stock_name_map.json
+          copy_if_exists stock_name_map.csv mobile_dashboard_v1/data/stock_name_map.csv
 
       - name: Verify locked dates
         run: |
@@ -197,6 +331,11 @@ jobs:
           git add -f mobile_dashboard_v1/data/position_overlay_summary.txt || true
           git add -f manual_positions.csv || true
           git add -f mobile_dashboard_v1/data/manual_positions.csv || true
+          git add -f workflow_status.json || true
+          git add -f mobile_dashboard_v1/data/workflow_status.json || true
+          git add -f stock_name_map.json stock_name_map.csv || true
+          git add -f mobile_dashboard_v1/data/stock_name_map.json || true
+          git add -f mobile_dashboard_v1/data/stock_name_map.csv || true
 
           git add -f trade_plan.csv final_action_plan.csv final_action_summary.json exit_risk_plan.csv || true
           git add -f mobile_dashboard_v1/data/trade_plan.csv || true
@@ -246,3 +385,55 @@ jobs:
             git commit -m "lock pipeline final decision outputs"
             git push
           fi
+
+      # v266.31 TRUE TIMER:
+      # 無論成功或失敗，都寫入最終狀態，讓前端顯示完成 / 失敗與總耗時。
+      - name: Write workflow final status
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          now = datetime.now(timezone.utc).isoformat()
+          final_status = "${{ job.status }}"
+          old = {}
+
+          old_path = Path("workflow_status.json")
+          if old_path.exists():
+              try:
+                  old = json.loads(old_path.read_text(encoding="utf-8"))
+              except Exception:
+                  old = {}
+
+          status = {
+              "version": "v266.31.1_true_timer_stock_name_map",
+              "status": "success" if final_status == "success" else "failed",
+              "job_status": final_status,
+              "run_id": "${{ github.run_id }}",
+              "run_number": "${{ github.run_number }}",
+              "workflow": "${{ github.workflow }}",
+              "branch": "${{ github.ref_name }}",
+              "start_time": old.get("start_time") or now,
+              "end_time": now,
+              "updated_at": now,
+              "source": "github_actions"
+          }
+
+          for p in [
+              Path("workflow_status.json"),
+              Path("mobile_dashboard_v1/data/workflow_status.json"),
+          ]:
+              p.parent.mkdir(parents=True, exist_ok=True)
+              p.write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
+          PY
+
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git fetch origin main
+          git pull --rebase origin main || true
+          git add -f workflow_status.json mobile_dashboard_v1/data/workflow_status.json
+          git commit -m "workflow status final ${{ github.run_number }}" || echo "no final status change"
+          git push || echo "final status push skipped"
+
