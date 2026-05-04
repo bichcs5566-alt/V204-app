@@ -173,7 +173,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.30K_backend_run_status_timer";
+const APP_PATCH_VERSION = "v266.30L_workflow_poll_lock";
 
 
 const FILES = {
@@ -1566,7 +1566,7 @@ async function githubApi(path, options = {}) {
 
 async function getLatestWorkflowRun(createdAfterIso) {
   const gh = loadGithubSettings();
-  const res = await githubApi(`/actions/workflows/${encodeURIComponent(gh.workflow)}/runs?branch=${encodeURIComponent(gh.branch)}&per_page=10`, {
+  const res = await githubApi(`/actions/workflows/${encodeURIComponent(gh.workflow)}/runs?branch=${encodeURIComponent(gh.branch)}&per_page=20`, {
     method: "GET"
   });
 
@@ -1579,21 +1579,35 @@ async function getLatestWorkflowRun(createdAfterIso) {
   if (trimmed.startsWith("<")) {
     throw new Error("GitHub Actions 進度查詢回傳 HTML，請稍後再看 Actions。");
   }
+
   let data;
   try {
     data = JSON.parse(text);
   } catch (e) {
     throw new Error(`GitHub Actions 進度 JSON 解析失敗：${e.message}`);
   }
+
   const runs = Array.isArray(data.workflow_runs) ? data.workflow_runs : [];
   const after = new Date(createdAfterIso).getTime();
 
-  const matched = runs.find(run => {
-    const t = new Date(run.created_at).getTime();
-    return Number.isFinite(t) && t >= after - 30000;
-  });
+  // v266.30L：只追蹤本次按下更新後建立的 workflow。
+  // 避免抓到上一筆 cancelled / failed 任務，造成前端誤報失敗。
+  const candidates = runs
+    .filter(run => {
+      const t = new Date(run.created_at).getTime();
+      return Number.isFinite(t) && t >= after - 10000;
+    })
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-  return matched || runs[0] || null;
+  if (!candidates.length) return null;
+
+  const active = candidates.find(run =>
+    ["queued", "in_progress", "waiting", "requested"].includes(String(run.status || ""))
+  );
+
+  if (active) return active;
+
+  return candidates[0] || null;
 }
 
 async function pollWorkflowRun(createdAfterIso) {
