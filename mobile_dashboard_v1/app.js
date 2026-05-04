@@ -173,7 +173,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.32_ignition_list";
+const APP_PATCH_VERSION = "v266.33_strategy_evolution";
 
 
 const FILES = {
@@ -182,7 +182,8 @@ const FILES = {
   regime: DATA_DIR + "market_regime.json",
   macro: DATA_DIR + "macro_regime.json",
   tradePlan: DATA_DIR + "trade_plan.csv",
-  ignition: DATA_DIR + "ignition_candidates.csv"
+  ignition: DATA_DIR + "ignition_candidates.csv",
+  evolution: DATA_DIR + "strategy_evolution.csv"
 };
 
 const GH_STORAGE_KEY = "daily_dashboard_github_settings_v1";
@@ -1761,6 +1762,14 @@ function renderAppShell() {
         </details>
       </section>
 
+      <section class="card compact-card evolution-card">
+        <details open>
+          <summary>🧬 EVOLUTION 策略進化清單</summary>
+          <div class="hint">IGNITION→TEST→ALPHA→CORE 升級提示，TOP5 會排在最前面。</div>
+          <div id="evolutionList"></div>
+        </details>
+      </section>
+
       <section class="card compact-card">
         <details>
           <summary>🟡 TEST 試單清單</summary>
@@ -2460,6 +2469,7 @@ function renderStats(rows, summary) {
       <span>ALPHA <b>${alpha}</b></span>
       <span>CORE <b>${core}</b></span>
       <span>IGNITION <b>${rows.filter(r => String(r.strategy_type || r.strategy || r.bucket || "").toUpperCase() === "IGNITION").length}</b></span>
+      <span>EVOLUTION <b>${rows.filter(r => String(r.strategy_type || r.strategy || r.bucket || "").toUpperCase() === "EVOLUTION").length}</b></span>
       <span>高流動性 <b>${high}</b></span>
       <span>中流動性 <b>${mid}</b></span>
       <span>低流動性 <b>${low}</b></span>
@@ -2533,22 +2543,50 @@ async function loadIgnitionRows() {
   }
 }
 
+async function loadEvolutionRows() {
+  try {
+    const txt = await fetchText(FILES.evolution);
+    const rows = parseCsv(txt);
+    return rows
+      .filter(r => normalizeAction(r.action || r.final_action) !== "SKIP")
+      .map(r => ({
+        ...r,
+        final_action: normalizeAction(r.action || r.final_action || "TEST"),
+        source: r.source || "EVOLUTION",
+        bucket: r.bucket || "EVOLUTION",
+        strategy_type: r.strategy_type || "EVOLUTION",
+        strategy_name: r.strategy_name || "EVOLUTION 策略進化鏈",
+        score: r.evolution_score || r.entry_score || r.score || "",
+        entry_type: r.evolution_phase || r.entry_type || r.action_sub || "策略進化",
+        execution_flag: r.section_top_opportunity || r.execution_flag || "",
+        close: r.close || r.ref_price || "",
+        reason: r.reason || r.note || "策略進化清單",
+        system_note: r.system_note || "策略進化提示：由起漲、試單、強勢、核心狀態逐步升級。"
+      }));
+  } catch (e) {
+    console.warn("strategy_evolution load fail", e);
+    return [];
+  }
+}
+
 async function init() {
   renderAppShell();
   showBackendRunCompleteIfAnyV26630K();
 
   try {
-    const [regime, summary, macro, rows, ignitionRowsRaw] = await Promise.all([
+    const [regime, summary, macro, rows, ignitionRowsRaw, evolutionRowsRaw] = await Promise.all([
       fetchJson(FILES.regime, {}),
       fetchJson(FILES.finalSummary, {}),
       fetchJson(FILES.macro, {}),
       loadFinalRows(),
-      loadIgnitionRows()
+      loadIgnitionRows(),
+      loadEvolutionRows()
     ]);
 
     await loadPositionOverlayV26630();
     const groups = splitRows(rows);
     const ignitionRows = sortRows(ignitionRowsRaw || []);
+    const evolutionRows = sortRows(evolutionRowsRaw || []);
 
     renderMeta(regime, summary, macro, rows);
     // v266.31：頁面載入/重新整理後，直接讀後端 workflow_status.json 接回秒數。
@@ -2558,6 +2596,7 @@ async function init() {
     renderDecision(rows);
     renderFinalActions(groups.main);
     renderSectionList("ignitionList", ignitionRows, "ignition", 80);
+    renderSectionList("evolutionList", evolutionRows, "evolution", 80);
     renderSectionList("testList", groups.test, "test", 80);
     renderSectionList("watchList", groups.watch, "watch", 80);
     renderSectionList("blockList", groups.block, "block", 80);
@@ -3218,3 +3257,134 @@ function findMacroValueElementV26619() {
       if (candidates.length) return candidates[candidates.length - 1];
     }
   }
+
+  return null;
+}
+
+async function renderMacroPreciseV26619() {
+  try {
+    document.querySelectorAll(
+      ".macro-explain-v266162, .macro-explain-v266153, .macro-explain-v266152, .macro-inline-hint-v26617, .macro-inline-hint-v266171, .macro-value-v26618"
+    ).forEach(el => el.remove());
+
+    const res = await fetch("./data/macro_regime.json?ts=" + Date.now(), { cache: "no-store" });
+    const data = await res.json();
+
+    const valueEl = findMacroValueElementV26619();
+    if (!valueEl) return;
+
+    valueEl.innerHTML = macroInlineHTMLV26619(data);
+    valueEl.classList.add("macro-value-host-v26619");
+  } catch (e) {
+    console.log("v266.19 macro precise render failed", e);
+  }
+}
+
+setTimeout(renderMacroPreciseV26619, 400);
+setTimeout(renderMacroPreciseV26619, 1200);
+setTimeout(renderMacroPreciseV26619, 2400);
+setTimeout(renderMacroPreciseV26619, 4200);
+
+
+
+// ===== v266.21 籌碼信心顯示 =====
+function chipDisplayV26621(row) {
+  const display = row.chip_display || row["籌碼集中度"];
+  const conf = row.chip_confidence || row["籌碼信心"] || "";
+  if (display && String(display).trim() !== "--") {
+    return conf ? `${safeText(display)}｜${safeText(conf)}` : safeText(display);
+  }
+
+  const scoreRaw = row.chip_score || row.chip_concentration_score || row["籌碼分數"];
+  const score = Number(scoreRaw);
+  if (!Number.isFinite(score)) return "--";
+
+  let label = "🟡 普通";
+  if (score >= 80) label = "🔥 高度集中";
+  else if (score >= 60) label = "🟢 偏集中";
+  else if (score >= 40) label = "🟡 普通";
+  else if (score >= 20) label = "⚠️ 分散";
+  else label = "❌ 極度分散";
+
+  const base = `${Math.round(score)}（${label}）`;
+  return conf ? `${base}｜${safeText(conf)}` : base;
+}
+
+function chipReasonV26621(row) {
+  return safeText(
+    row.chip_reason ||
+    row.chip_concentration_reason ||
+    row["籌碼原因"],
+    "籌碼資料不足"
+  );
+}
+
+function chipHintV26621(row) {
+  return safeText(
+    row.chip_hint ||
+    row.chip_concentration_hint ||
+    row["籌碼提示"],
+    "籌碼資料不足，只能當輔助，不可重倉。"
+  );
+}
+
+
+
+/* ===== v266.30B hotfix：只修正顯示，不再動原本區塊 ===== */
+function injectV26630BPositionColorStyle() {
+  if (document.getElementById("v26630b-position-color-style")) return;
+  const style = document.createElement("style");
+  style.id = "v26630b-position-color-style";
+  style.textContent = `
+    .position-merged-v26630.sell,
+    .position-merged-v26630.reduce {
+      background: #fff1f1 !important;
+      border: 3px solid #f0a3a3 !important;
+      border-radius: 24px !important;
+      padding: 18px !important;
+      margin-top: 14px !important;
+    }
+    .position-merged-v26630.hold,
+    .position-merged-v26630.watch {
+      background: #effcf3 !important;
+      border: 3px solid #89e5a4 !important;
+      border-radius: 24px !important;
+      padding: 18px !important;
+      margin-top: 14px !important;
+    }
+    .position-merged-pill-v26630.sell,
+    .position-merged-pill-v26630.reduce {
+      background: #fde2e2 !important;
+      color: #b91c1c !important;
+      border-radius: 999px !important;
+      padding: 8px 14px !important;
+      font-weight: 900 !important;
+    }
+    .position-merged-pill-v26630.hold,
+    .position-merged-pill-v26630.watch {
+      background: #dcfce7 !important;
+      color: #166534 !important;
+      border-radius: 999px !important;
+      padding: 8px 14px !important;
+      font-weight: 900 !important;
+    }
+    .position-merged-head-v26630 {
+      display: flex !important;
+      align-items: center !important;
+      gap: 12px !important;
+      margin-bottom: 16px !important;
+    }
+    .position-merged-head-v26630 b {
+      flex: 1 !important;
+      font-size: 1.28em !important;
+      font-weight: 900 !important;
+    }
+    .position-merged-head-v26630 strong {
+      font-size: 1.08em !important;
+      font-weight: 900 !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
+try { injectV26630BPositionColorStyle(); } catch(e) {}
+document.addEventListener("DOMContentLoaded", injectV26630BPositionColorStyle);
