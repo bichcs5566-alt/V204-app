@@ -1,4 +1,4 @@
-name: data_pipeline  # v266.38 fake breakout guard
+name: data_pipeline  # v266.40 fake breakout guard
 
 on:
   workflow_dispatch:
@@ -233,19 +233,21 @@ jobs:
       # 原本 Keep dashboard files after bridge 會重跑 final_decision_engine.py / overlay，
       # 造成 trade_date 被覆蓋回 signal_date，這版已鎖住。
 
-      # v266.38：最終輸出補齊技術欄位，讓前端最終操作 / 試單 / 觀察 / 持倉都有 MA / K棒 / K線。
+
+      # v266.40：最終輸出補齊技術欄位（完全防炸版）
       - name: Enrich final outputs with tech fields
         if: always()
         run: |
           python - <<'PY'
           from pathlib import Path
           import pandas as pd
+          import numpy as np
 
           ROOT = Path(".")
           DATA = ROOT / "mobile_dashboard_v1" / "data"
           DATA.mkdir(parents=True, exist_ok=True)
 
-          tech_cols = [
+          TECH_COLS = [
               "stock_id","close","open","high","low","ma5","ma10","ma20",
               "ma5_label","ma10_label","ma20_label",
               "ma5_status","ma10_status","ma20_status",
@@ -255,12 +257,44 @@ jobs:
 
           def read_csv_safe(p):
               p = Path(p)
-              if not p.exists():
+              if not p.exists() or p.stat().st_size == 0:
                   return pd.DataFrame()
               try:
-                  return pd.read_csv(p, dtype=str)
+                  return pd.read_csv(p, dtype=str, encoding="utf-8-sig")
               except Exception:
-                  return pd.DataFrame()
+                  try:
+                      return pd.read_csv(p, dtype=str)
+                  except Exception as e:
+                      print("skip read", p, e)
+                      return pd.DataFrame()
+
+          def safe_text(x, default=""):
+              try:
+                  if x is None:
+                      return default
+                  if pd.isna(x):
+                      return default
+                  s = str(x).strip()
+                  if s.lower() in ["nan", "none", "null", "undefined"]:
+                      return default
+                  return s
+              except Exception:
+                  return default
+
+          def first_non_empty(series):
+              for x in series:
+                  s = safe_text(x, "")
+                  if s and s != "--":
+                      return s
+              return ""
+
+          def normalize_stock_id(df):
+              if df.empty or "stock_id" not in df.columns:
+                  return df
+              df = df.copy()
+              sid = df["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False)
+              df["stock_id"] = sid.fillna(df["stock_id"].astype(str))
+              return df
 
           sources = []
           for name in [
@@ -271,52 +305,73 @@ jobs:
               "ignition_candidates.csv",
               "strategy_evolution.csv",
               "position_overlay.csv",
+              "final_action_plan.csv",
           ]:
               for p in [ROOT / name, DATA / name]:
-                  df = read_csv_safe(p)
+                  df = normalize_stock_id(read_csv_safe(p))
                   if not df.empty and "stock_id" in df.columns:
-                      keep = [c for c in tech_cols if c in df.columns]
+                      keep = [c for c in TECH_COLS if c in df.columns]
                       if keep:
-                          sources.append(df[keep].copy())
+                          tmp = df[keep].copy()
+                          for c in keep:
+                              tmp[c] = tmp[c].map(lambda v: safe_text(v, ""))
+                          sources.append(tmp)
 
           if sources:
               tech = pd.concat(sources, ignore_index=True)
-              tech["stock_id"] = tech["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False).fillna(tech["stock_id"].astype(str))
-              tech = tech.replace({"nan": "", "None": "", "--": ""})
-              tech = tech.groupby("stock_id", as_index=False).agg(lambda s: next((x for x in s.astype(str) if x.strip()), ""))
+              tech = normalize_stock_id(tech)
+              tech = tech.groupby("stock_id", as_index=False).agg(first_non_empty)
           else:
               tech = pd.DataFrame(columns=["stock_id"])
 
           def enrich_file(path):
               p = Path(path)
-              df = read_csv_safe(p)
-              if df.empty or "stock_id" not in df.columns or tech.empty:
+              df = normalize_stock_id(read_csv_safe(p))
+              if df.empty or "stock_id" not in df.columns:
                   return
-              df["stock_id"] = df["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False).fillna(df["stock_id"].astype(str))
+              if tech.empty:
+                  df.to_csv(p, index=False, encoding="utf-8-sig")
+                  return
+
               merged = df.merge(tech, on="stock_id", how="left", suffixes=("", "_tech"))
-              for c in tech_cols:
+
+              for c in TECH_COLS:
                   if c == "stock_id":
                       continue
                   tc = c + "_tech"
-                  if tc in merged.columns:
-                      if c not in merged.columns:
-                          merged[c] = merged[tc]
-                      else:
-                          merged[c] = merged[c].fillna("").astype(str)
-                          merged[c] = merged[c].where(merged[c].str.strip().ne(""), merged[tc].fillna(""))
-                      merged.drop(columns=[tc], inplace=True)
+                  if tc not in merged.columns:
+                      continue
+
+                  if c not in merged.columns:
+                      merged[c] = merged[tc].map(lambda v: safe_text(v, ""))
+                  else:
+                      left = merged[c].map(lambda v: safe_text(v, ""))
+                      right = merged[tc].map(lambda v: safe_text(v, ""))
+                      merged[c] = [l if l and l != "--" else r for l, r in zip(left, right)]
+
+                  merged.drop(columns=[tc], inplace=True)
+
+              # 最後保底，避免前端拿到 nan/None。
+              for c in merged.columns:
+                  merged[c] = merged[c].map(lambda v: safe_text(v, ""))
+
               merged.to_csv(p, index=False, encoding="utf-8-sig")
 
-          for name in ["final_action_plan.csv","trade_plan.csv","position_overlay.csv","ignition_candidates.csv","strategy_evolution.csv"]:
+          for name in [
+              "final_action_plan.csv",
+              "trade_plan.csv",
+              "position_overlay.csv",
+              "ignition_candidates.csv",
+              "strategy_evolution.csv",
+          ]:
               enrich_file(ROOT / name)
               enrich_file(DATA / name)
 
-          print("v266.38 enrich done")
+          print("v266.40 guarded enrich done, tech rows =", len(tech))
           PY
 
 
-
-      # v266.38：資料時間鎖定。用 feature_panel_daily.csv 最新日期強制覆寫所有 summary/meta，避免訊號日卡舊值。
+      # v266.40：資料時間鎖定。用 feature_panel_daily.csv 最新日期強制覆寫所有 summary/meta，避免訊號日卡舊值。
       - name: Lock signal date and summary metadata
         if: always()
         run: |
@@ -414,8 +469,8 @@ jobs:
           regime = read_json(ROOT / "market_regime.json") or read_json(DATA / "market_regime.json")
 
           patch = {
-              "source": "v266_38_stable_integrated",
-              "version": "v266.38",
+              "source": "v266_40_stable_guarded_test",
+              "version": "v266.40",
               "signal_date": signal_date,
               "latest_date": signal_date,
               "trade_date": trade_date,
@@ -434,8 +489,8 @@ jobs:
               "trade_date": trade_date,
               "updated_at": now,
               "generated_at": regime.get("generated_at") or now,
-              "source": "v266_38_stable_integrated",
-              "version": "v266.38",
+              "source": "v266_40_stable_guarded_test",
+              "version": "v266.40",
               "date_lock_source": source_file,
           })
 
@@ -445,14 +500,14 @@ jobs:
 
           # 另外輸出一份 debug，方便你手機檢查。
           write_json_both({
-              "version": "v266.38",
+              "version": "v266.40",
               "signal_date": signal_date,
               "trade_date": trade_date,
               "updated_at": now,
               "source_file": source_file,
           }, "date_lock_report.json")
 
-          print("v266.38 date locked:", signal_date, "trade:", trade_date, "source:", source_file)
+          print("v266.40 date locked:", signal_date, "trade:", trade_date, "source:", source_file)
           PY
 
 
