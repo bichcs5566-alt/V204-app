@@ -66,6 +66,12 @@ def write_both(df, name):
     df.to_csv(DATA_DIR / name, index=False, encoding="utf-8-sig")
 
 
+def write_json_both(obj, name):
+    for p in [ROOT / name, DATA_DIR / name]:
+        with open(p, "w", encoding="utf-8-sig") as f:
+            json.dump(obj, f, ensure_ascii=False, indent=2)
+
+
 def safe_num(s, default=np.nan):
     try:
         return pd.to_numeric(s, errors="coerce")
@@ -75,7 +81,7 @@ def safe_num(s, default=np.nan):
 
 def safe_str_series(x, index=None):
     """
-    v266.36.2 防型態炸裂：
+    v266.38 防型態炸裂：
     np.where 會回傳 numpy.ndarray，不能直接 .str。
     統一轉成 pandas Series 後再做字串處理。
     """
@@ -86,7 +92,7 @@ def safe_str_series(x, index=None):
 
 def safe_bool_series(x, index):
     """
-    v266.36.2.2 防單一 bool 炸裂：
+    v266.38.2 防單一 bool 炸裂：
     df.loc[False, col] 會造成 KeyError: cannot use a single bool to index into setitem。
     任何 scalar bool 都轉成與 df.index 對齊的 Series。
     """
@@ -163,14 +169,18 @@ def add_liquidity_fields(d):
 
 def add_tech_decision_fields(d):
     """
-    v266.36.2 append-only:
-    補齊前端卡片需要的小欄位，不覆蓋既有欄位。
-    所有欄位都可安全缺省；缺資料時顯示 --。
+    v266.38 技術欄位完整修復：
+    - 補 MA5 / MA10 / MA20 中文狀態
+    - 補 K棒型態 / K線結構
+    - 補乾淨中文技術提示
+    - 欄位只新增，不覆蓋既有策略欄位
     """
     d = d.copy()
 
     def _num(col):
-        return pd.to_numeric(d.get(col), errors="coerce")
+        if col in d.columns:
+            return pd.to_numeric(d[col], errors="coerce")
+        return pd.Series(np.nan, index=d.index)
 
     close = _num("close")
     open_ = _num("open")
@@ -180,69 +190,85 @@ def add_tech_decision_fields(d):
     ma10 = _num("ma10")
     ma20 = _num("ma20")
     mom5 = _num("mom5")
-    mom10 = _num("mom10")
     mom20 = _num("mom20")
     volume_ratio = _num("volume_ratio")
-    ma_converge = _num("ma_converge_pct")
     ma20_slope = _num("ma20_slope")
+    ma_converge = _num("ma_converge_pct")
 
-    # MA 狀態：盡量用中文直接給前端顯示。
-    d["ma5_label"] = np.where(close >= ma5, "MA5：站上｜↑ 強勢", "MA5：跌破｜↓ 轉弱")
-    d["ma10_label"] = np.where(close >= ma10, "MA10：站上｜↑ 偏強", "MA10：跌破｜↓ 偏弱")
-    d["ma20_label"] = np.where(close >= ma20, "MA20：站上｜↑ 多頭", "MA20：跌破｜↓ 轉弱")
+    def ma_label(close_s, ma_s, name):
+        out = pd.Series(f"{name}：資料不足", index=d.index, dtype=object)
+        valid = close_s.notna() & ma_s.notna() & (ma_s > 0)
+        out.loc[valid & (close_s >= ma_s * 1.01)] = f"{name}：站上｜↑ 強勢"
+        out.loc[valid & (close_s <= ma_s * 0.99)] = f"{name}：跌破｜↓ 轉弱"
+        out.loc[valid & (close_s < ma_s * 1.01) & (close_s > ma_s * 0.99)] = f"{name}：貼近｜→ 盤整"
+        return out
 
+    d["ma5_label"] = ma_label(close, ma5, "MA5")
+    d["ma10_label"] = ma_label(close, ma10, "MA10")
+    d["ma20_label"] = ma_label(close, ma20, "MA20")
     d["ma5_status"] = d["ma5_label"]
     d["ma10_status"] = d["ma10_label"]
     d["ma20_status"] = d["ma20_label"]
 
-    # 單根 K 棒型態。
     candle_range = (high - low).replace(0, np.nan)
     body = (close - open_).abs()
     upper_shadow = high - pd.concat([open_, close], axis=1).max(axis=1)
     lower_shadow = pd.concat([open_, close], axis=1).min(axis=1) - low
+
     body_ratio = (body / candle_range).replace([np.inf, -np.inf], np.nan).fillna(0)
     upper_ratio = (upper_shadow / candle_range).replace([np.inf, -np.inf], np.nan).fillna(0)
     lower_ratio = (lower_shadow / candle_range).replace([np.inf, -np.inf], np.nan).fillna(0)
 
-    kbar = np.full(len(d), "一般K棒", dtype=object)
-    kbar = np.where((close > open_) & (body_ratio >= 0.55) & (close >= ma20), "突破長紅K", kbar)
-    kbar = np.where((close < open_) & (body_ratio >= 0.50) & (close < ma20), "跌破型K棒", kbar)
-    kbar = np.where((upper_ratio >= 0.45) & (close < high * 0.98), "上影壓力K", kbar)
-    kbar = np.where((lower_ratio >= 0.45) & (close > low * 1.02), "下影支撐K", kbar)
-    kbar = np.where((body_ratio <= 0.18), "十字K／猶豫", kbar)
-    kbar = np.where((volume_ratio > 3.5) & (upper_ratio >= 0.40), "疑似假突破K", kbar)
+    kbar = pd.Series("資料不足", index=d.index, dtype=object)
+    valid_k = close.notna() & open_.notna() & high.notna() & low.notna() & (candle_range > 0)
+    kbar.loc[valid_k] = "一般K棒"
+    kbar.loc[valid_k & (close > open_) & (body_ratio >= 0.55) & (close >= ma20)] = "突破長紅K"
+    kbar.loc[valid_k & (close < open_) & (body_ratio >= 0.50) & (close < ma20)] = "跌破型K棒"
+    kbar.loc[valid_k & (upper_ratio >= 0.45) & (close < high * 0.98)] = "上影壓力K"
+    kbar.loc[valid_k & (lower_ratio >= 0.45) & (close > low * 1.02)] = "下影支撐K"
+    kbar.loc[valid_k & (body_ratio <= 0.18)] = "十字K／猶豫"
+    kbar.loc[valid_k & (volume_ratio > 3.5) & (upper_ratio >= 0.40)] = "疑似假突破K"
+
     d["kbar_type"] = kbar
     d["k_bar_type"] = kbar
 
-    # 多日 K 線 / 均線結構。
-    structure = np.full(len(d), "震盪整理", dtype=object)
-    structure = np.where((ma5 > ma10) & (ma10 > ma20) & (close > ma20), "多頭排列", structure)
-    structure = np.where((ma_converge <= 0.08), "整理收斂", structure)
-    structure = np.where((close > ma20) & (ma20_slope >= 0) & (mom5 > 0), "整理後轉強", structure)
-    structure = np.where((close < ma20) & (mom5 < 0), "短線轉弱", structure)
-    structure = np.where((volume_ratio > 3.5) & (upper_ratio >= 0.40), "假突破風險", structure)
-    structure = np.where((mom20 > 0.35) & (upper_ratio >= 0.35), "高檔出貨疑慮", structure)
+    structure = pd.Series("資料不足", index=d.index, dtype=object)
+    valid_ma = close.notna() & ma5.notna() & ma10.notna() & ma20.notna()
+    structure.loc[valid_ma] = "震盪整理"
+    structure.loc[valid_ma & (ma5 > ma10) & (ma10 > ma20) & (close > ma20)] = "多頭排列"
+    structure.loc[valid_ma & (ma5 < ma10) & (ma10 < ma20) & (close < ma20)] = "空頭排列"
+    structure.loc[valid_ma & (ma_converge <= 0.08)] = "整理收斂"
+    structure.loc[valid_ma & (close > ma20) & (ma20_slope >= 0) & (mom5 > 0)] = "整理後轉強"
+    structure.loc[valid_ma & (close < ma20) & (mom5 < 0)] = "短線轉弱"
+    structure.loc[valid_ma & (volume_ratio > 3.5) & (upper_ratio >= 0.40)] = "假突破風險"
+    structure.loc[valid_ma & (mom20 > 0.35) & (upper_ratio >= 0.35)] = "高檔出貨疑慮"
+
     d["k_structure"] = structure
     d["kline_structure"] = structure
-    d["k線結構"] = structure
 
-    # 中文原因補充：不覆蓋 reason，只新增 extra hints。
     d["tech_reason"] = (
         d["ma5_label"].astype(str) + "｜" +
         d["ma10_label"].astype(str) + "｜" +
-        d["ma20_label"].astype(str)
+        d["ma20_label"].astype(str) + "｜" +
+        "K棒：" + d["kbar_type"].astype(str) + "｜" +
+        "K線：" + d["k_structure"].astype(str)
     )
     d["kbar_reason"] = (
-        "K棒：" + d["kbar_type"].astype(str) + "｜K線結構：" + d["k_structure"].astype(str)
+        "K棒型態：" + d["kbar_type"].astype(str) +
+        "｜K線結構：" + d["k_structure"].astype(str)
     )
-    d["tech_decision_hint"] = np.where(
-        (close > ma20) & (mom5 > 0),
-        "技術面偏強，可依原策略小量試單或續抱觀察。",
-        np.where(
-            close < ma20,
-            "技術面轉弱，需優先控風險，不建議追價。",
-            "技術面仍在整理，等待更明確方向。"
-        )
+    d["tech_decision_hint"] = np.select(
+        [
+            (close > ma20) & (ma5 > ma10) & (ma10 > ma20) & (mom5 > 0),
+            (close < ma20) | (mom5 < 0),
+            (ma_converge <= 0.08),
+        ],
+        [
+            "技術面偏強，若符合原策略可小量試單或續抱觀察。",
+            "技術面轉弱，優先控風險，不建議追價。",
+            "均線收斂整理中，等待突破或跌破確認。",
+        ],
+        default="依原策略執行，技術欄位用於確認節奏與風險。"
     )
 
     return d
@@ -281,7 +307,7 @@ def detect_regime(x):
 
 
 def set_action(df, buy, test, watch, buy_sub, test_sub, watch_sub):
-    # v266.36.2.2：所有 mask 都安全轉成 Series，避免 scalar False/True 造成 pandas setitem KeyError。
+    # v266.38.2：所有 mask 都安全轉成 Series，避免 scalar False/True 造成 pandas setitem KeyError。
     buy = safe_bool_series(buy, df.index)
     test = safe_bool_series(test, df.index)
     watch = safe_bool_series(watch, df.index)
@@ -847,6 +873,10 @@ def build_trade_plan(core, alpha, regime, signal_date):
             "suggested_shares": round(shares, 2),
             "estimated_total_cost": round(shares * px * 1.0015, 2),
             "entry_score": round(score, 2),
+            "close": round(float(r.get("close", np.nan)), 4) if pd.notna(r.get("close", np.nan)) else "",
+            "open": round(float(r.get("open", np.nan)), 4) if pd.notna(r.get("open", np.nan)) else "",
+            "high": round(float(r.get("high", np.nan)), 4) if pd.notna(r.get("high", np.nan)) else "",
+            "low": round(float(r.get("low", np.nan)), 4) if pd.notna(r.get("low", np.nan)) else "",
             "liquidity_level": r.get("liquidity_level", ""),
             "liquidity_tag": r.get("liquidity_tag", ""),
             "liquidity_score": round(float(r.get("liquidity_score", 0)), 2),
@@ -940,7 +970,7 @@ def main():
 
     meta = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "source": "v266_36_safe_type_guard",
+        "source": "v266_38_stable_integrated",
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
         "data_state": "fresh",
@@ -961,9 +991,20 @@ def main():
         },
     }
 
-    for p in [ROOT / "meta.json", DATA_DIR / "meta.json"]:
-        with open(p, "w", encoding="utf-8-sig") as f:
-            json.dump(meta, f, ensure_ascii=False, indent=2)
+    # v266.38：策略層也輸出 summary fallback；真正最終日期仍由 yml 最後鎖定一次。
+    final_summary = {
+        **meta,
+        "source": "v266_38_stable_integrated",
+        "latest_date": str(signal_date.date()),
+        "signal_date": str(signal_date.date()),
+        "trade_date": str(next_trade_date(signal_date).date()),
+        "updated_at": meta["generated_at"],
+        "total_rows": len(plan),
+        "rows": len(plan),
+    }
+
+    write_json_both(meta, "meta.json")
+    write_json_both(final_summary, "final_action_summary.json")
 
     print(json.dumps(meta, ensure_ascii=False, indent=2))
 
