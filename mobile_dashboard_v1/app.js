@@ -173,7 +173,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.30O_detect_active_workflow_on_load";
+const APP_PATCH_VERSION = "v266.30P_position_stock_name_map";
 
 
 const FILES = {
@@ -885,7 +885,7 @@ function positionToCsv(rows) {
     const sid = typeof stockKeyV26630H === "function" ? stockKeyV26630H(r.stock_id) : sidV26630(r.stock_id);
     const item = {
       stock_id: sid,
-      stock_name: r.stock_name || "",
+      stock_name: r.stock_name || window.__stockNameMapV26630?.[sid] || "",
       avg_price: r.avg_price || "",
       shares: r.shares || "",
       lots: r.lots || "",
@@ -1056,7 +1056,11 @@ function normalizeRowV26630H(row) {
   out.stock_id = pickV26630H(out, ["stock_id", "stockId", "symbol", "code", "個股", "股票代號"], out.stock_id || "");
   out.stock_id = stockKeyV26630H(out.stock_id);
 
-  out.stock_name = pickV26630H(out, ["stock_name", "name", "股票名稱", "證券名稱"], out.stock_name || "");
+  out.stock_name = pickV26630H(out, [
+    "stock_name", "stockName", "name", "Name",
+    "股票名稱", "證券名稱", "證券簡稱", "公司簡稱", "公司名稱",
+    "security_name", "SecurityName", "short_name"
+  ], out.stock_name || "");
   out.close = pickV26630H(out, ["close", "Close", "收盤價", "price", "ref_price", "參考價"], out.close || "");
   out.ma5 = pickV26630H(out, ["ma5", "MA5", "ma_5", "sma5", "五日線", "五日均線"], out.ma5 || "");
   out.ma20 = pickV26630H(out, ["ma20", "MA20", "ma_20", "sma20", "二十日線", "二十日均線"], out.ma20 || "");
@@ -1109,8 +1113,19 @@ function chipTextV26630(row) {
 }
 
 function positionNameV26630(stock, posRow = {}, overlay = {}, riskRow = {}) {
-  const sid = sidV26630(stock || posRow.stock_id || overlay.stock_id || riskRow.stock_id);
-  return cleanV26630(posRow.stock_name || overlay.stock_name || riskRow.stock_name || window.__stockNameMapV26630[sid], "--");
+  const sid = stockKeyV26630H(stock || posRow.stock_id || overlay.stock_id || riskRow.stock_id);
+  const posH = normalizeRowV26630H(posRow);
+  const overlayH = normalizeRowV26630H(overlay);
+  const riskH = normalizeRowV26630H(riskRow);
+
+  const name =
+    posH.stock_name ||
+    overlayH.stock_name ||
+    riskH.stock_name ||
+    window.__stockNameMapV26630?.[sid] ||
+    "";
+
+  return cleanV26630(name, "--");
 }
 
 function positionDetailCellV26630(label, value) {
@@ -1127,7 +1142,12 @@ async function loadPositionOverlayV26630() {
     "./data/positions_manual.csv",
     "./data/manual_positions.csv",
     "./data/final_action_plan.csv",
-    "./data/trade_plan.csv"
+    "./data/trade_plan.csv",
+    "./data/market_snapshot.csv",
+    "./data/full_summary.csv",
+    "./data/selection_debug.csv",
+    "./data/watchlist_monitor.csv",
+    "./data/chip_source_twse.csv"
   ];
 
   for (const url of files) {
@@ -1140,8 +1160,12 @@ async function loadPositionOverlayV26630() {
         const sid = stockKeyV26630H(r.stock_id);
         if (!sid) return;
 
-        const name = cleanV26630(r.stock_name || r.name, "");
-        if (name) window.__stockNameMapV26630[sid] = name;
+        const name = cleanV26630(
+          r.stock_name || r.stockName || r.name || r.Name ||
+          r["股票名稱"] || r["證券名稱"] || r["證券簡稱"] || r["公司簡稱"] || r["公司名稱"],
+          ""
+        );
+        if (name && name !== "--") window.__stockNameMapV26630[sid] = name;
 
         // 只有 position_overlay 才進 overlay map；其他檔只補股票名稱。
         if (url.includes("position_overlay")) {
