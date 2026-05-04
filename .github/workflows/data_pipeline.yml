@@ -1,4 +1,4 @@
-name: data_pipeline  # v266.45 fake breakout guard
+name: data_pipeline  # v266.46 fake breakout guard
 
 on:
   workflow_dispatch:
@@ -102,13 +102,39 @@ jobs:
           python v266_data_guard.py
 
 
-      # v266.45：策略前置檢查，避免 import / syntax 問題跑到中段才炸。
+      # v266.46：策略前置檢查，避免 import / syntax 問題跑到中段才炸。
       - name: Preflight strategy syntax and imports
         run: |
           python - <<'PY'
           import py_compile
           py_compile.compile("v266_strategy_engine.py", doraise=True)
-          print("v266.45 preflight OK")
+          print("v266.46 preflight OK")
+          PY
+
+
+
+      # v266.46：強制刷新。跑策略前清掉舊標的輸出，避免 final_action_plan 沿用舊檔。
+      - name: Clear stale strategy outputs before rebuild
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          stale = [
+              "final_action_plan.csv",
+              "trade_plan.csv",
+              "ignition_candidates.csv",
+              "strategy_evolution.csv",
+              "selection_debug.csv",
+              "full_summary.csv",
+          ]
+          roots = [Path("."), Path("mobile_dashboard_v1/data")]
+          for root in roots:
+              root.mkdir(parents=True, exist_ok=True)
+              for name in stale:
+                  p = root / name
+                  if p.exists():
+                      p.unlink()
+                      print("cleared", p)
+          print("v266.46 stale outputs cleared")
           PY
 
 
@@ -245,7 +271,7 @@ jobs:
       # 造成 trade_date 被覆蓋回 signal_date，這版已鎖住。
 
 
-      # v266.45：最終輸出補齊技術欄位（完全防炸版）
+      # v266.46：最終輸出補齊技術欄位（完全防炸版）
       - name: Enrich final outputs with tech fields
         if: always()
         run: |
@@ -362,7 +388,7 @@ jobs:
 
                   merged.drop(columns=[tc], inplace=True)
 
-              # v266.45：若 K棒/K線還是空，依現有 MA / 原因 / action 做保底推論。
+              # v266.46：若 K棒/K線還是空，依現有 MA / 原因 / action 做保底推論。
               def _num(v):
                   try:
                       return float(str(v).replace(",", ""))
@@ -430,11 +456,11 @@ jobs:
               enrich_file(ROOT / name)
               enrich_file(DATA / name)
 
-          print("v266.45 guarded enrich done, tech rows =", len(tech))
+          print("v266.46 guarded enrich done, tech rows =", len(tech))
           PY
 
 
-      # v266.45：資料時間鎖定。用 feature_panel_daily.csv 最新日期強制覆寫所有 summary/meta，避免訊號日卡舊值。
+      # v266.46：資料時間鎖定。用 feature_panel_daily.csv 最新日期強制覆寫所有 summary/meta，避免訊號日卡舊值。
       - name: Lock signal date and summary metadata
         if: always()
         run: |
@@ -533,8 +559,8 @@ jobs:
           regime = read_json(ROOT / "market_regime.json") or read_json(DATA / "market_regime.json")
 
           patch = {
-              "source": "v266_45_field_locked",
-              "version": "v266.45",
+              "source": "v266_46_force_refresh",
+              "version": "v266.46",
               "signal_date": signal_date,
               "latest_date": signal_date,
               "trade_date": trade_date,
@@ -553,8 +579,8 @@ jobs:
               "trade_date": trade_date,
               "updated_at": now,
               "generated_at": regime.get("generated_at") or now,
-              "source": "v266_45_field_locked",
-              "version": "v266.45",
+              "source": "v266_46_force_refresh",
+              "version": "v266.46",
               "date_lock_source": source_file,
           })
 
@@ -564,19 +590,19 @@ jobs:
 
           # 另外輸出一份 debug，方便你手機檢查。
           write_json_both({
-              "version": "v266.45",
+              "version": "v266.46",
               "signal_date": signal_date,
               "trade_date": trade_date,
               "updated_at": now,
               "source_file": source_file,
           }, "date_lock_report.json")
 
-          print("v266.45 date locked:", signal_date, "trade:", trade_date, "source:", source_file)
+          print("v266.46 date locked:", signal_date, "trade:", trade_date, "source:", source_file)
           PY
 
 
 
-      # v266.45：全系統時間統一。所有 JSON / 關鍵 CSV 的 updated_at / generated_at 都寫入台灣時間。
+      # v266.46：全系統時間統一。所有 JSON / 關鍵 CSV 的 updated_at / generated_at 都寫入台灣時間。
       - name: Normalize all dashboard timestamps to Taiwan time
         if: always()
         run: |
@@ -610,7 +636,7 @@ jobs:
               obj["last_update"] = now
               obj["timezone"] = "Asia/Taipei"
               obj["time_source"] = "github_actions_taipei"
-              obj["version"] = "v266.45"
+              obj["version"] = "v266.46"
               for p in [ROOT / name, DATA / name]:
                   p.parent.mkdir(parents=True, exist_ok=True)
                   p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8-sig")
@@ -661,12 +687,77 @@ jobs:
               normalize_csv_time(ROOT / name)
               normalize_csv_time(DATA / name)
 
-          print("v266.45 timestamps normalized:", now)
+          print("v266.46 timestamps normalized:", now)
           PY
 
 
 
-      # v266.45：欄位鎖死。所有前端卡片欄位統一補齊，不允許 NaN / 資料不足 / 空欄位。
+      # v266.46：欄位鎖死。所有前端卡片欄位統一補齊，不允許 NaN / 資料不足 / 空欄位。
+
+      # v266.46：確認最終操作已重新產出，並強制同步 root / dashboard 兩邊。
+      - name: Verify and force sync final action refresh
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from datetime import datetime, timedelta, timezone
+          import pandas as pd
+          import json
+
+          ROOT = Path(".")
+          DATA = ROOT / "mobile_dashboard_v1" / "data"
+          DATA.mkdir(parents=True, exist_ok=True)
+          now = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
+
+          def read_csv_any(name):
+              for p in [ROOT/name, DATA/name]:
+                  if p.exists() and p.stat().st_size > 0:
+                      try:
+                          return pd.read_csv(p, dtype=str), p
+                      except Exception:
+                          pass
+              return pd.DataFrame(), None
+
+          df, src = read_csv_any("final_action_plan.csv")
+          if df.empty:
+              # 不讓前端沿用舊標的：沒有新 final 就寫空表。
+              df = pd.DataFrame(columns=["stock_id","stock_name","final_action","action","ref_price","reason","updated_at","refresh_mode"])
+              print("v266.46 final_action empty; wrote empty locked table")
+          else:
+              df["updated_at"] = now
+              df["refresh_mode"] = "force_rebuild_outputs"
+              print("v266.46 final_action refreshed rows =", len(df), "source =", src)
+
+          for p in [ROOT/"final_action_plan.csv", DATA/"final_action_plan.csv"]:
+              df.to_csv(p, index=False, encoding="utf-8-sig")
+
+          # 更新 summary，讓前端知道 final 真的是本輪刷新。
+          summary = {}
+          for p in [ROOT/"final_action_summary.json", DATA/"final_action_summary.json"]:
+              if p.exists():
+                  try:
+                      summary = json.loads(p.read_text(encoding="utf-8-sig"))
+                      break
+                  except Exception:
+                      pass
+
+          summary.update({
+              "version": "v266.46",
+              "source": "v266_46_force_refresh",
+              "refresh_mode": "force_rebuild_outputs",
+              "final_action_rows": int(len(df)),
+              "final_action_updated_at": now,
+              "updated_at": now,
+              "timezone": "Asia/Taipei",
+          })
+
+          for p in [ROOT/"final_action_summary.json", DATA/"final_action_summary.json"]:
+              p.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+
+          print("v266.46 final refresh verified", now)
+          PY
+
+
       - name: Lock dashboard display fields
         if: always()
         run: |
@@ -837,7 +928,7 @@ jobs:
               lock_file(ROOT/name)
               lock_file(DATA/name)
 
-          print("v266.45 display fields locked", now)
+          print("v266.46 display fields locked", now)
           PY
 
 
@@ -927,7 +1018,7 @@ jobs:
           rm -f mobile_dashboard_v1/data/raw_market_daily.csv
 
 
-      # v266.45：最後防護。即使前面局部失敗，也盡量補出可讀狀態檔，避免前端白屏。
+      # v266.46：最後防護。即使前面局部失敗，也盡量補出可讀狀態檔，避免前端白屏。
       - name: Final dashboard file guard
         if: always()
         run: |
@@ -944,8 +1035,8 @@ jobs:
 
           def write_json_both(name, obj):
               obj = dict(obj or {})
-              obj.setdefault("version", "v266.45")
-              obj.setdefault("source", "v266_45_field_locked")
+              obj.setdefault("version", "v266.46")
+              obj.setdefault("source", "v266_46_force_refresh")
               obj["updated_at"] = now
               obj["timezone"] = "Asia/Taipei"
               for p in [ROOT / name, DATA / name]:
@@ -965,8 +1056,8 @@ jobs:
                           pass
               if not obj:
                   obj = {
-                      "source": "v266_45_field_locked",
-                      "version": "v266.45",
+                      "source": "v266_46_force_refresh",
+                      "version": "v266.46",
                       "signal_date": "",
                       "trade_date": "",
                       "status": "guard_created",
@@ -983,7 +1074,7 @@ jobs:
               for p in [ROOT / name, DATA / name]:
                   if not p.exists() or p.stat().st_size == 0:
                       pd.DataFrame(columns=cols).to_csv(p, index=False, encoding="utf-8-sig")
-          print("v266.45 final guard OK", now)
+          print("v266.46 final guard OK", now)
           PY
 
 
