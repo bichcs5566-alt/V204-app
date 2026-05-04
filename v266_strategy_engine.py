@@ -1,6 +1,6 @@
 """
 v266_strategy_engine.py
-v266.33 策略進化版：CORE + ALPHA + IGNITION + EVOLUTION
+v266.34 防假起漲版：CORE + ALPHA + IGNITION + EVOLUTION + FakeScore
 
 設計原則：
 1. 保留原本輸出檔名，不影響後面 pipeline：
@@ -379,14 +379,77 @@ def ignition_engine(x):
     d["entry_score"] -= (d["mom20"] > 0.35).astype(int) * 14
     d["entry_score"] -= (d["volume_ratio"] > 6.5).astype(int) * 10
 
+    # v266.34 防假起漲：FakeScore / TrapScore
+    # 目的：不是 100% 抓主力假K，而是把「不乾淨的起漲」降權或剔除。
+    real_body = (d["close"] - d["open"]).abs()
+    candle_range = (d["high"] - d["low"]).replace(0, np.nan)
+    upper_shadow = d["high"] - d[["open", "close"]].max(axis=1)
+    lower_shadow = d[["open", "close"]].min(axis=1) - d["low"]
+
+    d["upper_shadow_ratio"] = (upper_shadow / candle_range).replace([np.inf, -np.inf], np.nan).fillna(0)
+    d["body_ratio"] = (real_body / candle_range).replace([np.inf, -np.inf], np.nan).fillna(0)
+    d["close_position"] = ((d["close"] - d["low"]) / candle_range).replace([np.inf, -np.inf], np.nan).fillna(0)
+
+    fake_no_volume = d["volume_ratio"].fillna(0) < 1.10
+    fake_long_upper = (d["upper_shadow_ratio"] >= 0.45) & (d["close_position"] < 0.65)
+    fake_weak_body = d["body_ratio"] < 0.22
+    fake_not_stand_ma20 = d["close"] < d["ma20"]
+    fake_ma20_down = d["ma20_slope"] < 0
+    fake_overheat = (d["mom20"] > 0.32) | (d["volume_ratio"] > 6.5)
+    fake_kd_not_confirm = (d["kd_cross"].fillna(0) <= 0) & (d["macd_diff"].fillna(0) <= 0)
+    fake_low_liq = d["liquidity_level"].eq("LOW")
+
+    d["fake_score"] = (
+        fake_no_volume.astype(int)
+        + fake_long_upper.astype(int)
+        + fake_weak_body.astype(int)
+        + fake_not_stand_ma20.astype(int)
+        + fake_ma20_down.astype(int)
+        + fake_overheat.astype(int)
+        + fake_kd_not_confirm.astype(int)
+        + fake_low_liq.astype(int)
+    )
+
+    d["fake_flags"] = (
+        np.where(fake_no_volume, "量能不足｜", "")
+        + np.where(fake_long_upper, "上影線偏長｜", "")
+        + np.where(fake_weak_body, "實體不足｜", "")
+        + np.where(fake_not_stand_ma20, "未站穩MA20｜", "")
+        + np.where(fake_ma20_down, "MA20尚未上彎｜", "")
+        + np.where(fake_overheat, "過熱或爆量異常｜", "")
+        + np.where(fake_kd_not_confirm, "KD/MACD未確認｜", "")
+        + np.where(fake_low_liq, "流動性不足｜", "")
+    ).str.rstrip("｜")
+
+    d["fake_risk_level"] = np.select(
+        [d["fake_score"] >= 4, d["fake_score"] >= 2, d["fake_score"] <= 1],
+        ["高", "中", "低"],
+        default="中"
+    )
+    d["fake_risk_tag"] = np.select(
+        [d["fake_score"] >= 4, d["fake_score"] >= 2, d["fake_score"] <= 1],
+        ["❌ 疑似假起漲", "⚠️ 起漲需確認", "✅ 起漲乾淨"],
+        default="⚠️ 起漲需確認"
+    )
+
+    # 假起漲扣分：高 FakeScore 直接壓低排序，避免進 Top5。
+    d["entry_score"] -= d["fake_score"] * 8
+    d["entry_score"] -= fake_long_upper.astype(int) * 6
+    d["entry_score"] -= fake_no_volume.astype(int) * 8
+    d["entry_score"] -= fake_not_stand_ma20.astype(int) * 8
+
+    clean_signal = d["fake_score"] <= 2
+    very_clean_signal = d["fake_score"] <= 1
+
     test = (
         (d["entry_score"] >= 64)
         & (d["close"] > d["ma20"] * 0.995)
         & (d["volume"] >= 1000)
         & mid_or_high
+        & clean_signal
     )
 
-    watch = (d["entry_score"] >= 50) & ~test
+    watch = (d["entry_score"] >= 50) & ~test & (d["fake_score"] <= 3)
 
     # 起漲清單以 TEST / WATCH 呈現，不直接 BUY，避免假突破重倉。
     set_action(d, False, test, watch, "", "起漲試單", "起漲觀察")
@@ -400,29 +463,65 @@ def ignition_engine(x):
 
     d["ignition_phase"] = np.select(
         [
-            (d["entry_score"] >= 72),
-            (d["entry_score"] >= 64),
-            (d["entry_score"] >= 50),
+            (d["entry_score"] >= 72) & (d["fake_score"] <= 1),
+            (d["entry_score"] >= 64) & (d["fake_score"] <= 2),
+            (d["entry_score"] >= 50) & (d["fake_score"] <= 3),
         ],
-        ["啟動確認", "突破觀察", "預備布局"],
-        default="條件不足"
+        ["強起漲：乾淨啟動", "起漲確認：等待延續", "起漲觀察：小心假突破"],
+        default="疑似假起漲或條件不足"
+    )
+
+    d["fake_filter_pass"] = np.where(d["fake_score"] <= 2, "PASS", "WATCH_ONLY")
+    d["ignition_hint_zh"] = np.select(
+        [
+            (d["fake_score"] <= 1) & (d["entry_score"] >= 72),
+            (d["fake_score"] <= 2) & (d["entry_score"] >= 64),
+            (d["fake_score"] <= 3) & (d["entry_score"] >= 50),
+        ],
+        [
+            "強起漲：量能、均線與動能同步，假突破痕跡低；可列入優先試單，但仍不建議重倉。",
+            "起漲確認：結構轉強，但仍需觀察隔日延續；可小倉試單或等待回測不破。",
+            "起漲觀察：已有啟動跡象，但假突破風險仍在；不建議追高，等量價確認。",
+        ],
+        default="疑似假起漲：量價或K棒結構不乾淨，建議先排除或僅觀察。"
+    )
+
+    d["fake_reason_zh"] = np.where(
+        d["fake_flags"].astype(str).str.len() > 0,
+        "假起漲檢查：" + d["fake_flags"].astype(str),
+        "假起漲檢查：未見明顯騙線痕跡"
+    )
+
+    d["operation_advice_zh"] = np.select(
+        [
+            (d["fake_score"] <= 1) & (d["entry_score"] >= 72),
+            (d["fake_score"] <= 2) & (d["entry_score"] >= 64),
+            (d["fake_score"] <= 3) & (d["entry_score"] >= 50),
+        ],
+        [
+            "操作建議：可優先列入起漲觀察，若要進場僅用小倉試單；隔日站穩再加碼。",
+            "操作建議：可小量測試，不要一次重倉；若跌回MA20或量縮轉弱，直接放棄。",
+            "操作建議：先觀察，不建議追價；等突破後第二根K棒確認再處理。",
+        ],
+        default="操作建議：不處理，避免被假突破洗掉。"
     )
 
     d["note"] = (
-        "IGNITION起漲啟動｜均線糾結/收斂｜放量轉強｜突破節奏｜"
+        "IGNITION防假起漲｜"
         + d["ignition_phase"].astype(str)
-        + "｜"
-        + d["liquidity_tag"].astype(str)
+        + "｜FakeScore=" + d["fake_score"].astype(str)
+        + "｜" + d["fake_risk_tag"].astype(str)
+        + "｜" + d["liquidity_tag"].astype(str)
     )
-    d["reason"] = d["note"]
-    d["system_note"] = "起漲清單：適合小量試單或優先觀察，不建議一次重倉。"
+    d["reason"] = d["ignition_hint_zh"] + "｜" + d["fake_reason_zh"]
+    d["system_note"] = d["operation_advice_zh"]
 
-    return d.sort_values(["entry_score", "liquidity_score", "volume_ratio"], ascending=False)
+    return d.sort_values(["entry_score", "fake_score", "liquidity_score", "volume_ratio"], ascending=[False, True, False, False])
 
 
 def evolution_engine(core, alpha, ignition):
     """
-    v266.33 EVOLUTION：策略進化鏈。
+    v266.34 EVOLUTION：策略進化鏈。
     目的：把 IGNITION → TEST → ALPHA → CORE 的升級路徑獨立成一張清單。
     不直接改變原本 final trade_plan；只提供決策提示與優先級。
     """
@@ -670,6 +769,9 @@ def main():
         "ignition_count": len(ignition),
         "ignition_test_count": int((ignition.action == "TEST").sum()),
         "ignition_watch_count": int((ignition.action == "WATCH").sum()),
+        "ignition_fake_high_count": int((pd.to_numeric(ignition.get("fake_score", 0), errors="coerce").fillna(0) >= 4).sum()) if not ignition.empty else 0,
+        "ignition_fake_high_count": int((pd.to_numeric(ignition.get("fake_score", 0), errors="coerce").fillna(0) >= 4).sum()) if not ignition.empty else 0,
+        "ignition_fake_avg": float(pd.to_numeric(ignition.get("fake_score", 0), errors="coerce").fillna(0).mean()) if not ignition.empty else 0,
         "evolution_count": len(evolution),
         "evolution_test_count": int((evolution.action == "TEST").sum()) if not evolution.empty else 0,
         "evolution_buy_count": int((evolution.action == "BUY").sum()) if not evolution.empty else 0,
