@@ -255,6 +255,7 @@ jobs:
           copy_if_exists core_candidates.csv mobile_dashboard_v1/data/core_candidates.csv
           copy_if_exists alpha_candidates.csv mobile_dashboard_v1/data/alpha_candidates.csv
           copy_if_exists ignition_candidates.csv mobile_dashboard_v1/data/ignition_candidates.csv
+          copy_if_exists strategy_evolution.csv mobile_dashboard_v1/data/strategy_evolution.csv
           copy_if_exists selection_debug.csv mobile_dashboard_v1/data/selection_debug.csv
 
           copy_if_exists timing_candidates.csv mobile_dashboard_v1/data/timing_candidates.csv
