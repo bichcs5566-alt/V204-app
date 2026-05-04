@@ -188,7 +188,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.44_complete_stable";
+const APP_PATCH_VERSION = "v266.45_field_locked";
 
 
 const FILES = {
@@ -2465,18 +2465,22 @@ function inferMaLabelV26635(row, maKey, label) {
   const merged = mergeTechRowV26637(row || {});
   const existing = pickFieldV26635(merged, [`${maKey}_label`, `${maKey}_status`, `${label}觀察`, `${label}_status`], "");
   if (usefulV26637(existing)) return cleanTechV26637(existing);
-  const close = Number(String(merged.close || merged.ref_price || "").replace(/,/g, ""));
+
+  const close = Number(String(merged.close || merged.ref_price || merged.price || "").replace(/,/g, ""));
   const ma = Number(String(merged[maKey] || "").replace(/,/g, ""));
-  if (!Number.isFinite(close) || !Number.isFinite(ma) || ma <= 0) return `${label}：依策略判斷`;
-  if (close >= ma * 1.01) return `${label}：站上｜↑ 強勢`;
-  if (close <= ma * 0.99) return `${label}：跌破｜↓ 轉弱`;
-  return `${label}：貼近｜→ 盤整`;
+  if (Number.isFinite(close) && Number.isFinite(ma) && ma > 0) {
+    if (close >= ma * 1.01) return `${label}：站上｜↑ 強勢`;
+    if (close <= ma * 0.99) return `${label}：跌破｜↓ 轉弱`;
+    return `${label}：貼近｜→ 盤整`;
+  }
+
+  const txt = String(merged.reason || "") + " " + String(merged.system_note || "") + " " + String(merged.final_action || merged.action || merged.status || "");
+  if (/停損|跌破|出場|SELL|賣/.test(txt)) return `${label}：依出場風控判斷`;
+  if (/試單|突破|強勢|BUY|買/.test(txt)) return `${label}：依試單節奏判斷`;
+  if (/觀察|整理|收斂|WATCH/.test(txt)) return `${label}：依觀察節奏判斷`;
+  return `${label}：依策略判斷`;
 }
 
-function numV26641(v) {
-  const n = Number(String(v ?? "").replace(/,/g, "").replace("億", ""));
-  return Number.isFinite(n) ? n : NaN;
-}
 
 function inferKbarFromPriceV26641(row) {
   const merged = mergeTechRowV26637(row || {});
