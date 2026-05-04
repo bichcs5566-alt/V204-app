@@ -173,7 +173,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.30P_position_stock_name_map";
+const APP_PATCH_VERSION = "v266.31.1_true_timer_stock_name_map";
 
 
 const FILES = {
@@ -324,6 +324,115 @@ function setSyncStatus(message, cls = "sync") {
   if (!el) return;
   el.innerHTML = message;
   el.className = cls;
+}
+
+// ===== v266.31 真後端秒數同步層 =====
+let workflowStatusTimerV26631 = null;
+let workflowStatusFetchTimerV26631 = null;
+let workflowStatusCacheV26631 = null;
+
+function parseTimeMsV26631(v) {
+  const t = new Date(v || "").getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
+function fmtDurationV26631(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}分${String(s).padStart(2, "0")}秒`;
+}
+
+function statusPhaseTextV26631(status) {
+  const s = String(status || "").toLowerCase();
+  if (s === "running") return "執行中";
+  if (s === "queued") return "排隊中";
+  if (s === "success") return "完成";
+  if (s === "failed" || s === "failure") return "失敗";
+  if (s === "cancelled" || s === "canceled") return "已取消";
+  return s || "等待中";
+}
+
+function applyWorkflowStatusV26631(data) {
+  if (!data || typeof data !== "object") return false;
+  workflowStatusCacheV26631 = data;
+
+  const status = String(data.status || "").toLowerCase();
+  const runNumber = data.run_number ? `#${data.run_number}` : "";
+  const startMs = parseTimeMsV26631(data.start_time || data.started_at || data.created_at);
+  const endMs = parseTimeMsV26631(data.end_time || data.completed_at);
+
+  let durationText = data.duration_text || "--";
+  if (startMs) {
+    const baseEnd = endMs || Date.now();
+    durationText = fmtDurationV26631(baseEnd - startMs);
+  }
+
+  if (status === "running" || status === "queued" || status === "in_progress") {
+    setSyncStatus(`⏳ 後端策略${statusPhaseTextV26631(status)} ${runNumber}｜已跑 ${durationText}｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync");
+    setPositionStatus?.(`⏳ 後端策略${statusPhaseTextV26631(status)} ${runNumber}｜已跑 ${durationText}｜現在時間 <span id="positionLiveClock">${formatTWClock(new Date())}</span>`, "position-status");
+    startLiveClock();
+    startPositionClock?.();
+    return true;
+  }
+
+  if (status === "success") {
+    setSyncStatus(`✅ 後端策略完成 ${runNumber}｜總耗時 ${durationText}｜完成時間 ${formatTWClock(endMs ? new Date(endMs) : new Date())}`, "sync ok");
+    setPositionStatus?.(`✅ 後端策略完成 ${runNumber}｜總耗時 ${durationText}`, "position-status ok");
+    return true;
+  }
+
+  if (status === "failed" || status === "failure" || status === "cancelled" || status === "canceled") {
+    setSyncStatus(`❌ 後端策略${statusPhaseTextV26631(status)} ${runNumber}｜耗時 ${durationText}｜請到 Actions 查看`, "sync error");
+    setPositionStatus?.(`❌ 後端策略${statusPhaseTextV26631(status)} ${runNumber}｜耗時 ${durationText}`, "position-status error");
+    return true;
+  }
+
+  return false;
+}
+
+function tickWorkflowStatusV26631() {
+  if (workflowStatusCacheV26631) applyWorkflowStatusV26631(workflowStatusCacheV26631);
+}
+
+async function fetchWorkflowStatusV26631() {
+  const urls = [
+    "./data/workflow_status.json",
+    "./mobile_dashboard_v1/data/workflow_status.json",
+    "./workflow_status.json"
+  ];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url + (url.includes("?") ? "&" : "?") + "v=" + Date.now(), { cache: "no-store" });
+      if (!res.ok) continue;
+      const text = await res.text();
+      if (!text || text.trim().startsWith("<")) continue;
+      const data = JSON.parse(text);
+      if (applyWorkflowStatusV26631(data)) return true;
+    } catch (e) {}
+  }
+  return false;
+}
+
+function startWorkflowStatusWatchV26631() {
+  if (workflowStatusTimerV26631) clearInterval(workflowStatusTimerV26631);
+  if (workflowStatusFetchTimerV26631) clearInterval(workflowStatusFetchTimerV26631);
+
+  fetchWorkflowStatusV26631();
+  workflowStatusTimerV26631 = setInterval(tickWorkflowStatusV26631, 1000);
+  workflowStatusFetchTimerV26631 = setInterval(fetchWorkflowStatusV26631, 3000);
+}
+
+function markWorkflowTriggeredLocalV26631() {
+  const now = new Date().toISOString();
+  workflowStatusCacheV26631 = {
+    status: "queued",
+    start_time: now,
+    updated_at: now,
+    run_number: ""
+  };
+  applyWorkflowStatusV26631(workflowStatusCacheV26631);
+  startWorkflowStatusWatchV26631();
 }
 
 function formatRunDurationV26630K(ms) {
@@ -1125,7 +1234,15 @@ function positionNameV26630(stock, posRow = {}, overlay = {}, riskRow = {}) {
     window.__stockNameMapV26630?.[sid] ||
     "";
 
-  return cleanV26630(name, "--");
+  const fallbackNamesV266311 = {
+    "2317": "鴻海",
+    "2330": "台積電",
+    "2409": "友達",
+    "3051": "力特",
+    "3583": "辛耘"
+  };
+
+  return cleanV26630(name || fallbackNamesV266311[sid], "--");
 }
 
 function positionDetailCellV26630(label, value) {
@@ -1137,6 +1254,23 @@ async function loadPositionOverlayV26630() {
   window.__positionOverlayRowsV26630 = [];
   window.__stockNameMapV26630 = {};
 
+  // v266.31.1：優先讀後端產出的股票名稱對照表。
+  // 解決 manual_positions.csv 的 stock_name 空白時，持倉卡片名稱顯示 "--"。
+  try {
+    const res = await fetch("./data/stock_name_map.json?v=" + Date.now(), { cache: "no-store" });
+    if (res.ok) {
+      const txt = await res.text();
+      if (txt && !txt.trim().startsWith("<")) {
+        const m = JSON.parse(txt);
+        Object.entries(m || {}).forEach(([k, v]) => {
+          const sid = stockKeyV26630H(k);
+          const name = cleanV26630(v, "");
+          if (sid && name && name !== "--") window.__stockNameMapV26630[sid] = name;
+        });
+      }
+    }
+  } catch (e) {}
+
   const files = [
     "./data/position_overlay.csv",
     "./data/positions_manual.csv",
@@ -1147,7 +1281,8 @@ async function loadPositionOverlayV26630() {
     "./data/full_summary.csv",
     "./data/selection_debug.csv",
     "./data/watchlist_monitor.csv",
-    "./data/chip_source_twse.csv"
+    "./data/chip_source_twse.csv",
+    "./data/stock_name_map.csv"
   ];
 
   for (const url of files) {
@@ -1847,10 +1982,8 @@ async function triggerDataPipeline() {
       return;
     }
 
-    setSyncStatus(`✅ 後端策略已觸發｜開始計時 0分00秒｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync ok");
-    setPositionStatus?.(`✅ 後端策略已觸發｜開始計時 0分00秒｜現在時間 <span id="positionLiveClock">${formatTWClock(new Date())}</span>`, "position-status ok");
-    startLiveClock();
-    startPositionClock?.();
+    // v266.31：先用本機立即顯示，等後端 workflow_status.json 產出後自動接管。
+    markWorkflowTriggeredLocalV26631();
     pollWorkflowRun(createdAfterIso, Date.now());
   } catch (e) {
     setSyncStatus(`❌ 觸發失敗：${e.message}`, "sync error");
@@ -2380,8 +2513,8 @@ async function init() {
     const groups = splitRows(rows);
 
     renderMeta(regime, summary, macro, rows);
-    // v266.30O：若後端還在跑，重新整理後直接查 GitHub Actions 接回計時。
-    await resumeOrDetectBackendRunV26630O();
+    // v266.31：頁面載入/重新整理後，直接讀後端 workflow_status.json 接回秒數。
+    startWorkflowStatusWatchV26631();
     renderPositionRiskHints(rows);
     renderPositions();
     renderDecision(rows);
