@@ -1,15 +1,15 @@
 ﻿{
-  "generated_at": "2026-05-04 19:56:31",
-  "source": "v266_40_stable_guarded_test",
+  "generated_at": "2026-05-04 20:51:21",
+  "source": "v266_41_unified_k_tech_cards",
   "signal_date": "2026-05-04",
   "trade_date": "2026-05-05",
   "data_state": "fresh",
   "market_regime": "RANGE",
   "regime_info": {
-    "pct_above_ma20": 0.457,
-    "pct_above_ma60": 0.4632,
-    "pct_mom20_pos": 0.5616,
-    "pct_strong": 0.153,
+    "pct_above_ma20": 0.4534,
+    "pct_above_ma60": 0.4626,
+    "pct_mom20_pos": 0.5621,
+    "pct_strong": 0.1577,
     "median_mom20": 0.0131,
     "regime_score": 2
   },
@@ -26,9 +26,9 @@
     "IGNITION": "起漲啟動 / 均線糾結放量突破 / 小量試單",
     "EVOLUTION": "策略進化鏈 / IGNITION→TEST→ALPHA→CORE / 升級提示"
   },
-  "version": "v266.40",
+  "version": "v266.41",
   "latest_date": "2026-05-04",
-  "updated_at": "2026-05-04 11:57:20",
+  "updated_at": "2026-05-04 12:52:17",
   "date_lock_source": "feature_panel_daily.csv",
   "date_state": "locked_from_latest_feature"
 }
