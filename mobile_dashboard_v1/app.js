@@ -188,15 +188,20 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.36.2.2_safe_bool_guard";
+const APP_PATCH_VERSION = "v266.38_stable_integrated";
 
 
 const FILES = {
   final: DATA_DIR + "final_action_plan.csv",
   finalSummary: DATA_DIR + "final_action_summary.json",
+  meta: DATA_DIR + "meta.json",
   regime: DATA_DIR + "market_regime.json",
   macro: DATA_DIR + "macro_regime.json",
   tradePlan: DATA_DIR + "trade_plan.csv",
+  candidates: DATA_DIR + "candidates.csv",
+  core: DATA_DIR + "core_candidates.csv",
+  alpha: DATA_DIR + "alpha_candidates.csv",
+  positionOverlay: DATA_DIR + "position_overlay.csv",
   ignition: DATA_DIR + "ignition_candidates.csv",
   evolution: DATA_DIR + "strategy_evolution.csv"
 };
@@ -1346,8 +1351,8 @@ function getPositionRiskRowV26630(stock) {
 
 function renderMergedPositionHintV26630(stock, posRow) {
   const sid = sidV26630(stock);
-  const overlay = getPositionOverlayRowV26630(sid);
-  const riskRow = getPositionRiskRowV26630(sid);
+  const overlay = { ...(window.__techMapV26637?.[sid] || {}), ...getPositionOverlayRowV26630(sid) };
+  const riskRow = { ...(window.__techMapV26637?.[sid] || {}), ...getPositionRiskRowV26630(sid) };
   const actionRaw = overlay.position_action || riskRow.final_action || riskRow.action || "HOLD";
   const actionInfo = zhPositionActionV26630(actionRaw);
 
@@ -1375,8 +1380,8 @@ function renderMergedPositionHintV26630(stock, posRow) {
   const ma5 = maStatusV26630("MA5", close, ma5RawH, ma5StatusH);
   const ma10 = maStatusV26630("MA10", close, ma10RawH, ma10StatusH);
   const ma20 = maStatusV26630("MA20", close, ma20RawH, ma20StatusH);
-  const positionKbarTypeV26635 = pickFieldV26635({...riskRow, ...overlay}, ["kbar_type", "k_bar_type", "exit_kbar_type"], "--");
-  const positionKStructureV26635 = pickFieldV26635({...riskRow, ...overlay}, ["k_structure", "kline_structure"], "--");
+  const positionKbarTypeV26635 = pickFieldV26635({...riskRow, ...overlay}, ["kbar_type", "k_bar_type", "exit_kbar_type"], "資料不足");
+  const positionKStructureV26635 = pickFieldV26635({...riskRow, ...overlay}, ["k_structure", "kline_structure"], "資料不足");
   const riskZh = zhRiskV26630(overlay.risk_flag || riskRow.risk_flag || riskRow.risk_level || riskRow.exit_risk_level, actionRaw);
   const chip = chipTextV26630({ ...riskRow, ...overlay });
   const name = positionNameV26630(sid, posRow, overlay, riskRow);
@@ -2082,11 +2087,11 @@ function resolveTradeDateV26630(regime, summary) {
 }
 
 function renderMeta(regime, summary, macro, rows) {
-  const backendUpdatedAt = formatTWDateTime(summary.generated_at || regime.generated_at);
+  const backendUpdatedAt = formatTWDateTime(summary.updated_at || summary.generated_at || regime.generated_at);
 
   const marketText = `${safeText(regime.market_label || summary.market_label || regime.label || regime.regime, "--")} ${safeText(regime.index_change_pct_text || summary.index_change_pct_text, "")}`.trim();
   const macroText = `${safeText(macro.macro_label || summary.macro_label, "--")}｜分數 ${safeText(macro.macro_score ?? summary.macro_score, "--")}`;
-  const signalDate = safeText(regime.date || regime.latest_date || summary.signal_date || summary.generated_at, "--");
+  const signalDate = safeText(summary.signal_date || summary.latest_date || regime.signal_date || regime.latest_date || regime.date || summary.generated_at, "--");
   const tradeDate = resolveTradeDateV26630(regime, summary);
   qs("metaBox").innerHTML = `
     <div class="mini"><span>來源版本</span><b>C 完整交易系統</b></div>
@@ -2289,13 +2294,13 @@ function inferExitKbarReasonV26616(row) {
 
 function inferExitRiskLevelV26616(row) {
   const direct = row.risk_level || row.exit_risk_level || row["風險等級"];
-  if (direct) return safeText(direct);
+  if (direct) return riskZhV26637(direct);
 
   const text = `${row.reason || ""} ${row.system_note || ""} ${row.note || ""}`.toUpperCase();
-  if (/HIGH|高風險|停損|跌破/.test(text)) return "HIGH";
-  if (/MEDIUM|中風險|轉弱|減碼/.test(text)) return "MEDIUM";
-  if (/LOW|低風險/.test(text)) return "LOW";
-  return "--";
+  if (/HIGH|高風險|停損|跌破/.test(text)) return "高風險";
+  if (/MEDIUM|中風險|轉弱|減碼/.test(text)) return "中風險";
+  if (/LOW|低風險/.test(text)) return "低風險";
+  return "資料不足";
 }
 
 function inferExitAdviceV26616(row, action) {
@@ -2408,38 +2413,80 @@ function evolutionChinesePromptV26634(row) {
 }
 
 
-function pickFieldV26635(row, keys, fallback = "--") {
+
+function sidKeyV26637(v) {
+  const s = String(v ?? "").trim();
+  const m = s.match(/\d{4}/);
+  return m ? m[0] : s;
+}
+
+window.__techMapV26637 = window.__techMapV26637 || {};
+
+function usefulV26637(v) {
+  if (v === undefined || v === null) return false;
+  const s = String(v).trim();
+  return !!s && !["--", "nan", "NaN", "undefined", "null", "None", "資料不足"].includes(s);
+}
+
+function cleanTechV26637(v, fallback = "資料不足") {
+  if (!usefulV26637(v)) return fallback;
+  let s = safeText(v, fallback);
+  s = s.replace(/MA5\s*[:：]\s*MA5\s*[:：]/g, "MA5：");
+  s = s.replace(/MA10\s*[:：]\s*MA10\s*[:：]/g, "MA10：");
+  s = s.replace(/MA20\s*[:：]\s*MA20\s*[:：]/g, "MA20：");
+  s = s.replace(/\s+\|/g, "｜").replace(/\|\s+/g, "｜").replace(/\|/g, "｜");
+  s = s.replace(/｜\s*資料不足/g, "");
+  return s.trim() || fallback;
+}
+
+function riskZhV26637(v) {
+  const s = String(v || "").trim().toUpperCase();
+  if (!s || s === "--") return "資料不足";
+  if (s.includes("HIGH") || s.includes("高")) return "高風險";
+  if (s.includes("MEDIUM") || s.includes("MID") || s.includes("中")) return "中風險";
+  if (s.includes("LOW") || s.includes("低")) return "低風險";
+  return safeText(v, "資料不足");
+}
+
+function mergeTechRowV26637(row) {
+  const sid = sidKeyV26637(row?.stock_id || row?.symbol || row?.code);
+  const m = sid ? (window.__techMapV26637?.[sid] || {}) : {};
+  return { ...m, ...row };
+}
+
+function pickFieldV26635(row, keys, fallback = "資料不足") {
+  const merged = mergeTechRowV26637(row || {});
   for (const k of keys) {
-    const v = row?.[k];
-    if (v !== undefined && v !== null && String(v).trim() !== "" && String(v).trim() !== "nan" && String(v).trim() !== "NaN") {
-      return safeText(v, fallback);
-    }
+    const v = merged?.[k];
+    if (usefulV26637(v)) return cleanTechV26637(v, fallback);
   }
   return fallback;
 }
 
 function inferMaLabelV26635(row, maKey, label) {
-  const close = Number(String(row.close || row.ref_price || "").replace(/,/g, ""));
-  const ma = Number(String(row[maKey] || "").replace(/,/g, ""));
-  const existing = pickFieldV26635(row, [`${maKey}_label`, `${maKey}_status`, `${label}觀察`, `${label}_status`], "");
-  if (existing) return existing;
-  if (!Number.isFinite(close) || !Number.isFinite(ma) || ma <= 0) return `${label}：--`;
-  if (close >= ma) return `${label}：站上｜↑ 強勢`;
-  return `${label}：跌破｜↓ 轉弱`;
+  const merged = mergeTechRowV26637(row || {});
+  const existing = pickFieldV26635(merged, [`${maKey}_label`, `${maKey}_status`, `${label}觀察`, `${label}_status`], "");
+  if (usefulV26637(existing)) return cleanTechV26637(existing);
+  const close = Number(String(merged.close || merged.ref_price || "").replace(/,/g, ""));
+  const ma = Number(String(merged[maKey] || "").replace(/,/g, ""));
+  if (!Number.isFinite(close) || !Number.isFinite(ma) || ma <= 0) return `${label}：資料不足`;
+  if (close >= ma * 1.01) return `${label}：站上｜↑ 強勢`;
+  if (close <= ma * 0.99) return `${label}：跌破｜↓ 轉弱`;
+  return `${label}：貼近｜→ 盤整`;
 }
 
 function inferKbarTypeV26635(row) {
   return pickFieldV26635(row, [
     "kbar_type", "k_bar_type", "K棒型態", "k棒型態",
-    "exit_kbar_type", "exit_kbar_reason"
-  ], "--");
+    "exit_kbar_type"
+  ], "資料不足");
 }
 
 function inferKStructureV26635(row) {
   return pickFieldV26635(row, [
     "k_structure", "kline_structure", "K線結構", "k線結構",
     "tech_structure", "structure_label"
-  ], "--");
+  ], "資料不足");
 }
 
 function techGridCellsV26635(row) {
@@ -2453,23 +2500,52 @@ function techGridCellsV26635(row) {
 }
 
 function techTextBlockV26635(row, isExit = false) {
-  const techReason = pickFieldV26635(row, ["tech_reason", "technical_reason", "技術原因"], "");
-  const kReason = pickFieldV26635(row, ["kbar_reason", "k_bar_reason", "kline_reason", "K棒判斷原因"], "");
-  const hint = pickFieldV26635(row, ["tech_decision_hint", "technical_hint", "技術提示"], "");
+  const merged = mergeTechRowV26637(row || {});
+  const techReason = pickFieldV26635(merged, ["tech_reason", "technical_reason", "技術原因"], "");
+  const kReason = pickFieldV26635(merged, ["kbar_reason", "k_bar_reason", "kline_reason", "K棒判斷原因"], "");
+  const hint = pickFieldV26635(merged, ["tech_decision_hint", "technical_hint", "技術提示"], "");
 
-  const fallback = `
-MA5：${inferMaLabelV26635(row, "ma5", "MA5")}
-MA10：${inferMaLabelV26635(row, "ma10", "MA10")}
-MA20：${inferMaLabelV26635(row, "ma20", "MA20")}
-K棒型態：${inferKbarTypeV26635(row)}
-K線結構：${inferKStructureV26635(row)}
-  `.trim();
+  const fallback = [
+    inferMaLabelV26635(merged, "ma5", "MA5"),
+    inferMaLabelV26635(merged, "ma10", "MA10"),
+    inferMaLabelV26635(merged, "ma20", "MA20"),
+    "K棒型態：" + inferKbarTypeV26635(merged),
+    "K線結構：" + inferKStructureV26635(merged)
+  ].map(x => cleanTechV26637(x)).filter(x => usefulV26637(x)).join("｜") || "技術資料不足";
 
   return `
-        <div class="detail-text ${isExit ? "exit-detail-text" : ""}"><b>技術補充</b><p>${safeText(techReason || fallback)}</p></div>
-        <div class="detail-text ${isExit ? "exit-detail-text" : ""}"><b>K線／型態提示</b><p>${safeText(kReason || fallback)}</p></div>
-        <div class="detail-text ${isExit ? "exit-detail-text" : ""}"><b>技術決策提示</b><p>${safeText(hint || (isExit ? "若 MA5/MA20 轉弱，優先控風險；若站回均線再觀察。" : "依原策略執行，技術欄位用於確認節奏與風險。"))}</p></div>
+        <div class="detail-text ${isExit ? "exit-detail-text" : ""}"><b>技術補充</b><p>${cleanTechV26637(techReason || fallback)}</p></div>
+        <div class="detail-text ${isExit ? "exit-detail-text" : ""}"><b>K線／型態提示</b><p>${cleanTechV26637(kReason || fallback)}</p></div>
+        <div class="detail-text ${isExit ? "exit-detail-text" : ""}"><b>技術決策提示</b><p>${cleanTechV26637(hint || (isExit ? "若 MA5/MA20 轉弱，優先控風險；若站回均線再觀察。" : "依原策略執行，技術欄位用於確認節奏與風險。"))}</p></div>
       `;
+}
+
+async function loadTechMapV26637() {
+  const files = [
+    FILES.candidates,
+    FILES.tradePlan,
+    FILES.core,
+    FILES.alpha,
+    FILES.ignition,
+    FILES.evolution,
+    FILES.positionOverlay,
+    FILES.final
+  ].filter(Boolean);
+
+  const out = {};
+  for (const file of files) {
+    try {
+      const txt = await fetchText(file);
+      const rows = parseCsv(txt);
+      for (const r of rows) {
+        const sid = sidKeyV26637(r.stock_id || r.symbol || r.code);
+        if (!sid) continue;
+        out[sid] = { ...(out[sid] || {}), ...r };
+      }
+    } catch (e) {}
+  }
+  window.__techMapV26637 = out;
+  return out;
 }
 
 
@@ -2729,33 +2805,38 @@ async function init() {
   showBackendRunCompleteIfAnyV26630K();
 
   try {
-    const [regime, summary, macro, rows, ignitionRowsRaw, evolutionRowsRaw] = await Promise.all([
+    const [regime, summaryRaw, metaRaw, macro, rows, ignitionRowsRaw, evolutionRowsRaw] = await Promise.all([
       fetchJson(FILES.regime, {}),
       fetchJson(FILES.finalSummary, {}),
+      fetchJson(FILES.meta, {}),
       fetchJson(FILES.macro, {}),
       loadFinalRows(),
       loadIgnitionRows(),
       loadEvolutionRows()
     ]);
 
-    await loadPositionOverlayV26630();
-    const groups = splitRows(rows);
-    const ignitionRows = sortRows(ignitionRowsRaw || []);
-    const evolutionRows = sortRows(evolutionRowsRaw || []);
+    const summary = { ...(metaRaw || {}), ...(summaryRaw || {}) };
 
-    renderMeta(regime, summary, macro, rows);
+    await loadPositionOverlayV26630();
+    await loadTechMapV26637();
+    const rowsWithTech = (rows || []).map(r => mergeTechRowV26637(r));
+    const groups = splitRows(rowsWithTech);
+    const ignitionRows = sortRows((ignitionRowsRaw || []).map(r => mergeTechRowV26637(r)));
+    const evolutionRows = sortRows((evolutionRowsRaw || []).map(r => mergeTechRowV26637(r)));
+
+    renderMeta(regime, summary, macro, rowsWithTech);
     // v266.31：頁面載入/重新整理後，直接讀後端 workflow_status.json 接回秒數。
     startWorkflowStatusWatchV26631();
-    renderPositionRiskHints(rows);
+    renderPositionRiskHints(rowsWithTech);
     renderPositions();
-    renderDecision(rows);
+    renderDecision(rowsWithTech);
     renderFinalActions(groups.main);
     renderSectionList("ignitionList", ignitionRows, "ignition", 80);
     renderSectionList("evolutionList", evolutionRows, "evolution", 80);
     renderSectionList("testList", groups.test, "test", 80);
     renderSectionList("watchList", groups.watch, "watch", 80);
     renderSectionList("blockList", groups.block, "block", 80);
-    renderStats(rows, summary);
+    renderStats(rowsWithTech, summary);
   } catch (e) {
     console.error(e);
     try {
