@@ -1,6 +1,6 @@
 ﻿{
-  "generated_at": "2026-05-05 01:30:54",
-  "source": "v266_46_force_refresh",
+  "generated_at": "2026-05-05 07:49:54",
+  "source": "v266_47_final_source_locked",
   "signal_date": "2026-05-04",
   "trade_date": "2026-05-05",
   "rows": 503,
@@ -43,15 +43,26 @@
   "total_indicator_count": 7,
   "unknown_count": 5,
   "encoding": "utf-8-sig",
-  "version": "v266.46",
+  "version": "v266.47",
   "latest_date": "2026-05-04",
-  "updated_at": "2026-05-05 01:31:57",
+  "updated_at": "2026-05-05 07:50:51",
   "date_lock_source": "feature_panel_daily.csv",
   "date_state": "locked_from_latest_feature",
-  "last_update": "2026-05-05 01:31:50",
+  "last_update": "2026-05-05 07:50:44",
   "timezone": "Asia/Taipei",
   "time_source": "github_actions_taipei",
-  "refresh_mode": "force_rebuild_outputs",
+  "refresh_mode": "final_source_locked",
   "final_action_rows": 503,
-  "final_action_updated_at": "2026-05-05 01:31:50"
+  "active_position_count": 8,
+  "active_position_ids": [
+    "2317",
+    "2330",
+    "2409",
+    "3051",
+    "3374",
+    "3583",
+    "4933",
+    "6651"
+  ],
+  "final_action_updated_at": "2026-05-05 07:50:45"
 }
