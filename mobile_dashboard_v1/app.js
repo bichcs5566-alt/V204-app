@@ -173,7 +173,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.35_append_tech_fields";
+const APP_PATCH_VERSION = "v266.36_safe_type_guard";
 
 
 const FILES = {
@@ -3523,7 +3523,4 @@ function injectV26630BPositionColorStyle() {
       font-weight: 900 !important;
     }
   `;
-  document.head.appendChild(style);
-}
-try { injectV26630BPositionColorStyle(); } catch(e) {}
-document.addEventListener("DOMContentLoaded", injectV26630BPositionColorStyle);
+  document.head.appendChi
