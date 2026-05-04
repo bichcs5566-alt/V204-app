@@ -81,7 +81,7 @@ def safe_num(s, default=np.nan):
 
 def safe_str_series(x, index=None):
     """
-    v266.40 防型態炸裂：
+    v266.41 防型態炸裂：
     np.where 會回傳 numpy.ndarray，不能直接 .str。
     統一轉成 pandas Series 後再做字串處理。
     """
@@ -92,7 +92,7 @@ def safe_str_series(x, index=None):
 
 def safe_bool_series(x, index):
     """
-    v266.40.2 防單一 bool 炸裂：
+    v266.41.2 防單一 bool 炸裂：
     df.loc[False, col] 會造成 KeyError: cannot use a single bool to index into setitem。
     任何 scalar bool 都轉成與 df.index 對齊的 Series。
     """
@@ -169,7 +169,7 @@ def add_liquidity_fields(d):
 
 def add_tech_decision_fields(d):
     """
-    v266.40 技術欄位完整修復：
+    v266.41 技術欄位完整修復：
     - 補 MA5 / MA10 / MA20 中文狀態
     - 補 K棒型態 / K線結構
     - 補乾淨中文技術提示
@@ -307,7 +307,7 @@ def detect_regime(x):
 
 
 def set_action(df, buy, test, watch, buy_sub, test_sub, watch_sub):
-    # v266.40.2：所有 mask 都安全轉成 Series，避免 scalar False/True 造成 pandas setitem KeyError。
+    # v266.41.2：所有 mask 都安全轉成 Series，避免 scalar False/True 造成 pandas setitem KeyError。
     buy = safe_bool_series(buy, df.index)
     test = safe_bool_series(test, df.index)
     watch = safe_bool_series(watch, df.index)
@@ -970,7 +970,7 @@ def main():
 
     meta = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "source": "v266_40_stable_guarded_test",
+        "source": "v266_41_unified_k_tech_cards",
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
         "data_state": "fresh",
@@ -991,10 +991,10 @@ def main():
         },
     }
 
-    # v266.40：策略層也輸出 summary fallback；真正最終日期仍由 yml 最後鎖定一次。
+    # v266.41：策略層也輸出 summary fallback；真正最終日期仍由 yml 最後鎖定一次。
     final_summary = {
         **meta,
-        "source": "v266_40_stable_guarded_test",
+        "source": "v266_41_unified_k_tech_cards",
         "latest_date": str(signal_date.date()),
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
