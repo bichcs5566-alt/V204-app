@@ -1,3 +1,18 @@
+// ===== v266.36.1 Blank Screen Guard / 空白頁防護 =====
+window.__APP_BOOT_ERROR__ = "";
+window.addEventListener("error", function(e) {
+  window.__APP_BOOT_ERROR__ = e && e.message ? e.message : String(e || "");
+  try {
+    if (document && document.body && !document.body.innerHTML.trim()) {
+      document.body.innerHTML = '<main style="padding:28px;font-family:-apple-system,BlinkMacSystemFont,Noto Sans TC,sans-serif;color:#111827"><h1>⚠️ 前端載入失敗</h1><p>app.js 執行錯誤：' + window.__APP_BOOT_ERROR__ + '</p><p>請先回報這段錯誤，不要重跑策略。</p></main>';
+    }
+  } catch (_) {}
+});
+
+window.addEventListener("unhandledrejection", function(e) {
+  window.__APP_BOOT_ERROR__ = e && e.reason ? (e.reason.message || String(e.reason)) : "Promise rejection";
+});
+
 // ===== v266.15.2 Macro / TOP 說明補強 =====
 function getTopBadgeV266152(row) {
   row = safeObj(row);
@@ -173,7 +188,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.36_safe_type_guard";
+const APP_PATCH_VERSION = "v266.36.1_blank_screen_guard";
 
 
 const FILES = {
@@ -1045,6 +1060,7 @@ function renderPositionRiskInsideCard(stock) {
   const reason = safeText(row.reason, "無");
   const note = safeText(row.system_note, "無");
   const amount = row.suggested_amount ? money(row.suggested_amount) : "--";
+  const topBadge = typeof getTopBadge === "function" ? getTopBadge(row) : "";
 
   return `
     <div class="position-inline-risk ${cls}">
@@ -2742,11 +2758,30 @@ async function init() {
     renderStats(rows, summary);
   } catch (e) {
     console.error(e);
-    setSyncStatus("❌ 讀取失敗：" + e.message, "sync error");
+    try {
+      if (!document.body.innerHTML.trim()) renderAppShell();
+      setSyncStatus("❌ 讀取失敗：" + e.message, "sync error");
+    } catch (_) {}
   }
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
+// v266.36.1：如果 Safari / GitHub Pages 快取或早期錯誤導致畫面空白，至少強制渲染外殼，避免整頁空白。
+document.addEventListener("DOMContentLoaded", function blankScreenGuardV266361() {
+  setTimeout(function() {
+    try {
+      if (document.body && !document.body.innerHTML.trim() && typeof renderAppShell === "function") {
+        renderAppShell();
+        setSyncStatus("⚠️ 前端已啟動空白頁防護，請重新整理或回報錯誤：" + (window.__APP_BOOT_ERROR__ || "未知錯誤"), "sync error");
+      }
+    } catch (e) {
+      try {
+        document.body.innerHTML = '<main style="padding:28px;font-family:-apple-system,BlinkMacSystemFont,Noto Sans TC,sans-serif;color:#111827"><h1>⚠️ 前端防護啟動失敗</h1><p>' + e.message + '</p></main>';
+      } catch (_) {}
+    }
+  }, 1200);
+});
 
 
 try { loadMacroDashboardV26614(); } catch(e) { console.log(e); }
@@ -3523,4 +3558,7 @@ function injectV26630BPositionColorStyle() {
       font-weight: 900 !important;
     }
   `;
-  document.head.appendChi
+  document.head.appendChild(style);
+}
+try { injectV26630BPositionColorStyle(); } catch(e) {}
+document.addEventListener("DOMContentLoaded", injectV26630BPositionColorStyle);
