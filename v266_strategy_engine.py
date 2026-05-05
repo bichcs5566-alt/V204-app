@@ -1,5 +1,5 @@
 # =========================
-# v266.59 single source lock helpers
+# v266.60 single source lock helpers
 # 資料來源唯一鎖：final_action 只能跟當次 run_id + 真持倉一致。
 # =========================
 def v26659_normalize_stock_id(x):
@@ -18,12 +18,12 @@ def v26659_stamp_run_source(df, run_id="manual"):
         if df is None:
             return df
         df = df.copy()
-        df["run_source_lock"] = "v266.59_single_source_lock"
+        df["run_source_lock"] = "v266.60_single_source_lock"
         df["run_id"] = str(run_id)
         df["updated_at"] = v26659_now_taipei()
         return df
     except Exception as e:
-        print("v266.59 stamp warning:", e)
+        print("v266.60 stamp warning:", e)
         return df
 
 from pathlib import Path
@@ -103,7 +103,7 @@ def write_both(df, name):
         try:
             df = lock_display_fields_v26645(df)
         except Exception as e:
-            print("v266.59 field lock warning:", name, e)
+            print("v266.60 field lock warning:", name, e)
     df.to_csv(ROOT / name, index=False, encoding="utf-8-sig")
     df.to_csv(DATA_DIR / name, index=False, encoding="utf-8-sig")
 
@@ -123,7 +123,7 @@ def safe_num(s, default=np.nan):
 
 def safe_str_series(x, index=None):
     """
-    v266.59 防型態炸裂：
+    v266.60 防型態炸裂：
     np.where 會回傳 numpy.ndarray，不能直接 .str。
     統一轉成 pandas Series 後再做字串處理。
     """
@@ -134,7 +134,7 @@ def safe_str_series(x, index=None):
 
 def safe_bool_series(x, index):
     """
-    v266.59.2 防單一 bool 炸裂：
+    v266.60.2 防單一 bool 炸裂：
     df.loc[False, col] 會造成 KeyError: cannot use a single bool to index into setitem。
     任何 scalar bool 都轉成與 df.index 對齊的 Series。
     """
@@ -211,7 +211,7 @@ def add_liquidity_fields(d):
 
 def add_tech_decision_fields(d):
     """
-    v266.59 技術欄位完整修復：
+    v266.60 技術欄位完整修復：
     - 補 MA5 / MA10 / MA20 中文狀態
     - 補 K棒型態 / K線結構
     - 補乾淨中文技術提示
@@ -318,7 +318,7 @@ def add_tech_decision_fields(d):
 
 def lock_display_fields_v26645(df):
     """
-    v266.59 欄位鎖死：
+    v266.60 欄位鎖死：
     確保所有輸出清單都有一致技術欄位，不留下 NaN / None / 空白 / 資料不足。
     """
     if df is None or len(df) == 0:
@@ -466,7 +466,7 @@ def detect_regime(x):
 
 
 def set_action(df, buy, test, watch, buy_sub, test_sub, watch_sub):
-    # v266.59.2：所有 mask 都安全轉成 Series，避免 scalar False/True 造成 pandas setitem KeyError。
+    # v266.60.2：所有 mask 都安全轉成 Series，避免 scalar False/True 造成 pandas setitem KeyError。
     buy = safe_bool_series(buy, df.index)
     test = safe_bool_series(test, df.index)
     watch = safe_bool_series(watch, df.index)
@@ -1068,7 +1068,7 @@ def build_trade_plan(core, alpha, regime, signal_date):
 
 def add_behavior_fields_v26650(df):
     """
-    v266.59 行為判讀：
+    v266.60 行為判讀：
     不改原本 K棒型態 / K線結構，只新增：
     - behavior_hint
     - behavior_confidence
@@ -1159,7 +1159,7 @@ def add_behavior_fields_v26650(df):
 
 def clear_stale_outputs_v26646():
     """
-    v266.59 強制刷新：
+    v266.60 強制刷新：
     每次策略啟動前先清掉會讓前端沿用舊標的的輸出檔。
     注意：不刪手動持倉 manual_positions/current_positions。
     """
@@ -1176,9 +1176,9 @@ def clear_stale_outputs_v26646():
             try:
                 if p.exists():
                     p.unlink()
-                    print("v266.59 cleared stale output:", p)
+                    print("v266.60 cleared stale output:", p)
             except Exception as e:
-                print("v266.59 clear warning:", p, e)
+                print("v266.60 clear warning:", p, e)
 
 
 
@@ -1268,7 +1268,7 @@ def main():
         },
     }
 
-    # v266.59：策略層也輸出 summary fallback；真正最終日期仍由 yml 最後鎖定一次。
+    # v266.60：策略層也輸出 summary fallback；真正最終日期仍由 yml 最後鎖定一次。
     final_summary = {
         **meta,
         "source": "v266_59_single_source_lock",
