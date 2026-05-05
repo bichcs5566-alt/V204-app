@@ -188,7 +188,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.47_final_source_locked";
+const APP_PATCH_VERSION = "v266.48_live_refresh_final_lock";
 const FORCE_REFRESH_NONCE_V26646 = Date.now();
 function bustUrlV26647(url) {
   const sep = String(url).includes("?") ? "&" : "?";
@@ -211,6 +211,41 @@ const FILES = {
   ignition: DATA_DIR + "ignition_candidates.csv",
   evolution: DATA_DIR + "strategy_evolution.csv"
 };
+
+// v266.48：前端強制刷新鎖。
+// 目的：Safari / GitHub Pages 不可再沿用舊 final_action_plan。
+let LAST_WORKFLOW_RUN_V26648 = "";
+let LIVE_WORKFLOW_TIMER_V26648 = null;
+
+function isManualPositionActiveV26648() {
+  try {
+    const rows = loadPositions?.() || [];
+    return rows.some(r => Number(String(r.shares || r.qty || 0).replace(/,/g, "")) > 0);
+  } catch (e) {
+    return false;
+  }
+}
+
+function purgeStaleFinalRowsV26648(rows) {
+  const active = isManualPositionActiveV26648();
+  return (rows || []).filter(row => {
+    const txt = String(row.final_action || row.action || row.status || row.decision || "").toUpperCase()
+      + " " + String(row.reason || row.system_note || "");
+    const isSell = /SELL|賣|賣出|出場|停損|REDUCE|減碼/.test(txt);
+    if (isSell && !active) return false;
+    return true;
+  });
+}
+
+function forceClearClientCacheV26648() {
+  try {
+    Object.keys(localStorage || {}).forEach(k => {
+      if (/final|workflow|dashboard|csv|cache/i.test(k)) localStorage.removeItem(k);
+    });
+  } catch (e) {}
+}
+
+
 
 const GH_STORAGE_KEY = "daily_dashboard_github_settings_v1";
 const POS_STORAGE_KEY = "daily_dashboard_positions_v1";
@@ -387,6 +422,11 @@ function applyWorkflowStatusV26631(data) {
 
   const status = String(data.status || "").toLowerCase();
   const runNumber = data.run_number ? `#${data.run_number}` : "";
+  const runKey = String(data.run_id || data.run_number || "");
+  if (runKey && LAST_WORKFLOW_RUN_V26648 && LAST_WORKFLOW_RUN_V26648 !== runKey) {
+    forceClearClientCacheV26648();
+  }
+  if (runKey) LAST_WORKFLOW_RUN_V26648 = runKey;
   const startMs = parseTimeMsV26631(data.start_time || data.started_at || data.created_at);
   const endMs = parseTimeMsV26631(data.end_time || data.completed_at);
 
@@ -405,8 +445,11 @@ function applyWorkflowStatusV26631(data) {
   }
 
   if (status === "success") {
-    setSyncStatus(`✅ 後端策略完成 ${runNumber}｜總耗時 ${durationText}｜完成時間 ${formatTWClock(endMs ? new Date(endMs) : new Date())}`, "sync ok");
-    setPositionStatus?.(`✅ 後端策略完成 ${runNumber}｜總耗時 ${durationText}`, "position-status ok");
+    const completeClock = formatTWClock(endMs ? new Date(endMs) : new Date());
+    setSyncStatus(`✅ 後端策略完成 ${runNumber}｜總耗時 ${durationText}｜完成時間 ${completeClock}｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync ok");
+    setPositionStatus?.(`✅ 後端策略完成 ${runNumber}｜總耗時 ${durationText}｜現在時間 <span id="positionLiveClock">${formatTWClock(new Date())}</span>`, "position-status ok");
+    startLiveClock();
+    startPositionClock?.();
     return true;
   }
 
@@ -2133,9 +2176,10 @@ function renderDecision(rows) {
 
 function renderFinalActions(rows) {
   const container = qs("finalActionList");
+  rows = purgeStaleFinalRowsV26648(rows || []);
 
   if (!rows.length) {
-    container.innerHTML = `<div class="empty">目前沒有 SELL / REDUCE / BUY 主操作</div>`;
+    container.innerHTML = `<div class="empty">本輪沒有新的最終操作，未保留舊標的。</div>`;
     return;
   }
 
