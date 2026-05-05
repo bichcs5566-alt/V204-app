@@ -3789,4 +3789,190 @@ function macroChangeTextV26619(data) {
     data?.yesterday_macro_score,
     data?.last_macro_score
   ];
-  const found = prevCandidates.fin
+  const found = prevCandidates.find(v => v !== undefined && v !== null && v !== "");
+  if (found === undefined) return "";
+  const prev = Number(found);
+  if (!Number.isFinite(prev)) return "";
+
+  const diff = now - prev;
+  const sign = diff > 0 ? "+" : "";
+  const word = diff > 0 ? "轉強" : diff < 0 ? "轉弱" : "持平";
+  return `📈 ${sign}${diff.toFixed(1)} ${word}`;
+}
+
+function macroInlineHTMLV26619(data) {
+  const label = macroLabelV26619(data);
+  const score = macroScoreV26619(data);
+  const total = macroTotalV26619(data);
+  const decision = macroDecisionV26619(data);
+  const confidence = macroConfidenceV26619(data);
+  const change = macroChangeTextV26619(data);
+
+  return `
+    <span class="macro-line-v26619">
+      <span class="macro-main-v26619">${label}｜分數 ${score}/${total}</span>
+      <span class="macro-pill-v26619">${decision}</span>
+      <span class="macro-pill-v26619 macro-conf-v26619">${confidence}</span>
+      ${change ? `<span class="macro-pill-v26619 macro-change-v26619">${change}</span>` : ""}
+    </span>
+  `;
+}
+
+function findMacroValueElementV26619() {
+  const all = Array.from(document.querySelectorAll("body *"));
+
+  const direct = all.find(el => {
+    if (el.children.length > 2) return false;
+    const txt = (el.textContent || "").trim();
+    return (
+      txt.includes("總經偏") &&
+      txt.includes("分數") &&
+      !txt.includes("風險模式") &&
+      !txt.includes("市場狀態") &&
+      !txt.includes("macro")
+    );
+  });
+  if (direct) return direct;
+
+  const label = all.find(el => (el.textContent || "").trim() === "總經狀態");
+  if (label) {
+    const card = label.parentElement || label.closest("div");
+    if (card) {
+      const candidates = Array.from(card.querySelectorAll("div, span, b, strong")).filter(el => {
+        const t = (el.textContent || "").trim();
+        return t && t !== "總經狀態" && (t.includes("總經") || t.includes("分數"));
+      });
+      if (candidates.length) return candidates[candidates.length - 1];
+    }
+  }
+
+  return null;
+}
+
+async function renderMacroPreciseV26619() {
+  try {
+    document.querySelectorAll(
+      ".macro-explain-v266162, .macro-explain-v266153, .macro-explain-v266152, .macro-inline-hint-v26617, .macro-inline-hint-v266171, .macro-value-v26618"
+    ).forEach(el => el.remove());
+
+    const res = await fetch("./data/macro_regime.json?ts=" + Date.now(), { cache: "no-store" });
+    const data = await res.json();
+
+    const valueEl = findMacroValueElementV26619();
+    if (!valueEl) return;
+
+    valueEl.innerHTML = macroInlineHTMLV26619(data);
+    valueEl.classList.add("macro-value-host-v26619");
+  } catch (e) {
+    console.log("v266.19 macro precise render failed", e);
+  }
+}
+
+setTimeout(renderMacroPreciseV26619, 400);
+setTimeout(renderMacroPreciseV26619, 1200);
+setTimeout(renderMacroPreciseV26619, 2400);
+setTimeout(renderMacroPreciseV26619, 4200);
+
+
+
+// ===== v266.21 籌碼信心顯示 =====
+function chipDisplayV26621(row) {
+  const display = row.chip_display || row["籌碼集中度"];
+  const conf = row.chip_confidence || row["籌碼信心"] || "";
+  if (display && String(display).trim() !== "--") {
+    return conf ? `${safeText(display)}｜${safeText(conf)}` : safeText(display);
+  }
+
+  const scoreRaw = row.chip_score || row.chip_concentration_score || row["籌碼分數"];
+  const score = Number(scoreRaw);
+  if (!Number.isFinite(score)) return "--";
+
+  let label = "🟡 普通";
+  if (score >= 80) label = "🔥 高度集中";
+  else if (score >= 60) label = "🟢 偏集中";
+  else if (score >= 40) label = "🟡 普通";
+  else if (score >= 20) label = "⚠️ 分散";
+  else label = "❌ 極度分散";
+
+  const base = `${Math.round(score)}（${label}）`;
+  return conf ? `${base}｜${safeText(conf)}` : base;
+}
+
+function chipReasonV26621(row) {
+  return safeText(
+    row.chip_reason ||
+    row.chip_concentration_reason ||
+    row["籌碼原因"],
+    "籌碼依策略判斷"
+  );
+}
+
+function chipHintV26621(row) {
+  return safeText(
+    row.chip_hint ||
+    row.chip_concentration_hint ||
+    row["籌碼提示"],
+    "籌碼依策略判斷，只能當輔助，不可重倉。"
+  );
+}
+
+
+
+/* ===== v266.30B hotfix：只修正顯示，不再動原本區塊 ===== */
+function injectV26630BPositionColorStyle() {
+  if (document.getElementById("v26630b-position-color-style")) return;
+  const style = document.createElement("style");
+  style.id = "v26630b-position-color-style";
+  style.textContent = `
+    .position-merged-v26630.sell,
+    .position-merged-v26630.reduce {
+      background: #fff1f1 !important;
+      border: 3px solid #f0a3a3 !important;
+      border-radius: 24px !important;
+      padding: 18px !important;
+      margin-top: 14px !important;
+    }
+    .position-merged-v26630.hold,
+    .position-merged-v26630.watch {
+      background: #effcf3 !important;
+      border: 3px solid #89e5a4 !important;
+      border-radius: 24px !important;
+      padding: 18px !important;
+      margin-top: 14px !important;
+    }
+    .position-merged-pill-v26630.sell,
+    .position-merged-pill-v26630.reduce {
+      background: #fde2e2 !important;
+      color: #b91c1c !important;
+      border-radius: 999px !important;
+      padding: 8px 14px !important;
+      font-weight: 900 !important;
+    }
+    .position-merged-pill-v26630.hold,
+    .position-merged-pill-v26630.watch {
+      background: #dcfce7 !important;
+      color: #166534 !important;
+      border-radius: 999px !important;
+      padding: 8px 14px !important;
+      font-weight: 900 !important;
+    }
+    .position-merged-head-v26630 {
+      display: flex !important;
+      align-items: center !important;
+      gap: 12px !important;
+      margin-bottom: 16px !important;
+    }
+    .position-merged-head-v26630 b {
+      flex: 1 !important;
+      font-size: 1.28em !important;
+      font-weight: 900 !important;
+    }
+    .position-merged-head-v26630 strong {
+      font-size: 1.08em !important;
+      font-weight: 900 !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
+try { injectV26630BPositionColorStyle(); } catch(e) {}
+document.addEventListener("DOMContentLoaded", injectV26630BPositionColorStyle);
