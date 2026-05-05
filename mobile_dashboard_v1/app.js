@@ -188,7 +188,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.57_source_safe_string";
+const APP_PATCH_VERSION = "v266.57.1_backend_relink_patch";
 const FORCE_REFRESH_NONCE_V26646 = Date.now();
 function bustUrlV26647(url) {
   const sep = String(url).includes("?") ? "&" : "?";
@@ -250,6 +250,16 @@ function forceClearClientCacheV26648() {
 const GH_STORAGE_KEY = "daily_dashboard_github_settings_v1";
 const POS_STORAGE_KEY = "daily_dashboard_positions_v1";
 const DEFAULT_WORKFLOW_ID = "data_pipeline.yml";
+
+// v266.57.1：GitHub 後端連結鎖定。
+// Pages 網址是 bichcs5566-alt.github.io/V204-app/，但 Actions 所在 repo 是 V204-app。
+// 舊設定若誤存成 bichcs5566-alt.github.io，會打到錯 repo，造成前端與後端斷開。
+function normalizeGithubRepoV266571(repo) {
+  const r = String(repo || "").trim();
+  if (!r || r === "bichcs5566-alt.github.io" || r === "github.io") return "V204-app";
+  return r;
+}
+
 
 const ACTION_LABEL = {
   SELL: "賣出",
@@ -977,7 +987,7 @@ function loadGithubSettings() {
     const raw = localStorage.getItem(GH_STORAGE_KEY);
     if (!raw) return {
       owner: "bichcs5566-alt",
-      repo: "bichcs5566-alt.github.io",
+      repo: "V204-app",
       branch: "main",
       token: "",
       workflow: DEFAULT_WORKFLOW_ID
@@ -986,7 +996,7 @@ function loadGithubSettings() {
     const obj = JSON.parse(raw);
     return {
       owner: obj.owner || "bichcs5566-alt",
-      repo: obj.repo || "bichcs5566-alt.github.io",
+      repo: normalizeGithubRepoV266571(obj.repo || "V204-app"),
       branch: obj.branch || "main",
       token: obj.token || "",
       workflow: obj.workflow || DEFAULT_WORKFLOW_ID
@@ -994,7 +1004,7 @@ function loadGithubSettings() {
   } catch (e) {
     return {
       owner: "bichcs5566-alt",
-      repo: "bichcs5566-alt.github.io",
+      repo: "V204-app",
       branch: "main",
       token: "",
       workflow: DEFAULT_WORKFLOW_ID
@@ -1005,7 +1015,7 @@ function loadGithubSettings() {
 function saveGithubSettings() {
   const settings = {
     owner: qs("ghOwner")?.value.trim() || "",
-    repo: qs("ghRepo")?.value.trim() || "",
+    repo: normalizeGithubRepoV266571(qs("ghRepo")?.value.trim() || "V204-app"),
     branch: qs("ghBranch")?.value.trim() || "main",
     token: qs("ghToken")?.value.trim() || "",
     workflow: DEFAULT_WORKFLOW_ID
@@ -1875,7 +1885,7 @@ function renderAppShell() {
       <section class="card github-settings-card">
         <h2>🔐 GitHub 本機設定</h2>
         <input id="ghOwner" class="github-input" value="${gh.owner}" placeholder="owner，例如 bichcs5566-alt" autocomplete="off" />
-        <input id="ghRepo" class="github-input" value="${gh.repo}" placeholder="repo，例如 bichcs5566-alt.github.io" autocomplete="off" />
+        <input id="ghRepo" class="github-input" value="${gh.repo}" placeholder="repo，例如 V204-app" autocomplete="off" />
         <input id="ghBranch" class="github-input" value="${gh.branch}" placeholder="branch，例如 main" autocomplete="off" />
         <input id="ghToken" class="github-input" value="${gh.token}" placeholder="token，只存在本機瀏覽器" type="password" autocomplete="off" />
         <div class="github-actions">
@@ -1887,7 +1897,10 @@ function renderAppShell() {
     </main>
   `;
 
-  qs("refreshBtn").addEventListener("click", () => location.reload());
+  qs("refreshBtn").addEventListener("click", () => {
+    const safePath = (location.pathname && location.pathname !== "/") ? location.pathname : "/V204-app/";
+    location.href = safePath + "?v=" + Date.now() + location.hash;
+  });
   qs("updateBtn").addEventListener("click", triggerDataPipeline);
   qs("saveGhBtn").addEventListener("click", saveGithubSettings);
   qs("clearGhBtn").addEventListener("click", clearGithubSettings);
@@ -2004,7 +2017,10 @@ async function pollWorkflowRun(createdAfterIso, startedAtMs = null) {
             });
             setSyncStatus(`✅ 後端策略完成 ${runNumber}｜耗時 ${elapsedText}｜完成時間 ${doneClock}｜重新整理中...`, "sync ok");
             setPositionStatus?.(`✅ 後端策略完成 ${runNumber}｜耗時 ${elapsedText}｜完成時間 ${doneClock}｜重新整理中...`, "position-status ok");
-            setTimeout(() => { location.href = location.pathname + '?v=' + Date.now() + location.hash; }, 1800);
+            setTimeout(() => {
+              const safePath = (location.pathname && location.pathname !== "/") ? location.pathname : "/V204-app/";
+              location.href = safePath + '?v=' + Date.now() + location.hash;
+            }, 1800);
             return;
           }
 
