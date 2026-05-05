@@ -188,7 +188,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.59_single_source_lock";
+const APP_PATCH_VERSION = "v266.60_api_position_sync";
 const FORCE_REFRESH_NONCE_V26646 = Date.now();
 function bustUrlV26647(url) {
   const sep = String(url).includes("?") ? "&" : "?";
@@ -3911,3 +3911,69 @@ function injectV26630BPositionColorStyle() {
 }
 try { injectV26630BPositionColorStyle(); } catch(e) {}
 document.addEventListener("DOMContentLoaded", injectV26630BPositionColorStyle);
+
+
+
+// =========================
+// v266.60 GitHub API 真同步版
+// 先部署 Cloudflare Worker，再把 URL 換成你的 Worker endpoint。
+// =========================
+const POSITION_SYNC_API_URL = window.POSITION_SYNC_API_URL || "https://YOUR-WORKER-NAME.YOUR-SUBDOMAIN.workers.dev/sync-positions";
+
+function v26660CollectManualPositions() {
+  const rows = [];
+  const pools = [window.manualPositions, window.currentPositions, window.positionRows, window.positions];
+  for (const pool of pools) {
+    if (!Array.isArray(pool)) continue;
+    for (const r of pool) {
+      const stock_id = String(r?.stock_id || r?.code || r?.股票代號 || "").match(/\d{4}/)?.[0] || "";
+      const avg_price = Number(String(r?.avg_price || r?.average_price || r?.均價 || "").replace(/,/g, ""));
+      const shares = Number(String(r?.shares || r?.qty || r?.張數 || "").replace(/,/g, ""));
+      const note = String(r?.note || r?.備註 || "").trim();
+      if (stock_id && Number.isFinite(avg_price) && Number.isFinite(shares) && shares > 0) rows.push({stock_id, avg_price, shares, note});
+    }
+    if (rows.length) break;
+  }
+  return rows;
+}
+async function v26660SyncPositionsViaApi() {
+  const positions = v26660CollectManualPositions();
+  if (!positions.length) throw new Error("尚未建立可同步持倉，請先輸入個股、均價、張數。");
+  const res = await fetch(POSITION_SYNC_API_URL, {
+    method: "POST",
+    headers: {"content-type": "application/json"},
+    cache: "no-store",
+    body: JSON.stringify({positions, source: "mobile_dashboard_v1"})
+  });
+  let data = {};
+  try { data = await res.json(); } catch(e) {}
+  if (!res.ok || !data.ok) throw new Error(data.error || `同步失敗 HTTP ${res.status}`);
+  return data;
+}
+async function v26660HandleSyncPositionsClick() {
+  const box = document.querySelector("#workflowStatus, #syncStatus, .sync-status, .status-box");
+  try {
+    if (box) box.innerHTML = "⏳ 持倉 API 同步中，正在寫入 GitHub...";
+    const data = await v26660SyncPositionsViaApi();
+    if (box) box.innerHTML = `✅ 持倉已真同步 ${data.synced_count} 筆，已觸發後端策略。`;
+    alert(`✅ 持倉已真同步 ${data.synced_count} 筆\n已觸發 GitHub Actions`);
+    return data;
+  } catch (err) {
+    const msg = String(err?.message || err);
+    if (box) box.innerHTML = `❌ 持倉 API 同步失敗：${msg}`;
+    alert(`❌ 持倉 API 同步失敗：${msg}`);
+    throw err;
+  }
+}
+window.v26660SyncPositionsViaApi = v26660SyncPositionsViaApi;
+window.v26660HandleSyncPositionsClick = v26660HandleSyncPositionsClick;
+
+document.addEventListener("click", function(e) {
+  const t = e.target;
+  const txt = String(t?.innerText || t?.value || "").trim();
+  if (txt.includes("同步持倉")) {
+    e.preventDefault();
+    e.stopPropagation();
+    v26660HandleSyncPositionsClick();
+  }
+}, true);
