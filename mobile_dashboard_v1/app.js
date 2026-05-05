@@ -188,7 +188,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.52_remove_broken_enrich";
+const APP_PATCH_VERSION = "v266.53_remove_verify_block";
 const FORCE_REFRESH_NONCE_V26646 = Date.now();
 function bustUrlV26647(url) {
   const sep = String(url).includes("?") ? "&" : "?";
@@ -212,7 +212,7 @@ const FILES = {
   evolution: DATA_DIR + "strategy_evolution.csv"
 };
 
-// v266.52：前端強制刷新鎖。
+// v266.53：前端強制刷新鎖。
 // 目的：Safari / GitHub Pages 不可再沿用舊 final_action_plan。
 let LAST_WORKFLOW_RUN_V26648 = "";
 let LIVE_WORKFLOW_TIMER_V26648 = null;
@@ -3715,4 +3715,96 @@ function chipDisplayV26621(row) {
     return conf ? `${safeText(display)}｜${safeText(conf)}` : safeText(display);
   }
 
-  const scoreRaw = row.chip_score
+  const scoreRaw = row.chip_score || row.chip_concentration_score || row["籌碼分數"];
+  const score = Number(scoreRaw);
+  if (!Number.isFinite(score)) return "--";
+
+  let label = "🟡 普通";
+  if (score >= 80) label = "🔥 高度集中";
+  else if (score >= 60) label = "🟢 偏集中";
+  else if (score >= 40) label = "🟡 普通";
+  else if (score >= 20) label = "⚠️ 分散";
+  else label = "❌ 極度分散";
+
+  const base = `${Math.round(score)}（${label}）`;
+  return conf ? `${base}｜${safeText(conf)}` : base;
+}
+
+function chipReasonV26621(row) {
+  return safeText(
+    row.chip_reason ||
+    row.chip_concentration_reason ||
+    row["籌碼原因"],
+    "籌碼依策略判斷"
+  );
+}
+
+function chipHintV26621(row) {
+  return safeText(
+    row.chip_hint ||
+    row.chip_concentration_hint ||
+    row["籌碼提示"],
+    "籌碼依策略判斷，只能當輔助，不可重倉。"
+  );
+}
+
+
+
+/* ===== v266.30B hotfix：只修正顯示，不再動原本區塊 ===== */
+function injectV26630BPositionColorStyle() {
+  if (document.getElementById("v26630b-position-color-style")) return;
+  const style = document.createElement("style");
+  style.id = "v26630b-position-color-style";
+  style.textContent = `
+    .position-merged-v26630.sell,
+    .position-merged-v26630.reduce {
+      background: #fff1f1 !important;
+      border: 3px solid #f0a3a3 !important;
+      border-radius: 24px !important;
+      padding: 18px !important;
+      margin-top: 14px !important;
+    }
+    .position-merged-v26630.hold,
+    .position-merged-v26630.watch {
+      background: #effcf3 !important;
+      border: 3px solid #89e5a4 !important;
+      border-radius: 24px !important;
+      padding: 18px !important;
+      margin-top: 14px !important;
+    }
+    .position-merged-pill-v26630.sell,
+    .position-merged-pill-v26630.reduce {
+      background: #fde2e2 !important;
+      color: #b91c1c !important;
+      border-radius: 999px !important;
+      padding: 8px 14px !important;
+      font-weight: 900 !important;
+    }
+    .position-merged-pill-v26630.hold,
+    .position-merged-pill-v26630.watch {
+      background: #dcfce7 !important;
+      color: #166534 !important;
+      border-radius: 999px !important;
+      padding: 8px 14px !important;
+      font-weight: 900 !important;
+    }
+    .position-merged-head-v26630 {
+      display: flex !important;
+      align-items: center !important;
+      gap: 12px !important;
+      margin-bottom: 16px !important;
+    }
+    .position-merged-head-v26630 b {
+      flex: 1 !important;
+      font-size: 1.28em !important;
+      font-weight: 900 !important;
+    }
+    .position-merged-head-v26630 strong {
+      font-size: 1.08em !important;
+      font-weight: 900 !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
+try { injectV26630BPositionColorStyle(); } catch(e) {}
+document.addEventListener("DOMContentLoaded", injectV26630BPositionColorStyle);
