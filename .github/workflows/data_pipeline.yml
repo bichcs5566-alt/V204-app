@@ -1,4 +1,4 @@
-name: data_pipeline  # v266.51 fake breakout guard
+name: data_pipeline  # v266.52 fake breakout guard
 
 on:
   workflow_dispatch:
@@ -32,7 +32,7 @@ jobs:
           git fetch origin main
           git pull --ff-only origin main
 
-      # v266.51 TRUE LIVE TIMER：
+      # v266.52 TRUE LIVE TIMER：
       # 任務一開始寫入真正 start_time / start_epoch，前端可像手錶每秒更新。
       - name: Write workflow running status
         run: |
@@ -46,7 +46,7 @@ jobs:
           now_iso = now_dt.isoformat()
           start_epoch = int(time.time())
           status = {
-              "version": "v266.51",
+              "version": "v266.52",
               "status": "running",
               "job_status": "running",
               "run_id": "${{ github.run_id }}",
@@ -115,18 +115,30 @@ jobs:
           python v266_data_guard.py
 
 
-      # v266.51：策略前置檢查，避免 import / syntax 問題跑到中段才炸。
+      # v266.52：策略前置檢查，避免 import / syntax 問題跑到中段才炸。
+
+      - name: Verify broken enrich step removed
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          y = Path(".github/workflows/data_pipeline.yml").read_text(encoding="utf-8")
+          if "Enrich final outputs with tech fields" in y:
+              raise SystemExit("Broken enrich step still exists")
+          print("v266.52 old broken enrich step removed")
+          PY
+
+
       - name: Preflight strategy syntax and imports
         run: |
           python - <<'PY'
           import py_compile
           py_compile.compile("v266_strategy_engine.py", doraise=True)
-          print("v266.51 preflight OK")
+          print("v266.52 preflight OK")
           PY
 
 
 
-      # v266.51：強制刷新。跑策略前清掉舊標的輸出，避免 final_action_plan 沿用舊檔。
+      # v266.52：強制刷新。跑策略前清掉舊標的輸出，避免 final_action_plan 沿用舊檔。
       - name: Clear stale strategy outputs before rebuild
         run: |
           python - <<'PY'
@@ -147,7 +159,7 @@ jobs:
                   if p.exists():
                       p.unlink()
                       print("cleared", p)
-          print("v266.51 stale outputs cleared")
+          print("v266.52 stale outputs cleared")
           PY
 
 
@@ -284,218 +296,8 @@ jobs:
       # 造成 trade_date 被覆蓋回 signal_date，這版已鎖住。
 
 
-      # v266.51：最終輸出補齊技術欄位（完全防炸版）
-      - name: Enrich final outputs with tech fields
-        if: always()
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import pandas as pd
-          import numpy as np
+      # v266.52：最終輸出補齊技術欄位（完全防炸版）
 
-          ROOT = Path(".")
-          DATA = ROOT / "mobile_dashboard_v1" / "data"
-          DATA.mkdir(parents=True, exist_ok=True)
-
-          TECH_COLS = [
-              "stock_id","close","open","high","low","ma5","ma10","ma20",
-              "ma5_label","ma10_label","ma20_label",
-              "ma5_status","ma10_status","ma20_status",
-              "kbar_type","k_bar_type","k_structure","kline_structure",
-              "tech_reason","kbar_reason","tech_decision_hint"
-          ]
-
-          def read_csv_safe(p):
-              p = Path(p)
-              if not p.exists() or p.stat().st_size == 0:
-                  return pd.DataFrame()
-              try:
-                  return pd.read_csv(p, dtype=str, encoding="utf-8-sig")
-              except Exception:
-                  try:
-                      return pd.read_csv(p, dtype=str)
-                  except Exception as e:
-                      print("skip read", p, e)
-                      return pd.DataFrame()
-
-          def safe_text(x, default=""):
-              try:
-                  if x is None:
-                      return default
-                  if pd.isna(x):
-                      return default
-                  s = str(x).strip()
-                  if s.lower() in ["nan", "none", "null", "undefined", "n/a"] or s in ["資料不足", "資料有限", "--", "-"]:
-                      return default
-                  return s
-              except Exception:
-                  return default
-
-          def first_non_empty(series):
-              for x in series:
-                  s = safe_text(x, "")
-                  if s and s != "--":
-                      return s
-              return ""
-
-          def normalize_stock_id(df):
-              if df.empty or "stock_id" not in df.columns:
-                  return df
-              df = df.copy()
-              sid = df["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False)
-              df["stock_id"] = sid.fillna(df["stock_id"].astype(str))
-              return df
-
-          sources = []
-          for name in [
-              "candidates.csv",
-              "trade_plan.csv",
-              "core_candidates.csv",
-              "alpha_candidates.csv",
-              "ignition_candidates.csv",
-              "strategy_evolution.csv",
-              "position_overlay.csv",
-              "final_action_plan.csv",
-          ]:
-              for p in [ROOT / name, DATA / name]:
-                  df = normalize_stock_id(read_csv_safe(p))
-                  if not df.empty and "stock_id" in df.columns:
-                      keep = [c for c in TECH_COLS if c in df.columns]
-                      if keep:
-                          tmp = df[keep].copy()
-                          for c in keep:
-                              tmp[c] = tmp[c].map(lambda v: safe_text(v, ""))
-                          sources.append(tmp)
-
-          if sources:
-              tech = pd.concat(sources, ignore_index=True)
-              tech = normalize_stock_id(tech)
-              tech = tech.groupby("stock_id", as_index=False).agg(first_non_empty)
-          else:
-              tech = pd.DataFrame(columns=["stock_id"])
-
-          def enrich_file(path):
-              p = Path(path)
-              df = normalize_stock_id(read_csv_safe(p))
-              if df.empty or "stock_id" not in df.columns:
-                  return
-              if tech.empty:
-    
-              def _behavior(row):
-                  text_all = " ".join([txt(row.get(c, ""), "") for c in ["final_action","action","status","reason","system_note","tech_reason","kbar_type","k_structure"]])
-                  if any(x in text_all for x in ["SELL","REDUCE","賣","賣出","出場","停損","跌破","短線轉弱"]):
-                      return ("🔻 結構轉弱（優先控風險）", "高", "先控風險，不急著攤平；等站回關鍵均線再觀察。")
-                  if any(x in text_all for x in ["高檔出貨","假突破","上影壓力","疑似假突破"]):
-                      return ("⚠️ 高檔出貨／誘多風險（不追高）", "中高", "避免追價；若已有部位，觀察是否跌破 MA5 / MA10。")
-                  if any(x in text_all for x in ["突破長紅","突破確認","多頭排列","強勢"]):
-                      return ("🚀 主力拉升（趨勢延續）", "高", "可續抱；若是試單，可觀察是否進入加碼條件。")
-                  if any(x in text_all for x in ["整理收斂","整理觀察","下影支撐","洗盤","吸籌"]):
-                      return ("🟡 洗盤吸籌／整理換手（結構未壞）", "中高", "不急追；等放量突破或站穩 MA10 / MA20 再提高權重。")
-                  if any(x in text_all for x in ["WATCH","觀察","盤整","震盪","十字"]):
-                      return ("⚪ 盤整觀望（等待方向）", "中低", "先觀察，不急進場；等突破、量能或均線方向出現。")
-                  return ("⚪ 行為中性（依策略判斷）", "中低", "目前訊號不夠明確，依原策略與風控執行。")
-
-              bvals = df.apply(_behavior, axis=1)
-              df["behavior_hint"] = [x[0] for x in bvals]
-              df["behavior_confidence"] = [x[1] for x in bvals]
-              df["behavior_action_hint"] = [x[2] for x in bvals]
-
-              df.to_csv(p, index=False, encoding="utf-8-sig")
-                  return
-
-              merged = df.merge(tech, on="stock_id", how="left", suffixes=("", "_tech"))
-
-              for c in TECH_COLS:
-                  if c == "stock_id":
-                      continue
-                  tc = c + "_tech"
-                  if tc not in merged.columns:
-                      continue
-
-                  if c not in merged.columns:
-                      merged[c] = merged[tc].map(lambda v: safe_text(v, ""))
-                  else:
-                      left = merged[c].map(lambda v: safe_text(v, ""))
-                      right = merged[tc].map(lambda v: safe_text(v, ""))
-                      merged[c] = [l if l and l != "--" else r for l, r in zip(left, right)]
-
-                  merged.drop(columns=[tc], inplace=True)
-
-              # v266.51：若 K棒/K線還是空，依現有 MA / 原因 / action 做保底推論。
-              def _num(v):
-                  try:
-                      return float(str(v).replace(",", ""))
-                  except Exception:
-                      return np.nan
-
-              def _infer_kbar(r):
-                  current = safe_text(r.get("kbar_type", ""), "")
-                  if current and current not in ["--", "資料不足", "資料有限", "-"]:
-                      return current
-                  reason = safe_text(r.get("reason", ""), "") + " " + safe_text(r.get("system_note", ""), "") + " " + safe_text(r.get("action", ""), "") + " " + safe_text(r.get("final_action", ""), "")
-                  if any(x in reason for x in ["停損", "跌破", "出場", "SELL", "賣"]):
-                      return "跌破型K棒"
-                  if any(x in reason for x in ["突破", "強勢", "試單", "BUY", "買"]):
-                      return "突破確認K"
-                  if any(x in reason for x in ["觀察", "整理", "收斂", "WATCH"]):
-                      return "整理觀察K"
-                  return "整理觀察K"
-
-              def _infer_kstruct(r):
-                  current = safe_text(r.get("k_structure", ""), "")
-                  if current and current not in ["--", "資料不足", "資料有限", "-"]:
-                      return current
-                  c = _num(r.get("close", r.get("ref_price", "")))
-                  ma5 = _num(r.get("ma5", ""))
-                  ma10 = _num(r.get("ma10", ""))
-                  ma20 = _num(r.get("ma20", ""))
-                  if all(np.isfinite(x) for x in [c, ma5, ma10, ma20]):
-                      if ma5 > ma10 and ma10 > ma20 and c > ma20:
-                          return "多頭排列"
-                      if ma5 < ma10 and ma10 < ma20 and c < ma20:
-                          return "空頭排列"
-                      if c > ma20 and ma5 >= ma10:
-                          return "整理後轉強"
-                      if c < ma20:
-                          return "短線轉弱"
-                  reason = safe_text(r.get("reason", ""), "") + " " + safe_text(r.get("system_note", ""), "") + " " + safe_text(r.get("action", ""), "") + " " + safe_text(r.get("final_action", ""), "")
-                  if any(x in reason for x in ["停損", "跌破", "出場", "SELL", "賣"]):
-                      return "短線轉弱"
-                  if any(x in reason for x in ["突破", "強勢", "試單", "BUY", "買"]):
-                      return "整理後轉強"
-                  if any(x in reason for x in ["觀察", "整理", "收斂", "WATCH"]):
-                      return "整理收斂"
-                  return "整理收斂"
-
-              merged["kbar_type"] = merged.apply(_infer_kbar, axis=1)
-              merged["k_bar_type"] = merged["kbar_type"]
-              merged["k_structure"] = merged.apply(_infer_kstruct, axis=1)
-              merged["kline_structure"] = merged["k_structure"]
-              merged["kbar_reason"] = "K棒型態：" + merged["kbar_type"].astype(str) + "｜K線結構：" + merged["k_structure"].astype(str)
-
-              # 最後保底，避免前端拿到 nan/None。
-              for c in merged.columns:
-                  merged[c] = merged[c].map(lambda v: safe_text(v, ""))
-
-              merged.to_csv(p, index=False, encoding="utf-8-sig")
-
-          for name in [
-              "final_action_plan.csv",
-              "trade_plan.csv",
-              "position_overlay.csv",
-              "ignition_candidates.csv",
-              "strategy_evolution.csv",
-          ]:
-              enrich_file(ROOT / name)
-              enrich_file(DATA / name)
-
-          print("v266.51 guarded enrich done, tech rows =", len(tech))
-          PY
-
-
-      # v266.51：資料時間鎖定。用 feature_panel_daily.csv 最新日期強制覆寫所有 summary/meta，避免訊號日卡舊值。
-
-      # v266.51：行為判讀安全補欄位。獨立步驟，不嵌入原本 enrich 區塊，避免縮排炸裂。
       - name: Add behavior interpretation fields safely
         if: always()
         run: |
@@ -577,7 +379,7 @@ jobs:
               enrich_file(ROOT / name)
               enrich_file(DATA / name)
 
-          print("v266.51 behavior fields safe complete", now)
+          print("v266.52 behavior fields safe complete", now)
           PY
 
 
@@ -679,8 +481,8 @@ jobs:
           regime = read_json(ROOT / "market_regime.json") or read_json(DATA / "market_regime.json")
 
           patch = {
-              "source": "v266_51_behavior_indent_fix",
-              "version": "v266.51",
+              "source": "v266_52_remove_broken_enrich",
+              "version": "v266.52",
               "signal_date": signal_date,
               "latest_date": signal_date,
               "trade_date": trade_date,
@@ -699,8 +501,8 @@ jobs:
               "trade_date": trade_date,
               "updated_at": now,
               "generated_at": regime.get("generated_at") or now,
-              "source": "v266_51_behavior_indent_fix",
-              "version": "v266.51",
+              "source": "v266_52_remove_broken_enrich",
+              "version": "v266.52",
               "date_lock_source": source_file,
           })
 
@@ -710,19 +512,19 @@ jobs:
 
           # 另外輸出一份 debug，方便你手機檢查。
           write_json_both({
-              "version": "v266.51",
+              "version": "v266.52",
               "signal_date": signal_date,
               "trade_date": trade_date,
               "updated_at": now,
               "source_file": source_file,
           }, "date_lock_report.json")
 
-          print("v266.51 date locked:", signal_date, "trade:", trade_date, "source:", source_file)
+          print("v266.52 date locked:", signal_date, "trade:", trade_date, "source:", source_file)
           PY
 
 
 
-      # v266.51：全系統時間統一。所有 JSON / 關鍵 CSV 的 updated_at / generated_at 都寫入台灣時間。
+      # v266.52：全系統時間統一。所有 JSON / 關鍵 CSV 的 updated_at / generated_at 都寫入台灣時間。
       - name: Normalize all dashboard timestamps to Taiwan time
         if: always()
         run: |
@@ -756,7 +558,7 @@ jobs:
               obj["last_update"] = now
               obj["timezone"] = "Asia/Taipei"
               obj["time_source"] = "github_actions_taipei"
-              obj["version"] = "v266.51"
+              obj["version"] = "v266.52"
               for p in [ROOT / name, DATA / name]:
                   p.parent.mkdir(parents=True, exist_ok=True)
                   p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8-sig")
@@ -807,16 +609,16 @@ jobs:
               normalize_csv_time(ROOT / name)
               normalize_csv_time(DATA / name)
 
-          print("v266.51 timestamps normalized:", now)
+          print("v266.52 timestamps normalized:", now)
           PY
 
 
 
-      # v266.51：欄位鎖死。所有前端卡片欄位統一補齊，不允許 NaN / 資料不足 / 空欄位。
+      # v266.52：欄位鎖死。所有前端卡片欄位統一補齊，不允許 NaN / 資料不足 / 空欄位。
 
-      # v266.51：確認最終操作已重新產出，並強制同步 root / dashboard 兩邊。
+      # v266.52：確認最終操作已重新產出，並強制同步 root / dashboard 兩邊。
 
-      # v266.51：最終操作來源鎖定。
+      # v266.52：最終操作來源鎖定。
       # 目的：跑完策略後 final_action_plan 不可沿用舊賣出標的。
       # 規則：
       # 1. 若本輪沒有持倉，SELL/REDUCE 全部清空。
@@ -947,8 +749,8 @@ jobs:
 
           summary = read_json(ROOT / "final_action_summary.json") or read_json(DATA / "final_action_summary.json")
           summary.update({
-              "version": "v266.51",
-              "source": "v266_51_behavior_indent_fix",
+              "version": "v266.52",
+              "source": "v266_52_remove_broken_enrich",
               "refresh_mode": "behavior_interpretation",
               "final_action_rows": int(len(final)),
               "active_position_count": int(len(active_position_ids)),
@@ -960,7 +762,7 @@ jobs:
           for p in [ROOT/"final_action_summary.json", DATA/"final_action_summary.json"]:
               p.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8-sig")
 
-          print("v266.51 final source locked")
+          print("v266.52 final source locked")
           print("active_position_ids =", sorted(active_position_ids))
           print("final_action_rows =", len(final))
           PY
@@ -993,11 +795,11 @@ jobs:
           if df.empty:
               # 不讓前端沿用舊標的：沒有新 final 就寫空表。
               df = pd.DataFrame(columns=["stock_id","stock_name","final_action","action","ref_price","reason","updated_at","refresh_mode"])
-              print("v266.51 final_action empty; wrote empty locked table")
+              print("v266.52 final_action empty; wrote empty locked table")
           else:
               df["updated_at"] = now
               df["refresh_mode"] = "behavior_interpretation"
-              print("v266.51 final_action refreshed rows =", len(df), "source =", src)
+              print("v266.52 final_action refreshed rows =", len(df), "source =", src)
 
           for p in [ROOT/"final_action_plan.csv", DATA/"final_action_plan.csv"]:
               df.to_csv(p, index=False, encoding="utf-8-sig")
@@ -1013,8 +815,8 @@ jobs:
                       pass
 
           summary.update({
-              "version": "v266.51",
-              "source": "v266_51_behavior_indent_fix",
+              "version": "v266.52",
+              "source": "v266_52_remove_broken_enrich",
               "refresh_mode": "behavior_interpretation",
               "final_action_rows": int(len(df)),
               "final_action_updated_at": now,
@@ -1025,7 +827,7 @@ jobs:
           for p in [ROOT/"final_action_summary.json", DATA/"final_action_summary.json"]:
               p.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8-sig")
 
-          print("v266.51 final refresh verified", now)
+          print("v266.52 final refresh verified", now)
           PY
 
 
@@ -1199,7 +1001,7 @@ jobs:
               lock_file(ROOT/name)
               lock_file(DATA/name)
 
-          print("v266.51 display fields locked", now)
+          print("v266.52 display fields locked", now)
           PY
 
 
@@ -1289,7 +1091,7 @@ jobs:
           rm -f mobile_dashboard_v1/data/raw_market_daily.csv
 
 
-      # v266.51：最後防護。即使前面局部失敗，也盡量補出可讀狀態檔，避免前端白屏。
+      # v266.52：最後防護。即使前面局部失敗，也盡量補出可讀狀態檔，避免前端白屏。
       - name: Final dashboard file guard
         if: always()
         run: |
@@ -1306,8 +1108,8 @@ jobs:
 
           def write_json_both(name, obj):
               obj = dict(obj or {})
-              obj.setdefault("version", "v266.51")
-              obj.setdefault("source", "v266_51_behavior_indent_fix")
+              obj.setdefault("version", "v266.52")
+              obj.setdefault("source", "v266_52_remove_broken_enrich")
               obj["updated_at"] = now
               obj["timezone"] = "Asia/Taipei"
               for p in [ROOT / name, DATA / name]:
@@ -1327,8 +1129,8 @@ jobs:
                           pass
               if not obj:
                   obj = {
-                      "source": "v266_51_behavior_indent_fix",
-                      "version": "v266.51",
+                      "source": "v266_52_remove_broken_enrich",
+                      "version": "v266.52",
                       "signal_date": "",
                       "trade_date": "",
                       "status": "guard_created",
@@ -1345,12 +1147,12 @@ jobs:
               for p in [ROOT / name, DATA / name]:
                   if not p.exists() or p.stat().st_size == 0:
                       pd.DataFrame(columns=cols).to_csv(p, index=False, encoding="utf-8-sig")
-          print("v266.51 final guard OK", now)
+          print("v266.52 final guard OK", now)
           PY
 
 
 
-      # v266.51：最後一次鎖 final_action，放在所有 guard / enrich / sync 後面，避免後段又把舊標的寫回來。
+      # v266.52：最後一次鎖 final_action，放在所有 guard / enrich / sync 後面，避免後段又把舊標的寫回來。
       - name: Final action last lock before commit
         if: always()
         run: |
@@ -1421,7 +1223,7 @@ jobs:
 
           final["updated_at"] = now
           final["refresh_mode"] = "behavior_interpretation"
-          # v266.51：final_action 也補行為判讀欄位。
+          # v266.52：final_action 也補行為判讀欄位。
           if "behavior_hint" not in final.columns:
               final["behavior_hint"] = "⚪ 行為中性（依策略判斷）"
           if "behavior_confidence" not in final.columns:
@@ -1440,8 +1242,8 @@ jobs:
                   except Exception:
                       pass
           summary.update({
-              "version": "v266.51",
-              "source": "v266_51_behavior_indent_fix",
+              "version": "v266.52",
+              "source": "v266_52_remove_broken_enrich",
               "refresh_mode": "behavior_interpretation",
               "active_position_ids": sorted(active_ids),
               "final_action_rows": int(len(final)),
@@ -1452,7 +1254,7 @@ jobs:
           for p in [ROOT/"final_action_summary.json", DATA/"final_action_summary.json"]:
               p.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8-sig")
 
-          print("v266.51 final last lock rows =", len(final), "active_ids =", sorted(active_ids))
+          print("v266.52 final last lock rows =", len(final), "active_ids =", sorted(active_ids))
           PY
 
 
@@ -1527,7 +1329,7 @@ jobs:
             git push
           fi
 
-      # v266.51 TRUE LIVE TIMER：
+      # v266.52 TRUE LIVE TIMER：
       # 無論成功或失敗，都寫入正確總耗時；不再出現 0分00秒。
       - name: Write workflow final status
         if: always()
@@ -1562,7 +1364,7 @@ jobs:
           duration_text = f"{elapsed//60}分{elapsed%60:02d}秒"
 
           status = {
-              "version": "v266.51",
+              "version": "v266.52",
               "status": "success" if final_status == "success" else "failed",
               "job_status": final_status,
               "run_id": "${{ github.run_id }}",
