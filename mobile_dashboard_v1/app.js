@@ -188,7 +188,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.56_no_position_final_empty";
+const APP_PATCH_VERSION = "v266.57_source_safe_string";
 const FORCE_REFRESH_NONCE_V26646 = Date.now();
 function bustUrlV26647(url) {
   const sep = String(url).includes("?") ? "&" : "?";
@@ -212,7 +212,7 @@ const FILES = {
   evolution: DATA_DIR + "strategy_evolution.csv"
 };
 
-// v266.56：前端強制刷新鎖。
+// v266.57：前端強制刷新鎖。
 // 目的：Safari / GitHub Pages 不可再沿用舊 final_action_plan。
 let LAST_WORKFLOW_RUN_V26648 = "";
 let LIVE_WORKFLOW_TIMER_V26648 = null;
@@ -2175,7 +2175,7 @@ function renderDecision(rows) {
 }
 
 
-// v266.56：無同步持倉時，最終操作不可顯示舊 SELL / 出場資料。
+// v266.57：無同步持倉時，最終操作不可顯示舊 SELL / 出場資料。
 function hasSyncedPositionRowsV26656() {
   try {
     const candidates = [
