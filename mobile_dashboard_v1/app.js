@@ -188,7 +188,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.55_main_tail_fix";
+const APP_PATCH_VERSION = "v266.56_no_position_final_empty";
 const FORCE_REFRESH_NONCE_V26646 = Date.now();
 function bustUrlV26647(url) {
   const sep = String(url).includes("?") ? "&" : "?";
@@ -212,7 +212,7 @@ const FILES = {
   evolution: DATA_DIR + "strategy_evolution.csv"
 };
 
-// v266.55：前端強制刷新鎖。
+// v266.56：前端強制刷新鎖。
 // 目的：Safari / GitHub Pages 不可再沿用舊 final_action_plan。
 let LAST_WORKFLOW_RUN_V26648 = "";
 let LIVE_WORKFLOW_TIMER_V26648 = null;
@@ -2174,12 +2174,69 @@ function renderDecision(rows) {
   `;
 }
 
+
+// v266.56：無同步持倉時，最終操作不可顯示舊 SELL / 出場資料。
+function hasSyncedPositionRowsV26656() {
+  try {
+    const candidates = [
+      window.positionRows,
+      window.positions,
+      window.currentPositions,
+      window.manualPositions,
+      window.positionOverlayRows
+    ];
+    for (const rows of candidates) {
+      if (Array.isArray(rows) && rows.some(r => {
+        const q = Number(String(r?.shares || r?.qty || r?.股數 || r?.lots || 0).replace(/,/g, ""));
+        const sid = String(r?.stock_id || r?.code || r?.股票代號 || "").trim();
+        return sid && q > 0;
+      })) return true;
+    }
+  } catch (e) {}
+  try {
+    const box = document.body?.innerText || "";
+    if (/尚未建立持倉/.test(box)) return false;
+  } catch (e) {}
+  return false;
+}
+
+function isSellLikeFinalRowV26656(row) {
+  const txt = [
+    row?.final_action, row?.action, row?.status, row?.decision,
+    row?.reason, row?.system_note, row?.source
+  ].map(v => String(v || "")).join(" ").toUpperCase();
+  return /SELL|REDUCE|賣|賣出|出場|停損|減碼/.test(txt);
+}
+
+function filterFinalRowsBySyncedPositionsV26656(rows) {
+  rows = Array.isArray(rows) ? rows : [];
+  const hasPos = hasSyncedPositionRowsV26656();
+  if (!hasPos) {
+    return rows.filter(r => !isSellLikeFinalRowV26656(r));
+  }
+  return rows;
+}
+
+function clearStaleFinalCacheV26656() {
+  try {
+    Object.keys(localStorage || {}).forEach(k => {
+      if (/final|action|sell|position|workflow|dashboard|csv/i.test(k)) {
+        localStorage.removeItem(k);
+      }
+    });
+  } catch (e) {}
+}
+
+
 function renderFinalActions(rows) {
+  clearStaleFinalCacheV26656();
+  rows = filterFinalRowsBySyncedPositionsV26656(rows || []);
+
   const container = qs("finalActionList");
   rows = purgeStaleFinalRowsV26648(rows || []);
 
   if (!rows.length) {
-    container.innerHTML = `<div class="empty">本輪沒有新的最終操作，未保留舊標的。</div>`;
+    container.innerHTML = `<div class="empty">本輪沒有最終操作，且沒有同步持倉，不顯示舊標的。</div>`;
     return;
   }
 
