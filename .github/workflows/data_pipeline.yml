@@ -1,4 +1,4 @@
-name: data_pipeline  # v266.57 fake breakout guard
+name: data_pipeline  # v266.59 fake breakout guard
 
 on:
   workflow_dispatch:
@@ -32,7 +32,7 @@ jobs:
           git fetch origin main
           git pull --ff-only origin main
 
-      # v266.57 TRUE LIVE TIMER：
+      # v266.59 TRUE LIVE TIMER：
       # 任務一開始寫入真正 start_time / start_epoch，前端可像手錶每秒更新。
       - name: Write workflow running status
         run: |
@@ -46,7 +46,7 @@ jobs:
           now_iso = now_dt.isoformat()
           start_epoch = int(time.time())
           status = {
-              "version": "v266.57",
+              "version": "v266.59",
               "status": "running",
               "job_status": "running",
               "run_id": "${{ github.run_id }}",
@@ -115,16 +115,16 @@ jobs:
           python v266_data_guard.py
 
 
-      # v266.57：策略前置檢查，避免 import / syntax 問題跑到中段才炸。
+      # v266.59：策略前置檢查，避免 import / syntax 問題跑到中段才炸。
 
 
 
-      - name: Confirm v266.57 safe behavior path
+      - name: Confirm v266.59 safe behavior path
         run: |
-          echo "v266.57 OK: old broken Enrich step removed; safe behavior step remains."
+          echo "v266.59 OK: old broken Enrich step removed; safe behavior step remains."
 
 
-      # v266.57：防止主程式尾端被手機複製/貼上截斷。
+      # v266.59：防止主程式尾端被手機複製/貼上截斷。
       - name: Repair strategy main tail before syntax check
         run: |
           python - <<'PY'
@@ -136,7 +136,7 @@ jobs:
               s = s[:s.rfind(marker)].rstrip()
           s = s.rstrip() + '\n\nif __name__ == "__main__":\n    main()\n'
           p.write_text(s, encoding="utf-8")
-          print("v266.57 repaired __main__ tail")
+          print("v266.59 repaired __main__ tail")
           PY
 
 
@@ -145,12 +145,12 @@ jobs:
           python - <<'PY'
           import py_compile
           py_compile.compile("v266_strategy_engine.py", doraise=True)
-          print("v266.57 preflight OK")
+          print("v266.59 preflight OK")
           PY
 
 
 
-      # v266.57：強制刷新。跑策略前清掉舊標的輸出，避免 final_action_plan 沿用舊檔。
+      # v266.59：強制刷新。跑策略前清掉舊標的輸出，避免 final_action_plan 沿用舊檔。
       - name: Clear stale strategy outputs before rebuild
         run: |
           python - <<'PY'
@@ -171,7 +171,7 @@ jobs:
                   if p.exists():
                       p.unlink()
                       print("cleared", p)
-          print("v266.57 stale outputs cleared")
+          print("v266.59 stale outputs cleared")
           PY
 
 
@@ -202,7 +202,7 @@ jobs:
       # v266.31.1:
       # 建立 stock_id -> stock_name 對照表，讓手動持倉卡片也能顯示名稱。
 
-      # v266.57：持倉區也補齊行為判讀，讓持倉卡片與試單/觀察/起漲/進化清單一致。
+      # v266.59：持倉區也補齊行為判讀，讓持倉卡片與試單/觀察/起漲/進化清單一致。
       - name: Add behavior interpretation to position files
         if: always()
         run: |
@@ -288,7 +288,7 @@ jobs:
                   df.to_csv(p, index=False, encoding="utf-8-sig")
                   print("position behavior enriched:", p, len(df))
 
-          print("v266.57 position behavior complete", now)
+          print("v266.59 position behavior complete", now)
           PY
 
 
@@ -399,7 +399,7 @@ jobs:
       # 造成 trade_date 被覆蓋回 signal_date，這版已鎖住。
 
 
-      # v266.57：最終輸出補齊技術欄位（完全防炸版）
+      # v266.59：最終輸出補齊技術欄位（完全防炸版）
 
       - name: Add behavior interpretation fields safely
         if: always()
@@ -485,7 +485,7 @@ jobs:
               enrich_file(ROOT / name)
               enrich_file(DATA / name)
 
-          print("v266.57 behavior fields safe complete", now)
+          print("v266.59 behavior fields safe complete", now)
           PY
 
 
@@ -587,8 +587,8 @@ jobs:
           regime = read_json(ROOT / "market_regime.json") or read_json(DATA / "market_regime.json")
 
           patch = {
-              "source": "v266_57_source_safe_string",
-              "version": "v266.57",
+              "source": "v266_59_single_source_lock",
+              "version": "v266.59",
               "signal_date": signal_date,
               "latest_date": signal_date,
               "trade_date": trade_date,
@@ -607,8 +607,8 @@ jobs:
               "trade_date": trade_date,
               "updated_at": now,
               "generated_at": regime.get("generated_at") or now,
-              "source": "v266_57_source_safe_string",
-              "version": "v266.57",
+              "source": "v266_59_single_source_lock",
+              "version": "v266.59",
               "date_lock_source": source_file,
           })
 
@@ -618,19 +618,19 @@ jobs:
 
           # 另外輸出一份 debug，方便你手機檢查。
           write_json_both({
-              "version": "v266.57",
+              "version": "v266.59",
               "signal_date": signal_date,
               "trade_date": trade_date,
               "updated_at": now,
               "source_file": source_file,
           }, "date_lock_report.json")
 
-          print("v266.57 date locked:", signal_date, "trade:", trade_date, "source:", source_file)
+          print("v266.59 date locked:", signal_date, "trade:", trade_date, "source:", source_file)
           PY
 
 
 
-      # v266.57：全系統時間統一。所有 JSON / 關鍵 CSV 的 updated_at / generated_at 都寫入台灣時間。
+      # v266.59：全系統時間統一。所有 JSON / 關鍵 CSV 的 updated_at / generated_at 都寫入台灣時間。
       - name: Normalize all dashboard timestamps to Taiwan time
         if: always()
         run: |
@@ -664,7 +664,7 @@ jobs:
               obj["last_update"] = now
               obj["timezone"] = "Asia/Taipei"
               obj["time_source"] = "github_actions_taipei"
-              obj["version"] = "v266.57"
+              obj["version"] = "v266.59"
               for p in [ROOT / name, DATA / name]:
                   p.parent.mkdir(parents=True, exist_ok=True)
                   p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8-sig")
@@ -715,16 +715,16 @@ jobs:
               normalize_csv_time(ROOT / name)
               normalize_csv_time(DATA / name)
 
-          print("v266.57 timestamps normalized:", now)
+          print("v266.59 timestamps normalized:", now)
           PY
 
 
 
-      # v266.57：欄位鎖死。所有前端卡片欄位統一補齊，不允許 NaN / 資料不足 / 空欄位。
+      # v266.59：欄位鎖死。所有前端卡片欄位統一補齊，不允許 NaN / 資料不足 / 空欄位。
 
-      # v266.57：確認最終操作已重新產出，並強制同步 root / dashboard 兩邊。
+      # v266.59：確認最終操作已重新產出，並強制同步 root / dashboard 兩邊。
 
-      # v266.57：最終操作來源鎖定。
+      # v266.59：最終操作來源鎖定。
       # 目的：跑完策略後 final_action_plan 不可沿用舊賣出標的。
       # 規則：
       # 1. 若本輪沒有持倉，SELL/REDUCE 全部清空。
@@ -855,8 +855,8 @@ jobs:
 
           summary = read_json(ROOT / "final_action_summary.json") or read_json(DATA / "final_action_summary.json")
           summary.update({
-              "version": "v266.57",
-              "source": "v266_57_source_safe_string",
+              "version": "v266.59",
+              "source": "v266_59_single_source_lock",
               "refresh_mode": "behavior_interpretation",
               "final_action_rows": int(len(final)),
               "active_position_count": int(len(active_position_ids)),
@@ -868,7 +868,7 @@ jobs:
           for p in [ROOT/"final_action_summary.json", DATA/"final_action_summary.json"]:
               p.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8-sig")
 
-          print("v266.57 final source locked")
+          print("v266.59 final source locked")
           print("active_position_ids =", sorted(active_position_ids))
           print("final_action_rows =", len(final))
           PY
@@ -901,11 +901,11 @@ jobs:
           if df.empty:
               # 不讓前端沿用舊標的：沒有新 final 就寫空表。
               df = pd.DataFrame(columns=["stock_id","stock_name","final_action","action","ref_price","reason","updated_at","refresh_mode"])
-              print("v266.57 final_action empty; wrote empty locked table")
+              print("v266.59 final_action empty; wrote empty locked table")
           else:
               df["updated_at"] = now
               df["refresh_mode"] = "behavior_interpretation"
-              print("v266.57 final_action refreshed rows =", len(df), "source =", src)
+              print("v266.59 final_action refreshed rows =", len(df), "source =", src)
 
           for p in [ROOT/"final_action_plan.csv", DATA/"final_action_plan.csv"]:
               df.to_csv(p, index=False, encoding="utf-8-sig")
@@ -921,8 +921,8 @@ jobs:
                       pass
 
           summary.update({
-              "version": "v266.57",
-              "source": "v266_57_source_safe_string",
+              "version": "v266.59",
+              "source": "v266_59_single_source_lock",
               "refresh_mode": "behavior_interpretation",
               "final_action_rows": int(len(df)),
               "final_action_updated_at": now,
@@ -933,7 +933,7 @@ jobs:
           for p in [ROOT/"final_action_summary.json", DATA/"final_action_summary.json"]:
               p.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8-sig")
 
-          print("v266.57 final refresh verified", now)
+          print("v266.59 final refresh verified", now)
           PY
 
 
@@ -1107,7 +1107,7 @@ jobs:
               lock_file(ROOT/name)
               lock_file(DATA/name)
 
-          print("v266.57 display fields locked", now)
+          print("v266.59 display fields locked", now)
           PY
 
 
@@ -1197,7 +1197,7 @@ jobs:
           rm -f mobile_dashboard_v1/data/raw_market_daily.csv
 
 
-      # v266.57：最後防護。即使前面局部失敗，也盡量補出可讀狀態檔，避免前端白屏。
+      # v266.59：最後防護。即使前面局部失敗，也盡量補出可讀狀態檔，避免前端白屏。
       - name: Final dashboard file guard
         if: always()
         run: |
@@ -1214,8 +1214,8 @@ jobs:
 
           def write_json_both(name, obj):
               obj = dict(obj or {})
-              obj.setdefault("version", "v266.57")
-              obj.setdefault("source", "v266_57_source_safe_string")
+              obj.setdefault("version", "v266.59")
+              obj.setdefault("source", "v266_59_single_source_lock")
               obj["updated_at"] = now
               obj["timezone"] = "Asia/Taipei"
               for p in [ROOT / name, DATA / name]:
@@ -1235,8 +1235,8 @@ jobs:
                           pass
               if not obj:
                   obj = {
-                      "source": "v266_57_source_safe_string",
-                      "version": "v266.57",
+                      "source": "v266_59_single_source_lock",
+                      "version": "v266.59",
                       "signal_date": "",
                       "trade_date": "",
                       "status": "guard_created",
@@ -1253,12 +1253,12 @@ jobs:
               for p in [ROOT / name, DATA / name]:
                   if not p.exists() or p.stat().st_size == 0:
                       pd.DataFrame(columns=cols).to_csv(p, index=False, encoding="utf-8-sig")
-          print("v266.57 final guard OK", now)
+          print("v266.59 final guard OK", now)
           PY
 
 
 
-      # v266.57：最後一次鎖 final_action，放在所有 guard / enrich / sync 後面，避免後段又把舊標的寫回來。
+      # v266.59：最後一次鎖 final_action，放在所有 guard / enrich / sync 後面，避免後段又把舊標的寫回來。
       - name: Final action last lock before commit
         if: always()
         run: |
@@ -1329,7 +1329,7 @@ jobs:
 
           final["updated_at"] = now
           final["refresh_mode"] = "behavior_interpretation"
-          # v266.57：final_action 也補行為判讀欄位。
+          # v266.59：final_action 也補行為判讀欄位。
           if "behavior_hint" not in final.columns:
               final["behavior_hint"] = "⚪ 行為中性（依策略判斷）"
           if "behavior_confidence" not in final.columns:
@@ -1348,8 +1348,8 @@ jobs:
                   except Exception:
                       pass
           summary.update({
-              "version": "v266.57",
-              "source": "v266_57_source_safe_string",
+              "version": "v266.59",
+              "source": "v266_59_single_source_lock",
               "refresh_mode": "behavior_interpretation",
               "active_position_ids": sorted(active_ids),
               "final_action_rows": int(len(final)),
@@ -1360,12 +1360,12 @@ jobs:
           for p in [ROOT/"final_action_summary.json", DATA/"final_action_summary.json"]:
               p.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8-sig")
 
-          print("v266.57 final last lock rows =", len(final), "active_ids =", sorted(active_ids))
+          print("v266.59 final last lock rows =", len(final), "active_ids =", sorted(active_ids))
           PY
 
 
 
-      # v266.57：無同步持倉時，最終操作強制鎖空。
+      # v266.59：無同步持倉時，最終操作強制鎖空。
       # 防止只刷新頁面就復活舊的 2409 / 2330 賣出標的。
       - name: Force empty final actions when no synced positions
         if: always()
@@ -1427,7 +1427,7 @@ jobs:
           try:
               ids = active_position_ids()
           except Exception as e:
-              print("v266.57 active_position_ids warning:", e)
+              print("v266.59 active_position_ids warning:", e)
               ids = set()
 
           final_cols = [
@@ -1443,8 +1443,8 @@ jobs:
                   final.to_csv(p, index=False, encoding="utf-8-sig")
 
               summary = {
-                  "version": "v266.57",
-                  "source": "v266_57_source_safe_string",
+                  "version": "v266.59",
+                  "source": "v266_59_single_source_lock",
                   "refresh_mode": "no_position_final_empty",
                   "final_action_rows": 0,
                   "active_position_count": 0,
@@ -1457,9 +1457,147 @@ jobs:
               for p in [ROOT/"final_action_summary.json", DATA/"final_action_summary.json"]:
                   p.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8-sig")
 
-              print("v266.57 no active synced positions -> final_action_plan emptied")
+              print("v266.59 no active synced positions -> final_action_plan emptied")
           else:
-              print("v266.57 active synced positions found -> keep final actions:", sorted(ids))
+              print("v266.59 active synced positions found -> keep final actions:", sorted(ids))
+          PY
+
+
+
+      # v266.59：資料來源唯一鎖死。
+      # final_action 只能來自「當次 run + 真同步持倉」；沒有同步持倉就清空 final_action 與 position_overlay。
+      - name: v266.59 single source lock final action and positions
+        if: always()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from datetime import datetime, timedelta, timezone
+          import json
+          import pandas as pd
+
+          ROOT = Path(".")
+          DATA = ROOT / "mobile_dashboard_v1" / "data"
+          DATA.mkdir(parents=True, exist_ok=True)
+
+          RUN_ID = "${{ github.run_number }}"
+          now = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
+
+          def read_csv_safe(p):
+              p = Path(p)
+              if not p.exists() or p.stat().st_size == 0:
+                  return pd.DataFrame()
+              try:
+                  return pd.read_csv(p, dtype=str, encoding="utf-8-sig")
+              except Exception:
+                  try:
+                      return pd.read_csv(p, dtype=str)
+                  except Exception:
+                      return pd.DataFrame()
+
+          def norm_sid(v):
+              import re
+              s = "" if v is None else str(v)
+              m = re.search(r"(\d{4})", s)
+              return m.group(1) if m else ""
+
+          def quantity_series(df):
+              for c in ["shares", "qty", "股數", "lots"]:
+                  if c in df.columns:
+                      return pd.to_numeric(df[c].fillna("0").map(str).str.replace(",", "", regex=False), errors="coerce").fillna(0)
+              return pd.Series([0] * len(df), index=df.index)
+
+          def true_position_ids():
+              ids = set()
+              # 真同步持倉只看手動/目前持倉，不拿 position_overlay 當來源，避免殭屍持倉復活。
+              for name in ["manual_positions.csv", "current_positions.csv"]:
+                  for base in [ROOT, DATA]:
+                      df = read_csv_safe(base / name)
+                      if df.empty:
+                          continue
+                      q = quantity_series(df)
+                      valid = df.loc[q > 0].copy()
+                      if valid.empty:
+                          continue
+                      code_col = None
+                      for c in ["stock_id", "code", "股票代號"]:
+                          if c in valid.columns:
+                              code_col = c
+                              break
+                      if code_col:
+                          ids.update(norm_sid(x) for x in valid[code_col].tolist() if norm_sid(x))
+              return ids
+
+          active_ids = true_position_ids()
+
+          final_names = ["final_action_plan.csv", "trade_plan.csv"]
+          position_names = ["position_overlay.csv", "position_monitor.csv"]
+
+          if not active_ids:
+              # 無真持倉：final 與 overlay 全部鎖空，避免舊資料復活。
+              for name in final_names + position_names:
+                  for base in [ROOT, DATA]:
+                      p = base / name
+                      p.parent.mkdir(parents=True, exist_ok=True)
+                      pd.DataFrame().to_csv(p, index=False, encoding="utf-8-sig")
+                      print("v266.59 emptied:", p)
+
+              summary = {
+                  "version": "v266.59",
+                  "source": "v266_59_single_source_lock",
+                  "run_source_lock": "v266.59_single_source_lock",
+                  "run_id": RUN_ID,
+                  "final_action_rows": 0,
+                  "active_position_count": 0,
+                  "active_position_ids": [],
+                  "updated_at": now,
+                  "timezone": "Asia/Taipei",
+                  "message": "無真同步持倉，final_action 與 position_overlay 已強制清空。"
+              }
+              for p in [ROOT/"final_action_summary.json", DATA/"final_action_summary.json"]:
+                  p.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+
+          else:
+              # 有真持倉：final_action 只能保留 active_ids 內標的，並蓋上當次 run_id。
+              for name in final_names:
+                  for base in [ROOT, DATA]:
+                      p = base / name
+                      df = read_csv_safe(p)
+                      if df.empty:
+                          continue
+                      code_col = None
+                      for c in ["stock_id", "code", "股票代號"]:
+                          if c in df.columns:
+                              code_col = c
+                              break
+                      if code_col:
+                          df["_sid_lock"] = df[code_col].map(norm_sid)
+                          df = df[df["_sid_lock"].isin(active_ids)].drop(columns=["_sid_lock"], errors="ignore")
+                      df["run_source_lock"] = "v266.59_single_source_lock"
+                      df["run_id"] = RUN_ID
+                      df["updated_at"] = now
+                      df.to_csv(p, index=False, encoding="utf-8-sig")
+                      print("v266.59 locked final:", p, len(df))
+
+              # overlay 同樣只保留真持倉，防殭屍持倉。
+              for name in position_names:
+                  for base in [ROOT, DATA]:
+                      p = base / name
+                      df = read_csv_safe(p)
+                      if df.empty:
+                          continue
+                      code_col = None
+                      for c in ["stock_id", "code", "股票代號"]:
+                          if c in df.columns:
+                              code_col = c
+                              break
+                      if code_col:
+                          df["_sid_lock"] = df[code_col].map(norm_sid)
+                          df = df[df["_sid_lock"].isin(active_ids)].drop(columns=["_sid_lock"], errors="ignore")
+                      df["run_source_lock"] = "v266.59_single_source_lock"
+                      df["run_id"] = RUN_ID
+                      df["updated_at"] = now
+                      df.to_csv(p, index=False, encoding="utf-8-sig")
+                      print("v266.59 locked positions:", p, len(df))
           PY
 
 
@@ -1534,7 +1672,7 @@ jobs:
             git push
           fi
 
-      # v266.57 TRUE LIVE TIMER：
+      # v266.59 TRUE LIVE TIMER：
       # 無論成功或失敗，都寫入正確總耗時；不再出現 0分00秒。
       - name: Write workflow final status
         if: always()
@@ -1569,7 +1707,7 @@ jobs:
           duration_text = f"{elapsed//60}分{elapsed%60:02d}秒"
 
           status = {
-              "version": "v266.57",
+              "version": "v266.59",
               "status": "success" if final_status == "success" else "failed",
               "job_status": final_status,
               "run_id": "${{ github.run_id }}",
