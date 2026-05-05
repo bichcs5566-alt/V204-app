@@ -188,7 +188,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.57_source_safe_string";
+const APP_PATCH_VERSION = "v266.61_front_position_strategy_patch";
 const FORCE_REFRESH_NONCE_V26646 = Date.now();
 function bustUrlV26647(url) {
   const sep = String(url).includes("?") ? "&" : "?";
@@ -1472,6 +1472,7 @@ function renderMergedPositionHintV26630(stock, posRow) {
         ${positionDetailCellV26630("K線結構", positionKStructureV26635)}
         ${positionDetailCellV26630("籌碼集中度", chip)}
         ${positionDetailCellV26630("風控提示", riskZh)}
+        ${positionDetailCellV26630("前端策略", cleanV26630(posRow.front_strategy_decision || posRow.strategy_decision, "--"))}
         ${positionDetailCellV26630("更新時間", cleanV26630(posRow.updated_at))}
         ${positionDetailCellV26630("備註", cleanV26630(posRow.note, "手動持倉"))}
       </div>
@@ -1481,6 +1482,7 @@ function renderMergedPositionHintV26630(stock, posRow) {
       <div class="detail-text position-merged-text-v26630"><b>籌碼提示</b><p>${chipReason}｜${chipHint}</p></div>
       <div class="detail-text position-merged-text-v26630"><b>建議動作</b><p>${advice}</p></div>
       <div class="detail-text position-merged-text-v26630"><b>系統提示</b><p>${systemHint}</p></div>
+      ${frontPositionStrategyBlockV26661(posRow)}
     </div>
   `;
 }
@@ -1814,6 +1816,7 @@ function renderAppShell() {
 
         <div class="position-actions">
           <button id="addPositionBtn" type="button">新增 / 更新</button>
+          <button id="runFrontPositionStrategyBtn" type="button" class="secondary">📦 重算持倉策略</button>
           <button id="syncPositionBtn" type="button" class="secondary">同步持倉</button>
           <button id="rerunWithPositionBtn" type="button" class="danger">重跑策略</button>
         </div>
@@ -1892,6 +1895,7 @@ function renderAppShell() {
   qs("saveGhBtn").addEventListener("click", saveGithubSettings);
   qs("clearGhBtn").addEventListener("click", clearGithubSettings);
   qs("addPositionBtn").addEventListener("click", addOrUpdatePosition);
+  qs("runFrontPositionStrategyBtn")?.addEventListener("click", runFrontPositionStrategyV26661);
   qs("syncPositionBtn").addEventListener("click", syncPositionsToRepo);
   qs("rerunWithPositionBtn").addEventListener("click", rerunStrategyWithPositions);
   renderPositions();
@@ -3073,6 +3077,108 @@ async function init() {
   }
 }
 
+
+
+// ===== v266.61 前端持倉策略修補：不動後端，只用前端持倉 + 已載入資料重算提示 =====
+function frontPositionStrategyBlockV26661(row) {
+  const decision = cleanV26630(row?.front_strategy_decision || row?.strategy_decision, "");
+  const reason = cleanV26630(row?.front_strategy_reason || row?.strategy_note, "");
+  const behavior = cleanV26630(row?.front_behavior_hint || "", "");
+  if (!decision && !reason && !behavior) return "";
+  return `
+    <div class="detail-text position-merged-text-v26630 front-position-strategy-v26661">
+      <b>📦 前端持倉策略</b>
+      <p>${decision || "依持倉風控觀察"}｜${reason || "依目前已載入資料判斷"}${behavior ? "<br>" + behavior : ""}</p>
+    </div>
+  `;
+}
+
+function frontNumberV26661(v) {
+  const n = Number(String(v ?? "").replace(/,/g, "").replace("%", ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+function frontDecisionByMaV26661(row, overlay) {
+  const avg = frontNumberV26661(row.avg_price);
+  const close = frontNumberV26661(overlay.close || overlay.ref_price || row.close || row.avg_price);
+  const ma5 = frontNumberV26661(overlay.ma5 || row.ma5);
+  const ma10 = frontNumberV26661(overlay.ma10 || row.ma10);
+  const ma20 = frontNumberV26661(overlay.ma20 || row.ma20);
+
+  let decision = "🟡 觀察";
+  let reason = "資料有限，先依均線與原持倉風控觀察。";
+  let behavior = "⚪ 行為中性（等待方向）";
+
+  if (close !== null && ma20 !== null && close < ma20) {
+    decision = "🔴 出場 / 停損觀察";
+    reason = "現價跌破 MA20，持倉優先控風險。";
+    behavior = "🔻 結構轉弱（優先控風險）";
+  } else if (close !== null && ma10 !== null && close < ma10) {
+    decision = "🟠 減碼觀察";
+    reason = "現價跌破 MA10，短線轉弱，先降低部位風險。";
+    behavior = "⚠️ 短線轉弱（觀察是否跌破 MA20）";
+  } else if (close !== null && ma5 !== null && ma10 !== null && ma20 !== null && close > ma5 && ma5 >= ma10 && ma10 >= ma20) {
+    decision = "🟢 續抱";
+    reason = "價格站上 MA5，且均線偏多排列，趨勢尚未破壞。";
+    behavior = "🚀 主力拉升 / 趨勢延續";
+  } else if (close !== null && ma20 !== null && close >= ma20) {
+    decision = "🟡 續抱觀察";
+    reason = "價格仍在 MA20 上方，結構尚未破壞，但未達強勢續抱。";
+    behavior = "🟡 洗盤吸籌 / 整理換手（結構未壞）";
+  }
+
+  if (avg !== null && close !== null && avg > 0) {
+    const pnl = ((close - avg) / avg) * 100;
+    if (pnl <= -8) {
+      decision = "🔴 停損優先";
+      reason = `持倉損益約 ${pnl.toFixed(2)}%，已達風控區，優先保護本金。`;
+      behavior = "🔻 風控觸發（不凹單）";
+    } else if (pnl >= 15 && decision.includes("續抱")) {
+      reason += `｜目前損益約 +${pnl.toFixed(2)}%，可改用移動停利保護。`;
+    }
+  }
+
+  return { decision, reason, behavior };
+}
+
+function runFrontPositionStrategyV26661() {
+  try {
+    const rows = loadPositions();
+    if (!rows.length) {
+      setPositionStatus("❌ 尚未建立持倉，請先新增持倉。", "position-status error");
+      return;
+    }
+
+    const out = rows.map(row => {
+      const sid = typeof stockKeyV26630H === "function" ? stockKeyV26630H(row.stock_id) : sidV26630(row.stock_id);
+      const overlay = {
+        ...(window.__techMapV26637?.[sid] || {}),
+        ...getPositionOverlayRowV26630(sid),
+        ...getPositionRiskRowV26630(sid)
+      };
+      const res = frontDecisionByMaV26661(row, overlay);
+      return {
+        ...row,
+        front_strategy_decision: res.decision,
+        front_strategy_reason: res.reason,
+        front_behavior_hint: res.behavior,
+        updated_at: formatTWDateTime(new Date().toISOString())
+      };
+    });
+
+    savePositions(out);
+    renderPositions();
+    setPositionStatus(`✅ 前端持倉策略已重算｜${out.length} 檔｜現在時間 <span id="positionLiveClock">${formatTWClock(new Date())}</span>`, "position-status ok");
+    setSyncStatus(`✅ 前端持倉策略已重算｜不寫回後端｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync ok");
+    startPositionClock();
+    startLiveClock();
+  } catch (e) {
+    setPositionStatus(`❌ 前端持倉策略重算失敗：${e.message}`, "position-status error");
+    setSyncStatus(`❌ 前端持倉策略重算失敗：${e.message}`, "sync error");
+  }
+}
+
+
 document.addEventListener("DOMContentLoaded", init);
 
 // v266.36.2.2：如果 Safari / GitHub Pages 快取或早期錯誤導致畫面空白，至少強制渲染外殼，避免整頁空白。
@@ -3683,190 +3789,4 @@ function macroChangeTextV26619(data) {
     data?.yesterday_macro_score,
     data?.last_macro_score
   ];
-  const found = prevCandidates.find(v => v !== undefined && v !== null && v !== "");
-  if (found === undefined) return "";
-  const prev = Number(found);
-  if (!Number.isFinite(prev)) return "";
-
-  const diff = now - prev;
-  const sign = diff > 0 ? "+" : "";
-  const word = diff > 0 ? "轉強" : diff < 0 ? "轉弱" : "持平";
-  return `📈 ${sign}${diff.toFixed(1)} ${word}`;
-}
-
-function macroInlineHTMLV26619(data) {
-  const label = macroLabelV26619(data);
-  const score = macroScoreV26619(data);
-  const total = macroTotalV26619(data);
-  const decision = macroDecisionV26619(data);
-  const confidence = macroConfidenceV26619(data);
-  const change = macroChangeTextV26619(data);
-
-  return `
-    <span class="macro-line-v26619">
-      <span class="macro-main-v26619">${label}｜分數 ${score}/${total}</span>
-      <span class="macro-pill-v26619">${decision}</span>
-      <span class="macro-pill-v26619 macro-conf-v26619">${confidence}</span>
-      ${change ? `<span class="macro-pill-v26619 macro-change-v26619">${change}</span>` : ""}
-    </span>
-  `;
-}
-
-function findMacroValueElementV26619() {
-  const all = Array.from(document.querySelectorAll("body *"));
-
-  const direct = all.find(el => {
-    if (el.children.length > 2) return false;
-    const txt = (el.textContent || "").trim();
-    return (
-      txt.includes("總經偏") &&
-      txt.includes("分數") &&
-      !txt.includes("風險模式") &&
-      !txt.includes("市場狀態") &&
-      !txt.includes("macro")
-    );
-  });
-  if (direct) return direct;
-
-  const label = all.find(el => (el.textContent || "").trim() === "總經狀態");
-  if (label) {
-    const card = label.parentElement || label.closest("div");
-    if (card) {
-      const candidates = Array.from(card.querySelectorAll("div, span, b, strong")).filter(el => {
-        const t = (el.textContent || "").trim();
-        return t && t !== "總經狀態" && (t.includes("總經") || t.includes("分數"));
-      });
-      if (candidates.length) return candidates[candidates.length - 1];
-    }
-  }
-
-  return null;
-}
-
-async function renderMacroPreciseV26619() {
-  try {
-    document.querySelectorAll(
-      ".macro-explain-v266162, .macro-explain-v266153, .macro-explain-v266152, .macro-inline-hint-v26617, .macro-inline-hint-v266171, .macro-value-v26618"
-    ).forEach(el => el.remove());
-
-    const res = await fetch("./data/macro_regime.json?ts=" + Date.now(), { cache: "no-store" });
-    const data = await res.json();
-
-    const valueEl = findMacroValueElementV26619();
-    if (!valueEl) return;
-
-    valueEl.innerHTML = macroInlineHTMLV26619(data);
-    valueEl.classList.add("macro-value-host-v26619");
-  } catch (e) {
-    console.log("v266.19 macro precise render failed", e);
-  }
-}
-
-setTimeout(renderMacroPreciseV26619, 400);
-setTimeout(renderMacroPreciseV26619, 1200);
-setTimeout(renderMacroPreciseV26619, 2400);
-setTimeout(renderMacroPreciseV26619, 4200);
-
-
-
-// ===== v266.21 籌碼信心顯示 =====
-function chipDisplayV26621(row) {
-  const display = row.chip_display || row["籌碼集中度"];
-  const conf = row.chip_confidence || row["籌碼信心"] || "";
-  if (display && String(display).trim() !== "--") {
-    return conf ? `${safeText(display)}｜${safeText(conf)}` : safeText(display);
-  }
-
-  const scoreRaw = row.chip_score || row.chip_concentration_score || row["籌碼分數"];
-  const score = Number(scoreRaw);
-  if (!Number.isFinite(score)) return "--";
-
-  let label = "🟡 普通";
-  if (score >= 80) label = "🔥 高度集中";
-  else if (score >= 60) label = "🟢 偏集中";
-  else if (score >= 40) label = "🟡 普通";
-  else if (score >= 20) label = "⚠️ 分散";
-  else label = "❌ 極度分散";
-
-  const base = `${Math.round(score)}（${label}）`;
-  return conf ? `${base}｜${safeText(conf)}` : base;
-}
-
-function chipReasonV26621(row) {
-  return safeText(
-    row.chip_reason ||
-    row.chip_concentration_reason ||
-    row["籌碼原因"],
-    "籌碼依策略判斷"
-  );
-}
-
-function chipHintV26621(row) {
-  return safeText(
-    row.chip_hint ||
-    row.chip_concentration_hint ||
-    row["籌碼提示"],
-    "籌碼依策略判斷，只能當輔助，不可重倉。"
-  );
-}
-
-
-
-/* ===== v266.30B hotfix：只修正顯示，不再動原本區塊 ===== */
-function injectV26630BPositionColorStyle() {
-  if (document.getElementById("v26630b-position-color-style")) return;
-  const style = document.createElement("style");
-  style.id = "v26630b-position-color-style";
-  style.textContent = `
-    .position-merged-v26630.sell,
-    .position-merged-v26630.reduce {
-      background: #fff1f1 !important;
-      border: 3px solid #f0a3a3 !important;
-      border-radius: 24px !important;
-      padding: 18px !important;
-      margin-top: 14px !important;
-    }
-    .position-merged-v26630.hold,
-    .position-merged-v26630.watch {
-      background: #effcf3 !important;
-      border: 3px solid #89e5a4 !important;
-      border-radius: 24px !important;
-      padding: 18px !important;
-      margin-top: 14px !important;
-    }
-    .position-merged-pill-v26630.sell,
-    .position-merged-pill-v26630.reduce {
-      background: #fde2e2 !important;
-      color: #b91c1c !important;
-      border-radius: 999px !important;
-      padding: 8px 14px !important;
-      font-weight: 900 !important;
-    }
-    .position-merged-pill-v26630.hold,
-    .position-merged-pill-v26630.watch {
-      background: #dcfce7 !important;
-      color: #166534 !important;
-      border-radius: 999px !important;
-      padding: 8px 14px !important;
-      font-weight: 900 !important;
-    }
-    .position-merged-head-v26630 {
-      display: flex !important;
-      align-items: center !important;
-      gap: 12px !important;
-      margin-bottom: 16px !important;
-    }
-    .position-merged-head-v26630 b {
-      flex: 1 !important;
-      font-size: 1.28em !important;
-      font-weight: 900 !important;
-    }
-    .position-merged-head-v26630 strong {
-      font-size: 1.08em !important;
-      font-weight: 900 !important;
-    }
-  `;
-  document.head.appendChild(style);
-}
-try { injectV26630BPositionColorStyle(); } catch(e) {}
-document.addEventListener("DOMContentLoaded", injectV26630BPositionColorStyle);
+  const found = prevCandidates.fin
