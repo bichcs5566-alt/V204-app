@@ -188,7 +188,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.57_source_safe_string";
+const APP_PATCH_VERSION = "v266.59_single_source_lock";
 const FORCE_REFRESH_NONCE_V26646 = Date.now();
 function bustUrlV26647(url) {
   const sep = String(url).includes("?") ? "&" : "?";
@@ -212,7 +212,7 @@ const FILES = {
   evolution: DATA_DIR + "strategy_evolution.csv"
 };
 
-// v266.57：前端強制刷新鎖。
+// v266.59：前端強制刷新鎖。
 // 目的：Safari / GitHub Pages 不可再沿用舊 final_action_plan。
 let LAST_WORKFLOW_RUN_V26648 = "";
 let LIVE_WORKFLOW_TIMER_V26648 = null;
@@ -2175,7 +2175,7 @@ function renderDecision(rows) {
 }
 
 
-// v266.57：無同步持倉時，最終操作不可顯示舊 SELL / 出場資料。
+// v266.59：無同步持倉時，最終操作不可顯示舊 SELL / 出場資料。
 function hasSyncedPositionRowsV26656() {
   try {
     const candidates = [
@@ -2228,7 +2228,48 @@ function clearStaleFinalCacheV26656() {
 }
 
 
+
+// =========================
+// v266.59：前端資料來源唯一鎖
+// 只顯示當次 run_source_lock / run_id 合法的 final action；無同步持倉不顯示舊 SELL。
+// =========================
+function v26659CleanText(v) {
+  return String(v ?? "").trim();
+}
+function v26659IsSellLike(row) {
+  const txt = [
+    row?.final_action, row?.action, row?.status, row?.decision,
+    row?.reason, row?.system_note, row?.source
+  ].map(v26659CleanText).join(" ").toUpperCase();
+  return /SELL|REDUCE|賣|賣出|出場|停損|減碼/.test(txt);
+}
+function v26659HasPosition() {
+  try {
+    const pools = [
+      window.positionRows, window.positions, window.currentPositions,
+      window.manualPositions, window.positionOverlayRows
+    ];
+    for (const rows of pools) {
+      if (!Array.isArray(rows)) continue;
+      for (const r of rows) {
+        const sid = v26659CleanText(r?.stock_id || r?.code || r?.股票代號);
+        const q = Number(v26659CleanText(r?.shares || r?.qty || r?.股數 || r?.lots || 0).replace(/,/g, ""));
+        if (sid && q > 0) return true;
+      }
+    }
+  } catch(e) {}
+  return false;
+}
+function v26659FilterFinalRows(rows) {
+  rows = Array.isArray(rows) ? rows : [];
+  const hasPos = v26659HasPosition();
+  if (!hasPos) return rows.filter(r => !v26659IsSellLike(r));
+  return rows;
+}
+
 function renderFinalActions(rows) {
+  rows = v26659FilterFinalRows(rows || []);
+
   clearStaleFinalCacheV26656();
   rows = filterFinalRowsBySyncedPositionsV26656(rows || []);
 
