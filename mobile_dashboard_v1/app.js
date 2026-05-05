@@ -188,7 +188,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.53_remove_verify_block";
+const APP_PATCH_VERSION = "v266.54_position_behavior_hint";
 const FORCE_REFRESH_NONCE_V26646 = Date.now();
 function bustUrlV26647(url) {
   const sep = String(url).includes("?") ? "&" : "?";
@@ -212,7 +212,7 @@ const FILES = {
   evolution: DATA_DIR + "strategy_evolution.csv"
 };
 
-// v266.53：前端強制刷新鎖。
+// v266.54：前端強制刷新鎖。
 // 目的：Safari / GitHub Pages 不可再沿用舊 final_action_plan。
 let LAST_WORKFLOW_RUN_V26648 = "";
 let LIVE_WORKFLOW_TIMER_V26648 = null;
@@ -2661,6 +2661,11 @@ function inferBehaviorActionHintV26650(row) {
   if (/出貨|誘多/.test(hint)) return "避免追價；若已有部位，觀察是否跌破 MA5 / MA10。";
   if (/洗盤|吸籌/.test(hint)) return "不急追；等放量突破或站穩 MA10 / MA20 再提高權重。";
   return "先觀察，不急進場；等突破、量能或均線方向出現。";
+}
+
+
+function positionBehaviorBlockV26654(row) {
+  return `<div class="detail-text position-behavior-v26654"><b>🧠 行為判讀</b><p>${inferBehaviorHintV26650(row)}｜信心：${inferBehaviorConfidenceV26650(row)}<br>${inferBehaviorActionHintV26650(row)}</p></div>`;
 }
 
 
