@@ -188,7 +188,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.57_source_safe_string";
+const APP_PATCH_VERSION = "v266.57.1_backend_relink_patch";
 const FORCE_REFRESH_NONCE_V26646 = Date.now();
 function bustUrlV26647(url) {
   const sep = String(url).includes("?") ? "&" : "?";
@@ -250,6 +250,16 @@ function forceClearClientCacheV26648() {
 const GH_STORAGE_KEY = "daily_dashboard_github_settings_v1";
 const POS_STORAGE_KEY = "daily_dashboard_positions_v1";
 const DEFAULT_WORKFLOW_ID = "data_pipeline.yml";
+
+// v266.57.1：GitHub 後端連結鎖定。
+// Pages 網址是 bichcs5566-alt.github.io/V204-app/，但 Actions 所在 repo 是 V204-app。
+// 舊設定若誤存成 bichcs5566-alt.github.io，會打到錯 repo，造成前端與後端斷開。
+function normalizeGithubRepoV266571(repo) {
+  const r = String(repo || "").trim();
+  if (!r || r === "bichcs5566-alt.github.io" || r === "github.io") return "V204-app";
+  return r;
+}
+
 
 const ACTION_LABEL = {
   SELL: "賣出",
@@ -977,7 +987,7 @@ function loadGithubSettings() {
     const raw = localStorage.getItem(GH_STORAGE_KEY);
     if (!raw) return {
       owner: "bichcs5566-alt",
-      repo: "bichcs5566-alt.github.io",
+      repo: "V204-app",
       branch: "main",
       token: "",
       workflow: DEFAULT_WORKFLOW_ID
@@ -986,7 +996,7 @@ function loadGithubSettings() {
     const obj = JSON.parse(raw);
     return {
       owner: obj.owner || "bichcs5566-alt",
-      repo: obj.repo || "bichcs5566-alt.github.io",
+      repo: normalizeGithubRepoV266571(obj.repo || "V204-app"),
       branch: obj.branch || "main",
       token: obj.token || "",
       workflow: obj.workflow || DEFAULT_WORKFLOW_ID
@@ -994,7 +1004,7 @@ function loadGithubSettings() {
   } catch (e) {
     return {
       owner: "bichcs5566-alt",
-      repo: "bichcs5566-alt.github.io",
+      repo: "V204-app",
       branch: "main",
       token: "",
       workflow: DEFAULT_WORKFLOW_ID
@@ -1005,7 +1015,7 @@ function loadGithubSettings() {
 function saveGithubSettings() {
   const settings = {
     owner: qs("ghOwner")?.value.trim() || "",
-    repo: qs("ghRepo")?.value.trim() || "",
+    repo: normalizeGithubRepoV266571(qs("ghRepo")?.value.trim() || "V204-app"),
     branch: qs("ghBranch")?.value.trim() || "main",
     token: qs("ghToken")?.value.trim() || "",
     workflow: DEFAULT_WORKFLOW_ID
@@ -1875,7 +1885,7 @@ function renderAppShell() {
       <section class="card github-settings-card">
         <h2>🔐 GitHub 本機設定</h2>
         <input id="ghOwner" class="github-input" value="${gh.owner}" placeholder="owner，例如 bichcs5566-alt" autocomplete="off" />
-        <input id="ghRepo" class="github-input" value="${gh.repo}" placeholder="repo，例如 bichcs5566-alt.github.io" autocomplete="off" />
+        <input id="ghRepo" class="github-input" value="${gh.repo}" placeholder="repo，例如 V204-app" autocomplete="off" />
         <input id="ghBranch" class="github-input" value="${gh.branch}" placeholder="branch，例如 main" autocomplete="off" />
         <input id="ghToken" class="github-input" value="${gh.token}" placeholder="token，只存在本機瀏覽器" type="password" autocomplete="off" />
         <div class="github-actions">
@@ -1887,7 +1897,10 @@ function renderAppShell() {
     </main>
   `;
 
-  qs("refreshBtn").addEventListener("click", () => location.reload());
+  qs("refreshBtn").addEventListener("click", () => {
+    const safePath = (location.pathname && location.pathname !== "/") ? location.pathname : "/V204-app/";
+    location.href = safePath + "?v=" + Date.now() + location.hash;
+  });
   qs("updateBtn").addEventListener("click", triggerDataPipeline);
   qs("saveGhBtn").addEventListener("click", saveGithubSettings);
   qs("clearGhBtn").addEventListener("click", clearGithubSettings);
@@ -2004,7 +2017,10 @@ async function pollWorkflowRun(createdAfterIso, startedAtMs = null) {
             });
             setSyncStatus(`✅ 後端策略完成 ${runNumber}｜耗時 ${elapsedText}｜完成時間 ${doneClock}｜重新整理中...`, "sync ok");
             setPositionStatus?.(`✅ 後端策略完成 ${runNumber}｜耗時 ${elapsedText}｜完成時間 ${doneClock}｜重新整理中...`, "position-status ok");
-            setTimeout(() => { location.href = location.pathname + '?v=' + Date.now() + location.hash; }, 1800);
+            setTimeout(() => {
+              const safePath = (location.pathname && location.pathname !== "/") ? location.pathname : "/V204-app/";
+              location.href = safePath + '?v=' + Date.now() + location.hash;
+            }, 1800);
             return;
           }
 
@@ -3710,163 +3726,3 @@ function macroInlineHTMLV26619(data) {
       ${change ? `<span class="macro-pill-v26619 macro-change-v26619">${change}</span>` : ""}
     </span>
   `;
-}
-
-function findMacroValueElementV26619() {
-  const all = Array.from(document.querySelectorAll("body *"));
-
-  const direct = all.find(el => {
-    if (el.children.length > 2) return false;
-    const txt = (el.textContent || "").trim();
-    return (
-      txt.includes("總經偏") &&
-      txt.includes("分數") &&
-      !txt.includes("風險模式") &&
-      !txt.includes("市場狀態") &&
-      !txt.includes("macro")
-    );
-  });
-  if (direct) return direct;
-
-  const label = all.find(el => (el.textContent || "").trim() === "總經狀態");
-  if (label) {
-    const card = label.parentElement || label.closest("div");
-    if (card) {
-      const candidates = Array.from(card.querySelectorAll("div, span, b, strong")).filter(el => {
-        const t = (el.textContent || "").trim();
-        return t && t !== "總經狀態" && (t.includes("總經") || t.includes("分數"));
-      });
-      if (candidates.length) return candidates[candidates.length - 1];
-    }
-  }
-
-  return null;
-}
-
-async function renderMacroPreciseV26619() {
-  try {
-    document.querySelectorAll(
-      ".macro-explain-v266162, .macro-explain-v266153, .macro-explain-v266152, .macro-inline-hint-v26617, .macro-inline-hint-v266171, .macro-value-v26618"
-    ).forEach(el => el.remove());
-
-    const res = await fetch("./data/macro_regime.json?ts=" + Date.now(), { cache: "no-store" });
-    const data = await res.json();
-
-    const valueEl = findMacroValueElementV26619();
-    if (!valueEl) return;
-
-    valueEl.innerHTML = macroInlineHTMLV26619(data);
-    valueEl.classList.add("macro-value-host-v26619");
-  } catch (e) {
-    console.log("v266.19 macro precise render failed", e);
-  }
-}
-
-setTimeout(renderMacroPreciseV26619, 400);
-setTimeout(renderMacroPreciseV26619, 1200);
-setTimeout(renderMacroPreciseV26619, 2400);
-setTimeout(renderMacroPreciseV26619, 4200);
-
-
-
-// ===== v266.21 籌碼信心顯示 =====
-function chipDisplayV26621(row) {
-  const display = row.chip_display || row["籌碼集中度"];
-  const conf = row.chip_confidence || row["籌碼信心"] || "";
-  if (display && String(display).trim() !== "--") {
-    return conf ? `${safeText(display)}｜${safeText(conf)}` : safeText(display);
-  }
-
-  const scoreRaw = row.chip_score || row.chip_concentration_score || row["籌碼分數"];
-  const score = Number(scoreRaw);
-  if (!Number.isFinite(score)) return "--";
-
-  let label = "🟡 普通";
-  if (score >= 80) label = "🔥 高度集中";
-  else if (score >= 60) label = "🟢 偏集中";
-  else if (score >= 40) label = "🟡 普通";
-  else if (score >= 20) label = "⚠️ 分散";
-  else label = "❌ 極度分散";
-
-  const base = `${Math.round(score)}（${label}）`;
-  return conf ? `${base}｜${safeText(conf)}` : base;
-}
-
-function chipReasonV26621(row) {
-  return safeText(
-    row.chip_reason ||
-    row.chip_concentration_reason ||
-    row["籌碼原因"],
-    "籌碼依策略判斷"
-  );
-}
-
-function chipHintV26621(row) {
-  return safeText(
-    row.chip_hint ||
-    row.chip_concentration_hint ||
-    row["籌碼提示"],
-    "籌碼依策略判斷，只能當輔助，不可重倉。"
-  );
-}
-
-
-
-/* ===== v266.30B hotfix：只修正顯示，不再動原本區塊 ===== */
-function injectV26630BPositionColorStyle() {
-  if (document.getElementById("v26630b-position-color-style")) return;
-  const style = document.createElement("style");
-  style.id = "v26630b-position-color-style";
-  style.textContent = `
-    .position-merged-v26630.sell,
-    .position-merged-v26630.reduce {
-      background: #fff1f1 !important;
-      border: 3px solid #f0a3a3 !important;
-      border-radius: 24px !important;
-      padding: 18px !important;
-      margin-top: 14px !important;
-    }
-    .position-merged-v26630.hold,
-    .position-merged-v26630.watch {
-      background: #effcf3 !important;
-      border: 3px solid #89e5a4 !important;
-      border-radius: 24px !important;
-      padding: 18px !important;
-      margin-top: 14px !important;
-    }
-    .position-merged-pill-v26630.sell,
-    .position-merged-pill-v26630.reduce {
-      background: #fde2e2 !important;
-      color: #b91c1c !important;
-      border-radius: 999px !important;
-      padding: 8px 14px !important;
-      font-weight: 900 !important;
-    }
-    .position-merged-pill-v26630.hold,
-    .position-merged-pill-v26630.watch {
-      background: #dcfce7 !important;
-      color: #166534 !important;
-      border-radius: 999px !important;
-      padding: 8px 14px !important;
-      font-weight: 900 !important;
-    }
-    .position-merged-head-v26630 {
-      display: flex !important;
-      align-items: center !important;
-      gap: 12px !important;
-      margin-bottom: 16px !important;
-    }
-    .position-merged-head-v26630 b {
-      flex: 1 !important;
-      font-size: 1.28em !important;
-      font-weight: 900 !important;
-    }
-    .position-merged-head-v26630 strong {
-      font-size: 1.08em !important;
-      font-weight: 900 !important;
-    }
-  `;
-  document.head.appendChild(style);
-}
-try { injectV26630BPositionColorStyle(); } catch(e) {}
-document.addEventListener("DOMContentLoaded", injectV26630BPositionColorStyle);
