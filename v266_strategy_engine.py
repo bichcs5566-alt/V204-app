@@ -75,7 +75,7 @@ def write_both(df, name):
         try:
             df = lock_display_fields_v26645(df)
         except Exception as e:
-            print("v266.48 field lock warning:", name, e)
+            print("v266.50 field lock warning:", name, e)
     df.to_csv(ROOT / name, index=False, encoding="utf-8-sig")
     df.to_csv(DATA_DIR / name, index=False, encoding="utf-8-sig")
 
@@ -95,7 +95,7 @@ def safe_num(s, default=np.nan):
 
 def safe_str_series(x, index=None):
     """
-    v266.48 防型態炸裂：
+    v266.50 防型態炸裂：
     np.where 會回傳 numpy.ndarray，不能直接 .str。
     統一轉成 pandas Series 後再做字串處理。
     """
@@ -106,7 +106,7 @@ def safe_str_series(x, index=None):
 
 def safe_bool_series(x, index):
     """
-    v266.48.2 防單一 bool 炸裂：
+    v266.50.2 防單一 bool 炸裂：
     df.loc[False, col] 會造成 KeyError: cannot use a single bool to index into setitem。
     任何 scalar bool 都轉成與 df.index 對齊的 Series。
     """
@@ -183,7 +183,7 @@ def add_liquidity_fields(d):
 
 def add_tech_decision_fields(d):
     """
-    v266.48 技術欄位完整修復：
+    v266.50 技術欄位完整修復：
     - 補 MA5 / MA10 / MA20 中文狀態
     - 補 K棒型態 / K線結構
     - 補乾淨中文技術提示
@@ -290,7 +290,7 @@ def add_tech_decision_fields(d):
 
 def lock_display_fields_v26645(df):
     """
-    v266.48 欄位鎖死：
+    v266.50 欄位鎖死：
     確保所有輸出清單都有一致技術欄位，不留下 NaN / None / 空白 / 資料不足。
     """
     if df is None or len(df) == 0:
@@ -438,7 +438,7 @@ def detect_regime(x):
 
 
 def set_action(df, buy, test, watch, buy_sub, test_sub, watch_sub):
-    # v266.48.2：所有 mask 都安全轉成 Series，避免 scalar False/True 造成 pandas setitem KeyError。
+    # v266.50.2：所有 mask 都安全轉成 Series，避免 scalar False/True 造成 pandas setitem KeyError。
     buy = safe_bool_series(buy, df.index)
     test = safe_bool_series(test, df.index)
     watch = safe_bool_series(watch, df.index)
@@ -1038,9 +1038,100 @@ def build_trade_plan(core, alpha, regime, signal_date):
     return pd.DataFrame(rows)
 
 
+def add_behavior_fields_v26650(df):
+    """
+    v266.50 行為判讀：
+    不改原本 K棒型態 / K線結構，只新增：
+    - behavior_hint
+    - behavior_confidence
+    - behavior_action_hint
+    """
+    if df is None or len(df) == 0:
+        return df
+    df = df.copy()
+
+    def text(v, default=""):
+        try:
+            if pd.isna(v):
+                return default
+            s = str(v).strip()
+            if s in ["", "--", "-", "nan", "NaN", "None", "null", "undefined", "資料不足", "資料有限"]:
+                return default
+            return s
+        except Exception:
+            return default
+
+    def num(v):
+        try:
+            return float(str(v).replace(",", ""))
+        except Exception:
+            return np.nan
+
+    def behavior(row):
+        close = num(row.get("close", row.get("ref_price", row.get("price", np.nan))))
+        ma5 = num(row.get("ma5", np.nan))
+        ma10 = num(row.get("ma10", np.nan))
+        ma20 = num(row.get("ma20", np.nan))
+        mom5 = num(row.get("mom5", np.nan))
+        mom20 = num(row.get("mom20", np.nan))
+        vol_ratio = num(row.get("volume_ratio", np.nan))
+
+        kbar = text(row.get("kbar_type", row.get("k_bar_type", "")))
+        kstruct = text(row.get("k_structure", row.get("kline_structure", "")))
+        action = text(row.get("final_action", row.get("action", row.get("status", "")))).upper()
+        reason = " ".join([
+            text(row.get("reason", "")),
+            text(row.get("system_note", "")),
+            text(row.get("tech_reason", "")),
+            kbar,
+            kstruct,
+            action
+        ])
+
+        # 出場/風控優先
+        if any(x in reason for x in ["SELL", "REDUCE", "賣", "賣出", "出場", "停損", "跌破", "短線轉弱"]):
+            return ("🔻 結構轉弱（優先控風險）", "高", "先控風險，不急著攤平；等站回關鍵均線再觀察。")
+
+        # 高檔出貨/誘多風險
+        if any(x in reason for x in ["高檔出貨", "假突破", "上影壓力", "疑似假突破"]):
+            return ("⚠️ 高檔出貨／誘多風險（不追高）", "中高", "避免追價；若已有部位，觀察是否跌破 MA5 / MA10。")
+
+        # 主力拉升
+        if (
+            (np.isfinite(close) and np.isfinite(ma5) and np.isfinite(ma10) and np.isfinite(ma20) and close > ma20 and ma5 >= ma10 >= ma20)
+            or ("多頭排列" in kstruct)
+            or ("突破長紅" in kbar)
+            or ("突破確認" in kbar)
+        ):
+            if np.isfinite(vol_ratio) and vol_ratio >= 1.2:
+                return ("🚀 主力拉升（趨勢延續）", "高", "可續抱；若是試單，可觀察是否進入加碼條件。")
+            return ("🟢 趨勢偏多（等待量能確認）", "中", "方向偏多，但量能尚未完全確認，避免一次重倉。")
+
+        # 洗盤吸籌：站上/靠近 MA20，但短線震盪或整理
+        if (
+            ("整理收斂" in kstruct)
+            or ("整理觀察" in kbar)
+            or ("下影支撐" in kbar)
+            or (np.isfinite(close) and np.isfinite(ma20) and close >= ma20 * 0.98 and ("WATCH" in action or "觀察" in reason))
+        ):
+            return ("🟡 洗盤吸籌／整理換手（結構未壞）", "中", "不急追；等放量突破或站穩 MA10 / MA20 再提高權重。")
+
+        # 盤整觀望
+        if any(x in reason for x in ["WATCH", "觀察", "盤整", "震盪", "收斂", "十字K"]):
+            return ("⚪ 盤整觀望（等待方向）", "中低", "先觀察，不急進場；等突破、量能或均線方向出現。")
+
+        return ("⚪ 行為中性（依策略判斷）", "中低", "目前訊號不夠明確，依原策略與風控執行。")
+
+    vals = df.apply(behavior, axis=1)
+    df["behavior_hint"] = [v[0] for v in vals]
+    df["behavior_confidence"] = [v[1] for v in vals]
+    df["behavior_action_hint"] = [v[2] for v in vals]
+    return df
+
+
 def clear_stale_outputs_v26646():
     """
-    v266.48 強制刷新：
+    v266.50 強制刷新：
     每次策略啟動前先清掉會讓前端沿用舊標的的輸出檔。
     注意：不刪手動持倉 manual_positions/current_positions。
     """
@@ -1057,9 +1148,9 @@ def clear_stale_outputs_v26646():
             try:
                 if p.exists():
                     p.unlink()
-                    print("v266.48 cleared stale output:", p)
+                    print("v266.50 cleared stale output:", p)
             except Exception as e:
-                print("v266.48 clear warning:", p, e)
+                print("v266.50 clear warning:", p, e)
 
 
 
@@ -1127,8 +1218,8 @@ def main():
 
     meta = {
         "generated_at": taipei_now_str(),
-        "source": "v266_48_live_refresh_final_lock",
-        "refresh_mode": "live_refresh_final_lock",
+        "source": "v266_50_behavior_interpretation",
+        "refresh_mode": "behavior_interpretation",
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
         "data_state": "fresh",
@@ -1149,10 +1240,10 @@ def main():
         },
     }
 
-    # v266.48：策略層也輸出 summary fallback；真正最終日期仍由 yml 最後鎖定一次。
+    # v266.50：策略層也輸出 summary fallback；真正最終日期仍由 yml 最後鎖定一次。
     final_summary = {
         **meta,
-        "source": "v266_48_live_refresh_final_lock",
+        "source": "v266_50_behavior_interpretation",
         "latest_date": str(signal_date.date()),
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
