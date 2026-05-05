@@ -188,7 +188,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.48_live_refresh_final_lock";
+const APP_PATCH_VERSION = "v266.50_behavior_interpretation";
 const FORCE_REFRESH_NONCE_V26646 = Date.now();
 function bustUrlV26647(url) {
   const sep = String(url).includes("?") ? "&" : "?";
@@ -212,7 +212,7 @@ const FILES = {
   evolution: DATA_DIR + "strategy_evolution.csv"
 };
 
-// v266.48：前端強制刷新鎖。
+// v266.50：前端強制刷新鎖。
 // 目的：Safari / GitHub Pages 不可再沿用舊 final_action_plan。
 let LAST_WORKFLOW_RUN_V26648 = "";
 let LIVE_WORKFLOW_TIMER_V26648 = null;
@@ -2618,6 +2618,52 @@ function techGridCellsV26635(row) {
         `;
 }
 
+
+function inferBehaviorHintV26650(row) {
+  const merged = mergeTechRowV26637(row || {});
+  const direct = pickFieldV26635(merged, ["behavior_hint", "行為判讀"], "");
+  if (usefulV26637(direct)) return cleanTechV26637(direct);
+
+  const kbar = inferKbarTypeV26635(merged);
+  const kstruct = inferKStructureV26635(merged);
+  const txt = [
+    kbar, kstruct,
+    merged.final_action || merged.action || merged.status || "",
+    merged.reason || "",
+    merged.system_note || "",
+    merged.tech_reason || ""
+  ].join(" ");
+
+  if (/SELL|REDUCE|賣|出場|停損|跌破|短線轉弱/.test(txt)) return "🔻 結構轉弱（優先控風險）";
+  if (/高檔出貨|假突破|上影壓力|疑似假突破/.test(txt)) return "⚠️ 高檔出貨／誘多風險（不追高）";
+  if (/突破長紅|突破確認|多頭排列|強勢/.test(txt)) return "🚀 主力拉升（趨勢延續）";
+  if (/整理收斂|整理觀察|下影支撐|洗盤|吸籌/.test(txt)) return "🟡 洗盤吸籌／整理換手（結構未壞）";
+  if (/WATCH|觀察|盤整|震盪|十字/.test(txt)) return "⚪ 盤整觀望（等待方向）";
+  return "⚪ 行為中性（依策略判斷）";
+}
+
+function inferBehaviorConfidenceV26650(row) {
+  const direct = pickFieldV26635(row, ["behavior_confidence", "行為信心"], "");
+  if (usefulV26637(direct)) return cleanTechV26637(direct);
+  const hint = inferBehaviorHintV26650(row);
+  if (/主力拉升|結構轉弱/.test(hint)) return "高";
+  if (/出貨|誘多|洗盤|吸籌/.test(hint)) return "中高";
+  if (/盤整/.test(hint)) return "中低";
+  return "中低";
+}
+
+function inferBehaviorActionHintV26650(row) {
+  const direct = pickFieldV26635(row, ["behavior_action_hint", "行為操作提示"], "");
+  if (usefulV26637(direct)) return cleanTechV26637(direct);
+  const hint = inferBehaviorHintV26650(row);
+  if (/主力拉升/.test(hint)) return "可續抱；若是試單，可觀察是否進入加碼條件。";
+  if (/結構轉弱/.test(hint)) return "先控風險，不急著攤平；等站回關鍵均線再觀察。";
+  if (/出貨|誘多/.test(hint)) return "避免追價；若已有部位，觀察是否跌破 MA5 / MA10。";
+  if (/洗盤|吸籌/.test(hint)) return "不急追；等放量突破或站穩 MA10 / MA20 再提高權重。";
+  return "先觀察，不急進場；等突破、量能或均線方向出現。";
+}
+
+
 function techTextBlockV26635(row, isExit = false) {
   const merged = mergeTechRowV26637(row || {});
   const techReason = [
@@ -2634,6 +2680,7 @@ function techTextBlockV26635(row, isExit = false) {
   return `
         <div class="detail-text ${isExit ? "exit-detail-text" : ""}"><b>技術補充</b><p>${cleanTechV26637(techReason)}</p></div>
         <div class="detail-text ${isExit ? "exit-detail-text" : ""}"><b>K線／型態提示</b><p>${cleanTechV26637(kReason)}</p></div>
+        <div class="detail-text ${isExit ? "exit-detail-text" : ""}"><b>🧠 行為判讀</b><p>${inferBehaviorHintV26650(merged)}｜信心：${inferBehaviorConfidenceV26650(merged)}<br>${inferBehaviorActionHintV26650(merged)}</p></div>
         <div class="detail-text ${isExit ? "exit-detail-text" : ""}"><b>技術決策提示</b><p>${cleanTechV26637(hint || (isExit ? "若 MA5/MA20 轉弱，優先控風險；若站回均線再觀察。" : "依原策略執行，技術欄位用於確認節奏與風險。"))}</p></div>
       `;
 }
@@ -3528,236 +3575,3 @@ function macroTotalV26619(data) {
 function macroScoreV26619(data) {
   const raw = Number(data?.macro_score ?? data?.score ?? 0);
   return Number.isFinite(raw) ? raw : 0;
-}
-
-function macroLabelV26619(data) {
-  const label = data?.macro_label || data?.macro_regime_label || "";
-  if (label) return String(label);
-  const score = macroScoreV26619(data);
-  if (score >= 2) return "總經偏多";
-  if (score <= -2) return "總經偏空";
-  return "總經中性";
-}
-
-function macroConfidenceV26619(data) {
-  const unknown = Number(data?.unknown_count || 0);
-  const valid = Number(data?.valid_indicator_count || 0);
-  const total = macroTotalV26619(data);
-  const raw = String(data?.macro_confidence || data?.macro_confidence_label || "").toUpperCase();
-
-  if (raw.includes("HIGH") || raw.includes("高")) return "📘 信心高";
-  if (raw.includes("MEDIUM") || raw.includes("中")) return "📘 信心中";
-  if (raw.includes("LOW") || raw.includes("低")) return "📘 信心低";
-
-  if (total > 0 && valid / total >= 0.75) return "📘 信心高";
-  if (total > 0 && valid / total >= 0.45) return "📘 信心中";
-  if (unknown >= 4) return "📘 信心低";
-  return "📘 信心未定";
-}
-
-function macroDecisionV26619(data) {
-  const score = macroScoreV26619(data);
-  const total = macroTotalV26619(data);
-  const ratio = total ? score / total : 0;
-
-  if (score >= 3 || ratio >= 0.45) return "🔥 可分批｜勿追高";
-  if (score >= 1) return "🧭 試單｜不可重倉";
-  if (score <= -2) return "⚠️ 防守｜停止新倉";
-  return "⚖️ 中性｜控倉";
-}
-
-function macroChangeTextV26619(data) {
-  const now = macroScoreV26619(data);
-  const prevCandidates = [
-    data?.prev_macro_score,
-    data?.previous_macro_score,
-    data?.yesterday_macro_score,
-    data?.last_macro_score
-  ];
-  const found = prevCandidates.find(v => v !== undefined && v !== null && v !== "");
-  if (found === undefined) return "";
-  const prev = Number(found);
-  if (!Number.isFinite(prev)) return "";
-
-  const diff = now - prev;
-  const sign = diff > 0 ? "+" : "";
-  const word = diff > 0 ? "轉強" : diff < 0 ? "轉弱" : "持平";
-  return `📈 ${sign}${diff.toFixed(1)} ${word}`;
-}
-
-function macroInlineHTMLV26619(data) {
-  const label = macroLabelV26619(data);
-  const score = macroScoreV26619(data);
-  const total = macroTotalV26619(data);
-  const decision = macroDecisionV26619(data);
-  const confidence = macroConfidenceV26619(data);
-  const change = macroChangeTextV26619(data);
-
-  return `
-    <span class="macro-line-v26619">
-      <span class="macro-main-v26619">${label}｜分數 ${score}/${total}</span>
-      <span class="macro-pill-v26619">${decision}</span>
-      <span class="macro-pill-v26619 macro-conf-v26619">${confidence}</span>
-      ${change ? `<span class="macro-pill-v26619 macro-change-v26619">${change}</span>` : ""}
-    </span>
-  `;
-}
-
-function findMacroValueElementV26619() {
-  const all = Array.from(document.querySelectorAll("body *"));
-
-  const direct = all.find(el => {
-    if (el.children.length > 2) return false;
-    const txt = (el.textContent || "").trim();
-    return (
-      txt.includes("總經偏") &&
-      txt.includes("分數") &&
-      !txt.includes("風險模式") &&
-      !txt.includes("市場狀態") &&
-      !txt.includes("macro")
-    );
-  });
-  if (direct) return direct;
-
-  const label = all.find(el => (el.textContent || "").trim() === "總經狀態");
-  if (label) {
-    const card = label.parentElement || label.closest("div");
-    if (card) {
-      const candidates = Array.from(card.querySelectorAll("div, span, b, strong")).filter(el => {
-        const t = (el.textContent || "").trim();
-        return t && t !== "總經狀態" && (t.includes("總經") || t.includes("分數"));
-      });
-      if (candidates.length) return candidates[candidates.length - 1];
-    }
-  }
-
-  return null;
-}
-
-async function renderMacroPreciseV26619() {
-  try {
-    document.querySelectorAll(
-      ".macro-explain-v266162, .macro-explain-v266153, .macro-explain-v266152, .macro-inline-hint-v26617, .macro-inline-hint-v266171, .macro-value-v26618"
-    ).forEach(el => el.remove());
-
-    const res = await fetch("./data/macro_regime.json?ts=" + Date.now(), { cache: "no-store" });
-    const data = await res.json();
-
-    const valueEl = findMacroValueElementV26619();
-    if (!valueEl) return;
-
-    valueEl.innerHTML = macroInlineHTMLV26619(data);
-    valueEl.classList.add("macro-value-host-v26619");
-  } catch (e) {
-    console.log("v266.19 macro precise render failed", e);
-  }
-}
-
-setTimeout(renderMacroPreciseV26619, 400);
-setTimeout(renderMacroPreciseV26619, 1200);
-setTimeout(renderMacroPreciseV26619, 2400);
-setTimeout(renderMacroPreciseV26619, 4200);
-
-
-
-// ===== v266.21 籌碼信心顯示 =====
-function chipDisplayV26621(row) {
-  const display = row.chip_display || row["籌碼集中度"];
-  const conf = row.chip_confidence || row["籌碼信心"] || "";
-  if (display && String(display).trim() !== "--") {
-    return conf ? `${safeText(display)}｜${safeText(conf)}` : safeText(display);
-  }
-
-  const scoreRaw = row.chip_score || row.chip_concentration_score || row["籌碼分數"];
-  const score = Number(scoreRaw);
-  if (!Number.isFinite(score)) return "--";
-
-  let label = "🟡 普通";
-  if (score >= 80) label = "🔥 高度集中";
-  else if (score >= 60) label = "🟢 偏集中";
-  else if (score >= 40) label = "🟡 普通";
-  else if (score >= 20) label = "⚠️ 分散";
-  else label = "❌ 極度分散";
-
-  const base = `${Math.round(score)}（${label}）`;
-  return conf ? `${base}｜${safeText(conf)}` : base;
-}
-
-function chipReasonV26621(row) {
-  return safeText(
-    row.chip_reason ||
-    row.chip_concentration_reason ||
-    row["籌碼原因"],
-    "籌碼依策略判斷"
-  );
-}
-
-function chipHintV26621(row) {
-  return safeText(
-    row.chip_hint ||
-    row.chip_concentration_hint ||
-    row["籌碼提示"],
-    "籌碼依策略判斷，只能當輔助，不可重倉。"
-  );
-}
-
-
-
-/* ===== v266.30B hotfix：只修正顯示，不再動原本區塊 ===== */
-function injectV26630BPositionColorStyle() {
-  if (document.getElementById("v26630b-position-color-style")) return;
-  const style = document.createElement("style");
-  style.id = "v26630b-position-color-style";
-  style.textContent = `
-    .position-merged-v26630.sell,
-    .position-merged-v26630.reduce {
-      background: #fff1f1 !important;
-      border: 3px solid #f0a3a3 !important;
-      border-radius: 24px !important;
-      padding: 18px !important;
-      margin-top: 14px !important;
-    }
-    .position-merged-v26630.hold,
-    .position-merged-v26630.watch {
-      background: #effcf3 !important;
-      border: 3px solid #89e5a4 !important;
-      border-radius: 24px !important;
-      padding: 18px !important;
-      margin-top: 14px !important;
-    }
-    .position-merged-pill-v26630.sell,
-    .position-merged-pill-v26630.reduce {
-      background: #fde2e2 !important;
-      color: #b91c1c !important;
-      border-radius: 999px !important;
-      padding: 8px 14px !important;
-      font-weight: 900 !important;
-    }
-    .position-merged-pill-v26630.hold,
-    .position-merged-pill-v26630.watch {
-      background: #dcfce7 !important;
-      color: #166534 !important;
-      border-radius: 999px !important;
-      padding: 8px 14px !important;
-      font-weight: 900 !important;
-    }
-    .position-merged-head-v26630 {
-      display: flex !important;
-      align-items: center !important;
-      gap: 12px !important;
-      margin-bottom: 16px !important;
-    }
-    .position-merged-head-v26630 b {
-      flex: 1 !important;
-      font-size: 1.28em !important;
-      font-weight: 900 !important;
-    }
-    .position-merged-head-v26630 strong {
-      font-size: 1.08em !important;
-      font-weight: 900 !important;
-    }
-  `;
-  document.head.appendChild(style);
-}
-try { injectV26630BPositionColorStyle(); } catch(e) {}
-document.addEventListener("DOMContentLoaded", injectV26630BPositionColorStyle);
