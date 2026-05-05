@@ -1,17 +1,17 @@
 ﻿{
-  "generated_at": "2026-05-05 12:14:29",
-  "source": "v266_55_main_tail_fix",
+  "generated_at": "2026-05-05 13:38:09",
+  "source": "v266_57_source_safe_string",
   "refresh_mode": "behavior_interpretation",
   "signal_date": "2026-05-05",
   "trade_date": "2026-05-06",
   "data_state": "fresh",
   "market_regime": "RANGE",
   "regime_info": {
-    "pct_above_ma20": 0.4497,
+    "pct_above_ma20": 0.4474,
     "pct_above_ma60": 0.4645,
-    "pct_mom20_pos": 0.5801,
-    "pct_strong": 0.1522,
-    "median_mom20": 0.0192,
+    "pct_mom20_pos": 0.5812,
+    "pct_strong": 0.1568,
+    "median_mom20": 0.0194,
     "regime_score": 3
   },
   "trade_plan_count": 17,
@@ -27,12 +27,12 @@
     "IGNITION": "起漲啟動 / 均線糾結放量突破 / 小量試單",
     "EVOLUTION": "策略進化鏈 / IGNITION→TEST→ALPHA→CORE / 升級提示"
   },
-  "version": "v266.55",
+  "version": "v266.57",
   "latest_date": "2026-05-05",
-  "updated_at": "2026-05-05 12:15:28",
+  "updated_at": "2026-05-05 13:39:06",
   "date_lock_source": "feature_panel_daily.csv",
   "date_state": "locked_from_latest_feature",
-  "last_update": "2026-05-05 12:15:20",
+  "last_update": "2026-05-05 13:38:58",
   "timezone": "Asia/Taipei",
   "time_source": "github_actions_taipei"
 }
