@@ -40,7 +40,6 @@ def taipei_now_str():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-
 def price_tier(p):
     p = float(p)
     if p < 50:
@@ -719,28 +718,26 @@ def main_v266572_continuation_patch():
     apply_continuation_hint_patch_v266572()
 
 
+if __name__ == "__main__":
+    main_v266572_continuation_patch()
 
 
-# ===== v266.57.5 20/40/60 結構分數測試層（append-only，不改原本策略核心） =====
-# 原則：
-# 1. 先讓原本 main() + v266.57.2 續強提示完整跑完。
-# 2. 只補 20/40/60 日結構欄位到既有輸出 CSV。
-# 3. 不改 CORE / ALPHA / TEST / WATCH 條件。
-# 4. 不改 entry_score、不改 action、不改資金配置、不改持倉。
-def _read_json_v266575(path):
+# ===== v266.57.5.1 20/40/60 結構欄位寫入修補（append-only） =====
+# 只修補：確保 structure 欄位在原本策略跑完後寫入 CSV。
+# 不改：CORE / ALPHA / entry_score / action / target_weight / allocator / 持倉邏輯。
+def _read_json_v2665751(path):
     p = Path(path)
     if not p.exists() or p.stat().st_size == 0:
         return {}
-    try:
-        return json.loads(p.read_text(encoding="utf-8-sig"))
-    except Exception:
+    for enc in ["utf-8-sig", "utf-8"]:
         try:
-            return json.loads(p.read_text(encoding="utf-8"))
+            return json.loads(p.read_text(encoding=enc))
         except Exception:
-            return {}
+            pass
+    return {}
 
 
-def _safe_float_v266575(v, default=np.nan):
+def _sf_v2665751(v, default=np.nan):
     try:
         x = float(v)
         return x if np.isfinite(x) else default
@@ -748,367 +745,305 @@ def _safe_float_v266575(v, default=np.nan):
         return default
 
 
-def _pct_range_v266575(high_s, low_s, ref):
-    hi = pd.to_numeric(high_s, errors="coerce").max()
-    lo = pd.to_numeric(low_s, errors="coerce").min()
-    ref = _safe_float_v266575(ref)
-    if not np.isfinite(hi) or not np.isfinite(lo) or not np.isfinite(ref) or ref <= 0:
+def _sid_v2665751(v):
+    s = str(v).strip()
+    m = re.search(r"(\d{4})", s)
+    return m.group(1) if m else s
+
+
+def _vol_mild_v2665751(last_vol, med_vol):
+    last_vol = _sf_v2665751(last_vol)
+    med_vol = _sf_v2665751(med_vol)
+    if not np.isfinite(last_vol) or not np.isfinite(med_vol) or med_vol <= 0:
+        return False
+    r = last_vol / med_vol
+    return 1.05 <= r <= 2.8
+
+
+def _range_pct_v2665751(g, ref):
+    ref = _sf_v2665751(ref)
+    if g.empty or not np.isfinite(ref) or ref <= 0:
+        return np.nan
+    hi = pd.to_numeric(g.get("high"), errors="coerce").max()
+    lo = pd.to_numeric(g.get("low"), errors="coerce").min()
+    if not np.isfinite(hi) or not np.isfinite(lo):
         return np.nan
     return (hi - lo) / ref
 
 
-def _volume_mild_expand_v266575(last_vol, recent_median):
-    last_vol = _safe_float_v266575(last_vol)
-    recent_median = _safe_float_v266575(recent_median)
-    if not np.isfinite(last_vol) or not np.isfinite(recent_median) or recent_median <= 0:
-        return False
-    return 1.05 <= (last_vol / recent_median) <= 2.8
-
-
-def _load_market_context_v266575():
+def _market_context_v2665751():
     meta = {}
-    for p in [ROOT / "meta.json", DATA_DIR / "meta.json"]:
-        meta.update(_read_json_v266575(p))
-
     macro = {}
+    for p in [ROOT / "meta.json", DATA_DIR / "meta.json"]:
+        meta.update(_read_json_v2665751(p))
     for p in [ROOT / "macro_regime.json", DATA_DIR / "macro_regime.json"]:
-        macro.update(_read_json_v266575(p))
+        macro.update(_read_json_v2665751(p))
 
-    market_regime = str(
-        meta.get("market_regime")
-        or meta.get("regime")
-        or meta.get("market_label")
-        or ""
-    ).upper()
+    mr = str(meta.get("market_regime") or meta.get("regime") or meta.get("market_label") or "")
+    ml = str(macro.get("macro_label") or macro.get("macro_regime") or meta.get("macro_label") or "")
 
-    macro_label = str(
-        macro.get("macro_label")
-        or macro.get("macro_regime")
-        or meta.get("macro_label")
-        or ""
-    )
-
-    # 權重只影響「結構提示分數」，不影響原策略進出。
-    if "TREND" in market_regime or "BULL" in market_regime or "多" in market_regime:
+    upper = mr.upper()
+    if "TREND" in upper or "BULL" in upper or "多" in mr:
         weights = {"20": 0.45, "40": 0.30, "60": 0.25}
-        env = "多頭／趨勢盤：偏重20日主升延續"
-    elif "BEAR" in market_regime or "空" in market_regime or "弱" in market_regime:
+        env_note = "多頭/趨勢盤：偏重20D主升延續"
+    elif "BEAR" in upper or "空" in mr or "弱" in mr:
         weights = {"20": 0.25, "40": 0.30, "60": 0.45}
-        env = "弱勢／空頭盤：偏重60日大結構防守"
+        env_note = "弱勢/空頭盤：偏重60D大結構防守"
     else:
         weights = {"20": 0.30, "40": 0.40, "60": 0.30}
-        env = "盤整盤：偏重40日平台整理"
+        env_note = "盤整盤：偏重40D平台整理"
 
     macro_adj = 0.0
-    if any(k in macro_label for k in ["偏多", "RISK_ON", "多頭"]):
+    macro_note = "總經中性或資料不足：不額外加權"
+    if any(k in ml for k in ["偏多", "多頭", "RISK_ON"]):
         macro_adj = 0.5
         macro_note = "總經偏多：結構分數小幅加權"
-    elif any(k in macro_label for k in ["偏空", "RISK_OFF", "空頭"]):
+    elif any(k in ml for k in ["偏空", "空頭", "RISK_OFF"]):
         macro_adj = -0.8
         macro_note = "總經偏空：結構分數小幅保守"
-    else:
-        macro_note = "總經中性或資料不足：不額外加權"
 
     return {
-        "market_regime": market_regime or "--",
-        "macro_label": macro_label or "--",
+        "market_regime": mr or "--",
+        "macro_label": ml or "--",
         "weights": weights,
         "macro_adj": macro_adj,
-        "env_note": env,
+        "env_note": env_note,
         "macro_note": macro_note,
     }
 
 
-def _calc_structure_map_v266575():
+def _build_structure_map_v2665751():
     try:
         df = load_feature()
     except Exception as e:
-        print("v266.57.5 structure patch skip: load_feature failed", e)
-        return {}, _load_market_context_v266575()
+        print("v266.57.5.1 structure skip: load_feature failed:", e)
+        return {}, _market_context_v2665751()
 
     if df.empty or "stock_id" not in df.columns or "date" not in df.columns:
-        return {}, _load_market_context_v266575()
+        print("v266.57.5.1 structure skip: feature empty or missing stock_id/date")
+        return {}, _market_context_v2665751()
 
-    need_cols = [
-        "open", "high", "low", "close", "volume",
-        "ma5", "ma10", "ma20", "ma60",
-        "mom5", "mom10", "mom20", "mom60",
-        "volume_ratio", "high_20", "low_20", "high_60", "low_60",
-        "ma_converge_pct", "ma20_slope"
-    ]
-    for c in need_cols:
+    df = df.copy()
+    df["stock_id"] = df["stock_id"].map(_sid_v2665751)
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df = df.dropna(subset=["date", "stock_id"]).sort_values(["stock_id", "date"])
+
+    for c in ["open", "high", "low", "close", "volume", "ma5", "ma10", "ma20", "ma60", "mom5", "mom10", "mom20", "mom60", "volume_ratio", "ma20_slope"]:
         if c not in df.columns:
             df[c] = np.nan
         df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    df = df.copy()
-    df["stock_id"] = df["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False).fillna(df["stock_id"].astype(str))
-    df = df.dropna(subset=["date", "stock_id", "close"]).sort_values(["stock_id", "date"])
-
-    ctx = _load_market_context_v266575()
-    weights = ctx["weights"]
+    ctx = _market_context_v2665751()
+    w = ctx["weights"]
     macro_adj = float(ctx["macro_adj"])
 
-    out = {}
-
+    result = {}
     for sid, g in df.groupby("stock_id"):
         h = g.tail(70).copy()
         if len(h) < 20:
             continue
 
         last = h.iloc[-1]
-        prev = h.iloc[-2] if len(h) >= 2 else last
-
-        close = _safe_float_v266575(last.get("close"))
-        open_ = _safe_float_v266575(last.get("open"))
-        high = _safe_float_v266575(last.get("high"))
-        low = _safe_float_v266575(last.get("low"))
-        volume = _safe_float_v266575(last.get("volume"))
-        ma5 = _safe_float_v266575(last.get("ma5"))
-        ma10 = _safe_float_v266575(last.get("ma10"))
-        ma20 = _safe_float_v266575(last.get("ma20"))
-        ma60 = _safe_float_v266575(last.get("ma60"))
-        ma20_slope = _safe_float_v266575(last.get("ma20_slope"))
-        mom5 = _safe_float_v266575(last.get("mom5"))
-        mom10 = _safe_float_v266575(last.get("mom10"))
-        mom20 = _safe_float_v266575(last.get("mom20"))
-        mom60 = _safe_float_v266575(last.get("mom60"))
-        volume_ratio = _safe_float_v266575(last.get("volume_ratio"))
-
+        close = _sf_v2665751(last.get("close"))
         if not np.isfinite(close) or close <= 0:
             continue
 
-        last20 = h.tail(20)
-        last40 = h.tail(40) if len(h) >= 40 else h
-        last60 = h.tail(60) if len(h) >= 60 else h
+        open_ = _sf_v2665751(last.get("open"))
+        high = _sf_v2665751(last.get("high"))
+        low = _sf_v2665751(last.get("low"))
+        vol = _sf_v2665751(last.get("volume"))
+        ma5 = _sf_v2665751(last.get("ma5"))
+        ma10 = _sf_v2665751(last.get("ma10"))
+        ma20 = _sf_v2665751(last.get("ma20"))
+        ma60 = _sf_v2665751(last.get("ma60"))
+        mom10 = _sf_v2665751(last.get("mom10"))
+        mom20 = _sf_v2665751(last.get("mom20"))
+        mom60 = _sf_v2665751(last.get("mom60"))
+        vol_ratio = _sf_v2665751(last.get("volume_ratio"))
+        ma20_slope = _sf_v2665751(last.get("ma20_slope"))
 
-        high20 = pd.to_numeric(last20["high"], errors="coerce").max()
-        low20 = pd.to_numeric(last20["low"], errors="coerce").min()
-        high40 = pd.to_numeric(last40["high"], errors="coerce").max()
-        low40 = pd.to_numeric(last40["low"], errors="coerce").min()
-        high60 = pd.to_numeric(last60["high"], errors="coerce").max()
-        low60 = pd.to_numeric(last60["low"], errors="coerce").min()
+        g20 = h.tail(20)
+        g40 = h.tail(40) if len(h) >= 40 else h
+        g60 = h.tail(60) if len(h) >= 60 else h
 
-        vol_med_20 = pd.to_numeric(last20["volume"], errors="coerce").median()
-        vol_med_40 = pd.to_numeric(last40["volume"], errors="coerce").median()
-        vol_med_60 = pd.to_numeric(last60["volume"], errors="coerce").median()
+        high20 = pd.to_numeric(g20["high"], errors="coerce").max()
+        high40 = pd.to_numeric(g40["high"], errors="coerce").max()
+        high60 = pd.to_numeric(g60["high"], errors="coerce").max()
+        low60 = pd.to_numeric(g60["low"], errors="coerce").min()
+        vol20 = pd.to_numeric(g20["volume"], errors="coerce").median()
+        vol40 = pd.to_numeric(g40["volume"], errors="coerce").median()
+        vol60 = pd.to_numeric(g60["volume"], errors="coerce").median()
 
-        range20 = _pct_range_v266575(last20["high"], last20["low"], close)
-        range40 = _pct_range_v266575(last40["high"], last40["low"], close)
-        range60 = _pct_range_v266575(last60["high"], last60["low"], close)
-
+        range40 = _range_pct_v2665751(g40, close)
         ma_tight = (
             np.isfinite(ma5) and np.isfinite(ma10) and np.isfinite(ma20)
-            and close > 0
             and (max(ma5, ma10, ma20) - min(ma5, ma10, ma20)) / close <= 0.08
         )
 
-        # 20D：短線轉強／主升初段
-        s20 = 0
-        r20 = []
+        s20, r20 = 0.0, []
         if np.isfinite(ma20) and close > ma20:
-            s20 += 2; r20.append("收盤站上MA20")
+            s20 += 2; r20.append("站上MA20")
         if np.isfinite(ma5) and np.isfinite(ma10) and ma5 >= ma10:
-            s20 += 2; r20.append("MA5站上MA10")
+            s20 += 2; r20.append("MA5>=MA10")
         if np.isfinite(high20) and close >= high20 * 0.96:
-            s20 += 2; r20.append("接近20日高點")
-        if _volume_mild_expand_v266575(volume, vol_med_20):
-            s20 += 2; r20.append("20日量能溫和回升")
+            s20 += 2; r20.append("接近20日高")
+        if _vol_mild_v2665751(vol, vol20):
+            s20 += 2; r20.append("20D量能溫和回升")
         if np.isfinite(mom10) and mom10 > 0:
-            s20 += 1; r20.append("10日動能轉正")
+            s20 += 1; r20.append("10D動能轉正")
         if np.isfinite(ma20) and ma20 > 0 and close <= ma20 * 1.15:
-            s20 += 1; r20.append("尚未嚴重乖離MA20")
+            s20 += 1; r20.append("未嚴重乖離MA20")
 
-        # 40D：中期平台整理／壓縮後待發動
-        s40 = 0
-        r40 = []
+        s40, r40 = 0.0, []
         if np.isfinite(range40) and range40 <= 0.35:
-            s40 += 2; r40.append("40日區間收斂")
+            s40 += 2; r40.append("40D區間收斂")
         if ma_tight:
-            s40 += 2; r40.append("均線糾結壓縮")
+            s40 += 2; r40.append("均線糾結")
         if np.isfinite(ma20) and close >= ma20 * 0.98:
-            s40 += 2; r40.append("站回平台成本區")
-        if len(last40) >= 30:
-            prior_low = pd.to_numeric(last40.iloc[:20]["low"], errors="coerce").min()
-            recent_low = pd.to_numeric(last40.iloc[-20:]["low"], errors="coerce").min()
+            s40 += 2; r40.append("站回平台成本")
+        if len(g40) >= 30:
+            prior_low = pd.to_numeric(g40.iloc[:20]["low"], errors="coerce").min()
+            recent_low = pd.to_numeric(g40.iloc[-20:]["low"], errors="coerce").min()
             if np.isfinite(prior_low) and np.isfinite(recent_low) and recent_low >= prior_low * 0.96:
-                s40 += 2; r40.append("中期低點未再破底")
-        if _volume_mild_expand_v266575(volume, vol_med_40):
-            s40 += 1; r40.append("40日量能開始回溫")
+                s40 += 2; r40.append("低點未再破")
+        if _vol_mild_v2665751(vol, vol40):
+            s40 += 1; r40.append("40D量能回溫")
         if np.isfinite(ma20_slope) and ma20_slope >= 0:
             s40 += 1; r40.append("MA20走平翻揚")
 
-        # 60D：長底翻多／大結構修復
-        s60 = 0
-        r60 = []
+        s60, r60 = 0.0, []
         if np.isfinite(ma60) and close >= ma60 * 0.96:
-            s60 += 2; r60.append("接近或站回MA60")
+            s60 += 2; r60.append("接近/站回MA60")
         if np.isfinite(ma20) and np.isfinite(ma60) and ma20 >= ma60 * 0.95:
             s60 += 2; r60.append("MA20接近MA60")
         if np.isfinite(high60) and np.isfinite(low60) and high60 > low60:
             pos60 = (close - low60) / (high60 - low60)
             if pos60 >= 0.45:
-                s60 += 2; r60.append("站回60日區間中上緣")
-        if len(last60) >= 50:
-            prior_low60 = pd.to_numeric(last60.iloc[:30]["low"], errors="coerce").min()
-            recent_low60 = pd.to_numeric(last60.iloc[-30:]["low"], errors="coerce").min()
+                s60 += 2; r60.append("站回60D區間中上")
+        if len(g60) >= 50:
+            prior_low60 = pd.to_numeric(g60.iloc[:30]["low"], errors="coerce").min()
+            recent_low60 = pd.to_numeric(g60.iloc[-30:]["low"], errors="coerce").min()
             if np.isfinite(prior_low60) and np.isfinite(recent_low60) and recent_low60 >= prior_low60 * 0.95:
-                s60 += 2; r60.append("60日低點結構守住")
+                s60 += 2; r60.append("60D低點守住")
         if np.isfinite(mom60) and mom60 > -0.05:
-            s60 += 1; r60.append("60日動能不再惡化")
-        if _volume_mild_expand_v266575(volume, vol_med_60):
-            s60 += 1; r60.append("60日量能溫和回補")
+            s60 += 1; r60.append("60D動能不再惡化")
+        if _vol_mild_v2665751(vol, vol60):
+            s60 += 1; r60.append("60D量能溫和回補")
 
-        # 過熱扣分：只扣結構提示分數，不影響原本動能名單。
-        heat = 0
-        heat_reason = []
+        heat, hr = 0.0, []
         if np.isfinite(ma20) and ma20 > 0 and close > ma20 * 1.22:
-            heat += 1.5; heat_reason.append("距MA20過遠")
-        if np.isfinite(volume_ratio) and volume_ratio > 5.5:
-            heat += 1.0; heat_reason.append("單日爆量偏高")
+            heat += 1.5; hr.append("距MA20過遠")
+        if np.isfinite(vol_ratio) and vol_ratio > 5.5:
+            heat += 1.0; hr.append("單日爆量偏高")
         if np.isfinite(mom20) and mom20 > 0.45:
-            heat += 1.0; heat_reason.append("20日漲幅偏熱")
+            heat += 1.0; hr.append("20D漲幅偏熱")
         if np.isfinite(open_) and np.isfinite(high) and np.isfinite(low) and np.isfinite(close) and high > low:
-            upper_ratio = (high - max(open_, close)) / (high - low)
-            if upper_ratio >= 0.45:
-                heat += 1.0; heat_reason.append("長上影壓力")
+            upper = (high - max(open_, close)) / (high - low)
+            if upper >= 0.45:
+                heat += 1.0; hr.append("長上影壓力")
 
         s20 = max(0, min(10, s20 - heat))
         s40 = max(0, min(10, s40 - heat * 0.5))
         s60 = max(0, min(10, s60 - heat * 0.3))
 
-        composite = (
-            s20 * weights["20"]
-            + s40 * weights["40"]
-            + s60 * weights["60"]
-            + macro_adj
-        )
-        composite = max(0, min(10, composite))
+        composite = max(0, min(10, s20 * w["20"] + s40 * w["40"] + s60 * w["60"] + macro_adj))
 
-        buckets = {
-            "20D短線轉強": s20,
-            "40D平台整理": s40,
-            "60D長底翻多": s60,
-        }
-        best_type = max(buckets, key=buckets.get)
-        best_score = buckets[best_type]
+        scores = {"20D短線轉強": s20, "40D平台整理": s40, "60D長底翻多": s60}
+        best_type = max(scores, key=scores.get)
 
         if composite < 4:
-            structure_type = "結構不足"
+            stype = "結構不足"
         elif heat >= 2 and s20 >= 6:
-            structure_type = "過熱延續"
+            stype = "過熱延續"
         else:
-            structure_type = best_type
+            stype = best_type
 
-        if composite >= 7:
-            grade = "強"
-        elif composite >= 5:
-            grade = "中"
-        else:
-            grade = "弱"
+        grade = "強" if composite >= 7 else ("中" if composite >= 5 else "弱")
+        reasons = [
+            "20D:" + ("、".join(r20) if r20 else "短線結構不足"),
+            "40D:" + ("、".join(r40) if r40 else "平台結構不足"),
+            "60D:" + ("、".join(r60) if r60 else "長底結構不足"),
+        ]
+        if hr:
+            reasons.append("過熱扣分:" + "、".join(hr))
 
-        reasons = []
-        reasons.append(f"20D:{'、'.join(r20) if r20 else '短線結構不足'}")
-        reasons.append(f"40D:{'、'.join(r40) if r40 else '平台結構不足'}")
-        reasons.append(f"60D:{'、'.join(r60) if r60 else '長底結構不足'}")
-        if heat_reason:
-            reasons.append("過熱扣分:" + "、".join(heat_reason))
-
-        if structure_type == "20D短線轉強":
-            hint = "偏主升初段／延續觀察：適合搭配原本ALPHA動能，但避免追過熱。"
-        elif structure_type == "40D平台整理":
-            hint = "偏平台整理後轉強：適合觀察是否從WATCH/TEST升級。"
-        elif structure_type == "60D長底翻多":
-            hint = "偏長底翻多：適合CORE早期卡位，小倉觀察是否放量確認。"
-        elif structure_type == "過熱延續":
-            hint = "已有動能但乖離偏高：保留原動能判斷，操作上不追高。"
+        if stype == "20D短線轉強":
+            hint = "偏主升初段/延續觀察：搭配原本動能，避免追過熱。"
+        elif stype == "40D平台整理":
+            hint = "偏平台整理後轉強：觀察是否從WATCH/TEST升級。"
+        elif stype == "60D長底翻多":
+            hint = "偏長底翻多：適合CORE早期卡位，小倉觀察放量確認。"
+        elif stype == "過熱延續":
+            hint = "已有動能但乖離偏高：保留原策略判斷，操作上不追高。"
         else:
             hint = "結構證據不足：原策略若入選，仍需降低信心。"
 
-        out[sid] = {
+        result[sid] = {
             "structure_20_score": round(float(s20), 2),
             "structure_40_score": round(float(s40), 2),
             "structure_60_score": round(float(s60), 2),
             "structure_score": round(float(composite), 2),
             "structure_grade": grade,
-            "structure_type": structure_type,
+            "structure_type": stype,
             "structure_reason": "｜".join(reasons),
             "structure_market_fit": ctx["env_note"] + "｜" + ctx["macro_note"],
             "structure_hint": hint,
-            "structure_patch_version": "v266.57.5",
+            "structure_patch_version": "v266.57.5.1",
         }
 
-    return out, ctx
+    return result, ctx
 
 
-def _enrich_csv_v266575(name, structure_map):
-    """只補 20/40/60 結構欄位，不刪列、不改 action、不改 entry_score。"""
-    for base in [ROOT, DATA_DIR]:
-        p = base / name
-        df = _safe_read_csv_v266572(p)
-        if df.empty or "stock_id" not in df.columns:
-            continue
+def _enrich_one_csv_v2665751(path, structure_map):
+    df = _safe_read_csv_v266572(path)
+    if df.empty or "stock_id" not in df.columns:
+        return False, 0
 
-        df = df.copy()
-        sids = df["stock_id"].map(_sid_v266572)
+    df = df.copy()
+    sids = df["stock_id"].map(_sid_v2665751)
 
-        cols = [
-            "structure_20_score",
-            "structure_40_score",
-            "structure_60_score",
-            "structure_score",
-            "structure_grade",
-            "structure_type",
-            "structure_reason",
-            "structure_market_fit",
-            "structure_hint",
-            "structure_patch_version",
-        ]
+    cols = [
+        "structure_20_score",
+        "structure_40_score",
+        "structure_60_score",
+        "structure_score",
+        "structure_grade",
+        "structure_type",
+        "structure_reason",
+        "structure_market_fit",
+        "structure_hint",
+        "structure_patch_version",
+    ]
 
-        for col in cols:
-            df[col] = [structure_map.get(sid, {}).get(col, "") for sid in sids]
+    for col in cols:
+        df[col] = [structure_map.get(sid, {}).get(col, "") for sid in sids]
 
-        # 只追加提示，不覆蓋原 note/system_note。
-        if "system_note" in df.columns:
-            df["system_note"] = df.apply(
-                lambda r: str(r.get("system_note", "")) + (
-                    "｜結構提示：" + str(r.get("structure_hint", ""))
-                    if str(r.get("structure_hint", "")).strip() else ""
-                ), axis=1
-            )
-        elif "note" in df.columns:
-            df["note"] = df.apply(
-                lambda r: str(r.get("note", "")) + (
-                    "｜結構提示：" + str(r.get("structure_hint", ""))
-                    if str(r.get("structure_hint", "")).strip() else ""
-                ), axis=1
-            )
+    # 不覆蓋原 note；只追加提示。
+    if "system_note" in df.columns:
+        df["system_note"] = df.apply(
+            lambda r: str(r.get("system_note", "")) + (
+                "｜結構提示：" + str(r.get("structure_hint", ""))
+                if str(r.get("structure_hint", "")).strip() else ""
+            ), axis=1
+        )
+    elif "note" in df.columns:
+        df["note"] = df.apply(
+            lambda r: str(r.get("note", "")) + (
+                "｜結構提示：" + str(r.get("structure_hint", ""))
+                if str(r.get("structure_hint", "")).strip() else ""
+            ), axis=1
+        )
 
-        df.to_csv(p, index=False, encoding="utf-8-sig")
-        print("v266.57.5 structure enriched:", p, len(df))
+    df.to_csv(path, index=False, encoding="utf-8-sig")
+    return True, len(df)
 
 
-def apply_structure_score_patch_v266575():
-    structure_map, ctx = _calc_structure_map_v266575()
-    if not structure_map:
-        print("v266.57.5 structure patch: no structure map, skip")
-        return
-
-    for name in [
-        "core_candidates.csv",
-        "alpha_candidates.csv",
-        "candidates.csv",
-        "trade_plan.csv",
-        "ignition_candidates.csv",
-        "strategy_evolution.csv",
-        "final_action_plan.csv",
-        "top_opportunities.csv",
-    ]:
-        _enrich_csv_v266575(name, structure_map)
+def apply_structure_score_patch_v2665751():
+    structure_map, ctx = _build_structure_map_v2665751()
 
     report = {
-        "version": "v266.57.5",
-        "mode": "append_only_20_40_60_structure_score",
+        "version": "v266.57.5.1",
+        "mode": "append_only_20_40_60_structure_score_write_fix",
         "changed_strategy_logic": False,
         "changed_actions": False,
         "changed_entry_score": False,
@@ -1118,20 +1053,45 @@ def apply_structure_score_patch_v266575():
         "market_weighting": ctx.get("weights", {}),
         "macro_adjustment": ctx.get("macro_adj", 0),
         "enriched_stock_count": len(structure_map),
+        "files": {},
         "updated_at": taipei_now_str(),
-        "description": "只補20/40/60日結構分數、結構型態、市場/總經適配提示；不改原本CORE/ALPHA動能與操作邏輯。",
+        "description": "只補20/40/60日結構分數並強制寫入既有CSV，不改原策略核心。",
     }
 
+    targets = [
+        "core_candidates.csv",
+        "alpha_candidates.csv",
+        "candidates.csv",
+        "trade_plan.csv",
+        "ignition_candidates.csv",
+        "strategy_evolution.csv",
+        "final_action_plan.csv",
+        "top_opportunities.csv",
+    ]
+
+    for name in targets:
+        for base in [ROOT, DATA_DIR]:
+            p = base / name
+            ok, n = _enrich_one_csv_v2665751(p, structure_map)
+            if ok:
+                report["files"][str(p)] = n
+                print("v266.57.5.1 structure enriched:", p, n)
+
     for p in [ROOT / "structure_patch_report.json", DATA_DIR / "structure_patch_report.json"]:
-        p.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+        except Exception as e:
+            print("write structure report failed:", p, e)
 
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
-def main_v266575_structure_patch():
+def main_v2665751_structure_write_fix():
+    # 原本策略 + 原本續強提示先跑完，再補結構欄位。
     main_v266572_continuation_patch()
-    apply_structure_score_patch_v266575()
+    apply_structure_score_patch_v2665751()
 
 
 if __name__ == "__main__":
-    main_v266575_structure_patch()
+    main_v2665751_structure_write_fix()
