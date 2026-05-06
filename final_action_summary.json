@@ -1,5 +1,5 @@
 ﻿{
-  "generated_at": "2026-05-06 19:39:04",
+  "generated_at": "2026-05-06 22:16:44",
   "source": "v266_57_source_safe_string",
   "signal_date": "2026-05-06",
   "trade_date": "2026-05-07",
@@ -45,10 +45,10 @@
   "encoding": "utf-8-sig",
   "version": "v266.57",
   "latest_date": "2026-05-06",
-  "updated_at": "2026-05-06 19:40:04",
+  "updated_at": "2026-05-06 22:17:40",
   "date_lock_source": "feature_panel_daily.csv",
   "date_state": "locked_from_latest_feature",
-  "last_update": "2026-05-06 19:39:57",
+  "last_update": "2026-05-06 22:17:34",
   "timezone": "Asia/Taipei",
   "time_source": "github_actions_taipei",
   "refresh_mode": "behavior_interpretation",
@@ -64,5 +64,5 @@
     "4933",
     "6651"
   ],
-  "final_action_updated_at": "2026-05-06 19:40:04"
+  "final_action_updated_at": "2026-05-06 22:17:40"
 }
