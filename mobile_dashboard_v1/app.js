@@ -188,7 +188,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.57.3_last_update_time_sync_patch";
+const APP_PATCH_VERSION = "v266.57.4_workflow_status_stable_patch";
 const FORCE_REFRESH_NONCE_V26646 = Date.now();
 function bustUrlV26647(url) {
   const sep = String(url).includes("?") ? "&" : "?";
@@ -404,6 +404,61 @@ let workflowStatusTimerV26631 = null;
 let workflowStatusFetchTimerV26631 = null;
 let workflowStatusCacheV26631 = null;
 
+// ===== v266.57.4 後端執行狀態穩定修補 =====
+// 只修 UI 狀態閃爍：
+// 1. 已觸發新 workflow 時，不吃舊 workflow_status.json 的 success。
+// 2. 後端執行中時，renderMeta 不再把狀態洗回「最終操作表已同步」。
+function isWorkflowStatusActiveV266574() {
+  const s = String(workflowStatusCacheV26631?.status || "").toLowerCase();
+  return ["queued", "running", "in_progress", "waiting", "requested"].includes(s);
+}
+
+function isWorkflowRunTrackingActiveV266574() {
+  try {
+    const active = getActiveBackendRunV26630N?.();
+    return !!(active && active.created_after_iso && active.started_at_ms);
+  } catch (e) {
+    return false;
+  }
+}
+
+function shouldIgnoreStaleWorkflowStatusV266574(data) {
+  try {
+    const active = getActiveBackendRunV26630N?.();
+    if (!active || !active.started_at_ms) return false;
+
+    const status = String(data?.status || "").toLowerCase();
+    if (!["success", "failed", "failure", "cancelled", "canceled"].includes(status)) return false;
+
+    const activeStart = Number(active.started_at_ms);
+    const candidates = [
+      data?.end_time,
+      data?.completed_at,
+      data?.updated_at,
+      data?.start_time,
+      data?.started_at,
+      data?.created_at
+    ];
+
+    let newest = null;
+    for (const v of candidates) {
+      const t = parseTimeMsV26631(v);
+      if (!t) continue;
+      if (!newest || t > newest) newest = t;
+    }
+
+    return !!(newest && newest < activeStart - 3000);
+  } catch (e) {
+    return false;
+  }
+}
+
+function setIdleSyncStatusV266574(message, cls = "sync ok") {
+  if (isWorkflowRunTrackingActiveV266574() || isWorkflowStatusActiveV266574()) return;
+  setSyncStatus(message, cls);
+}
+
+
 function parseTimeMsV26631(v) {
   const t = new Date(v || "").getTime();
   return Number.isFinite(t) ? t : null;
@@ -428,6 +483,7 @@ function statusPhaseTextV26631(status) {
 
 function applyWorkflowStatusV26631(data) {
   if (!data || typeof data !== "object") return false;
+  if (shouldIgnoreStaleWorkflowStatusV266574(data)) return false;
   workflowStatusCacheV26631 = data;
 
   const status = String(data.status || "").toLowerCase();
@@ -2198,7 +2254,7 @@ function renderMeta(regime, summary, macro, rows) {
     <div class="mini"><span>操作筆數</span><b>${rows.length}</b></div>
   `;
 
-  setSyncStatus(`✅ 最終操作表已同步｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync ok");
+  setIdleSyncStatusV266574(`✅ 最終操作表已同步｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync ok");
   startLiveClock();
 }
 
