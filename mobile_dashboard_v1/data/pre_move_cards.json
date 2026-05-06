@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-06 15:09:08",
+  "generated_at": "2026-05-06 17:09:46",
   "count": 30,
   "cards": [
     {
@@ -315,12 +315,12 @@
       "color": "green"
     },
     {
-      "stock_id": "4572",
+      "stock_id": "4175",
       "action": "BUY",
       "label": "小倉試單",
       "score": 86.0,
-      "close": 150.5,
-      "price_tier": "100-500",
+      "close": 53.8,
+      "price_tier": "50-100",
       "target_weight": 0.01,
       "suggested_amount": 10000,
       "setup_type": "主力佈局完成",
@@ -328,12 +328,12 @@
       "color": "green"
     },
     {
-      "stock_id": "4923",
+      "stock_id": "4572",
       "action": "BUY",
       "label": "小倉試單",
       "score": 86.0,
-      "close": 37.4,
-      "price_tier": "50以下",
+      "close": 150.5,
+      "price_tier": "100-500",
       "target_weight": 0.01,
       "suggested_amount": 10000,
       "setup_type": "主力佈局完成",
