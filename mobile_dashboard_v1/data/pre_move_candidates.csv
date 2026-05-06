@@ -23,7 +23,6 @@ date,stock_id,action,pre_score,close,price_tier,target_weight,suggested_amount,s
 2026-05-06,2904,BUY,86,16.0,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
 2026-05-06,4120,BUY,86,46.6,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
 2026-05-06,4137,BUY,86,106.5,100-500,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
-2026-05-06,4175,BUY,86,53.8,50-100,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
 2026-05-06,4572,BUY,86,150.5,100-500,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
 2026-05-06,4923,BUY,86,37.4,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
 2026-05-06,5523,BUY,86,30.35,50以下,0.01,10000,主力佈局完成,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可,True,True,False,True,True,True
@@ -74,20 +73,15 @@ date,stock_id,action,pre_score,close,price_tier,target_weight,suggested_amount,s
 2026-05-06,3541,TEST,72,23.3,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-05-06,3672,TEST,72,11.9,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,True,True,False,True,True,False
 2026-05-06,4106,TEST,72,22.25,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
+2026-05-06,4175,TEST,72,53.8,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-05-06,4506,TEST,72,118.5,100-500,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-05-06,4536,TEST,72,151.0,100-500,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-05-06,4953,TEST,72,123.5,100-500,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-05-06,5007,TEST,72,58.3,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-05-06,5315,TEST,72,22.2,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
-2026-05-06,5609,TEST,72,78.7,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
-2026-05-06,5878,TEST,72,40.6,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
-2026-05-06,5903,TEST,72,189.5,100-500,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
-2026-05-06,6020,TEST,72,19.2,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-05-06,6112,TEST,72,47.15,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-05-06,6185,TEST,72,13.85,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
-2026-05-06,6242,TEST,72,38.2,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-05-06,6491,TEST,72,281.5,100-500,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
-2026-05-06,6574,TEST,72,106.0,100-500,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-05-06,6593,TEST,72,35.7,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,True,True,False,True,True,False
 2026-05-06,6754,TEST,72,45.45,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,True,True,False,True,False,True
 2026-05-06,6776,TEST,72,58.2,50-100,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,True,True,False,True,True,False
@@ -160,7 +154,6 @@ date,stock_id,action,pre_score,close,price_tier,target_weight,suggested_amount,s
 2026-05-06,6645,TEST,66,12.8,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,True,True,False,True,False,True
 2026-05-06,7705,TEST,66,32.55,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,True,True,False,True,True,False
 2026-05-06,8249,TEST,66,49.9,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破,True,True,False,True,False,True
-2026-05-06,8929,TEST,66,14.6,50以下,0.005,5000,佈局高機率,波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收,True,True,False,True,True,False
 2026-05-06,6431,WATCH,64,19.35,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 洗盤收回 | 放量吸收,True,True,True,False,True,False
 2026-05-06,1414,WATCH,62,16.5,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破,False,True,False,True,True,True
 2026-05-06,3191,WATCH,62,13.8,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破,False,True,False,True,True,True
@@ -168,7 +161,6 @@ date,stock_id,action,pre_score,close,price_tier,target_weight,suggested_amount,s
 2026-05-06,5521,WATCH,62,12.15,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 放量吸收 | 接近突破,True,False,False,True,True,True
 2026-05-06,6796,WATCH,62,68.6,50-100,0.0,0,佈局觀察,安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收,False,True,True,True,True,False
 2026-05-06,8110,WATCH,62,51.9,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 放量吸收 | 接近突破,True,False,False,True,True,True
-2026-05-06,8403,WATCH,62,21.25,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破,False,True,False,True,True,True
 2026-05-06,1216,WATCH,58,68.7,50-100,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
 2026-05-06,1217,WATCH,58,9.69,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
 2026-05-06,1231,WATCH,58,86.8,50-100,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
@@ -176,9 +168,7 @@ date,stock_id,action,pre_score,close,price_tier,target_weight,suggested_amount,s
 2026-05-06,1560,WATCH,58,576.0,500-1000,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
 2026-05-06,2002,WATCH,58,18.8,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
 2026-05-06,2024,WATCH,58,13.95,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
-2026-05-06,2063,WATCH,58,25.35,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
 2026-05-06,3521,WATCH,58,13.9,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
-2026-05-06,3632,WATCH,58,8.7,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
 2026-05-06,5355,WATCH,58,6.83,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
 2026-05-06,6233,WATCH,58,26.6,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
 2026-05-06,6914,WATCH,58,145.0,100-500,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
@@ -190,8 +180,6 @@ date,stock_id,action,pre_score,close,price_tier,target_weight,suggested_amount,s
 2026-05-06,9931,WATCH,58,34.35,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂 | 結構尚可,True,True,False,True,False,False
 2026-05-06,3036,WATCH,56,214.0,100-500,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 放量吸收 | 結構尚可,True,True,False,False,True,False
 2026-05-06,4549,WATCH,56,108.5,100-500,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 接近突破 | 結構尚可,True,True,False,False,False,True
-2026-05-06,4749,WATCH,56,1010.0,1000以上,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 放量吸收 | 結構尚可,True,True,False,False,True,False
-2026-05-06,5309,WATCH,56,63.2,50-100,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 接近突破 | 結構尚可,True,True,False,False,False,True
 2026-05-06,6026,WATCH,56,15.9,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 接近突破 | 結構尚可,True,True,False,False,False,True
 2026-05-06,6138,WATCH,56,250.5,100-500,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 接近突破 | 結構尚可,True,True,False,False,False,True
 2026-05-06,6651,WATCH,56,105.0,100-500,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 接近突破 | 結構尚可,True,True,False,False,False,True
@@ -310,7 +298,6 @@ date,stock_id,action,pre_score,close,price_tier,target_weight,suggested_amount,s
 2026-05-06,4131,WATCH,54,36.0,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-05-06,4139,WATCH,54,23.9,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-05-06,4198,WATCH,54,40.4,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-05-06,4205,WATCH,54,74.0,50-100,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
 2026-05-06,4207,WATCH,54,17.5,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-05-06,4304,WATCH,54,30.1,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-05-06,4440,WATCH,54,17.8,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
@@ -348,8 +335,12 @@ date,stock_id,action,pre_score,close,price_tier,target_weight,suggested_amount,s
 2026-05-06,5548,WATCH,54,23.6,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-05-06,5603,WATCH,54,15.85,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可,False,True,False,True,True,False
 2026-05-06,5607,WATCH,54,47.6,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-05-06,5609,WATCH,54,78.7,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-05-06,5878,WATCH,54,40.6,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-05-06,5880,WATCH,54,22.95,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-05-06,5903,WATCH,54,189.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-05-06,5906,WATCH,54,50.0,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-05-06,6020,WATCH,54,19.2,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-05-06,6023,WATCH,54,100.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-05-06,6024,WATCH,54,57.6,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-05-06,6115,WATCH,54,47.7,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
@@ -362,6 +353,7 @@ date,stock_id,action,pre_score,close,price_tier,target_weight,suggested_amount,s
 2026-05-06,6170,WATCH,54,52.4,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-05-06,6184,WATCH,54,46.95,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-05-06,6189,WATCH,54,48.8,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
+2026-05-06,6242,WATCH,54,38.2,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-05-06,6248,WATCH,54,19.5,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-05-06,6266,WATCH,54,27.85,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-05-06,6277,WATCH,54,71.3,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
@@ -373,8 +365,8 @@ date,stock_id,action,pre_score,close,price_tier,target_weight,suggested_amount,s
 2026-05-06,6498,WATCH,54,99.0,50-100,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
 2026-05-06,6505,WATCH,54,54.8,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-05-06,6512,WATCH,54,19.1,50以下,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
-2026-05-06,6516,WATCH,54,60.1,50-100,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
 2026-05-06,6570,WATCH,54,41.4,50以下,0.0,0,佈局觀察,安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可,False,True,False,True,False,True
+2026-05-06,6574,WATCH,54,106.0,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-05-06,6577,WATCH,54,81.6,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-05-06,6581,WATCH,54,109.5,100-500,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
 2026-05-06,6590,WATCH,54,69.7,50-100,0.0,0,佈局觀察,波動壓縮 | 均線收斂 | 接近突破 | 結構尚可,True,False,False,True,False,True
@@ -453,6 +445,7 @@ date,stock_id,action,pre_score,close,price_tier,target_weight,suggested_amount,s
 2026-05-06,8069,WATCH,52,145.5,100-500,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂,True,True,False,True,False,False
 2026-05-06,8071,WATCH,52,17.7,50以下,0.0,0,佈局觀察,安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可,False,True,False,False,True,True
 2026-05-06,8464,WATCH,52,340.0,100-500,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂,True,True,False,True,False,False
+2026-05-06,8929,WATCH,52,14.6,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 均線收斂,True,True,False,True,False,False
 2026-05-06,1321,WATCH,50,29.25,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 放量吸收,True,True,False,False,True,False
 2026-05-06,2530,WATCH,50,20.75,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 放量吸收,True,True,False,False,True,False
 2026-05-06,2601,WATCH,50,4.89,50以下,0.0,0,佈局觀察,波動壓縮 | 安靜吸籌 | 放量吸收,True,True,False,False,True,False
