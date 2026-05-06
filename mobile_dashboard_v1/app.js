@@ -188,7 +188,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.57.1_backend_relink_patch";
+const APP_PATCH_VERSION = "v266.57.3_last_update_time_sync_patch";
 const FORCE_REFRESH_NONCE_V26646 = Date.now();
 function bustUrlV26647(url) {
   const sep = String(url).includes("?") ? "&" : "?";
@@ -2149,8 +2149,39 @@ function resolveTradeDateV26630(regime, summary) {
   return m ? m[0] : safeText(raw, "--");
 }
 
+
+// ===== v266.57.3 最後更新時間同步修補 =====
+// 只修 UI 顯示：最後更新優先吃後端 workflow 完成時間，避免顯示到舊 generated_at。
+function resolveBackendUpdatedAtV266573(regime, summary) {
+  const candidates = [
+    summary.workflow_completed_at,
+    summary.backend_completed_at,
+    summary.completed_at,
+    summary.updated_at,
+    summary.generated_at,
+    regime.workflow_completed_at,
+    regime.backend_completed_at,
+    regime.completed_at,
+    regime.updated_at,
+    regime.generated_at,
+    workflowStatusCacheV26631?.end_time,
+    workflowStatusCacheV26631?.completed_at,
+    workflowStatusCacheV26631?.updated_at
+  ];
+
+  let best = null;
+  for (const v of candidates) {
+    const d = parseAsTaipeiDateV26643(v);
+    if (!d) continue;
+    if (!best || d.getTime() > best.getTime()) best = d;
+  }
+
+  return best ? formatTWDateTime(best.toISOString()) : "--";
+}
+
+
 function renderMeta(regime, summary, macro, rows) {
-  const backendUpdatedAt = formatTWDateTime(summary.updated_at || summary.generated_at || regime.generated_at);
+  const backendUpdatedAt = resolveBackendUpdatedAtV266573(regime, summary);
 
   const marketText = `${safeText(regime.market_label || summary.market_label || regime.label || regime.regime, "--")} ${safeText(regime.index_change_pct_text || summary.index_change_pct_text, "")}`.trim();
   const macroText = `${safeText(macro.macro_label || summary.macro_label, "--")}｜分數 ${safeText(macro.macro_score ?? summary.macro_score, "--")}`;
