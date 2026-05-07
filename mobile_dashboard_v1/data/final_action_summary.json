@@ -1,19 +1,19 @@
 ﻿{
-  "generated_at": "2026-05-07 21:51:42",
+  "generated_at": "2026-05-07 22:54:58",
   "source": "v266_57_source_safe_string",
   "signal_date": "2026-05-07",
   "trade_date": "2026-05-08",
-  "rows": 509,
+  "rows": 556,
   "sell_count": 2,
   "reduce_count": 0,
   "buy_count": 0,
-  "test_count": 240,
-  "watch_count": 267,
+  "test_count": 244,
+  "watch_count": 310,
   "block_count": 0,
   "alpha_count": 60,
-  "core_count": 13,
-  "high_liquidity_count": 507,
-  "medium_liquidity_count": 1,
+  "core_count": 10,
+  "high_liquidity_count": 553,
+  "medium_liquidity_count": 2,
   "low_liquidity_count": 0,
   "backfill_source": "feature_panel_daily.csv",
   "extra_lookup_sources": [
@@ -25,8 +25,8 @@
     "pre_move_candidates.csv",
     "timing_candidates.csv"
   ],
-  "with_name_count": 505,
-  "top_opportunity_count": 11,
+  "with_name_count": 552,
+  "top_opportunity_count": 10,
   "chip_high_count": 21,
   "macro_regime": "NEUTRAL",
   "macro_label": "總經偏多（低信心）",
@@ -45,14 +45,14 @@
   "encoding": "utf-8-sig",
   "version": "v266.57",
   "latest_date": "2026-05-07",
-  "updated_at": "2026-05-07 21:53:27",
+  "updated_at": "2026-05-07 22:56:51",
   "date_lock_source": "feature_panel_daily.csv",
   "date_state": "locked_from_latest_feature",
-  "last_update": "2026-05-07 21:52:36",
+  "last_update": "2026-05-07 22:55:54",
   "timezone": "Asia/Taipei",
   "time_source": "github_actions_taipei",
   "refresh_mode": "behavior_interpretation",
-  "final_action_rows": 509,
+  "final_action_rows": 556,
   "active_position_count": 8,
   "active_position_ids": [
     "2317",
@@ -64,5 +64,5 @@
     "4933",
     "6651"
   ],
-  "final_action_updated_at": "2026-05-07 21:53:27"
+  "final_action_updated_at": "2026-05-07 22:56:51"
 }
