@@ -1,11 +1,11 @@
 ﻿{
-  "version": "v266.57.8",
-  "mode": "post_process_structure_continuation_patch",
+  "version": "v266.57.9",
+  "mode": "post_process_structure_continuation_ignition_power_patch",
   "changed_strategy_logic": false,
   "changed_original_score": false,
   "changed_action": false,
   "changed_position": false,
-  "feature_rows": 4806355,
+  "feature_rows": 4806353,
   "files": {
     "candidates.csv": 120,
     "mobile_dashboard_v1/data/candidates.csv": 120,
@@ -15,15 +15,16 @@
     "mobile_dashboard_v1/data/alpha_candidates.csv": 60,
     "trade_plan.csv": 10,
     "mobile_dashboard_v1/data/trade_plan.csv": 10,
-    "pre_move_candidates.csv": 477,
-    "mobile_dashboard_v1/data/pre_move_candidates.csv": 477,
+    "pre_move_candidates.csv": 482,
+    "mobile_dashboard_v1/data/pre_move_candidates.csv": 482,
     "top_opportunities.csv": 16,
     "mobile_dashboard_v1/data/top_opportunities.csv": 16,
-    "final_action_plan.csv": 549,
-    "mobile_dashboard_v1/data/final_action_plan.csv": 549
+    "final_action_plan.csv": 554,
+    "mobile_dashboard_v1/data/final_action_plan.csv": 554
   },
-  "updated_at": "2026-05-07 08:24:04",
-  "description": "在所有 engine 結束後最後補寫結構前置分、續強品質分與測試排序分；v266.57.8 放寬第一根起漲容忍、提高爆量門檻、加強續強確認。",
+  "updated_at": "2026-05-07 09:06:14",
+  "description": "最後補寫結構前置分、續強品質分、IGNITION突破品質分與測試排序分；不覆蓋原策略。",
   "structure_stock_count": 1960,
-  "continuation_stock_count": 1960
+  "continuation_stock_count": 1960,
+  "ignition_power_stock_count": 1923
 }
