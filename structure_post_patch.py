@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-v266.57.7.2 structure_post_patch.py
+v266.57.8 structure_post_patch.py
 
 放在 GitHub Actions 最後階段執行：
 所有 engine / dashboard bridge 都跑完後，再補寫：
@@ -94,7 +94,7 @@ def load_feature():
     if not p:
         return pd.DataFrame()
     df = read_csv(p)
-    print(f"[v266.57.7.2] feature source: {p} rows={len(df)}")
+    print(f"[v266.57.8] feature source: {p} rows={len(df)}")
     return df
 
 
@@ -271,7 +271,7 @@ def calc_structure_pre_map(feat):
             "structure_pre_type": stype,
             "structure_pre_reason": "｜".join(reasons + (["扣分:" + "、".join(penalties)] if penalties else [])),
             "structure_pre_hint": hint,
-            "structure_pre_patch_version": "v266.57.7.2",
+            "structure_pre_patch_version": "v266.57.8",
         }
     return out
 
@@ -391,7 +391,7 @@ def calc_continuation_quality_map(feat):
             "continuation_quality_type": label,
             "continuation_quality_reason": "｜".join(reasons + (["扣分:" + "、".join(penalties)] if penalties else [])),
             "continuation_quality_hint": hint,
-            "continuation_quality_patch_version": "v266.57.7.2",
+            "continuation_quality_patch_version": "v266.57.8",
         }
     return out
 
@@ -466,9 +466,9 @@ def enrich_csv(path, structure_map, quality_map):
         return "｜".join(parts)
 
     if "system_note" in df.columns:
-        df["system_note"] = df.apply(lambda r: str(r.get("system_note", "")) + ("｜v266.57.7.2：" + append_note(r) if append_note(r) else ""), axis=1)
+        df["system_note"] = df.apply(lambda r: str(r.get("system_note", "")) + ("｜v266.57.8：" + append_note(r) if append_note(r) else ""), axis=1)
     elif "note" in df.columns:
-        df["note"] = df.apply(lambda r: str(r.get("note", "")) + ("｜v266.57.7.2：" + append_note(r) if append_note(r) else ""), axis=1)
+        df["note"] = df.apply(lambda r: str(r.get("note", "")) + ("｜v266.57.8：" + append_note(r) if append_note(r) else ""), axis=1)
 
     write_csv(df, path)
     return True, len(df)
@@ -477,7 +477,7 @@ def enrich_csv(path, structure_map, quality_map):
 def main():
     feat = normalize_features(load_feature())
     report = {
-        "version": "v266.57.7.2",
+        "version": "v266.57.8",
         "mode": "post_process_structure_continuation_patch",
         "changed_strategy_logic": False,
         "changed_original_score": False,
@@ -486,7 +486,7 @@ def main():
         "feature_rows": int(len(feat)),
         "files": {},
         "updated_at": taipei_now_str(),
-        "description": "在所有 engine 結束後最後補寫結構前置分、續強品質分與測試排序分；v266.57.7.2 放寬第一根起漲容忍、提高爆量門檻、加強續強確認。",
+        "description": "在所有 engine 結束後最後補寫結構前置分、續強品質分與測試排序分；v266.57.8 放寬第一根起漲容忍、提高爆量門檻、加強續強確認。",
     }
 
     if feat.empty:
@@ -503,17 +503,142 @@ def main():
                 ok, n = enrich_csv(p, structure_map, quality_map)
                 if ok:
                     report["files"][str(p)] = n
-                    print(f"[v266.57.7.2] enriched {p} rows={n}")
+                    print(f"[v266.57.8] enriched {p} rows={n}")
 
     for p in [ROOT / "structure_post_patch_report.json", DATA_DIR / "structure_post_patch_report.json"]:
         try:
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8-sig")
         except Exception as e:
-            print(f"[v266.57.7.2] write report failed {p}: {e}")
+            print(f"[v266.57.8] write report failed {p}: {e}")
 
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
     main()
+
+
+# =========================================================
+# v266.57.8 lifecycle upgrade patch
+# =========================================================
+
+def apply_lifecycle_upgrade_patch(df):
+    try:
+        import numpy as np
+
+        if "close" not in df.columns:
+            return df
+
+        close = df["close"].astype(float)
+
+        low = df["low"].astype(float) if "low" in df.columns else close.copy()
+
+        vol_ratio = (
+            df["volume_ratio"].fillna(1.0).astype(float)
+            if "volume_ratio" in df.columns
+            else close * 0 + 1.0
+        )
+
+        ma5 = close.rolling(5).mean()
+        ma10 = close.rolling(10).mean()
+
+        ma5_slope = ma5.diff()
+
+        rolling_high_10 = close.rolling(10).max()
+        recent_low3 = low.rolling(3).min()
+        prior_low5 = low.shift(3).rolling(5).min()
+
+        watch_upgrade = []
+        ignition_upgrade = []
+        evolution_upgrade = []
+
+        for i in range(len(df)):
+
+            w = 0
+            ig = 0
+            ev = 0
+
+            try:
+
+                c = float(close.iloc[i])
+
+                if i >= 10:
+
+                    if (
+                        np.isfinite(recent_low3.iloc[i])
+                        and np.isfinite(prior_low5.iloc[i])
+                        and recent_low3.iloc[i] >= prior_low5.iloc[i] * 0.98
+                    ):
+                        w += 1
+
+                    if np.isfinite(ma5_slope.iloc[i]) and ma5_slope.iloc[i] > 0:
+                        w += 1
+
+                    if (
+                        np.isfinite(vol_ratio.iloc[i])
+                        and 1.2 <= vol_ratio.iloc[i] <= 4.5
+                    ):
+                        w += 1
+
+                    if (
+                        np.isfinite(rolling_high_10.iloc[i])
+                        and c >= rolling_high_10.iloc[i] * 0.985
+                    ):
+                        w += 1
+
+                if i >= 12:
+
+                    if (
+                        np.isfinite(ma5.iloc[i])
+                        and np.isfinite(ma10.iloc[i])
+                        and c >= ma5.iloc[i]
+                        and ma5.iloc[i] >= ma10.iloc[i]
+                    ):
+                        ig += 1
+
+                    if (
+                        np.isfinite(vol_ratio.iloc[i])
+                        and 1.5 <= vol_ratio.iloc[i] <= 6.5
+                    ):
+                        ig += 1
+
+                    prev_close = float(close.iloc[i - 1])
+
+                    if c >= prev_close * 0.98:
+                        ig += 1
+
+                if i >= 20:
+
+                    if np.isfinite(ma10.iloc[i]) and c >= ma10.iloc[i]:
+                        ev += 1
+
+                    recent_high5 = close.iloc[max(0, i - 5): i + 1].max()
+                    prior_high10 = close.iloc[max(0, i - 15): max(1, i - 5)].max()
+
+                    if recent_high5 >= prior_high10:
+                        ev += 1
+
+                    if (
+                        np.isfinite(recent_low3.iloc[i])
+                        and np.isfinite(prior_low5.iloc[i])
+                        and recent_low3.iloc[i] >= prior_low5.iloc[i]
+                    ):
+                        ev += 1
+
+            except Exception:
+                pass
+
+            watch_upgrade.append(w)
+            ignition_upgrade.append(ig)
+            evolution_upgrade.append(ev)
+
+        df["watch_upgrade_score_v266578"] = watch_upgrade
+        df["ignition_upgrade_score_v266578"] = ignition_upgrade
+        df["evolution_upgrade_score_v266578"] = evolution_upgrade
+
+        return df
+
+    except Exception:
+        return df
+
