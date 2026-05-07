@@ -1,20 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-v266.57.8 structure_post_patch.py
-
-放在 GitHub Actions 最後階段執行：
-所有 engine / dashboard bridge 都跑完後，再補寫：
+v266.57.9 structure_post_patch.py
+最後後處理補寫：
 - structure_pre_score
 - continuation_quality_score
-- adjusted_signal_score_v26657_7
-- structure_rank_v26657_7
+- ignition_power_score
+- adjusted_signal_score_v26657_9
 
-不改原本：
-- entry_score
-- action
+不改：
+- 原策略核心
+- 原 entry_score
+- 原 action
 - target_weight
 - 持倉
-- 資金配置
 """
 
 from pathlib import Path
@@ -40,16 +38,13 @@ TARGET_FILES = [
     "final_action_plan.csv",
 ]
 
-
 def taipei_now_str():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
 
 def sid(v):
     s = str(v).strip()
     m = re.search(r"(\d{4})", s)
     return m.group(1) if m else s
-
 
 def sf(v, default=np.nan):
     try:
@@ -57,7 +52,6 @@ def sf(v, default=np.nan):
         return x if np.isfinite(x) else default
     except Exception:
         return default
-
 
 def read_csv(path):
     p = Path(path)
@@ -70,12 +64,10 @@ def read_csv(path):
             pass
     return pd.DataFrame()
 
-
 def write_csv(df, path):
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(p, index=False, encoding="utf-8-sig")
-
 
 def find_feature_file():
     for p in [
@@ -88,15 +80,13 @@ def find_feature_file():
             return p
     return None
 
-
 def load_feature():
     p = find_feature_file()
     if not p:
         return pd.DataFrame()
     df = read_csv(p)
-    print(f"[v266.57.8] feature source: {p} rows={len(df)}")
+    print(f"[v266.57.9] feature source: {p} rows={len(df)}")
     return df
-
 
 def normalize_features(df):
     if df.empty or "stock_id" not in df.columns or "date" not in df.columns:
@@ -105,7 +95,6 @@ def normalize_features(df):
     df["stock_id"] = df["stock_id"].map(sid)
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     df = df.dropna(subset=["date", "stock_id"]).sort_values(["stock_id", "date"])
-
     for c in [
         "open", "high", "low", "close", "volume",
         "ma5", "ma10", "ma20", "ma60",
@@ -116,7 +105,6 @@ def normalize_features(df):
             df[c] = np.nan
         df[c] = pd.to_numeric(df[c], errors="coerce")
     return df
-
 
 def calc_structure_pre_map(feat):
     out = {}
@@ -271,10 +259,9 @@ def calc_structure_pre_map(feat):
             "structure_pre_type": stype,
             "structure_pre_reason": "｜".join(reasons + (["扣分:" + "、".join(penalties)] if penalties else [])),
             "structure_pre_hint": hint,
-            "structure_pre_patch_version": "v266.57.8",
+            "structure_pre_patch_version": "v266.57.9",
         }
     return out
-
 
 def calc_continuation_quality_map(feat):
     out = {}
@@ -391,10 +378,117 @@ def calc_continuation_quality_map(feat):
             "continuation_quality_type": label,
             "continuation_quality_reason": "｜".join(reasons + (["扣分:" + "、".join(penalties)] if penalties else [])),
             "continuation_quality_hint": hint,
-            "continuation_quality_patch_version": "v266.57.8",
+            "continuation_quality_patch_version": "v266.57.9",
         }
     return out
 
+def calc_ignition_power_map(feat):
+    out = {}
+    if feat.empty:
+        return out
+
+    for stock_id, g in feat.groupby("stock_id"):
+        h = g.tail(30).copy()
+        if len(h) < 12:
+            continue
+
+        last = h.iloc[-1]
+        prev = h.iloc[-2]
+
+        close = sf(last.get("close"))
+        open_ = sf(last.get("open"))
+        high = sf(last.get("high"))
+        low = sf(last.get("low"))
+        volume = sf(last.get("volume"))
+        prev_volume = sf(prev.get("volume"))
+        ma5 = sf(last.get("ma5"))
+        ma10 = sf(last.get("ma10"))
+
+        if not np.isfinite(close) or not np.isfinite(open_) or not np.isfinite(high) or not np.isfinite(low):
+            continue
+        if high <= low:
+            continue
+
+        score = 0.0
+        reasons = []
+        penalties = []
+
+        body = abs(close - open_)
+        if "open" in h.columns and len(h) >= 4:
+            body3 = (
+                pd.to_numeric(h.tail(4).iloc[:-1]["close"], errors="coerce")
+                - pd.to_numeric(h.tail(4).iloc[:-1]["open"], errors="coerce")
+            ).abs().mean()
+        else:
+            body3 = np.nan
+
+        if close > open_ and np.isfinite(body3) and body3 > 0 and body >= body3 * 1.15:
+            score += 1.5
+            reasons.append("紅K實體放大")
+
+        close_pos = (close - low) / (high - low)
+        if close_pos >= 0.70:
+            score += 1.5
+            reasons.append("收盤接近高點")
+        elif close_pos < 0.45:
+            score -= 1.0
+            penalties.append("收盤位置偏弱")
+
+        if np.isfinite(volume) and np.isfinite(prev_volume) and prev_volume > 0:
+            vr1 = volume / prev_volume
+            if 1.10 <= vr1 <= 3.50:
+                score += 1.2
+                reasons.append("量能較前日放大")
+            elif vr1 > 5.0:
+                score -= 1.0
+                penalties.append("單日量能過猛")
+
+        high5_prev = pd.to_numeric(h.iloc[-6:-1]["high"], errors="coerce").max() if len(h) >= 6 else np.nan
+        if np.isfinite(high5_prev) and close >= high5_prev * 0.995:
+            score += 1.5
+            reasons.append("突破近5日高")
+
+        close_s = pd.to_numeric(h["close"], errors="coerce")
+        ma5_s = close_s.rolling(5).mean()
+        ma5_diff = ma5_s.diff()
+        if len(ma5_diff.dropna()) >= 2:
+            if ma5_diff.iloc[-1] > ma5_diff.iloc[-2] and ma5_diff.iloc[-1] > 0:
+                score += 1.2
+                reasons.append("MA5加速上彎")
+
+        if np.isfinite(ma5) and np.isfinite(ma10) and ma5 >= ma10:
+            score += 0.8
+            reasons.append("短均多頭")
+
+        upper_shadow = (high - max(open_, close)) / (high - low)
+        if upper_shadow >= 0.55:
+            score -= 1.2
+            penalties.append("上影偏長")
+
+        score = max(-3.0, min(9.0, score))
+
+        if score >= 6:
+            grade, label = "A", "突破品質強"
+            hint = "TEST有升級IGNITION條件，可優先觀察隔日延續。"
+        elif score >= 4:
+            grade, label = "B", "突破品質中"
+            hint = "突破品質尚可，可列入試單後續確認。"
+        elif score >= 2:
+            grade, label = "C", "突破觀察"
+            hint = "有轉強跡象，但突破品質尚未完全成立。"
+        else:
+            grade, label = "D", "突破不足"
+            hint = "尚未形成乾淨突破，不急著升級。"
+
+        out[stock_id] = {
+            "ignition_power_score": round(float(score), 2),
+            "ignition_power_grade": grade,
+            "ignition_power_type": label,
+            "ignition_power_reason": "｜".join(reasons + (["扣分:" + "、".join(penalties)] if penalties else [])),
+            "ignition_power_hint": hint,
+            "ignition_power_patch_version": "v266.57.9",
+        }
+    return out
 
 def pick_score_col(df):
     for c in ["entry_score", "score", "total_score", "final_score", "momentum_score", "rank_score", "composite_score"]:
@@ -402,9 +496,8 @@ def pick_score_col(df):
             return c
     return None
 
-
 def strategy_bucket(row):
-    txt = " ".join(str(row.get(c, "")) for c in ["strategy_type", "strategy_name", "bucket", "source", "action_sub", "entry_type", "execution_flag"]).upper()
+    txt = " ".join(str(row.get(c, "")) for c in ["strategy_type", "strategy_name", "bucket", "source", "action_sub", "entry_type", "execution_flag", "action"]).upper()
     if "ALPHA" in txt:
         return "ALPHA"
     if "IGNITION" in txt or "起漲" in txt:
@@ -415,18 +508,20 @@ def strategy_bucket(row):
         return "CORE"
     if "TEST" in txt or "試單" in txt:
         return "TEST"
+    if "WATCH" in txt or "觀察" in txt:
+        return "WATCH"
     return "GENERIC"
 
-
 def structure_weight(bucket):
-    return {"CORE": 0.95, "IGNITION": 1.05, "EVOLUTION": 0.65, "TEST": 0.80, "ALPHA": 0.35}.get(bucket, 0.55)
-
+    return {"CORE": 0.95, "IGNITION": 1.05, "EVOLUTION": 0.65, "TEST": 0.80, "WATCH": 0.55, "ALPHA": 0.35}.get(bucket, 0.55)
 
 def continuation_weight(bucket):
-    return {"ALPHA": 0.75, "EVOLUTION": 0.85, "CORE": 0.55, "IGNITION": 0.45, "TEST": 0.50}.get(bucket, 0.50)
+    return {"ALPHA": 0.75, "EVOLUTION": 0.85, "CORE": 0.55, "IGNITION": 0.45, "TEST": 0.50, "WATCH": 0.35}.get(bucket, 0.50)
 
+def ignition_weight(bucket):
+    return {"IGNITION": 1.10, "TEST": 0.90, "WATCH": 0.75, "CORE": 0.35, "ALPHA": 0.25, "EVOLUTION": 0.45}.get(bucket, 0.50)
 
-def enrich_csv(path, structure_map, quality_map):
+def enrich_csv(path, structure_map, quality_map, ignition_map):
     df = read_csv(path)
     if df.empty or "stock_id" not in df.columns:
         return False, 0
@@ -438,47 +533,50 @@ def enrich_csv(path, structure_map, quality_map):
         df[col] = [structure_map.get(x, {}).get(col, "") for x in sids]
     for col in ["continuation_quality_score", "continuation_quality_grade", "continuation_quality_type", "continuation_quality_reason", "continuation_quality_hint", "continuation_quality_patch_version"]:
         df[col] = [quality_map.get(x, {}).get(col, "") for x in sids]
+    for col in ["ignition_power_score", "ignition_power_grade", "ignition_power_type", "ignition_power_reason", "ignition_power_hint", "ignition_power_patch_version"]:
+        df[col] = [ignition_map.get(x, {}).get(col, "") for x in sids]
 
     base_col = pick_score_col(df)
     base_score = pd.to_numeric(df[base_col], errors="coerce").fillna(0) if base_col else pd.Series([0] * len(df))
     structure_pre = pd.to_numeric(df["structure_pre_score"], errors="coerce").fillna(0)
     continuation_q = pd.to_numeric(df["continuation_quality_score"], errors="coerce").fillna(0)
+    ignition_p = pd.to_numeric(df["ignition_power_score"], errors="coerce").fillna(0)
 
     buckets = df.apply(strategy_bucket, axis=1)
-    s_weights = buckets.map(structure_weight).astype(float)
-    c_weights = buckets.map(continuation_weight).astype(float)
+    sw = buckets.map(structure_weight).astype(float)
+    cw = buckets.map(continuation_weight).astype(float)
+    iw = buckets.map(ignition_weight).astype(float)
 
-    df["strategy_bucket_v26657_7"] = buckets
-    df["structure_weight_v26657_7"] = s_weights.round(2)
-    df["continuation_weight_v26657_7"] = c_weights.round(2)
-    df["adjusted_signal_score_v26657_7"] = (base_score + structure_pre * s_weights + continuation_q * c_weights).round(3)
-    df["structure_rank_v26657_7"] = pd.to_numeric(df["adjusted_signal_score_v26657_7"], errors="coerce").rank(ascending=False, method="min")
-    df["adjusted_signal_note_v26657_7"] = "最後後處理補寫：原分數+結構前置分*策略權重+續強品質*策略權重；不覆蓋原策略"
+    df["strategy_bucket_v26657_9"] = buckets
+    df["structure_weight_v26657_9"] = sw.round(2)
+    df["continuation_weight_v26657_9"] = cw.round(2)
+    df["ignition_power_weight_v26657_9"] = iw.round(2)
+
+    df["adjusted_signal_score_v26657_9"] = (base_score + structure_pre * sw + continuation_q * cw + ignition_p * iw).round(3)
+    df["structure_rank_v26657_9"] = pd.to_numeric(df["adjusted_signal_score_v26657_9"], errors="coerce").rank(ascending=False, method="min")
+    df["adjusted_signal_note_v26657_9"] = "最後後處理補寫：原分數+結構前置+續強品質+突破品質；不覆蓋原策略"
 
     def append_note(row):
         parts = []
-        h1 = str(row.get("structure_pre_hint", "")).strip()
-        h2 = str(row.get("continuation_quality_hint", "")).strip()
-        if h1:
-            parts.append("結構：" + h1)
-        if h2:
-            parts.append("續強：" + h2)
+        for prefix, col in [("結構", "structure_pre_hint"), ("續強", "continuation_quality_hint"), ("突破", "ignition_power_hint")]:
+            v = str(row.get(col, "")).strip()
+            if v:
+                parts.append(prefix + "：" + v)
         return "｜".join(parts)
 
     if "system_note" in df.columns:
-        df["system_note"] = df.apply(lambda r: str(r.get("system_note", "")) + ("｜v266.57.8：" + append_note(r) if append_note(r) else ""), axis=1)
+        df["system_note"] = df.apply(lambda r: str(r.get("system_note", "")) + ("｜v266.57.9：" + append_note(r) if append_note(r) else ""), axis=1)
     elif "note" in df.columns:
-        df["note"] = df.apply(lambda r: str(r.get("note", "")) + ("｜v266.57.8：" + append_note(r) if append_note(r) else ""), axis=1)
+        df["note"] = df.apply(lambda r: str(r.get("note", "")) + ("｜v266.57.9：" + append_note(r) if append_note(r) else ""), axis=1)
 
     write_csv(df, path)
     return True, len(df)
 
-
 def main():
     feat = normalize_features(load_feature())
     report = {
-        "version": "v266.57.8",
-        "mode": "post_process_structure_continuation_patch",
+        "version": "v266.57.9",
+        "mode": "post_process_structure_continuation_ignition_power_patch",
         "changed_strategy_logic": False,
         "changed_original_score": False,
         "changed_action": False,
@@ -486,7 +584,7 @@ def main():
         "feature_rows": int(len(feat)),
         "files": {},
         "updated_at": taipei_now_str(),
-        "description": "在所有 engine 結束後最後補寫結構前置分、續強品質分與測試排序分；v266.57.8 放寬第一根起漲容忍、提高爆量門檻、加強續強確認。",
+        "description": "最後補寫結構前置分、續強品質分、IGNITION突破品質分與測試排序分；不覆蓋原策略。",
     }
 
     if feat.empty:
@@ -494,151 +592,27 @@ def main():
     else:
         structure_map = calc_structure_pre_map(feat)
         quality_map = calc_continuation_quality_map(feat)
+        ignition_map = calc_ignition_power_map(feat)
         report["structure_stock_count"] = len(structure_map)
         report["continuation_stock_count"] = len(quality_map)
+        report["ignition_power_stock_count"] = len(ignition_map)
 
         for name in TARGET_FILES:
             for base in [ROOT, DATA_DIR]:
                 p = base / name
-                ok, n = enrich_csv(p, structure_map, quality_map)
+                ok, n = enrich_csv(p, structure_map, quality_map, ignition_map)
                 if ok:
                     report["files"][str(p)] = n
-                    print(f"[v266.57.8] enriched {p} rows={n}")
+                    print(f"[v266.57.9] enriched {p} rows={n}")
 
     for p in [ROOT / "structure_post_patch_report.json", DATA_DIR / "structure_post_patch_report.json"]:
         try:
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8-sig")
         except Exception as e:
-            print(f"[v266.57.8] write report failed {p}: {e}")
+            print(f"[v266.57.9] write report failed {p}: {e}")
 
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
-
 if __name__ == "__main__":
     main()
-
-
-# =========================================================
-# v266.57.8 lifecycle upgrade patch
-# =========================================================
-
-def apply_lifecycle_upgrade_patch(df):
-    try:
-        import numpy as np
-
-        if "close" not in df.columns:
-            return df
-
-        close = df["close"].astype(float)
-
-        low = df["low"].astype(float) if "low" in df.columns else close.copy()
-
-        vol_ratio = (
-            df["volume_ratio"].fillna(1.0).astype(float)
-            if "volume_ratio" in df.columns
-            else close * 0 + 1.0
-        )
-
-        ma5 = close.rolling(5).mean()
-        ma10 = close.rolling(10).mean()
-
-        ma5_slope = ma5.diff()
-
-        rolling_high_10 = close.rolling(10).max()
-        recent_low3 = low.rolling(3).min()
-        prior_low5 = low.shift(3).rolling(5).min()
-
-        watch_upgrade = []
-        ignition_upgrade = []
-        evolution_upgrade = []
-
-        for i in range(len(df)):
-
-            w = 0
-            ig = 0
-            ev = 0
-
-            try:
-
-                c = float(close.iloc[i])
-
-                if i >= 10:
-
-                    if (
-                        np.isfinite(recent_low3.iloc[i])
-                        and np.isfinite(prior_low5.iloc[i])
-                        and recent_low3.iloc[i] >= prior_low5.iloc[i] * 0.98
-                    ):
-                        w += 1
-
-                    if np.isfinite(ma5_slope.iloc[i]) and ma5_slope.iloc[i] > 0:
-                        w += 1
-
-                    if (
-                        np.isfinite(vol_ratio.iloc[i])
-                        and 1.2 <= vol_ratio.iloc[i] <= 4.5
-                    ):
-                        w += 1
-
-                    if (
-                        np.isfinite(rolling_high_10.iloc[i])
-                        and c >= rolling_high_10.iloc[i] * 0.985
-                    ):
-                        w += 1
-
-                if i >= 12:
-
-                    if (
-                        np.isfinite(ma5.iloc[i])
-                        and np.isfinite(ma10.iloc[i])
-                        and c >= ma5.iloc[i]
-                        and ma5.iloc[i] >= ma10.iloc[i]
-                    ):
-                        ig += 1
-
-                    if (
-                        np.isfinite(vol_ratio.iloc[i])
-                        and 1.5 <= vol_ratio.iloc[i] <= 6.5
-                    ):
-                        ig += 1
-
-                    prev_close = float(close.iloc[i - 1])
-
-                    if c >= prev_close * 0.98:
-                        ig += 1
-
-                if i >= 20:
-
-                    if np.isfinite(ma10.iloc[i]) and c >= ma10.iloc[i]:
-                        ev += 1
-
-                    recent_high5 = close.iloc[max(0, i - 5): i + 1].max()
-                    prior_high10 = close.iloc[max(0, i - 15): max(1, i - 5)].max()
-
-                    if recent_high5 >= prior_high10:
-                        ev += 1
-
-                    if (
-                        np.isfinite(recent_low3.iloc[i])
-                        and np.isfinite(prior_low5.iloc[i])
-                        and recent_low3.iloc[i] >= prior_low5.iloc[i]
-                    ):
-                        ev += 1
-
-            except Exception:
-                pass
-
-            watch_upgrade.append(w)
-            ignition_upgrade.append(ig)
-            evolution_upgrade.append(ev)
-
-        df["watch_upgrade_score_v266578"] = watch_upgrade
-        df["ignition_upgrade_score_v266578"] = ignition_upgrade
-        df["evolution_upgrade_score_v266578"] = evolution_upgrade
-
-        return df
-
-    except Exception:
-        return df
-
