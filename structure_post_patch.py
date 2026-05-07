@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-v266.57.7.1 structure_post_patch.py
+v266.57.7.2 structure_post_patch.py
 
 放在 GitHub Actions 最後階段執行：
 所有 engine / dashboard bridge 都跑完後，再補寫：
@@ -94,7 +94,7 @@ def load_feature():
     if not p:
         return pd.DataFrame()
     df = read_csv(p)
-    print(f"[v266.57.7.1] feature source: {p} rows={len(df)}")
+    print(f"[v266.57.7.2] feature source: {p} rows={len(df)}")
     return df
 
 
@@ -235,10 +235,10 @@ def calc_structure_pre_map(feat):
             penalties.append("20D漲幅過熱")
         if np.isfinite(open_) and np.isfinite(high) and np.isfinite(low) and high > low:
             upper = (high - max(open_, close)) / (high - low)
-            if upper >= 0.45:
-                score -= 2.0
+            if upper >= 0.60:
+                score -= 1.0
                 penalties.append("長上影壓力")
-        if np.isfinite(vol_ratio) and vol_ratio >= 5.5:
+        if np.isfinite(vol_ratio) and vol_ratio >= 7.0:
             score -= 1.0
             penalties.append("成交量異常爆量")
 
@@ -271,7 +271,7 @@ def calc_structure_pre_map(feat):
             "structure_pre_type": stype,
             "structure_pre_reason": "｜".join(reasons + (["扣分:" + "、".join(penalties)] if penalties else [])),
             "structure_pre_hint": hint,
-            "structure_pre_patch_version": "v266.57.7.1",
+            "structure_pre_patch_version": "v266.57.7.2",
         }
     return out
 
@@ -317,9 +317,15 @@ def calc_continuation_quality_map(feat):
         if np.isfinite(recent_low5) and np.isfinite(prior_low10) and recent_low5 >= prior_low10 * 0.97:
             score += 2.0
             reasons.append("回檔不破前低")
+        if np.isfinite(recent_low5) and np.isfinite(prior_low10) and recent_low5 >= prior_low10 * 0.98:
+            score += 1.0
+            reasons.append("低點墊高確認")
         if np.isfinite(ma5) and close >= ma5 * 0.995:
             score += 1.5
             reasons.append("收盤守MA5")
+        if np.isfinite(ma5) and close >= ma5:
+            score += 1.0
+            reasons.append("續強確認：收盤未跌破MA5")
         elif np.isfinite(ma10) and close >= ma10 * 0.995:
             score += 0.8
             reasons.append("回測守MA10")
@@ -355,10 +361,10 @@ def calc_continuation_quality_map(feat):
                 penalties.append("接近20日高且短線過熱")
         if np.isfinite(open_) and np.isfinite(high) and np.isfinite(low) and high > low:
             upper = (high - max(open_, close)) / (high - low)
-            if upper >= 0.45:
-                score -= 1.5
+            if upper >= 0.60:
+                score -= 1.0
                 penalties.append("長上影壓力")
-        if np.isfinite(vol_ratio) and vol_ratio >= 5.5:
+        if np.isfinite(vol_ratio) and vol_ratio >= 7.0:
             score -= 1.0
             penalties.append("異常爆量")
         if np.isfinite(mom20) and mom20 > 0.45:
@@ -385,7 +391,7 @@ def calc_continuation_quality_map(feat):
             "continuation_quality_type": label,
             "continuation_quality_reason": "｜".join(reasons + (["扣分:" + "、".join(penalties)] if penalties else [])),
             "continuation_quality_hint": hint,
-            "continuation_quality_patch_version": "v266.57.7.1",
+            "continuation_quality_patch_version": "v266.57.7.2",
         }
     return out
 
@@ -460,9 +466,9 @@ def enrich_csv(path, structure_map, quality_map):
         return "｜".join(parts)
 
     if "system_note" in df.columns:
-        df["system_note"] = df.apply(lambda r: str(r.get("system_note", "")) + ("｜v266.57.7.1：" + append_note(r) if append_note(r) else ""), axis=1)
+        df["system_note"] = df.apply(lambda r: str(r.get("system_note", "")) + ("｜v266.57.7.2：" + append_note(r) if append_note(r) else ""), axis=1)
     elif "note" in df.columns:
-        df["note"] = df.apply(lambda r: str(r.get("note", "")) + ("｜v266.57.7.1：" + append_note(r) if append_note(r) else ""), axis=1)
+        df["note"] = df.apply(lambda r: str(r.get("note", "")) + ("｜v266.57.7.2：" + append_note(r) if append_note(r) else ""), axis=1)
 
     write_csv(df, path)
     return True, len(df)
@@ -471,7 +477,7 @@ def enrich_csv(path, structure_map, quality_map):
 def main():
     feat = normalize_features(load_feature())
     report = {
-        "version": "v266.57.7.1",
+        "version": "v266.57.7.2",
         "mode": "post_process_structure_continuation_patch",
         "changed_strategy_logic": False,
         "changed_original_score": False,
@@ -480,7 +486,7 @@ def main():
         "feature_rows": int(len(feat)),
         "files": {},
         "updated_at": taipei_now_str(),
-        "description": "在所有 engine 結束後最後補寫結構前置分、續強品質分與測試排序分，避免被後續流程覆蓋。",
+        "description": "在所有 engine 結束後最後補寫結構前置分、續強品質分與測試排序分；v266.57.7.2 放寬第一根起漲容忍、提高爆量門檻、加強續強確認。",
     }
 
     if feat.empty:
@@ -497,14 +503,14 @@ def main():
                 ok, n = enrich_csv(p, structure_map, quality_map)
                 if ok:
                     report["files"][str(p)] = n
-                    print(f"[v266.57.7.1] enriched {p} rows={n}")
+                    print(f"[v266.57.7.2] enriched {p} rows={n}")
 
     for p in [ROOT / "structure_post_patch_report.json", DATA_DIR / "structure_post_patch_report.json"]:
         try:
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8-sig")
         except Exception as e:
-            print(f"[v266.57.7.1] write report failed {p}: {e}")
+            print(f"[v266.57.7.2] write report failed {p}: {e}")
 
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
