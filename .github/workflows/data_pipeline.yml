@@ -1199,7 +1199,13 @@ jobs:
         if: always()
         run: |
           python chip_score_patch.py
-
+         
+         # v266.59 主力發動狀態機
+      - name: Run state engine patch
+        if: always()
+        run: |
+          python state_engine_patch.py
+      
       - name: Clean runtime big files
         run: |
           rm -f price_panel_daily.csv
