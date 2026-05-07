@@ -616,3 +616,10 @@ def main():
 
 if __name__ == "__main__":
     main()
+from market_regime_patch import apply_market_regime_patch
+
+df, regime = apply_market_regime_patch(df)
+
+5. push GitHub
+
+6. Actions -> data_pipeline -> Run workflow
