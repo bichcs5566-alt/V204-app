@@ -1,16 +1,16 @@
 {
-  "generated_at": "2026-05-07 00:48:09",
+  "generated_at": "2026-05-07 02:47:35",
   "source": "backfill_missing_days",
   "before_last_date": "2026-04-24",
   "after_last_date": "2026-05-07",
-  "rows": 4806172,
+  "rows": 4806178,
   "stock_count": 1966,
   "unique_dates": 2816,
   "filled_days": [
     {
       "date": "2026-04-27",
-      "rows": 1940,
-      "symbols": 1940
+      "rows": 1946,
+      "symbols": 1946
     },
     {
       "date": "2026-04-28",
