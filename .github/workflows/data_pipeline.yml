@@ -1187,6 +1187,14 @@ jobs:
                   print("NO signal_date/trade_date columns")
           PY
 
+
+      # v266.57.7.1：最後後處理結構補分（不覆蓋原策略）
+      - name: Run structure post patch
+        if: always()
+        run: |
+          python structure_post_patch.py
+
+
       - name: Clean runtime big files
         run: |
           rm -f price_panel_daily.csv
@@ -1490,6 +1498,10 @@ jobs:
           git add -f mobile_dashboard_v1/data/final_action_plan.csv || true
           git add -f mobile_dashboard_v1/data/final_action_summary.json || true
           git add -f mobile_dashboard_v1/data/exit_risk_plan.csv || true
+
+          
+          git add -f structure_post_patch_report.json || true
+          git add -f mobile_dashboard_v1/data/structure_post_patch_report.json || true
 
           git add -f candidates.csv core_candidates.csv alpha_candidates.csv selection_debug.csv || true
           git add -f timing_candidates.csv timing_summary.json || true
