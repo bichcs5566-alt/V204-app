@@ -1351,5 +1351,245 @@ def main_v266576_structure_pre_score_patch():
     main_v2665751_structure_write_fix()
     apply_structure_pre_score_patch_v266576()
 
-if __name__ == "__main__":
+
+# ===== v266.57.7 structure weight split + continuation quality（append-only 測試修補） =====
+# 不改原始 entry_score / action / target_weight；只新增測試排序分與續強品質欄位。
+def _sid_v266577(v):
+    s = str(v).strip()
+    m = re.search(r"(\d{4})", s)
+    return m.group(1) if m else s
+
+def _sf_v266577(v, default=np.nan):
+    try:
+        x = float(v)
+        return x if np.isfinite(x) else default
+    except Exception:
+        return default
+
+def _read_csv_v266577(path):
+    p = Path(path)
+    if not p.exists() or p.stat().st_size == 0:
+        return pd.DataFrame()
+    for enc in ["utf-8-sig", "utf-8"]:
+        try:
+            return pd.read_csv(p, encoding=enc)
+        except Exception:
+            pass
+    return pd.DataFrame()
+
+def _write_csv_v266577(df, path):
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(path, index=False, encoding="utf-8-sig")
+
+def _pick_score_col_v266577(df):
+    for c in ["entry_score", "score", "total_score", "final_score", "momentum_score", "rank_score", "composite_score"]:
+        if c in df.columns:
+            return c
+    return None
+
+def _strategy_bucket_v266577(row):
+    txt = " ".join(str(row.get(c, "")) for c in ["strategy_type", "strategy_name", "bucket", "source", "action_sub", "entry_type", "execution_flag"]).upper()
+    if "ALPHA" in txt:
+        return "ALPHA"
+    if "IGNITION" in txt or "起漲" in txt:
+        return "IGNITION"
+    if "EVOLUTION" in txt or "進化" in txt:
+        return "EVOLUTION"
+    if "CORE" in txt:
+        return "CORE"
+    if "TEST" in txt or "試單" in txt:
+        return "TEST"
+    return "GENERIC"
+
+def _structure_weight_v266577(bucket):
+    return {"CORE": 0.95, "IGNITION": 1.05, "EVOLUTION": 0.65, "TEST": 0.80, "ALPHA": 0.35}.get(bucket, 0.55)
+
+def _continuation_weight_v266577(bucket):
+    return {"ALPHA": 0.75, "EVOLUTION": 0.85, "CORE": 0.55, "IGNITION": 0.45, "TEST": 0.50}.get(bucket, 0.50)
+
+def _build_continuation_quality_map_v266577():
+    try:
+        feat = load_feature()
+    except Exception as e:
+        print("v266.57.7 continuation skip load_feature:", e)
+        return {}
+    if feat.empty or "stock_id" not in feat.columns or "date" not in feat.columns:
+        return {}
+
+    df = feat.copy()
+    df["stock_id"] = df["stock_id"].map(_sid_v266577)
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df = df.dropna(subset=["date", "stock_id"]).sort_values(["stock_id", "date"])
+
+    for c in ["open","high","low","close","volume","ma5","ma10","ma20","mom5","mom10","mom20","volume_ratio"]:
+        if c not in df.columns:
+            df[c] = np.nan
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    out = {}
+    for sid, g in df.groupby("stock_id"):
+        h = g.tail(35).copy()
+        if len(h) < 12:
+            continue
+        last = h.iloc[-1]
+        close = _sf_v266577(last.get("close"))
+        open_ = _sf_v266577(last.get("open"))
+        high = _sf_v266577(last.get("high"))
+        low = _sf_v266577(last.get("low"))
+        volume = _sf_v266577(last.get("volume"))
+        ma5 = _sf_v266577(last.get("ma5"))
+        ma10 = _sf_v266577(last.get("ma10"))
+        ma20 = _sf_v266577(last.get("ma20"))
+        mom5 = _sf_v266577(last.get("mom5"))
+        mom10 = _sf_v266577(last.get("mom10"))
+        mom20 = _sf_v266577(last.get("mom20"))
+        vol_ratio = _sf_v266577(last.get("volume_ratio"))
+        if not np.isfinite(close) or close <= 0:
+            continue
+
+        g5 = h.tail(5)
+        g20 = h.tail(20)
+        recent_low5 = pd.to_numeric(g5["low"], errors="coerce").min()
+        prior_low10 = pd.to_numeric(h.iloc[-15:-5]["low"], errors="coerce").min() if len(h) >= 15 else np.nan
+        vol5 = pd.to_numeric(g5["volume"], errors="coerce").mean()
+        vol20 = pd.to_numeric(g20["volume"], errors="coerce").mean()
+        high20 = pd.to_numeric(g20["high"], errors="coerce").max()
+
+        score = 0.0
+        reasons = []
+        penalties = []
+
+        if np.isfinite(recent_low5) and np.isfinite(prior_low10) and recent_low5 >= prior_low10 * 0.97:
+            score += 2.0; reasons.append("回檔不破前低")
+        if np.isfinite(ma5) and close >= ma5 * 0.995:
+            score += 1.5; reasons.append("收盤守MA5")
+        elif np.isfinite(ma10) and close >= ma10 * 0.995:
+            score += 0.8; reasons.append("回測守MA10")
+        else:
+            score -= 1.0; penalties.append("跌破短均")
+        if np.isfinite(vol5) and np.isfinite(vol20) and vol20 > 0:
+            vr5 = vol5 / vol20
+            if 0.55 <= vr5 <= 0.95:
+                score += 1.5; reasons.append("回檔量縮")
+            elif vr5 > 1.8:
+                score -= 1.2; penalties.append("回檔量放大")
+        if np.isfinite(ma5) and np.isfinite(ma10) and ma5 >= ma10:
+            score += 1.2; reasons.append("MA5仍在MA10上")
+        if np.isfinite(ma20) and close >= ma20:
+            score += 1.0; reasons.append("仍站MA20")
+        if np.isfinite(mom10) and mom10 > 0:
+            score += 1.0; reasons.append("10D動能維持")
+        if np.isfinite(mom5) and mom5 < -0.08:
+            score -= 1.2; penalties.append("短線急殺")
+        if np.isfinite(high20) and high20 > 0 and close / high20 >= 0.98 and np.isfinite(mom5) and mom5 > 0.08:
+            score -= 1.0; penalties.append("接近20日高且短線過熱")
+        if np.isfinite(open_) and np.isfinite(high) and np.isfinite(low) and high > low:
+            upper = (high - max(open_, close)) / (high - low)
+            if upper >= 0.45:
+                score -= 1.5; penalties.append("長上影壓力")
+        if np.isfinite(vol_ratio) and vol_ratio >= 5.5:
+            score -= 1.0; penalties.append("異常爆量")
+        if np.isfinite(mom20) and mom20 > 0.45:
+            score -= 1.2; penalties.append("20D漲幅偏熱")
+
+        score = max(-5.0, min(10.0, score))
+        if score >= 7:
+            grade, label = "A", "續強品質強"
+        elif score >= 5:
+            grade, label = "B", "續強品質中"
+        elif score >= 3:
+            grade, label = "C", "續強觀察"
+        elif score >= 1:
+            grade, label = "D", "續強偏弱"
+        else:
+            grade, label = "E", "續強不足"
+
+        hint = "回檔承接尚可，若原策略入選，可優先觀察延續。" if grade in ["A", "B"] else ("續強品質不足或有假突破壓力，避免追高。" if penalties else "尚未看到明確回檔承接，保留觀察。")
+        out[sid] = {
+            "continuation_quality_score": round(float(score), 2),
+            "continuation_quality_grade": grade,
+            "continuation_quality_type": label,
+            "continuation_quality_reason": "｜".join(reasons + (["扣分:" + "、".join(penalties)] if penalties else [])),
+            "continuation_quality_hint": hint,
+            "continuation_quality_patch_version": "v266.57.7",
+        }
+    return out
+
+def _apply_v266577_to_csv(path, quality_map):
+    df = _read_csv_v266577(path)
+    if df.empty or "stock_id" not in df.columns:
+        return False, 0
+    df = df.copy()
+    sids = df["stock_id"].map(_sid_v266577)
+    for c in ["continuation_quality_score","continuation_quality_grade","continuation_quality_type","continuation_quality_reason","continuation_quality_hint","continuation_quality_patch_version"]:
+        df[c] = [quality_map.get(sid, {}).get(c, "") for sid in sids]
+
+    base_col = _pick_score_col_v266577(df)
+    base_score = pd.to_numeric(df[base_col], errors="coerce").fillna(0) if base_col else pd.Series([0] * len(df))
+    structure_pre = pd.to_numeric(df["structure_pre_score"], errors="coerce").fillna(0) if "structure_pre_score" in df.columns else pd.Series([0] * len(df))
+    continuation_q = pd.to_numeric(df["continuation_quality_score"], errors="coerce").fillna(0)
+    buckets = df.apply(_strategy_bucket_v266577, axis=1)
+    s_weights = buckets.map(_structure_weight_v266577).astype(float)
+    c_weights = buckets.map(_continuation_weight_v266577).astype(float)
+
+    df["adjusted_signal_score_v26657_7"] = (base_score + structure_pre * s_weights + continuation_q * c_weights).round(3)
+    df["structure_weight_v26657_7"] = s_weights.round(2)
+    df["continuation_weight_v26657_7"] = c_weights.round(2)
+    df["strategy_bucket_v26657_7"] = buckets
+    df["adjusted_signal_note_v26657_7"] = "測試排序分=原分數+結構前置分*策略權重+續強品質*策略權重；不覆蓋原策略"
+    df["structure_rank_v26657_7"] = pd.to_numeric(df["adjusted_signal_score_v26657_7"], errors="coerce").rank(ascending=False, method="min")
+
+    def _append_note(row):
+        parts = []
+        h1 = str(row.get("structure_pre_hint", "")).strip()
+        h2 = str(row.get("continuation_quality_hint", "")).strip()
+        if h1:
+            parts.append("結構：" + h1)
+        if h2:
+            parts.append("續強：" + h2)
+        return "｜".join(parts)
+
+    if "system_note" in df.columns:
+        df["system_note"] = df.apply(lambda r: str(r.get("system_note", "")) + ("｜v266.57.7：" + _append_note(r) if _append_note(r) else ""), axis=1)
+    elif "note" in df.columns:
+        df["note"] = df.apply(lambda r: str(r.get("note", "")) + ("｜v266.57.7：" + _append_note(r) if _append_note(r) else ""), axis=1)
+
+    _write_csv_v266577(df, path)
+    return True, len(df)
+
+def apply_structure_weight_continuation_patch_v266577():
+    quality_map = _build_continuation_quality_map_v266577()
+    targets = ["candidates.csv","core_candidates.csv","alpha_candidates.csv","trade_plan.csv","ignition_candidates.csv","strategy_evolution.csv","selection_debug.csv","pre_move_candidates.csv","top_opportunities.csv","final_action_plan.csv"]
+    report = {
+        "version": "v266.57.7",
+        "mode": "append_only_structure_weight_split_plus_continuation_quality",
+        "changed_strategy_logic": False,
+        "changed_original_score": False,
+        "changed_action": False,
+        "changed_position": False,
+        "enriched_stock_count": len(quality_map),
+        "files": {},
+        "updated_at": taipei_now_str(),
+        "description": "CORE/IGNITION提高結構權重，ALPHA保留動能延續；新增回檔不破/量縮整理/守短均續強品質分，只作測試排序參考。",
+    }
+    for name in targets:
+        for base in [ROOT, DATA_DIR]:
+            p = base / name
+            ok, n = _apply_v266577_to_csv(p, quality_map)
+            if ok:
+                report["files"][str(p)] = n
+                print("v266.57.7 enriched:", p, n)
+    for p in [ROOT / "structure_weight_continuation_report.json", DATA_DIR / "structure_weight_continuation_report.json"]:
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+        except Exception as e:
+            print("write v266.57.7 report failed:", p, e)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+def main_v266577_structure_weight_continuation_patch():
     main_v266576_structure_pre_score_patch()
+    apply_structure_weight_continuation_patch_v266577()
+
+if __name__ == "__main__":
+    main_v266577_structure_weight_continuation_patch()
