@@ -8,7 +8,6 @@ v266.57.9 structure_post_patch.py
 - adjusted_signal_score_v26657_9
 
 不改：
-- 原策略核心
 - 原 entry_score
 - 原 action
 - target_weight
@@ -616,10 +615,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-from market_regime_patch import apply_market_regime_patch
-
-df, regime = apply_market_regime_patch(df)
-
-5. push GitHub
-
-6. Actions -> data_pipeline -> Run workflow
