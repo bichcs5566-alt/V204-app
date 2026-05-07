@@ -718,10 +718,6 @@ def main_v266572_continuation_patch():
     apply_continuation_hint_patch_v266572()
 
 
-if __name__ == "__main__":
-    main_v266572_continuation_patch()
-
-
 # ===== v266.57.5.1 20/40/60 結構欄位寫入修補（append-only） =====
 # 只修補：確保 structure 欄位在原本策略跑完後寫入 CSV。
 # 不改：CORE / ALPHA / entry_score / action / target_weight / allocator / 持倉邏輯。
@@ -1093,5 +1089,267 @@ def main_v2665751_structure_write_fix():
     apply_structure_score_patch_v2665751()
 
 
-if __name__ == "__main__":
+
+# ===== v266.57.6 structure pre-score candidate weighting（append-only 測試修補） =====
+# 只新增：structure_pre_score / adjusted_signal_score / structure_rank
+# 不覆蓋：entry_score / action / target_weight / 持倉 / 原策略核心
+def _sid_v266576(v):
+    s = str(v).strip()
+    m = re.search(r"(\d{4})", s)
+    return m.group(1) if m else s
+
+def _sf_v266576(v, default=np.nan):
+    try:
+        x = float(v)
+        return x if np.isfinite(x) else default
+    except Exception:
+        return default
+
+def _read_csv_v266576(path):
+    p = Path(path)
+    if not p.exists() or p.stat().st_size == 0:
+        return pd.DataFrame()
+    for enc in ["utf-8-sig", "utf-8"]:
+        try:
+            return pd.read_csv(p, encoding=enc)
+        except Exception:
+            pass
+    return pd.DataFrame()
+
+def _write_csv_v266576(df, path):
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(path, index=False, encoding="utf-8-sig")
+
+def _build_pre_score_map_v266576():
+    try:
+        feat = load_feature()
+    except Exception as e:
+        print("v266.57.6 skip load_feature:", e)
+        return {}
+
+    if feat.empty or "stock_id" not in feat.columns or "date" not in feat.columns:
+        return {}
+
+    df = feat.copy()
+    df["stock_id"] = df["stock_id"].map(_sid_v266576)
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df = df.dropna(subset=["date", "stock_id"]).sort_values(["stock_id", "date"])
+
+    for c in ["open","high","low","close","volume","ma5","ma10","ma20","ma60","mom5","mom10","mom20","volume_ratio"]:
+        if c not in df.columns:
+            df[c] = np.nan
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    out = {}
+    for sid, g in df.groupby("stock_id"):
+        h = g.tail(80).copy()
+        if len(h) < 25:
+            continue
+
+        last = h.iloc[-1]
+        prev3 = h.iloc[-4] if len(h) >= 4 else h.iloc[0]
+        prev10 = h.iloc[-11] if len(h) >= 11 else h.iloc[0]
+
+        close = _sf_v266576(last.get("close"))
+        open_ = _sf_v266576(last.get("open"))
+        high = _sf_v266576(last.get("high"))
+        low = _sf_v266576(last.get("low"))
+        volume = _sf_v266576(last.get("volume"))
+        ma5 = _sf_v266576(last.get("ma5"))
+        ma10 = _sf_v266576(last.get("ma10"))
+        ma20 = _sf_v266576(last.get("ma20"))
+        ma60 = _sf_v266576(last.get("ma60"))
+        ma20_p3 = _sf_v266576(prev3.get("ma20"))
+        ma60_p10 = _sf_v266576(prev10.get("ma60"))
+        mom5 = _sf_v266576(last.get("mom5"))
+        mom10 = _sf_v266576(last.get("mom10"))
+        mom20 = _sf_v266576(last.get("mom20"))
+        vol_ratio = _sf_v266576(last.get("volume_ratio"))
+
+        if not np.isfinite(close) or close <= 0:
+            continue
+
+        g5, g20 = h.tail(5), h.tail(20)
+        g40 = h.tail(40) if len(h) >= 40 else h
+        g60 = h.tail(60) if len(h) >= 60 else h
+
+        vol5 = pd.to_numeric(g5["volume"], errors="coerce").mean()
+        vol20 = pd.to_numeric(g20["volume"], errors="coerce").mean()
+        vol20_med = pd.to_numeric(g20["volume"], errors="coerce").median()
+        high20 = pd.to_numeric(g20["high"], errors="coerce").max()
+        high40 = pd.to_numeric(g40["high"], errors="coerce").max()
+        low40 = pd.to_numeric(g40["low"], errors="coerce").min()
+        high60 = pd.to_numeric(g60["high"], errors="coerce").max()
+        low60 = pd.to_numeric(g60["low"], errors="coerce").min()
+
+        score, reasons, penalties = 0.0, [], []
+
+        # 20D：短線剛翻強
+        if np.isfinite(ma20) and close > ma20:
+            score += 1.0; reasons.append("20D站上MA20")
+        if np.isfinite(ma20) and np.isfinite(ma20_p3) and ma20 >= ma20_p3:
+            score += 1.0; reasons.append("MA20走平翻揚")
+        if np.isfinite(ma5) and np.isfinite(ma10) and ma5 >= ma10:
+            score += 1.0; reasons.append("MA5站上MA10")
+        if np.isfinite(high20) and close >= high20 * 0.96:
+            score += 1.0; reasons.append("接近20日高")
+
+        # 40D：平台壓縮
+        if np.isfinite(high40) and np.isfinite(low40) and close > 0 and (high40-low40)/close <= 0.35:
+            score += 1.5; reasons.append("40D平台收斂")
+        if np.isfinite(ma5) and np.isfinite(ma10) and np.isfinite(ma20):
+            spread = (max(ma5, ma10, ma20) - min(ma5, ma10, ma20)) / close
+            if spread <= 0.08:
+                score += 1.5; reasons.append("短中均線糾結")
+        if len(g40) >= 30:
+            prior_low = pd.to_numeric(g40.iloc[:20]["low"], errors="coerce").min()
+            recent_low = pd.to_numeric(g40.iloc[-20:]["low"], errors="coerce").min()
+            if np.isfinite(prior_low) and np.isfinite(recent_low) and recent_low >= prior_low * 0.96:
+                score += 1.0; reasons.append("40D低點守住")
+
+        # 60D：長底翻多
+        if np.isfinite(ma60) and close >= ma60 * 0.96:
+            score += 1.0; reasons.append("接近/站回MA60")
+        if np.isfinite(ma60) and np.isfinite(ma60_p10) and ma60 >= ma60_p10 * 0.995:
+            score += 1.0; reasons.append("MA60不再下彎")
+        if np.isfinite(high60) and np.isfinite(low60) and high60 > low60 and (close-low60)/(high60-low60) >= 0.45:
+            score += 1.0; reasons.append("站回60D區間中上")
+
+        # 量縮後轉強
+        if np.isfinite(vol5) and np.isfinite(vol20) and vol20 > 0 and vol5 <= vol20 * 0.80:
+            score += 1.0; reasons.append("近5日量縮")
+        if np.isfinite(volume) and np.isfinite(vol20_med) and vol20_med > 0:
+            vr = volume / vol20_med
+            if 1.15 <= vr <= 2.8:
+                score += 2.0; reasons.append("量縮後溫和放量")
+            elif vr > 4.0:
+                score -= 1.5; penalties.append("單日爆量偏高")
+
+        # 動能確認，不取代原動能
+        if np.isfinite(mom5) and mom5 > 0:
+            score += 0.8; reasons.append("5D動能轉正")
+        if np.isfinite(mom10) and mom10 > 0:
+            score += 0.8; reasons.append("10D動能轉正")
+
+        # 過熱/假突破扣分
+        if np.isfinite(ma20) and ma20 > 0 and close > ma20 * 1.22:
+            score -= 2.0; penalties.append("距MA20過遠")
+        if np.isfinite(mom20) and mom20 > 0.45:
+            score -= 1.5; penalties.append("20D漲幅過熱")
+        if np.isfinite(open_) and np.isfinite(high) and np.isfinite(low) and high > low:
+            upper = (high - max(open_, close)) / (high - low)
+            if upper >= 0.45:
+                score -= 2.0; penalties.append("長上影壓力")
+        if np.isfinite(vol_ratio) and vol_ratio >= 5.5:
+            score -= 1.0; penalties.append("成交量異常爆量")
+
+        score = max(-5.0, min(12.0, score))
+        if score >= 8:
+            grade, stype = "A", "起漲結構強"
+        elif score >= 6:
+            grade, stype = "B", "起漲結構中"
+        elif score >= 4:
+            grade, stype = "C", "結構觀察"
+        elif score >= 2:
+            grade, stype = "D", "結構偏弱"
+        else:
+            grade, stype = "E", "結構不足"
+
+        if grade in ["A","B"] and any(("40D" in r or "糾結" in r) for r in reasons):
+            hint = "平台壓縮後轉強，可優先觀察起漲/試單。"
+        elif grade in ["A","B"] and any(("60D" in r or "MA60" in r) for r in reasons):
+            hint = "長底翻多結構，可偏CORE早期卡位。"
+        elif grade in ["A","B"]:
+            hint = "短線轉強結構，可搭配原動能延續。"
+        elif penalties:
+            hint = "有過熱或假突破壓力，避免追高。"
+        else:
+            hint = "結構證據不足，保留原策略但降低信心。"
+
+        out[sid] = {
+            "structure_pre_score": round(float(score), 2),
+            "structure_pre_grade": grade,
+            "structure_pre_type": stype,
+            "structure_pre_reason": "｜".join(reasons + (["扣分:" + "、".join(penalties)] if penalties else [])),
+            "structure_pre_hint": hint,
+            "structure_pre_patch_version": "v266.57.6",
+        }
+    return out
+
+def _pick_base_score_col_v266576(df):
+    for c in ["entry_score","score","total_score","final_score","momentum_score","rank_score","composite_score"]:
+        if c in df.columns:
+            return c
+    return None
+
+def _apply_pre_score_csv_v266576(path, score_map):
+    df = _read_csv_v266576(path)
+    if df.empty or "stock_id" not in df.columns:
+        return False, 0
+    df = df.copy()
+    sids = df["stock_id"].map(_sid_v266576)
+
+    cols = ["structure_pre_score","structure_pre_grade","structure_pre_type","structure_pre_reason","structure_pre_hint","structure_pre_patch_version"]
+    for col in cols:
+        df[col] = [score_map.get(sid, {}).get(col, "") for sid in sids]
+
+    base_col = _pick_base_score_col_v266576(df)
+    if base_col:
+        base = pd.to_numeric(df[base_col], errors="coerce")
+        bonus = pd.to_numeric(df["structure_pre_score"], errors="coerce").fillna(0)
+        df["adjusted_signal_score"] = (base + bonus * 0.35).round(3)
+        df["adjusted_signal_note"] = "原分數欄位:" + base_col + "｜結構前置加權僅供排序觀察，不覆蓋原策略"
+    else:
+        df["adjusted_signal_score"] = pd.to_numeric(df["structure_pre_score"], errors="coerce").fillna(0).round(3)
+        df["adjusted_signal_note"] = "無原分數欄位｜僅顯示結構前置分數"
+
+    if "system_note" in df.columns:
+        df["system_note"] = df.apply(lambda r: str(r.get("system_note","")) + ("｜前置結構：" + str(r.get("structure_pre_hint","")) if str(r.get("structure_pre_hint","")).strip() else ""), axis=1)
+    elif "note" in df.columns:
+        df["note"] = df.apply(lambda r: str(r.get("note","")) + ("｜前置結構：" + str(r.get("structure_pre_hint","")) if str(r.get("structure_pre_hint","")).strip() else ""), axis=1)
+
+    df["structure_rank"] = pd.to_numeric(df["adjusted_signal_score"], errors="coerce").rank(ascending=False, method="min")
+    _write_csv_v266576(df, path)
+    return True, len(df)
+
+def apply_structure_pre_score_patch_v266576():
+    score_map = _build_pre_score_map_v266576()
+    targets = [
+        "candidates.csv","core_candidates.csv","alpha_candidates.csv","trade_plan.csv",
+        "ignition_candidates.csv","strategy_evolution.csv","selection_debug.csv",
+        "pre_move_candidates.csv","top_opportunities.csv","final_action_plan.csv",
+    ]
+    report = {
+        "version": "v266.57.6",
+        "mode": "append_only_structure_pre_score_candidate_weighting",
+        "changed_strategy_logic": False,
+        "changed_original_score": False,
+        "changed_action": False,
+        "changed_position": False,
+        "enriched_stock_count": len(score_map),
+        "files": {},
+        "updated_at": taipei_now_str(),
+        "description": "只新增structure_pre_score與adjusted_signal_score作為排序觀察，不覆蓋原本動能/操作邏輯。",
+    }
+    for name in targets:
+        for base in [ROOT, DATA_DIR]:
+            p = base / name
+            ok, n = _apply_pre_score_csv_v266576(p, score_map)
+            if ok:
+                report["files"][str(p)] = n
+                print("v266.57.6 structure pre-score enriched:", p, n)
+
+    for p in [ROOT / "structure_pre_score_report.json", DATA_DIR / "structure_pre_score_report.json"]:
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+        except Exception as e:
+            print("write structure pre-score report failed:", p, e)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+def main_v266576_structure_pre_score_patch():
     main_v2665751_structure_write_fix()
+    apply_structure_pre_score_patch_v266576()
+
+if __name__ == "__main__":
+    main_v266576_structure_pre_score_patch()
