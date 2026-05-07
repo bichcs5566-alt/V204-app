@@ -1518,7 +1518,12 @@ jobs:
           
           git add -f structure_post_patch_report.json || true
           git add -f mobile_dashboard_v1/data/structure_post_patch_report.json || true
-
+          
+          git add -f state_transition_memory.csv || true
+          git add -f state_transition_report.json || true
+          git add -f mobile_dashboard_v1/data/state_transition_memory.csv || true
+          git add -f mobile_dashboard_v1/data/state_transition_report.json || true
+          
           git add -f candidates.csv core_candidates.csv alpha_candidates.csv selection_debug.csv || true
           git add -f timing_candidates.csv timing_summary.json || true
           git add -f trading_system_plan.csv trading_system_summary.json || true
