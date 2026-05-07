@@ -1,11 +1,11 @@
 ﻿{
-  "version": "v266.57.7.1",
+  "version": "v266.57.7.2",
   "mode": "post_process_structure_continuation_patch",
   "changed_strategy_logic": false,
   "changed_original_score": false,
   "changed_action": false,
   "changed_position": false,
-  "feature_rows": 4806178,
+  "feature_rows": 4807227,
   "files": {
     "candidates.csv": 120,
     "mobile_dashboard_v1/data/candidates.csv": 120,
@@ -13,17 +13,17 @@
     "mobile_dashboard_v1/data/core_candidates.csv": 60,
     "alpha_candidates.csv": 60,
     "mobile_dashboard_v1/data/alpha_candidates.csv": 60,
-    "trade_plan.csv": 13,
-    "mobile_dashboard_v1/data/trade_plan.csv": 13,
-    "pre_move_candidates.csv": 482,
-    "mobile_dashboard_v1/data/pre_move_candidates.csv": 482,
-    "top_opportunities.csv": 15,
-    "mobile_dashboard_v1/data/top_opportunities.csv": 15,
-    "final_action_plan.csv": 557,
-    "mobile_dashboard_v1/data/final_action_plan.csv": 557
+    "trade_plan.csv": 10,
+    "mobile_dashboard_v1/data/trade_plan.csv": 10,
+    "pre_move_candidates.csv": 488,
+    "mobile_dashboard_v1/data/pre_move_candidates.csv": 488,
+    "top_opportunities.csv": 16,
+    "mobile_dashboard_v1/data/top_opportunities.csv": 16,
+    "final_action_plan.csv": 560,
+    "mobile_dashboard_v1/data/final_action_plan.csv": 560
   },
-  "updated_at": "2026-05-07 05:42:56",
-  "description": "在所有 engine 結束後最後補寫結構前置分、續強品質分與測試排序分，避免被後續流程覆蓋。",
+  "updated_at": "2026-05-07 07:08:53",
+  "description": "在所有 engine 結束後最後補寫結構前置分、續強品質分與測試排序分；v266.57.7.2 放寬第一根起漲容忍、提高爆量門檻、加強續強確認。",
   "structure_stock_count": 1960,
   "continuation_stock_count": 1960
 }
