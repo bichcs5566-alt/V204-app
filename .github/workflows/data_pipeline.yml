@@ -1205,7 +1205,12 @@ jobs:
         if: always()
         run: |
           python state_engine_patch.py
-      
+
+      - name: Run state transition patch
+        if: always()
+        run: |
+          python state_transition_patch.py
+
       - name: Clean runtime big files
         run: |
           rm -f price_panel_daily.csv
