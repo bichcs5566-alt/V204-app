@@ -313,3 +313,83 @@ def main():
 
 if __name__ == "__main__":
     main()
+# =========================
+# v266.60.1
+# state transition memory export
+# =========================
+
+import os
+import json
+import shutil
+import pandas as pd
+
+EXPORT_DIR = "mobile_dashboard_v1/data"
+os.makedirs(EXPORT_DIR, exist_ok=True)
+
+memory_rows = []
+
+# final_action_plan.csv
+try:
+    df = pd.read_csv("final_action_plan.csv")
+
+    for _, row in df.iterrows():
+
+        memory_rows.append({
+            "symbol": row.get("symbol", ""),
+            "name": row.get("name", ""),
+            "strategy_layer": row.get("strategy_layer", ""),
+            "system_score": row.get("system_score", ""),
+            "chip_score": row.get("chip_score", ""),
+            "flow_category": row.get("flow_category", ""),
+            "entry_type": row.get("entry_type", ""),
+            "k_structure": row.get("k_structure", ""),
+            "updated_at": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+
+    memory_df = pd.DataFrame(memory_rows)
+
+    # 匯出 memory csv
+    memory_df.to_csv(
+        "state_transition_memory.csv",
+        index=False,
+        encoding="utf-8-sig"
+    )
+
+    # 同步 dashboard
+    shutil.copy(
+        "state_transition_memory.csv",
+        f"{EXPORT_DIR}/state_transition_memory.csv"
+    )
+
+    # report
+    report = {
+        "version": "v266.60.1",
+        "mode": "state_transition_memory_export",
+        "memory_rows": int(len(memory_df)),
+        "updated_at": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "states": memory_df["strategy_layer"].value_counts().to_dict()
+    }
+
+    with open(
+        "state_transition_report.json",
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        json.dump(
+            report,
+            f,
+            ensure_ascii=False,
+            indent=2
+        )
+
+    shutil.copy(
+        "state_transition_report.json",
+        f"{EXPORT_DIR}/state_transition_report.json"
+    )
+
+    print("[v266.60.1] exported state transition memory")
+
+except Exception as e:
+
+    print(f"[v266.60.1] export failed: {e}")
