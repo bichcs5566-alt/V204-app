@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-07 07:04:50",
+  "generated_at": "2026-05-07 08:19:48",
   "count": 30,
   "cards": [
     {
@@ -380,11 +380,11 @@
       "color": "green"
     },
     {
-      "stock_id": "3541",
+      "stock_id": "3484",
       "action": "BUY",
       "label": "小倉試單",
       "score": 86.0,
-      "close": 23.15,
+      "close": 45.35,
       "price_tier": "50以下",
       "target_weight": 0.01,
       "suggested_amount": 10000,
