@@ -1193,7 +1193,12 @@ jobs:
         if: always()
         run: |
           python structure_post_patch.py
-
+           
+        # v266.58：籌碼權重補丁（不覆蓋原策略）
+      - name: Run chip score patch
+        if: always()
+        run: |
+          python chip_score_patch.py
 
       - name: Clean runtime big files
         run: |
