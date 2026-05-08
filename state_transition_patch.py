@@ -1,10 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-v266.60 state_transition_patch.py
-狀態連續追蹤引擎
+v266.60.2 state_transition_patch.py
+狀態連續追蹤引擎 + 正確 report 統計欄位修正版
 
-不改原策略 / action / position / stoploss。
-只新增最近狀態是否連續升級欄位，讓 WATCH -> TEST -> 準IGNITION -> IGNITION 有時間序列追蹤。
+修正重點：
+- report 不再抓 strategy_layer
+- 改抓 state_today_v26660
+- 同時統計 state_transition_label_v26660
+- 同時統計 ignition_upgrade_flag_v26660
+
+不改：
+- 原策略
+- action
+- position
+- stoploss
 """
 
 from pathlib import Path
@@ -126,7 +135,8 @@ def load_memory():
     for p in [STATE_MEMORY, STATE_MEMORY_DATA]:
         df, status = read_csv_safe(p)
         if status == "ok":
-            df["stock_id"] = df["stock_id"].map(sid)
+            if "stock_id" in df.columns:
+                df["stock_id"] = df["stock_id"].map(sid)
             return df
     return pd.DataFrame(columns=[
         "stock_id", "last_date", "prev_state", "prev_rank",
@@ -250,7 +260,7 @@ def apply_transition(df, mem):
     df["state_transition_label_v26660"] = labels
     df["state_transition_reason_v26660"] = reasons
     df["ignition_upgrade_flag_v26660"] = flags
-    df["state_patch_version"] = "v266.60"
+    df["state_patch_version"] = "v266.60.2"
 
     base_col = next((c for c in ["chip_adjusted_score_v26658", "adjusted_signal_score_v26657_9", "score", "final_score", "entry_score"] if c in df.columns), None)
     if base_col:
@@ -272,7 +282,7 @@ def patch_file(name, mem):
         df, status = read_csv_safe(p)
         if status != "ok":
             report[str(p)] = {"status": status, "rows": 0}
-            print(f"[v266.60] skip {p}: {status}")
+            print(f"[v266.60.2] skip {p}: {status}")
             continue
         try:
             out, mem = apply_transition(df, mem)
@@ -280,17 +290,55 @@ def patch_file(name, mem):
             if base == ROOT:
                 write_csv(out, DATA_DIR / name)
             report[str(p)] = {"status": "updated", "rows": len(out)}
-            print(f"[v266.60] updated {p}: {len(out)}")
+            print(f"[v266.60.2] updated {p}: {len(out)}")
         except Exception as e:
             report[str(p)] = {"status": "failed", "error": str(e), "rows": len(df)}
-            print(f"[v266.60] failed {p}: {e}")
+            print(f"[v266.60.2] failed {p}: {e}")
     return report, mem
+
+def safe_counts(df, col):
+    if df is None or df.empty or col not in df.columns:
+        return {}
+    return df[col].fillna("").astype(str).replace({"nan": "", "None": ""}).value_counts().to_dict()
+
+def build_export_memory_from_final():
+    """
+    用 final_action_plan.csv 重新輸出 state_transition_memory.csv。
+    修正舊版抓 strategy_layer 導致 states 全空的問題。
+    """
+    df, status = read_csv_safe(ROOT / "final_action_plan.csv")
+    if status != "ok":
+        df, status = read_csv_safe(DATA_DIR / "final_action_plan.csv")
+    if status != "ok":
+        return pd.DataFrame()
+
+    df = df.copy()
+    if "stock_id" in df.columns:
+        df["stock_id"] = df["stock_id"].map(sid)
+
+    keep_cols = [
+        "stock_id", "stock_name", "action", "final_action",
+        "state_today_v26660", "state_rank_today_v26660",
+        "state_transition_score_v26660",
+        "state_transition_label_v26660",
+        "state_transition_reason_v26660",
+        "ignition_upgrade_flag_v26660",
+        "chip_score", "chip_signal", "chip_reason",
+        "state_adjusted_score_v26660",
+    ]
+
+    out = pd.DataFrame()
+    for c in keep_cols:
+        out[c] = df[c] if c in df.columns else ""
+
+    out["memory_updated_at"] = now_tw()
+    return out
 
 def main():
     mem = load_memory()
     report = {
-        "version": "v266.60",
-        "mode": "state_transition_memory_patch",
+        "version": "v266.60.2",
+        "mode": "state_transition_memory_patch_fixed_report",
         "changed_strategy_logic": False,
         "changed_action": False,
         "changed_position": False,
@@ -303,7 +351,21 @@ def main():
         report["files"][name] = r
 
     save_memory(mem)
-    report["memory_rows"] = int(len(mem))
+
+    # 另外輸出可讀記憶檔，讓 Code / dashboard 看得到正確欄位
+    export_mem = build_export_memory_from_final()
+    if not export_mem.empty:
+        write_csv(export_mem, STATE_MEMORY)
+        write_csv(export_mem, STATE_MEMORY_DATA)
+        report["memory_rows"] = int(len(export_mem))
+        report["states"] = safe_counts(export_mem, "state_today_v26660")
+        report["transition_labels"] = safe_counts(export_mem, "state_transition_label_v26660")
+        report["ignition_flags"] = safe_counts(export_mem, "ignition_upgrade_flag_v26660")
+    else:
+        report["memory_rows"] = int(len(mem))
+        report["states"] = safe_counts(mem, "prev_state")
+        report["transition_labels"] = {}
+        report["ignition_flags"] = {}
 
     for p in [ROOT / "state_transition_report.json", DATA_DIR / "state_transition_report.json"]:
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -313,83 +375,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-# =========================
-# v266.60.1
-# state transition memory export
-# =========================
-
-import os
-import json
-import shutil
-import pandas as pd
-
-EXPORT_DIR = "mobile_dashboard_v1/data"
-os.makedirs(EXPORT_DIR, exist_ok=True)
-
-memory_rows = []
-
-# final_action_plan.csv
-try:
-    df = pd.read_csv("final_action_plan.csv")
-
-    for _, row in df.iterrows():
-
-        memory_rows.append({
-            "symbol": row.get("symbol", ""),
-            "name": row.get("name", ""),
-            "strategy_layer": row.get("strategy_layer", ""),
-            "system_score": row.get("system_score", ""),
-            "chip_score": row.get("chip_score", ""),
-            "flow_category": row.get("flow_category", ""),
-            "entry_type": row.get("entry_type", ""),
-            "k_structure": row.get("k_structure", ""),
-            "updated_at": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-        })
-
-    memory_df = pd.DataFrame(memory_rows)
-
-    # 匯出 memory csv
-    memory_df.to_csv(
-        "state_transition_memory.csv",
-        index=False,
-        encoding="utf-8-sig"
-    )
-
-    # 同步 dashboard
-    shutil.copy(
-        "state_transition_memory.csv",
-        f"{EXPORT_DIR}/state_transition_memory.csv"
-    )
-
-    # report
-    report = {
-        "version": "v266.60.1",
-        "mode": "state_transition_memory_export",
-        "memory_rows": int(len(memory_df)),
-        "updated_at": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "states": memory_df["strategy_layer"].value_counts().to_dict()
-    }
-
-    with open(
-        "state_transition_report.json",
-        "w",
-        encoding="utf-8"
-    ) as f:
-
-        json.dump(
-            report,
-            f,
-            ensure_ascii=False,
-            indent=2
-        )
-
-    shutil.copy(
-        "state_transition_report.json",
-        f"{EXPORT_DIR}/state_transition_report.json"
-    )
-
-    print("[v266.60.1] exported state transition memory")
-
-except Exception as e:
-
-    print(f"[v266.60.1] export failed: {e}")
