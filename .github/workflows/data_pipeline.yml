@@ -1225,6 +1225,11 @@ jobs:
         if: always()
         run: |
           python first_trigger_event_patch.py
+
+      - name: Run turn first rank patch
+        if: always()
+        run: |
+          python turn_first_rank_patch.py
       
       - name: Clean runtime big files
         run: |
