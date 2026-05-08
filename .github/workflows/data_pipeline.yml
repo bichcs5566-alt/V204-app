@@ -1210,6 +1210,11 @@ jobs:
         if: always()
         run: |
           python state_transition_patch.py
+
+      - name: Run trigger quality patch
+        if: always()
+        run: |
+          python trigger_quality_patch.py
      
       - name: Run time series leader patch
         if: always()
