@@ -1517,7 +1517,14 @@ jobs:
           git add -f stock_name_map.json stock_name_map.csv || true
           git add -f mobile_dashboard_v1/data/stock_name_map.json || true
           git add -f mobile_dashboard_v1/data/stock_name_map.csv || true
-
+         
+          git add -f trigger_event_report.json || true
+          git add -f mobile_dashboard_v1/data/trigger_event_report.json || true
+          git add -f timing_candidates.csv || true
+          git add -f final_action_plan.csv || true
+          git add -f mobile_dashboard_v1/data/timing_candidates.csv || true
+          git add -f mobile_dashboard_v1/data/final_action_plan.csv || true
+          
           git add -f trade_plan.csv final_action_plan.csv final_action_summary.json exit_risk_plan.csv || true
           git add -f mobile_dashboard_v1/data/trade_plan.csv || true
           git add -f mobile_dashboard_v1/data/final_action_plan.csv || true
