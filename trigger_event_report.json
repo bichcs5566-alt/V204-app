@@ -1,11 +1,21 @@
 ﻿{
-  "version": "v266.60.2",
-  "mode": "state_transition_memory_patch_fixed_report",
+  "version": "v266.62",
+  "mode": "trigger_event_engine_patch",
   "changed_strategy_logic": false,
   "changed_action": false,
   "changed_position": false,
-  "updated_at": "2026-05-08 11:39:27",
+  "updated_at": "2026-05-08 11:39:30",
   "files": {
+    "timing_candidates.csv": {
+      "timing_candidates.csv": {
+        "status": "updated",
+        "rows": 557
+      },
+      "mobile_dashboard_v1/data/timing_candidates.csv": {
+        "status": "updated",
+        "rows": 557
+      }
+    },
     "trade_plan.csv": {
       "trade_plan.csv": {
         "status": "updated",
@@ -14,16 +24,6 @@
       "mobile_dashboard_v1/data/trade_plan.csv": {
         "status": "updated",
         "rows": 14
-      }
-    },
-    "watchlist_monitor.csv": {
-      "watchlist_monitor.csv": {
-        "status": "empty_data_error",
-        "rows": 0
-      },
-      "mobile_dashboard_v1/data/watchlist_monitor.csv": {
-        "status": "empty_rows",
-        "rows": 0
       }
     },
     "final_action_plan.csv": {
@@ -87,21 +87,10 @@
       }
     }
   },
-  "memory_rows": 574,
-  "states": {
-    "觀察": 424,
-    "突破中": 79,
-    "出貨疑慮": 69,
-    "發動中": 2
-  },
-  "transition_labels": {
-    "持續觀察": 426,
-    "準IGNITION": 79,
-    "降級風險": 69
-  },
-  "ignition_flags": {
-    "NO": 426,
-    "READY": 79,
-    "RISK": 69
+  "trigger_labels": {
+    "無事件": 426,
+    "強點火事件": 81,
+    "早期轉強事件": 65,
+    "過熱/風險事件": 2
   }
 }
