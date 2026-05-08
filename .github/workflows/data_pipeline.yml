@@ -1215,6 +1215,10 @@ jobs:
         if: always()
         run: |
           python time_series_leader_patch.py
+      - name: Run trigger event patch
+        if: always()
+        run: |
+          python trigger_event_patch.py
       
       - name: Clean runtime big files
         run: |
