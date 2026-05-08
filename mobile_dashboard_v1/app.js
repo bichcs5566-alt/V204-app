@@ -3974,336 +3974,190 @@ function injectV26630BPositionColorStyle() {
 try { injectV26630BPositionColorStyle(); } catch(e) {}
 document.addEventListener("DOMContentLoaded", injectV26630BPositionColorStyle);
 /* =========================================================
-   v266.65 Turn Field UI Patch / 轉折欄位顯示補丁
-   使用方式：
-   1) 直接貼到 app.js 最底部
-   2) 不刪原本函式
-   3) 這段會覆寫同名顯示/排序函式，但不動持倉、同步、Actions
+   v266.65.1 Turn UI Compact Fix / 轉折欄位原風格修正版
+   目的：
+   - 修正 v266.65 把 detail-grid 撐壞的問題
+   - 保留原本 App 卡片風格
+   - 只在詳情下方追加一條簡潔「轉折提示」
+   使用：
+   直接貼到 app.js 最底部，放在 v266.65 後面即可
    ========================================================= */
 
-const TURN_PATCH_VERSION_V26665 = "v266.65_turn_field_ui_patch";
+const TURN_PATCH_VERSION_V266651 = "v266.65.1_turn_ui_compact_fix";
 
-/* ---------- 轉折欄位工具 ---------- */
-function validTurnTextV26665(v) {
-  if (v === undefined || v === null) return false;
-  const s = String(v).trim();
-  return !!s && !["--", "-", "nan", "NaN", "undefined", "null", "None", "NONE", "無事件"].includes(s);
-}
-
-function pickTurnV26665(row, keys, fallback = "--") {
-  row = row || {};
-  for (const k of keys) {
-    if (Object.prototype.hasOwnProperty.call(row, k) && validTurnTextV26665(row[k])) return String(row[k]).trim();
-  }
-  return fallback;
-}
-
-function numTurnV26665(v, fallback = 999999) {
-  const n = Number(String(v ?? "").replace(/,/g, "").replace("%", ""));
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function turnLabelV26665(row) {
-  return pickTurnV26665(row, [
-    "turn_event_label_v26664_1",
-    "turn_event_label_v26664",
-    "first_trigger_label_v26663",
-    "trigger_event_label_v26662",
-    "state_transition_label_v26660"
-  ], "--");
-}
-
-function turnScoreV26665(row) {
-  return pickTurnV26665(row, [
-    "turn_event_score_v26664_1",
-    "turn_event_score_v26664",
-    "first_trigger_score_v26663",
-    "trigger_event_score_v26662",
-    "state_transition_score_v26660"
-  ], "--");
-}
-
-function turnRankV26665(row) {
-  const fields = [
-    "turn_first_rank_v26664_1",
-    "turn_first_rank_v26664",
-    "first_trigger_rank_v26663",
-    "trigger_rank_v26662",
-    "master_trend_rank_v26661"
-  ];
-
-  for (const f of fields) {
-    const n = numTurnV26665(row?.[f], null);
-    if (n !== null && Number.isFinite(n)) return n;
-  }
-  return 999999;
-}
-
-function turnReasonV26665(row) {
-  return pickTurnV26665(row, [
-    "turn_event_reason_v26664_1",
-    "turn_event_reason_v26664",
-    "first_trigger_reason_v26663",
-    "trigger_event_reason_v26662",
-    "state_transition_reason_v26660",
-    "evolution_reason"
-  ], "尚無轉折原因。");
-}
-
-function turnHintV26665(row) {
-  const direct = pickTurnV26665(row, [
-    "turn_priority_hint_v26664",
-    "trigger_action_hint_v26662"
-  ], "");
-
-  if (direct) return direct;
-
-  const lb = turnLabelV26665(row);
-  if (lb === "TURN_FIRST") return "第一優先：轉折剛出現，隔日看不破 MA5 / MA10。";
-  if (lb === "EARLY_TURN") return "早期轉強：可列入試單或優先觀察，不要一次重倉。";
-  if (lb === "WATCH_TURN") return "觀察轉強：等待第二根確認，確認承接再提高權重。";
-  if (lb === "AVOID_CHASE" || lb === "過熱/風險事件") return "避免追高：等回檔不破 MA10 / MA20 再評估。";
-  if (lb === "準點火事件" || lb === "準IGNITION") return "具備點火條件：觀察隔日是否不破關鍵均線。";
-  if (lb === "早期轉強事件") return "偏早期轉強：放入 WATCH，等待量能與籌碼二次確認。";
-  return "依轉折欄位輔助判斷，不取代原策略。";
-}
-
-function turnCssClassV26665(label) {
-  const s = String(label || "").toUpperCase();
-  if (s.includes("TURN_FIRST") || s.includes("FIRST_IGNITION") || s.includes("強點火")) return "turn-hot";
-  if (s.includes("EARLY") || s.includes("準") || s.includes("READY")) return "turn-early";
-  if (s.includes("WATCH") || s.includes("觀察")) return "turn-watch";
-  if (s.includes("AVOID") || s.includes("RISK") || s.includes("風險") || s.includes("過熱")) return "turn-risk";
-  return "turn-none";
-}
-
-function turnBadgeV26665(row) {
-  const lb = turnLabelV26665(row);
-  if (!validTurnTextV26665(lb)) return "";
-  const score = turnScoreV26665(row);
-  const rank = turnRankV26665(row);
-  const cls = turnCssClassV26665(lb);
-  const rankText = rank !== 999999 ? `#${rank}` : "";
-  return `<span class="turn-badge-v26665 ${cls}">⚡ ${lb}${rankText ? "｜" + rankText : ""}${score !== "--" ? "｜" + score : ""}</span>`;
-}
-
-function turnDetailBlockV26665(row) {
-  const lb = turnLabelV26665(row);
-  const score = turnScoreV26665(row);
-  const rank = turnRankV26665(row);
-  const reason = turnReasonV26665(row);
-  const hint = turnHintV26665(row);
-  const cls = turnCssClassV26665(lb);
-
-  if (!validTurnTextV26665(lb) && !validTurnTextV26665(reason)) return "";
-
-  return `
-    <div class="turn-box-v26665 ${cls}">
-      <div class="turn-box-head-v26665">
-        <b>⚡ 轉折雷達</b>
-        <span>${lb}</span>
-      </div>
-      <div class="turn-box-grid-v26665">
-        <div><span>轉折分數</span><b>${score}</b></div>
-        <div><span>轉折排名</span><b>${rank !== 999999 ? rank : "--"}</b></div>
-      </div>
-      <div class="detail-text"><b>轉折原因</b><p>${reason}</p></div>
-      <div class="detail-text"><b>操作提示</b><p>${hint}</p></div>
-    </div>
-  `;
-}
-
-/* ---------- CSS 注入 ---------- */
-function injectTurnStyleV26665() {
-  if (document.getElementById("turn-style-v26665")) return;
+function injectTurnStyleV266651() {
+  if (document.getElementById("turn-style-v266651")) return;
 
   const style = document.createElement("style");
-  style.id = "turn-style-v26665";
+  style.id = "turn-style-v266651";
   style.textContent = `
-    .turn-badge-v26665 {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      font-weight: 900;
-      font-size: 12px;
-      white-space: nowrap;
-      border: 1px solid rgba(0,0,0,.08);
-    }
-    .turn-badge-v26665.turn-hot,
-    .turn-box-v26665.turn-hot {
-      background: #fff7ed;
-      color: #9a3412;
-      border-color: #fdba74;
-    }
-    .turn-badge-v26665.turn-early,
-    .turn-box-v26665.turn-early {
-      background: #ecfeff;
-      color: #155e75;
-      border-color: #67e8f9;
-    }
-    .turn-badge-v26665.turn-watch,
-    .turn-box-v26665.turn-watch {
-      background: #fefce8;
-      color: #854d0e;
-      border-color: #fde047;
-    }
-    .turn-badge-v26665.turn-risk,
-    .turn-box-v26665.turn-risk {
-      background: #fef2f2;
-      color: #991b1b;
-      border-color: #fca5a5;
-    }
-    .turn-badge-v26665.turn-none,
-    .turn-box-v26665.turn-none {
-      background: #f3f4f6;
-      color: #374151;
-      border-color: #d1d5db;
-    }
-    .turn-box-v26665 {
+    .turn-inline-v266651 {
       margin: 12px 0;
-      padding: 14px;
+      padding: 14px 16px;
       border-radius: 18px;
+      background: #f8fafc;
       border: 2px solid #e5e7eb;
+      color: #334155;
+      line-height: 1.65;
+      font-weight: 800;
     }
-    .turn-box-head-v26665 {
+
+    .turn-inline-v266651.hot {
+      background: #fff7ed;
+      border-color: #fed7aa;
+      color: #9a3412;
+    }
+
+    .turn-inline-v266651.early {
+      background: #ecfeff;
+      border-color: #a5f3fc;
+      color: #155e75;
+    }
+
+    .turn-inline-v266651.watch {
+      background: #fefce8;
+      border-color: #fde68a;
+      color: #854d0e;
+    }
+
+    .turn-inline-v266651.risk {
+      background: #fef2f2;
+      border-color: #fecaca;
+      color: #991b1b;
+    }
+
+    .turn-inline-v266651 .turn-title {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-    .turn-box-head-v26665 b {
+      gap: 8px;
+      margin-bottom: 8px;
       font-size: 16px;
       font-weight: 900;
     }
-    .turn-box-head-v26665 span {
+
+    .turn-inline-v266651 .turn-title span {
       font-size: 13px;
       font-weight: 900;
+      opacity: .9;
     }
-    .turn-box-grid-v26665 {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-      margin-bottom: 10px;
-    }
-    .turn-box-grid-v26665 div {
-      background: rgba(255,255,255,.65);
-      border-radius: 12px;
-      padding: 8px 10px;
-    }
-    .turn-box-grid-v26665 span {
-      display: block;
-      font-size: 11px;
-      opacity: .72;
-      margin-bottom: 3px;
-    }
-    .turn-box-grid-v26665 b {
+
+    .turn-inline-v266651 .turn-reason {
       font-size: 15px;
-      font-weight: 900;
+      font-weight: 800;
+      color: inherit;
+      opacity: .94;
     }
-    .scan-main-live .turn-badge-v26665 {
+
+    .turn-inline-v266651 .turn-hint {
+      margin-top: 6px;
+      font-size: 14px;
+      font-weight: 800;
+      opacity: .86;
+    }
+
+    .turn-mini-badge-v266651 {
+      display: inline-block;
       margin-left: 6px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      font-size: 12px;
+      font-weight: 900;
+      color: #475569;
+      white-space: nowrap;
     }
   `;
   document.head.appendChild(style);
 }
 
-/* ---------- 排序覆寫：轉折排名優先 ---------- */
-const __oldRowScoreV26665 = typeof rowScoreV26630 === "function" ? rowScoreV26630 : null;
+function turnSimpleClassV266651(label) {
+  const s = String(label || "").toUpperCase();
+  if (s.includes("TURN_FIRST") || s.includes("FIRST_IGNITION") || s.includes("強點火")) return "hot";
+  if (s.includes("EARLY") || s.includes("準") || s.includes("READY")) return "early";
+  if (s.includes("WATCH") || s.includes("觀察")) return "watch";
+  if (s.includes("AVOID") || s.includes("RISK") || s.includes("風險") || s.includes("過熱")) return "risk";
+  return "";
+}
 
-rowScoreV26630 = function(row) {
-  const turnAdjusted = Number(row?.turn_adjusted_score_v26664 ?? "");
-  if (Number.isFinite(turnAdjusted)) return turnAdjusted;
+function turnCompactBlockV266651(row) {
+  if (typeof turnLabelV26665 !== "function") return "";
 
-  const turnScore = Number(row?.turn_event_score_v26664_1 ?? row?.turn_event_score_v26664 ?? "");
-  if (Number.isFinite(turnScore)) return turnScore;
+  const label = turnLabelV26665(row);
+  const score = typeof turnScoreV26665 === "function" ? turnScoreV26665(row) : "--";
+  const rank = typeof turnRankV26665 === "function" ? turnRankV26665(row) : 999999;
+  const reason = typeof turnReasonV26665 === "function" ? turnReasonV26665(row) : "";
+  const hint = typeof turnHintV26665 === "function" ? turnHintV26665(row) : "";
 
-  const triggerScore = Number(row?.trigger_adjusted_score_v26662 ?? row?.trigger_event_score_v26662 ?? "");
-  if (Number.isFinite(triggerScore)) return triggerScore;
+  if (!label || label === "--" || label === "NONE" || label === "無事件") return "";
 
-  if (__oldRowScoreV26665) return __oldRowScoreV26665(row);
-  const n = Number(row?.score || row?.opportunity_score || row?.entry_score || row?.rank_score || row?.liquidity_score || 0);
-  return Number.isFinite(n) ? n : 0;
-};
+  const cls = turnSimpleClassV266651(label);
+  const rankText = rank !== 999999 ? `｜排名 ${rank}` : "";
+  const scoreText = score !== "--" ? `｜分數 ${score}` : "";
 
-const __oldSortRowsV26665 = typeof sortRows === "function" ? sortRows : null;
+  return `
+    <div class="turn-inline-v266651 ${cls}">
+      <div class="turn-title">
+        <b>⚡ 轉折提示</b>
+        <span>${label}${rankText}${scoreText}</span>
+      </div>
+      <div class="turn-reason">${reason || "尚無轉折原因"}</div>
+      <div class="turn-hint">${hint || "依轉折欄位輔助判斷，不取代原策略。"}</div>
+    </div>
+  `;
+}
 
-sortRows = function(rows) {
-  return (rows || []).slice().sort((a, b) => {
-    const aa = normalizeAction(a.final_action || a.action);
-    const bb = normalizeAction(b.final_action || b.action);
-    const pa = ACTION_PRIORITY[aa] || 99;
-    const pb = ACTION_PRIORITY[bb] || 99;
-    if (pa !== pb) return pa - pb;
+function turnMiniBadgeV266651(row) {
+  if (typeof turnLabelV26665 !== "function") return "";
+  const label = turnLabelV26665(row);
+  if (!label || label === "--" || label === "NONE" || label === "無事件") return "";
+  return `<span class="turn-mini-badge-v266651">⚡${label}</span>`;
+}
 
-    const ra = turnRankV26665(a);
-    const rb = turnRankV26665(b);
-    if (ra !== rb) return ra - rb;
-
-    const tsa = Number(a.turn_event_score_v26664_1 ?? a.turn_event_score_v26664 ?? a.first_trigger_score_v26663 ?? a.trigger_event_score_v26662 ?? -999);
-    const tsb = Number(b.turn_event_score_v26664_1 ?? b.turn_event_score_v26664 ?? b.first_trigger_score_v26663 ?? b.trigger_event_score_v26662 ?? -999);
-    if (Number.isFinite(tsa) && Number.isFinite(tsb) && tsa !== tsb) return tsb - tsa;
-
-    const ta = getTopRankV26630(a);
-    const tb = getTopRankV26630(b);
-    if (ta !== tb) return ta - tb;
-
-    const sb = rowScoreV26630(b);
-    const sa = rowScoreV26630(a);
-    if (sb !== sa) return sb - sa;
-
-    const la = liquiditySortRank(a);
-    const lb = liquiditySortRank(b);
-    if (lb !== la) return lb - la;
-
-    const va = Number(a.volume || 0);
-    const vb = Number(b.volume || 0);
-    if (vb !== va) return vb - va;
-
-    return String(a.stock_id || "").localeCompare(String(b.stock_id || ""));
-  });
-};
-
-/* ---------- renderScanRow 覆寫：主列與詳情顯示轉折雷達 ---------- */
-const __oldRenderScanRowV26665 = typeof renderScanRow === "function" ? renderScanRow : null;
+/* 
+   重覆寫 renderScanRow：
+   - 不再把大型轉折卡塞進 detail-grid
+   - 只在「系統提示」後面追加簡潔轉折提示
+*/
+const __oldRenderScanRowV266651 = typeof __oldRenderScanRowV26665 === "function"
+  ? __oldRenderScanRowV26665
+  : (typeof renderScanRow === "function" ? renderScanRow : null);
 
 renderScanRow = function(row, key) {
-  injectTurnStyleV26665();
+  injectTurnStyleV266651();
 
-  const html = __oldRenderScanRowV26665
-    ? __oldRenderScanRowV26665(row, key)
+  const baseHtml = __oldRenderScanRowV266651
+    ? __oldRenderScanRowV266651(row, key)
     : "";
 
-  if (!html) return html;
+  if (!baseHtml) return baseHtml;
 
-  const badge = turnBadgeV26665(row);
-  const block = turnDetailBlockV26665(row);
+  const mini = turnMiniBadgeV266651(row);
+  const compact = turnCompactBlockV266651(row);
 
-  let out = html;
+  let out = baseHtml;
 
-  // 主列：把轉折 badge 放在 entry 後面，手機上最容易看到
-  if (badge && out.includes('<div class="scan-entry">')) {
+  // 主列只加小 badge，不影響高度
+  if (mini && out.includes('<div class="scan-entry">')) {
     out = out.replace(
       /<div class="scan-entry">([\s\S]*?)<\/div>/,
-      `<div class="scan-entry">$1 ${badge}</div>`
+      `<div class="scan-entry">$1 ${mini}</div>`
     );
   }
 
-  // 詳情：放在 detail-grid 後面、原因前面
-  if (block && out.includes('<div class="detail-grid">')) {
+  // 詳情區：放在 scan-detail 內最前方 detail-grid 後，不塞進 grid
+  if (compact && out.includes('<div class="scan-detail"')) {
     out = out.replace(
-      /(<div class="detail-grid">[\s\S]*?<\/div>\s*)/,
-      `$1${block}`
+      /(<div class="scan-detail"[^>]*>\s*<div class="detail-grid">[\s\S]*?<\/div>)/,
+      `$1${compact}`
     );
   }
 
   return out;
 };
 
-/* ---------- 初始化後補樣式 ---------- */
-try { injectTurnStyleV26665(); } catch(e) {}
+try { injectTurnStyleV266651(); } catch(e) {}
 document.addEventListener("DOMContentLoaded", function() {
-  try { injectTurnStyleV26665(); } catch(e) {}
+  try { injectTurnStyleV266651(); } catch(e) {}
 });
