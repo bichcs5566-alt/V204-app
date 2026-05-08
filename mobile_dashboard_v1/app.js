@@ -4518,3 +4518,182 @@ try { injectTurnStyleV266652(); } catch(e) {}
 document.addEventListener("DOMContentLoaded", function() {
   try { injectTurnStyleV266652(); } catch(e) {}
 });
+/* =========================================================
+   v266.65.4 Turn UI Exact Position Fix
+   位置：
+   K線結構 / 籌碼集中度
+   ↓
+   轉折提示
+   ↓
+   原因
+
+   貼到 app.js 最底部，放在前面所有 v266.65 補丁後面。
+   ========================================================= */
+
+const TURN_PATCH_VERSION_V266654 = "v266.65.4_exact_position_fix";
+
+function injectTurnStyleV266654() {
+  if (document.getElementById("turn-style-v266654")) return;
+  const style = document.createElement("style");
+  style.id = "turn-style-v266654";
+  style.textContent = `
+    .turn-box-v26665,
+    .turn-inline-v266651,
+    .turn-below-v266652,
+    .turn-row-mini-v266652,
+    .turn-mini-badge-v266651,
+    .turn-badge-v26665 {
+      display: none !important;
+    }
+
+    .turn-original-v266654 {
+      margin: 12px 0 14px 0;
+      padding: 0;
+      border: none;
+      background: transparent;
+      color: inherit;
+      font-size: inherit;
+      line-height: inherit;
+      font-weight: inherit;
+    }
+
+    .turn-original-v266654 .turn-title-v266654 {
+      margin: 0 0 6px 0;
+      font-size: inherit;
+      font-weight: 900;
+      color: inherit;
+    }
+
+    .turn-original-v266654 .turn-text-v266654 {
+      margin: 0 0 6px 0;
+      font-size: inherit;
+      font-weight: 800;
+      line-height: 1.75;
+      color: inherit;
+      word-break: break-word;
+    }
+
+    .turn-original-v266654 .turn-meta-v266654 {
+      display: inline-block;
+      margin-left: 6px;
+      font-size: .9em;
+      font-weight: 900;
+      opacity: .75;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function turnValueV266654(row, keys, fallback = "") {
+  row = row || {};
+  for (const k of keys) {
+    const v = row[k];
+    if (v === undefined || v === null) continue;
+    const s = String(v).trim();
+    if (!s || ["--", "-", "nan", "NaN", "undefined", "null", "None", "NONE", "無事件"].includes(s)) continue;
+    return s;
+  }
+  return fallback;
+}
+
+function turnOriginalBlockV266654(row) {
+  const label = turnValueV266654(row, [
+    "turn_event_label_v26664_1",
+    "turn_event_label_v26664",
+    "first_trigger_label_v26663",
+    "trigger_event_label_v26662",
+    "state_transition_label_v26660"
+  ]);
+
+  if (!label) return "";
+
+  const score = turnValueV266654(row, [
+    "turn_event_score_v26664_1",
+    "turn_event_score_v26664",
+    "first_trigger_score_v26663",
+    "trigger_event_score_v26662",
+    "state_transition_score_v26660"
+  ], "--");
+
+  const rank = turnValueV266654(row, [
+    "turn_first_rank_v26664_1",
+    "turn_first_rank_v26664",
+    "first_trigger_rank_v26663",
+    "trigger_rank_v26662"
+  ], "--");
+
+  const reason = turnValueV266654(row, [
+    "turn_event_reason_v26664_1",
+    "turn_event_reason_v26664",
+    "first_trigger_reason_v26663",
+    "trigger_event_reason_v26662",
+    "state_transition_reason_v26660"
+  ], "尚無轉折原因");
+
+  const hint = turnValueV266654(row, [
+    "turn_priority_hint_v26664",
+    "trigger_action_hint_v26662"
+  ], "");
+
+  const meta = [
+    label,
+    rank !== "--" ? `排 ${rank}` : "",
+    score !== "--" ? `分 ${score}` : ""
+  ].filter(Boolean).join("｜");
+
+  return `
+    <div class="turn-original-v266654">
+      <div class="turn-title-v266654">⚡ 轉折提示 <span class="turn-meta-v266654">${meta}</span></div>
+      <div class="turn-text-v266654">${reason}</div>
+      ${hint ? `<div class="turn-text-v266654">${hint}</div>` : ""}
+    </div>
+  `;
+}
+
+const __baseRenderScanRowV266654 =
+  (typeof __oldRenderScanRowV26665 === "function")
+    ? __oldRenderScanRowV26665
+    : (typeof renderScanRow === "function" ? renderScanRow : null);
+
+renderScanRow = function(row, key) {
+  injectTurnStyleV266654();
+
+  const baseHtml = __baseRenderScanRowV266654
+    ? __baseRenderScanRowV266654(row, key)
+    : "";
+
+  if (!baseHtml) return baseHtml;
+
+  const turnBlock = turnOriginalBlockV266654(row);
+  if (!turnBlock) return baseHtml;
+
+  let out = baseHtml;
+
+  /*
+    插入 detail-grid 後面。
+    你的 detail-grid 最後兩格是：
+    K線結構 / 籌碼集中度
+    所以這裡會剛好放在它們下面，原因上面。
+  */
+  const match = out.match(/<div class="detail-grid">[\s\S]*?<\/div>\s*(?=<div class="detail-text"|<h|<p|原因|中文決策提示|籌碼原因|系統提示)/);
+
+  if (match && typeof match.index === "number") {
+    const insertAt = match.index + match[0].length;
+    return out.slice(0, insertAt) + turnBlock + out.slice(insertAt);
+  }
+
+  /*
+    備援：放在第一個「原因」前面。
+  */
+  const reasonIdx = out.indexOf("原因");
+  if (reasonIdx > -1) {
+    return out.slice(0, reasonIdx) + turnBlock + out.slice(reasonIdx);
+  }
+
+  return out + turnBlock;
+};
+
+try { injectTurnStyleV266654(); } catch(e) {}
+document.addEventListener("DOMContentLoaded", function() {
+  try { injectTurnStyleV266654(); } catch(e) {}
+});
