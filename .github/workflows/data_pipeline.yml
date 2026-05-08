@@ -1219,6 +1219,12 @@ jobs:
         if: always()
         run: |
           python trigger_event_patch.py
+
+      # v266.63
+      - name: Run first trigger patch
+        if: always()
+        run: |
+          python first_trigger_event_patch.py
       
       - name: Clean runtime big files
         run: |
