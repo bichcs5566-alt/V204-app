@@ -133,3 +133,166 @@ def main():
 
 if __name__ == "__main__":
     main()
+# =========================================================
+# v266.66 主力發動階段模型（Phase Engine）
+# =========================================================
+
+import pandas as pd
+import numpy as np
+
+PHASE_VERSION_V26666 = "v266.66_phase_engine"
+
+def classify_phase_v26666(row):
+
+    score = float(row.get("score", 0) or 0)
+    chip = float(row.get("chip_score", 0) or 0)
+
+    ma5 = str(row.get("ma5_comment", ""))
+    ma10 = str(row.get("ma10_comment", ""))
+    ma20 = str(row.get("ma20_comment", ""))
+
+    reason = str(row.get("reason", ""))
+
+    strong_cnt = 0
+
+    for x in [ma5, ma10, ma20]:
+        if "站上" in x or "強勢" in x:
+            strong_cnt += 1
+
+    is_breakout = (
+        "突破" in reason
+        or "爆量" in reason
+        or "轉強" in reason
+    )
+
+    is_building = (
+        "平台" in reason
+        or "收斂" in reason
+        or "吸籌" in reason
+        or "量縮" in reason
+    )
+
+    # BUILDING
+    if (
+        is_building
+        and chip >= 40
+        and strong_cnt <= 1
+    ):
+        return "BUILDING"
+
+    # FIRST_TRIGGER
+    if (
+        is_breakout
+        and chip >= 45
+        and strong_cnt <= 2
+        and score >= 50
+        and score <= 68
+    ):
+        return "FIRST_TRIGGER"
+
+    # EARLY_PUSH
+    if (
+        strong_cnt >= 2
+        and score >= 60
+        and score <= 78
+        and chip >= 50
+    ):
+        return "EARLY_PUSH"
+
+    # CONTINUATION
+    if (
+        strong_cnt >= 3
+        and score >= 75
+    ):
+        return "CONTINUATION"
+
+    # EXTENDED
+    if (
+        score >= 85
+        and chip < 45
+    ):
+        return "EXTENDED"
+
+    return "WATCH"
+
+
+def apply_phase_engine_v26666(df):
+
+    if df is None or len(df) == 0:
+        return df
+
+    df["phase_v26666"] = df.apply(
+        classify_phase_v26666,
+        axis=1
+    )
+
+    # TEST 只保留真正早期
+    early_phases = [
+        "FIRST_TRIGGER",
+        "EARLY_PUSH"
+    ]
+
+    if "action" in df.columns:
+
+        mask_test = (
+            df["phase_v26666"].isin(early_phases)
+        )
+
+        df.loc[
+            mask_test,
+            "action"
+        ] = "TEST"
+
+        mask_watch = (
+            ~df["phase_v26666"].isin(early_phases)
+        )
+
+        df.loc[
+            mask_watch,
+            "action"
+        ] = "WATCH"
+
+    phase_map = {
+        "BUILDING": "主力吸籌",
+        "FIRST_TRIGGER": "第一發動",
+        "EARLY_PUSH": "早期推升",
+        "CONTINUATION": "續強延伸",
+        "EXTENDED": "過熱延伸",
+        "WATCH": "觀察"
+    }
+
+    df["phase_comment_v26666"] = (
+        df["phase_v26666"]
+        .map(phase_map)
+        .fillna("觀察")
+    )
+
+    print(
+        f"[{PHASE_VERSION_V26666}] updated:",
+        len(df)
+    )
+
+    print(
+        df["phase_v26666"]
+        .value_counts()
+    )
+
+    return df
+
+
+# =========================================================
+# 自動套用
+# =========================================================
+
+try:
+
+    if "df" in globals():
+
+        df = apply_phase_engine_v26666(df)
+
+except Exception as e:
+
+    print(
+        f"[{PHASE_VERSION_V26666}] error:",
+        e
+    )
