@@ -1596,6 +1596,10 @@ jobs:
             echo "no update"
           else
             git commit -m "lock pipeline final decision outputs"
+
+            # v266.67.1: avoid push rejected when remote main has newer workflow commits
+            git fetch origin main
+            git pull --rebase origin main || true
             git push
           fi
 
