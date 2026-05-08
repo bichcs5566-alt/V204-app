@@ -3974,105 +3974,126 @@ function injectV26630BPositionColorStyle() {
 try { injectV26630BPositionColorStyle(); } catch(e) {}
 document.addEventListener("DOMContentLoaded", injectV26630BPositionColorStyle);
 /* =========================================================
-   v266.65.1 Turn UI Compact Fix / 轉折欄位原風格修正版
+   v266.65.2 Turn UI Below Grid Fix / 轉折欄位下移修正版
+
    目的：
-   - 修正 v266.65 把 detail-grid 撐壞的問題
-   - 保留原本 App 卡片風格
-   - 只在詳情下方追加一條簡潔「轉折提示」
-   使用：
-   直接貼到 app.js 最底部，放在 v266.65 後面即可
+   - 把轉折提示放到原本欄位格子「下面」
+   - 不塞進左右兩欄 detail-grid
+   - 不撐高股票名稱欄位
+   - 字體縮小、卡片壓扁，保留原本 App 風格
+
+   使用方式：
+   直接貼到 app.js 最底部，放在 v266.65 / v266.65.1 後面
    ========================================================= */
 
-const TURN_PATCH_VERSION_V266651 = "v266.65.1_turn_ui_compact_fix";
+const TURN_PATCH_VERSION_V266652 = "v266.65.2_turn_ui_below_grid_fix";
 
-function injectTurnStyleV266651() {
-  if (document.getElementById("turn-style-v266651")) return;
+function injectTurnStyleV266652() {
+  if (document.getElementById("turn-style-v266652")) return;
 
   const style = document.createElement("style");
-  style.id = "turn-style-v266651";
+  style.id = "turn-style-v266652";
   style.textContent = `
-    .turn-inline-v266651 {
-      margin: 12px 0;
-      padding: 14px 16px;
+    .turn-below-v266652 {
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      margin: 12px 0 4px 0;
+      padding: 12px 14px;
       border-radius: 18px;
       background: #f8fafc;
       border: 2px solid #e5e7eb;
       color: #334155;
-      line-height: 1.65;
+      line-height: 1.55;
       font-weight: 800;
     }
 
-    .turn-inline-v266651.hot {
+    .turn-below-v266652.hot {
       background: #fff7ed;
       border-color: #fed7aa;
       color: #9a3412;
     }
 
-    .turn-inline-v266651.early {
+    .turn-below-v266652.early {
       background: #ecfeff;
       border-color: #a5f3fc;
       color: #155e75;
     }
 
-    .turn-inline-v266651.watch {
+    .turn-below-v266652.watch {
       background: #fefce8;
       border-color: #fde68a;
       color: #854d0e;
     }
 
-    .turn-inline-v266651.risk {
+    .turn-below-v266652.risk {
       background: #fef2f2;
       border-color: #fecaca;
       color: #991b1b;
     }
 
-    .turn-inline-v266651 .turn-title {
+    .turn-below-head-v266652 {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 8px;
       margin-bottom: 8px;
-      font-size: 16px;
-      font-weight: 900;
     }
 
-    .turn-inline-v266651 .turn-title span {
-      font-size: 13px;
-      font-weight: 900;
-      opacity: .9;
-    }
-
-    .turn-inline-v266651 .turn-reason {
+    .turn-below-title-v266652 {
       font-size: 15px;
-      font-weight: 800;
-      color: inherit;
-      opacity: .94;
+      font-weight: 900;
+      white-space: nowrap;
     }
 
-    .turn-inline-v266651 .turn-hint {
-      margin-top: 6px;
-      font-size: 14px;
-      font-weight: 800;
-      opacity: .86;
-    }
-
-    .turn-mini-badge-v266651 {
-      display: inline-block;
-      margin-left: 6px;
-      padding: 3px 8px;
-      border-radius: 999px;
-      background: #f1f5f9;
-      border: 1px solid #e2e8f0;
+    .turn-below-meta-v266652 {
       font-size: 12px;
       font-weight: 900;
+      opacity: .85;
+      text-align: right;
+    }
+
+    .turn-below-reason-v266652 {
+      font-size: 14px;
+      font-weight: 800;
+      opacity: .95;
+      word-break: break-word;
+    }
+
+    .turn-below-hint-v266652 {
+      margin-top: 5px;
+      font-size: 13px;
+      font-weight: 800;
+      opacity: .82;
+      word-break: break-word;
+    }
+
+    .turn-row-mini-v266652 {
+      display: inline-block;
+      margin-left: 4px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
       color: #475569;
+      font-size: 11px;
+      font-weight: 900;
+      max-width: 88px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      vertical-align: middle;
       white-space: nowrap;
+    }
+
+    .turn-box-v26665,
+    .turn-inline-v266651 {
+      display: none !important;
     }
   `;
   document.head.appendChild(style);
 }
 
-function turnSimpleClassV266651(label) {
+function turnSimpleClassV266652(label) {
   const s = String(label || "").toUpperCase();
   if (s.includes("TURN_FIRST") || s.includes("FIRST_IGNITION") || s.includes("強點火")) return "hot";
   if (s.includes("EARLY") || s.includes("準") || s.includes("READY")) return "early";
@@ -4081,64 +4102,66 @@ function turnSimpleClassV266651(label) {
   return "";
 }
 
-function turnCompactBlockV266651(row) {
+function turnBelowBlockV266652(row) {
   if (typeof turnLabelV26665 !== "function") return "";
 
   const label = turnLabelV26665(row);
+  if (!label || label === "--" || label === "NONE" || label === "無事件") return "";
+
   const score = typeof turnScoreV26665 === "function" ? turnScoreV26665(row) : "--";
   const rank = typeof turnRankV26665 === "function" ? turnRankV26665(row) : 999999;
   const reason = typeof turnReasonV26665 === "function" ? turnReasonV26665(row) : "";
   const hint = typeof turnHintV26665 === "function" ? turnHintV26665(row) : "";
 
-  if (!label || label === "--" || label === "NONE" || label === "無事件") return "";
-
-  const cls = turnSimpleClassV266651(label);
-  const rankText = rank !== 999999 ? `｜排名 ${rank}` : "";
-  const scoreText = score !== "--" ? `｜分數 ${score}` : "";
+  const cls = turnSimpleClassV266652(label);
+  const meta = [
+    label,
+    rank !== 999999 ? `排 ${rank}` : "",
+    score !== "--" ? `分 ${score}` : ""
+  ].filter(Boolean).join("｜");
 
   return `
-    <div class="turn-inline-v266651 ${cls}">
-      <div class="turn-title">
-        <b>⚡ 轉折提示</b>
-        <span>${label}${rankText}${scoreText}</span>
+    <div class="turn-below-v266652 ${cls}">
+      <div class="turn-below-head-v266652">
+        <div class="turn-below-title-v266652">⚡ 轉折提示</div>
+        <div class="turn-below-meta-v266652">${meta}</div>
       </div>
-      <div class="turn-reason">${reason || "尚無轉折原因"}</div>
-      <div class="turn-hint">${hint || "依轉折欄位輔助判斷，不取代原策略。"}</div>
+      <div class="turn-below-reason-v266652">${reason || "尚無轉折原因"}</div>
+      <div class="turn-below-hint-v266652">${hint || "依轉折欄位輔助判斷，不取代原策略。"}</div>
     </div>
   `;
 }
 
-function turnMiniBadgeV266651(row) {
+function turnMiniBadgeV266652(row) {
   if (typeof turnLabelV26665 !== "function") return "";
   const label = turnLabelV26665(row);
   if (!label || label === "--" || label === "NONE" || label === "無事件") return "";
-  return `<span class="turn-mini-badge-v266651">⚡${label}</span>`;
+  return `<span class="turn-row-mini-v266652">⚡${label}</span>`;
 }
 
-/* 
-   重覆寫 renderScanRow：
-   - 不再把大型轉折卡塞進 detail-grid
-   - 只在「系統提示」後面追加簡潔轉折提示
-*/
-const __oldRenderScanRowV266651 = typeof __oldRenderScanRowV26665 === "function"
-  ? __oldRenderScanRowV26665
-  : (typeof renderScanRow === "function" ? renderScanRow : null);
+const __baseRenderScanRowV266652 =
+  (typeof __oldRenderScanRowV26665 === "function")
+    ? __oldRenderScanRowV26665
+    : (
+        (typeof __oldRenderScanRowV266651 === "function")
+          ? __oldRenderScanRowV266651
+          : (typeof renderScanRow === "function" ? renderScanRow : null)
+      );
 
 renderScanRow = function(row, key) {
-  injectTurnStyleV266651();
+  injectTurnStyleV266652();
 
-  const baseHtml = __oldRenderScanRowV266651
-    ? __oldRenderScanRowV266651(row, key)
+  const baseHtml = __baseRenderScanRowV266652
+    ? __baseRenderScanRowV266652(row, key)
     : "";
 
   if (!baseHtml) return baseHtml;
 
-  const mini = turnMiniBadgeV266651(row);
-  const compact = turnCompactBlockV266651(row);
+  const mini = turnMiniBadgeV266652(row);
+  const below = turnBelowBlockV266652(row);
 
   let out = baseHtml;
 
-  // 主列只加小 badge，不影響高度
   if (mini && out.includes('<div class="scan-entry">')) {
     out = out.replace(
       /<div class="scan-entry">([\s\S]*?)<\/div>/,
@@ -4146,18 +4169,17 @@ renderScanRow = function(row, key) {
     );
   }
 
-  // 詳情區：放在 scan-detail 內最前方 detail-grid 後，不塞進 grid
-  if (compact && out.includes('<div class="scan-detail"')) {
+  if (below) {
     out = out.replace(
-      /(<div class="scan-detail"[^>]*>\s*<div class="detail-grid">[\s\S]*?<\/div>)/,
-      `$1${compact}`
+      /(<div class="detail-grid">[\s\S]*?<\/div>)/,
+      `$1${below}`
     );
   }
 
   return out;
 };
 
-try { injectTurnStyleV266651(); } catch(e) {}
+try { injectTurnStyleV266652(); } catch(e) {}
 document.addEventListener("DOMContentLoaded", function() {
-  try { injectTurnStyleV266651(); } catch(e) {}
+  try { injectTurnStyleV266652(); } catch(e) {}
 });
