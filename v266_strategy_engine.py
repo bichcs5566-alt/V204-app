@@ -340,6 +340,112 @@ def apply_master_trigger_v26670(d):
     d.loc[fake_breakout, "master_trigger_reason_v26670"] += "假突破/追高風險｜"
     d["master_trigger_reason_v26670"] = d["master_trigger_reason_v26670"].str.rstrip("｜")
 
+    # =========================================================
+    # v266.71 MASTER CONTROL PATCH
+    # =========================================================
+
+    d["chip_keep_v26671"] = (
+        _clip_series(
+            d.get(
+                "chip_concentration_score",
+                d.get("chip_score", 0)
+            )
+        ).rolling(5).mean() >= 28
+    )
+
+    d["sideway_range_v26671"] = (
+        (
+            (
+                _clip_series(d["high"]).rolling(10).max() -
+                _clip_series(d["low"]).rolling(10).min()
+            ) /
+            _clip_series(d["close"]).replace(0, np.nan)
+        ) <= 0.18
+    )
+
+    vol_ratio_v26671 = _clip_series(
+        d.get("volume_ratio", 1)
+    )
+
+    d["control_style_v26671"] = (
+        (vol_ratio_v26671 >= 0.85) &
+        (vol_ratio_v26671 <= 2.20) &
+        (
+            _clip_series(d["close"]) >=
+            _clip_series(d["ma20"]) * 0.97
+        )
+    )
+
+    upper_shadow_v26671 = (
+        (
+            _clip_series(d["high"]) -
+            _clip_series(d["close"])
+        ) /
+        (
+            (
+                _clip_series(d["high"]) -
+                _clip_series(d["low"])
+            ) + 0.001
+        )
+    )
+
+    d["hard_fake_breakout_v26671"] = (
+        (upper_shadow_v26671 > 0.60) |
+        (vol_ratio_v26671 > 4.20) |
+        (
+            _clip_series(d["close"]) >
+            _clip_series(d["ma20"]) * 1.18
+        )
+    )
+
+    v26671_boost = (
+        d["chip_keep_v26671"].astype(int) * 12 +
+        d["sideway_range_v26671"].astype(int) * 15 +
+        d["control_style_v26671"].astype(int) * 18 -
+        d["hard_fake_breakout_v26671"].astype(int) * 35
+    )
+
+    d["master_trigger_score_v26670"] = (
+        _clip_series(
+            d["master_trigger_score_v26670"]
+        ) + v26671_boost
+    ).round(2)
+
+    phase_v26671 = pd.Series(
+        "WATCH",
+        index=d.index,
+        dtype=object
+    )
+
+    phase_v26671.loc[
+        (
+            d["master_trigger_score_v26670"] >= 60
+        ) &
+        (
+            ~d["hard_fake_breakout_v26671"]
+        )
+    ] = "MASTER_TRIGGER"
+
+    phase_v26671.loc[
+        (
+            d["master_trigger_score_v26670"] >= 50
+        ) &
+        (
+            d["master_trigger_score_v26670"] < 60
+        ) &
+        (
+            ~d["hard_fake_breakout_v26671"]
+        )
+    ] = "PRE_MASTER"
+
+    phase_v26671.loc[
+        d["hard_fake_breakout_v26671"]
+    ] = "FAKE_BREAKOUT_RISK"
+
+    d["master_trigger_phase_v26670"] = phase_v26671
+
+
+
     # 只在 entry_score 存在時做補分，不破壞其他欄位
     if "entry_score" in d.columns:
         d["entry_score"] = _clip_series(d["entry_score"]) + master_score.clip(lower=-25, upper=45)
