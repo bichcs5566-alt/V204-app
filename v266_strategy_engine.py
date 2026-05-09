@@ -931,3 +931,65 @@ def apply_dynamic_trigger_patch_v26673(d):
         )
 
     return d
+
+
+# =========================================================
+# v266.74 VOLATILITY EXPANSION PATCH
+# 只補：
+# - 波動開始擴張
+# - 主升段前夕優先
+# - 壓低過度穩定股
+# 不動原本 pipeline / UI / output。
+# =========================================================
+
+def apply_volatility_expansion_patch_v26674(d):
+    d = d.copy()
+
+    atr_ratio = _clip_series(d.get("atr_ratio", 1))
+    vol_ratio = _clip_series(d.get("volume_ratio", 1))
+    mom5 = _clip_series(d.get("mom5", 0))
+    mom10 = _clip_series(d.get("mom10", 0))
+    breakout_score = _clip_series(d.get("breakout_score", 0))
+    entry_score = _clip_series(d.get("entry_score", 0))
+
+    expanding_volatility = (
+        (atr_ratio > 1.08) &
+        (atr_ratio < 2.20)
+    )
+
+    ignition_volume = (
+        (vol_ratio > 1.20) &
+        (vol_ratio < 3.50)
+    )
+
+    early_momentum = (
+        (mom5 > 0.02) &
+        (mom10 > 0.01)
+    )
+
+    breakout_ready = (
+        breakout_score > 55
+    )
+
+    over_stable = (
+        (atr_ratio < 0.92) &
+        (vol_ratio < 1.05)
+    )
+
+    expansion_bonus = (
+        expanding_volatility.astype(int) * 20 +
+        ignition_volume.astype(int) * 15 +
+        early_momentum.astype(int) * 18 +
+        breakout_ready.astype(int) * 12 -
+        over_stable.astype(int) * 25
+    )
+
+    d["volatility_expansion_score_v26674"] = expansion_bonus
+
+    if "entry_score" in d.columns:
+        d["entry_score"] = (
+            entry_score +
+            expansion_bonus.clip(lower=-20, upper=40)
+        )
+
+    return d
