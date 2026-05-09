@@ -873,3 +873,61 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# =========================================================
+# v266.73 DYNAMIC TRIGGER PATCH
+# 只補：
+# - 主力剛啟動放大
+# - 第一波突破優先
+# - 避免過度穩定
+# 不動原 pipeline / UI / 檔名 / 輸出。
+# =========================================================
+
+def apply_dynamic_trigger_patch_v26673(d):
+    d = d.copy()
+
+    close = _clip_series(d.get("close", 0))
+    ma20 = _clip_series(d.get("ma20", close))
+    vol_ratio = _clip_series(d.get("volume_ratio", 1))
+    mom5 = _clip_series(d.get("mom5", 0))
+    mom10 = _clip_series(d.get("mom10", 0))
+    mom20 = _clip_series(d.get("mom20", 0))
+
+    breakout_ready = (
+        (close > ma20 * 1.01) &
+        (close < ma20 * 1.12)
+    )
+
+    early_launch = (
+        (mom5 > 0.015) &
+        (mom10 > 0.01) &
+        (mom20 < 0.22)
+    )
+
+    warm_volume = (
+        (vol_ratio >= 1.15) &
+        (vol_ratio <= 2.80)
+    )
+
+    avoid_dead_pool = (
+        (vol_ratio < 0.75) |
+        (mom5 < -0.03)
+    )
+
+    dynamic_score = (
+        breakout_ready.astype(int) * 18 +
+        early_launch.astype(int) * 20 +
+        warm_volume.astype(int) * 15 -
+        avoid_dead_pool.astype(int) * 20
+    )
+
+    d["dynamic_trigger_score_v26673"] = dynamic_score
+
+    if "entry_score" in d.columns:
+        d["entry_score"] = (
+            _clip_series(d["entry_score"]) +
+            dynamic_score.clip(lower=-15, upper=35)
+        )
+
+    return d
