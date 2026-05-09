@@ -993,3 +993,69 @@ def apply_volatility_expansion_patch_v26674(d):
         )
 
     return d
+
+
+# =========================================================
+# v266.75 DISTRIBUTION HARD BLOCK PATCH
+# =========================================================
+
+def apply_distribution_hardblock_patch_v26675(d):
+    d = d.copy()
+
+    close = _clip_series(d.get("close", 0))
+    high = _clip_series(d.get("high", close))
+    open_ = _clip_series(d.get("open", close))
+
+    vol_ratio = _clip_series(d.get("volume_ratio", 1))
+    mom5 = _clip_series(d.get("mom5", 0))
+    mom20 = _clip_series(d.get("mom20", 0))
+
+    ma5 = _clip_series(d.get("ma5", close))
+    ma10 = _clip_series(d.get("ma10", close))
+
+    entry_score = _clip_series(d.get("entry_score", 0))
+
+    intraday_drop = (close - high) / high
+
+    limitdown_like = (
+        intraday_drop < -0.085
+    )
+
+    high_volume_dump = (
+        (vol_ratio > 2.8) &
+        (close < open_) &
+        (close < ma5)
+    )
+
+    fake_breakout = (
+        (mom20 > 0.35) &
+        (close < ma10)
+    )
+
+    long_black_distribution = (
+        (((close - open_) / open_) < -0.06) &
+        (vol_ratio > 2.0)
+    )
+
+    exhaustion_move = (
+        (mom5 > 0.18) &
+        (close < ma5)
+    )
+
+    hard_block = (
+        limitdown_like |
+        high_volume_dump |
+        fake_breakout |
+        long_black_distribution |
+        exhaustion_move
+    )
+
+    d["distribution_hardblock_v26675"] = hard_block.astype(int)
+
+    if "entry_score" in d.columns:
+        d.loc[hard_block, "entry_score"] = (
+            entry_score[hard_block] - 999
+        )
+
+    return d
+
