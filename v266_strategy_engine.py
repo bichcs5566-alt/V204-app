@@ -457,6 +457,111 @@ def apply_master_trigger_v26670(d):
 
     return d
 
+
+
+def apply_time_structure_patch_v26672(d):
+    """
+    v266.72 TIME STRUCTURE PATCH
+    只補：
+    - 壓縮天數
+    - 量縮後第一次放量
+    - 連續小紅K
+    - 假突破記憶
+    - 主力醞釀時間結構分數
+    不動 UI / pipeline / output / 原始欄位結構。
+    """
+    d = d.copy()
+
+    close = _clip_series(d.get("close", 0))
+    high = _clip_series(d.get("high", close))
+    low = _clip_series(d.get("low", close))
+    open_ = _clip_series(d.get("open", close))
+    volume = _clip_series(d.get("volume", 0))
+    ma20 = _clip_series(d.get("ma20", close))
+    vol_ratio = _clip_series(d.get("volume_ratio", 1))
+
+    # 1) 壓縮天數：若沒有逐日資料，就用當前橫盤/振幅條件做近似
+    daily_range_pct = ((high - low) / close.replace(0, np.nan) * 100).replace([np.inf, -np.inf], np.nan).fillna(999)
+    compression_flag = (
+        (daily_range_pct <= 3.5) |
+        (close.between(ma20 * 0.97, ma20 * 1.06))
+    )
+    compression_days = compression_flag.astype(int) * 5
+
+    # 2) 量縮後第一次放量：以 volume_ratio 近似 5日量縮後初放
+    vol_shrink = vol_ratio.between(0.55, 1.15)
+    first_expand = vol_ratio.between(1.20, 2.20)
+
+    # 3) 連續小紅K：單日近似 + 低波動環境
+    small_red_k = (
+        (close > open_) &
+        (((close - open_) / open_.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).fillna(0) <= 0.03) &
+        (daily_range_pct <= 5.5)
+    )
+    small_red_count = small_red_k.astype(int) * 4
+
+    # 4) 假突破記憶：近似當前/近期假突破風險
+    upper_shadow = ((high - close) / (high - low + 0.001)).replace([np.inf, -np.inf], np.nan).fillna(0)
+    fake_breakout_memory = (
+        (upper_shadow > 0.58) |
+        (vol_ratio > 3.50) |
+        (close > ma20 * 1.16)
+    )
+
+    time_score = (
+        (compression_days >= 4).astype(int) * 15 +
+        vol_shrink.astype(int) * 10 +
+        first_expand.astype(int) * 20 +
+        (small_red_count >= 4).astype(int) * 15 -
+        fake_breakout_memory.astype(int) * 20
+    )
+
+    d["compression_days_v26672"] = compression_days
+    d["vol_shrink_v26672"] = vol_shrink
+    d["first_expand_v26672"] = first_expand
+    d["small_red_k_v26672"] = small_red_k
+    d["small_red_count_v26672"] = small_red_count
+    d["fake_breakout_memory_v26672"] = fake_breakout_memory
+    d["time_structure_score_v26672"] = time_score
+
+    # 接到 v266.70 / v266.71 master score，不存在就新建
+    if "master_trigger_score_v26670" not in d.columns:
+        d["master_trigger_score_v26670"] = 0.0
+
+    d["master_trigger_score_v26670"] = (
+        _clip_series(d["master_trigger_score_v26670"]) + time_score
+    ).round(2)
+
+    # phase 更新：只輔助，不改原本欄位結構
+    phase = pd.Series("WATCH", index=d.index, dtype=object)
+    phase.loc[(d["master_trigger_score_v26670"] >= 62) & (~fake_breakout_memory)] = "MASTER_TRIGGER"
+    phase.loc[
+        (d["master_trigger_score_v26670"] >= 52) &
+        (d["master_trigger_score_v26670"] < 62) &
+        (~fake_breakout_memory)
+    ] = "PRE_MASTER"
+    phase.loc[fake_breakout_memory] = "FAKE_BREAKOUT_RISK"
+
+    d["time_structure_phase_v26672"] = phase
+
+    if "master_trigger_phase_v26670" in d.columns:
+        d.loc[phase.isin(["MASTER_TRIGGER", "PRE_MASTER", "FAKE_BREAKOUT_RISK"]), "master_trigger_phase_v26670"] = phase
+
+    d["time_structure_reason_v26672"] = ""
+    d.loc[compression_days >= 4, "time_structure_reason_v26672"] += "壓縮天數成立｜"
+    d.loc[vol_shrink, "time_structure_reason_v26672"] += "量能收斂｜"
+    d.loc[first_expand, "time_structure_reason_v26672"] += "量縮後初放｜"
+    d.loc[small_red_count >= 4, "time_structure_reason_v26672"] += "連續小紅K｜"
+    d.loc[fake_breakout_memory, "time_structure_reason_v26672"] += "假突破記憶風險｜"
+    d["time_structure_reason_v26672"] = d["time_structure_reason_v26672"].str.rstrip("｜")
+
+    # 輔助 watch_mode：只在欄位存在時更新
+    if "watch_mode" in d.columns:
+        d.loc[phase.isin(["MASTER_TRIGGER", "PRE_MASTER"]), "watch_mode"] = "TEST"
+        d.loc[phase.eq("FAKE_BREAKOUT_RISK"), "watch_mode"] = "WATCH"
+
+    return d
+
 def core_engine(x):
     """
     CORE：早期卡位策略。
