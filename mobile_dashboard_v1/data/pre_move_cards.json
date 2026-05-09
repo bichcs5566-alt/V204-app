@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-09 15:32:43",
+  "generated_at": "2026-05-09 16:21:59",
   "count": 30,
   "cards": [
     {
@@ -8,6 +8,19 @@
       "label": "小倉試單",
       "score": 100.0,
       "close": 32.4,
+      "price_tier": "50以下",
+      "target_weight": 0.01,
+      "suggested_amount": 10000,
+      "setup_type": "主力佈局完成",
+      "signal_tags": "波動壓縮 | 安靜吸籌 | 洗盤收回 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可",
+      "color": "green"
+    },
+    {
+      "stock_id": "2008",
+      "action": "BUY",
+      "label": "小倉試單",
+      "score": 100.0,
+      "close": 28.15,
       "price_tier": "50以下",
       "target_weight": 0.01,
       "suggested_amount": 10000,
@@ -107,12 +120,25 @@
       "color": "green"
     },
     {
-      "stock_id": "1612",
+      "stock_id": "1513",
       "action": "BUY",
       "label": "小倉試單",
       "score": 86.0,
-      "close": 36.7,
-      "price_tier": "50以下",
+      "close": 158.0,
+      "price_tier": "100-500",
+      "target_weight": 0.01,
+      "suggested_amount": 10000,
+      "setup_type": "主力佈局完成",
+      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可",
+      "color": "green"
+    },
+    {
+      "stock_id": "1519",
+      "action": "BUY",
+      "label": "小倉試單",
+      "score": 86.0,
+      "close": 896.0,
+      "price_tier": "500-1000",
       "target_weight": 0.01,
       "suggested_amount": 10000,
       "setup_type": "主力佈局完成",
@@ -133,11 +159,11 @@
       "color": "green"
     },
     {
-      "stock_id": "1817",
+      "stock_id": "1732",
       "action": "BUY",
       "label": "小倉試單",
       "score": 86.0,
-      "close": 38.5,
+      "close": 26.5,
       "price_tier": "50以下",
       "target_weight": 0.01,
       "suggested_amount": 10000,
@@ -146,11 +172,11 @@
       "color": "green"
     },
     {
-      "stock_id": "2008",
+      "stock_id": "1817",
       "action": "BUY",
       "label": "小倉試單",
       "score": 86.0,
-      "close": 28.15,
+      "close": 38.5,
       "price_tier": "50以下",
       "target_weight": 0.01,
       "suggested_amount": 10000,
@@ -250,6 +276,19 @@
       "color": "green"
     },
     {
+      "stock_id": "2634",
+      "action": "BUY",
+      "label": "小倉試單",
+      "score": 86.0,
+      "close": 50.1,
+      "price_tier": "50-100",
+      "target_weight": 0.01,
+      "suggested_amount": 10000,
+      "setup_type": "主力佈局完成",
+      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可",
+      "color": "green"
+    },
+    {
       "stock_id": "2727",
       "action": "BUY",
       "label": "小倉試單",
@@ -263,11 +302,11 @@
       "color": "green"
     },
     {
-      "stock_id": "2751",
+      "stock_id": "2732",
       "action": "BUY",
       "label": "小倉試單",
       "score": 86.0,
-      "close": 55.4,
+      "close": 66.9,
       "price_tier": "50-100",
       "target_weight": 0.01,
       "suggested_amount": 10000,
@@ -347,45 +386,6 @@
       "score": 86.0,
       "close": 28.3,
       "price_tier": "50以下",
-      "target_weight": 0.01,
-      "suggested_amount": 10000,
-      "setup_type": "主力佈局完成",
-      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可",
-      "color": "green"
-    },
-    {
-      "stock_id": "5523",
-      "action": "BUY",
-      "label": "小倉試單",
-      "score": 86.0,
-      "close": 30.35,
-      "price_tier": "50以下",
-      "target_weight": 0.01,
-      "suggested_amount": 10000,
-      "setup_type": "主力佈局完成",
-      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可",
-      "color": "green"
-    },
-    {
-      "stock_id": "6115",
-      "action": "BUY",
-      "label": "小倉試單",
-      "score": 86.0,
-      "close": 47.85,
-      "price_tier": "50以下",
-      "target_weight": 0.01,
-      "suggested_amount": 10000,
-      "setup_type": "主力佈局完成",
-      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可",
-      "color": "green"
-    },
-    {
-      "stock_id": "6581",
-      "action": "BUY",
-      "label": "小倉試單",
-      "score": 86.0,
-      "close": 110.0,
-      "price_tier": "100-500",
       "target_weight": 0.01,
       "suggested_amount": 10000,
       "setup_type": "主力佈局完成",
