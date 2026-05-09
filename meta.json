@@ -1,5 +1,5 @@
 ﻿{
-  "generated_at": "2026-05-09 19:34:05",
+  "generated_at": "2026-05-09 21:47:57",
   "source": "v266_57_source_safe_string",
   "signal_date": "2026-05-08",
   "trade_date": "2026-05-11",
@@ -23,10 +23,10 @@
   },
   "version": "v266.57",
   "latest_date": "2026-05-08",
-  "updated_at": "2026-05-09 19:35:51",
+  "updated_at": "2026-05-09 21:49:42",
   "date_lock_source": "feature_panel_daily.csv",
   "date_state": "locked_from_latest_feature",
-  "last_update": "2026-05-09 19:34:55",
+  "last_update": "2026-05-09 21:48:46",
   "timezone": "Asia/Taipei",
   "time_source": "github_actions_taipei"
 }
