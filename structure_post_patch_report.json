@@ -22,7 +22,7 @@
     "final_action_plan.csv": 569,
     "mobile_dashboard_v1/data/final_action_plan.csv": 569
   },
-  "updated_at": "2026-05-09 10:01:58",
+  "updated_at": "2026-05-09 11:35:33",
   "description": "最後補寫結構前置分、續強品質分、IGNITION突破品質分與測試排序分；不覆蓋原策略。",
   "structure_stock_count": 1960,
   "continuation_stock_count": 1960,
