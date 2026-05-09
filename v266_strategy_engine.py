@@ -879,6 +879,67 @@ def apply_final_output_hardblock_v26676(d):
 
     return d
 
+
+
+def apply_fallback_hardblock_sync_v26677(d):
+    """
+    v266.77 FALLBACK HARDBLOCK SYNC
+    只補：所有補名單 / fallback / backup / secondary 入口同步封殺。
+    目的：避免像 6823 這種已被主名單 hardblock 的股票，又被 fallback 補回 TEST/WATCH。
+    不動 UI / pipeline / 檔名 / 原策略核心。
+    """
+    d = d.copy()
+
+    block_cols = [
+        "final_output_hardblock_v26676",
+        "distribution_hardblock_v26675",
+        "hard_fake_breakout_v26671",
+        "fake_breakout_v26670",
+        "fake_breakout_memory_v26672",
+    ]
+
+    hard_block = pd.Series(False, index=d.index)
+
+    for c in block_cols:
+        if c in d.columns:
+            hard_block = hard_block | (_clip_series(d[c]) >= 1)
+
+    close = _clip_series(d.get("close", 0))
+    high = _clip_series(d.get("high", close))
+    open_ = _clip_series(d.get("open", close))
+    ma5 = _clip_series(d.get("ma5", close))
+    ma10 = _clip_series(d.get("ma10", close))
+    ma20 = _clip_series(d.get("ma20", close))
+    vol_ratio = _clip_series(d.get("volume_ratio", 1))
+    mom5 = _clip_series(d.get("mom5", 0))
+    mom20 = _clip_series(d.get("mom20", 0))
+
+    intraday_drop_from_high = (
+        ((close - high) / high.replace(0, np.nan))
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0)
+    )
+
+    final_dump_block = (
+        (intraday_drop_from_high <= -0.085) |
+        ((close < open_) & (close < ma5) & (vol_ratio >= 2.2)) |
+        ((close < ma10) & (mom20 >= 0.25)) |
+        ((close > ma20 * 1.15) & (close < ma5)) |
+        ((mom5 >= 0.15) & (close < ma5))
+    )
+
+    hard_block = hard_block | final_dump_block
+
+    d["fallback_hardblock_sync_v26677"] = hard_block.astype(int)
+
+    before = len(d)
+    d = d.loc[~hard_block].copy()
+    after = len(d)
+
+    print(f"[v266.77] fallback hardblock sync removed {before - after} rows, kept {after}")
+
+    return d
+
 def main():
     df = load_feature()
     signal_date, latest = latest_valid(df)
