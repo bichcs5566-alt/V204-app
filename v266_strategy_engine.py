@@ -137,165 +137,6 @@ def add_liquidity_fields(d):
     return d
 
 
-
-# ===== v266.69 主力發動前夕濾網 / Final Ignition Filter =====
-def _clip_series(s, lower=None, upper=None):
-    s = pd.to_numeric(s, errors="coerce").fillna(0)
-    if lower is not None:
-        s = s.clip(lower=lower)
-    if upper is not None:
-        s = s.clip(upper=upper)
-    return s
-
-
-def apply_final_ignition_filter_v26669(d):
-    """
-    只補「主力發動前夕」辨識，不覆蓋原策略。
-
-    目的：
-    - 加分：收斂、低檔量縮後第一次放量、突破前籌碼/OBV轉強、第一根轉強K。
-    - 扣分：爆量追高、離MA20過遠、已經漲太多、長上影假突破。
-
-    產出欄位：
-    - compression_score_v26669
-    - first_volume_trigger_v26669
-    - accumulation_score_v26669
-    - first_power_k_v26669
-    - fake_breakout_risk_v26669
-    - ignition_bonus_v26669
-    - ignition_state_v26669
-    - ignition_note_v26669
-    """
-    d = d.copy()
-
-    close = _clip_series(d.get("close", 0))
-    open_ = _clip_series(d.get("open", close))
-    high = _clip_series(d.get("high", close))
-    low = _clip_series(d.get("low", close))
-    ma5 = _clip_series(d.get("ma5", 0))
-    ma10 = _clip_series(d.get("ma10", 0))
-    ma20 = _clip_series(d.get("ma20", 0))
-    ma60 = _clip_series(d.get("ma60", 0))
-    vol_ratio = _clip_series(d.get("volume_ratio", 1))
-    vol_dry = _clip_series(d.get("vol_dry_ratio", 1))
-    ma_conv = _clip_series(d.get("ma_converge_pct", 1))
-    range20 = _clip_series(d.get("range_20", 1))
-    low_hold = _clip_series(d.get("low_non_down_count_5", 0))
-    obv_mom5 = _clip_series(d.get("obv_mom5", 0))
-    obv_up5 = _clip_series(d.get("obv_up_count_5", 0))
-    mom5 = _clip_series(d.get("mom5", 0))
-    mom10 = _clip_series(d.get("mom10", 0))
-    mom20 = _clip_series(d.get("mom20", 0))
-    high20 = _clip_series(d.get("high_20", close))
-    high60 = _clip_series(d.get("high_60", close))
-
-    # 1) 波動率壓縮 / 平台收斂
-    compression = pd.Series(0.0, index=d.index)
-    compression += (ma_conv <= 0.08).astype(int) * 16
-    compression += ((ma_conv > 0.08) & (ma_conv <= 0.12)).astype(int) * 8
-    compression += (range20 <= 0.18).astype(int) * 12
-    compression += ((range20 > 0.18) & (range20 <= 0.24)).astype(int) * 6
-    compression += (low_hold >= 3).astype(int) * 10
-    compression += ((ma20 > 0) & close.between(ma20 * 0.97, ma20 * 1.06)).astype(int) * 12
-    compression += ((vol_ratio >= 0.65) & (vol_ratio <= 1.25)).astype(int) * 6
-
-    # 2) 低檔量縮後第一次溫和放量
-    first_volume = pd.Series(0.0, index=d.index)
-    first_volume += vol_ratio.between(1.20, 1.85).astype(int) * 22
-    first_volume += vol_ratio.between(1.86, 2.50).astype(int) * 10
-    first_volume += ((vol_dry <= 0.95) & vol_ratio.between(1.15, 2.30)).astype(int) * 8
-    first_volume -= (vol_ratio > 2.80).astype(int) * 10
-    first_volume -= (vol_ratio > 4.00).astype(int) * 20
-
-    # 3) 主力/籌碼潛伏替代指標：OBV、低點不破、均線收斂
-    accumulation = pd.Series(0.0, index=d.index)
-    accumulation += (obv_mom5 > 0).astype(int) * 10
-    accumulation += (obv_up5 >= 3).astype(int) * 8
-    accumulation += (low_hold >= 3).astype(int) * 8
-    accumulation += ((ma5 >= ma20 * 0.995) & (ma20 > 0)).astype(int) * 8
-    accumulation += ((ma20 >= ma60 * 0.98) & (ma60 > 0)).astype(int) * 6
-    accumulation += ((mom20 >= -0.03) & (mom20 <= 0.18)).astype(int) * 8
-
-    # 若後續資料已有真正籌碼欄位，直接吃進來；沒有也不會炸。
-    chip_candidates = [
-        "chip_score", "chip_concentration_score", "chip_concentration",
-        "chip_score_v26658", "chip_adjusted_score_v26658"
-    ]
-    chip = pd.Series(0.0, index=d.index)
-    for c in chip_candidates:
-        if c in d.columns:
-            chip = _clip_series(d.get(c, 0))
-            break
-    accumulation += chip.between(20, 45).astype(int) * 14
-    accumulation += chip.between(46, 60).astype(int) * 8
-    accumulation -= (chip > 75).astype(int) * 12
-
-    # 4) 第一根轉強K：剛站回、還沒離均線太遠、量溫和
-    first_power = (
-        (close > ma5)
-        & (ma5 >= ma10 * 0.995)
-        & (ma10 >= ma20 * 0.985)
-        & (close <= ma20 * 1.08)
-        & vol_ratio.between(1.15, 2.60)
-        & (mom5 > 0)
-        & (mom20 <= 0.30)
-    )
-
-    # 5) 假突破 / 追高風險
-    body = (close - open_).abs().replace(0, np.nan)
-    upper_shadow_ratio = ((high - np.maximum(close, open_)) / body).replace([np.inf, -np.inf], 0).fillna(0)
-    fake_risk = pd.Series(0.0, index=d.index)
-    fake_risk += (upper_shadow_ratio >= 1.6).astype(int) * 18
-    fake_risk += ((ma20 > 0) & (close > ma20 * 1.12)).astype(int) * 18
-    fake_risk += ((ma20 > 0) & (close > ma20 * 1.18)).astype(int) * 28
-    fake_risk += (vol_ratio > 3.5).astype(int) * 14
-    fake_risk += (vol_ratio > 5.0).astype(int) * 24
-    fake_risk += (mom20 > 0.35).astype(int) * 14
-    fake_risk += ((high60 > 0) & (close >= high60 * 0.995) & (mom20 > 0.25)).astype(int) * 10
-    fake_risk += ((high20 > 0) & (close >= high20 * 0.995) & (vol_ratio > 2.8)).astype(int) * 8
-
-    # 綜合 bonus：最大目標不是拉高所有強勢股，而是把「前夜」排出來。
-    raw_bonus = (
-        compression * 0.25
-        + first_volume * 0.28
-        + accumulation * 0.22
-        + first_power.astype(int) * 16
-        - fake_risk * 0.55
-    )
-    ignition_bonus = raw_bonus.clip(lower=-22, upper=24).round(2)
-
-    d["compression_score_v26669"] = compression.round(2)
-    d["first_volume_trigger_v26669"] = first_volume.round(2)
-    d["accumulation_score_v26669"] = accumulation.round(2)
-    d["first_power_k_v26669"] = first_power.astype(int)
-    d["fake_breakout_risk_v26669"] = fake_risk.round(2)
-    d["ignition_bonus_v26669"] = ignition_bonus
-
-    # 僅調整 entry_score，不改原欄位邏輯與輸出結構。
-    d["entry_score"] = (pd.to_numeric(d["entry_score"], errors="coerce").fillna(0) + ignition_bonus).round(2)
-
-    cond_ready = (ignition_bonus >= 16) & (fake_risk <= 18)
-    cond_turning = (ignition_bonus >= 8) & (fake_risk <= 25)
-    cond_risk = fake_risk >= 32
-
-    d["ignition_state_v26669"] = np.select(
-        [cond_ready, cond_turning, cond_risk],
-        ["主力剛準備發動", "主力轉強中", "假突破風險"],
-        default="一般"
-    )
-
-    d["ignition_note_v26669"] = np.select(
-        [cond_ready, cond_turning, cond_risk],
-        [
-            "主力收斂完成｜低檔量縮後轉強｜可優先觀察第一根K",
-            "收斂轉強中｜等待放量確認｜不可追高",
-            "爆量/乖離/上影風險｜避免追價"
-        ],
-        default="條件未到臨界點｜維持原策略判斷"
-    )
-
-    return d
-
 def detect_regime(x):
     pct_ma20 = float((x["close"] >= x["ma20"]).mean())
     pct_ma60 = float((x["close"] >= x["ma60"]).mean())
@@ -347,6 +188,65 @@ def set_action(df, buy, test, watch, buy_sub, test_sub, watch_sub):
     df.loc[df["action"] == "WATCH", "action_sub"] = watch_sub
 
 
+
+
+def apply_ignition_rank_v26670(d):
+    """
+    v266.70:
+    主力點火排序層
+    不改原策略，只補：
+    - 第一段發動優先
+    - 壓縮後首次轉強
+    - 排除第二段爆噴
+    """
+    d = d.copy()
+
+    ignition_rank = pd.Series(0.0, index=d.index)
+
+    vol_ratio = _clip_series(d.get("volume_ratio", 1))
+    ma20 = _clip_series(d.get("ma20", 0))
+    close = _clip_series(d.get("close", 0))
+    ma_conv = _clip_series(d.get("ma_converge_pct", 1))
+    low_hold = _clip_series(d.get("low_non_down_count_5", 0))
+    mom5 = _clip_series(d.get("mom5", 0))
+    mom10 = _clip_series(d.get("mom10", 0))
+    mom20 = _clip_series(d.get("mom20", 0))
+
+    # 第一根轉強
+    ignition_rank += (
+        (mom5 > 0.02)
+        & (mom10 > 0)
+        & (close > ma20)
+    ).astype(int) * 25
+
+    # 量縮後首次放量
+    ignition_rank += (
+        vol_ratio.between(1.2, 2.2)
+    ).astype(int) * 20
+
+    # 波動壓縮
+    ignition_rank += (
+        (ma_conv <= 0.10)
+        & (low_hold >= 3)
+    ).astype(int) * 15
+
+    # MA20 剛翻揚
+    ignition_rank += (
+        (mom20 > -0.02)
+        & (mom20 < 0.18)
+    ).astype(int) * 10
+
+    # 排除已經噴太多
+    ignition_rank -= (mom20 > 0.25).astype(int) * 25
+    ignition_rank -= (vol_ratio > 3.8).astype(int) * 20
+
+    d["ignition_rank_v26670"] = ignition_rank
+
+    d["entry_score"] += ignition_rank
+
+    return d
+
+
 def core_engine(x):
     """
     CORE：早期卡位策略。
@@ -383,9 +283,6 @@ def core_engine(x):
     d["entry_score"] -= (d["mom20"] > 0.40).astype(int) * 10
     d["entry_score"] -= (d["volume_ratio"] > 5.5).astype(int) * 8
 
-    # v266.69：只補主力發動前夕濾網，不動其他策略架構
-    d = apply_final_ignition_filter_v26669(d)
-
     core_liq_ok = (d["volume"] >= 1000) & d["liquidity_level"].isin(["MEDIUM", "HIGH"])
     low_liq = d["liquidity_level"].eq("LOW")
 
@@ -413,7 +310,6 @@ def core_engine(x):
     d["note"] = (
         "CORE早期卡位｜剛轉強｜靠近MA20｜量能回溫｜"
         + d["liquidity_tag"].astype(str)
-        + "｜" + d.get("ignition_note_v26669", "").astype(str)
     )
 
     return d.sort_values(["entry_score", "mom20", "mom10"], ascending=False)
@@ -461,9 +357,6 @@ def alpha_engine(x):
     d["entry_score"] -= (d["volume_ratio"] > 8.0).astype(int) * 10
     d["entry_score"] -= (~mid_or_high).astype(int) * 30
 
-    # v266.69：只補主力發動前夕濾網，不動其他策略架構
-    d = apply_final_ignition_filter_v26669(d)
-
     buy = (
         (d["entry_score"] >= 70)
         & high_liq
@@ -488,7 +381,6 @@ def alpha_engine(x):
     d["note"] = (
         "ALPHA高流動性強勢延續｜成交量/成交金額優先｜突破/趨勢確認｜"
         + d["liquidity_tag"].astype(str)
-        + "｜" + d.get("ignition_note_v26669", "").astype(str)
     )
 
     return d.sort_values(["entry_score", "liquidity_score", "mom20"], ascending=False)
@@ -582,14 +474,6 @@ def build_trade_plan(core, alpha, regime, signal_date):
             "suggested_shares": round(shares, 2),
             "estimated_total_cost": round(shares * px * 1.0015, 2),
             "entry_score": round(score, 2),
-            "compression_score_v26669": round(float(r.get("compression_score_v26669", 0)), 2),
-            "first_volume_trigger_v26669": round(float(r.get("first_volume_trigger_v26669", 0)), 2),
-            "accumulation_score_v26669": round(float(r.get("accumulation_score_v26669", 0)), 2),
-            "first_power_k_v26669": int(float(r.get("first_power_k_v26669", 0))),
-            "fake_breakout_risk_v26669": round(float(r.get("fake_breakout_risk_v26669", 0)), 2),
-            "ignition_bonus_v26669": round(float(r.get("ignition_bonus_v26669", 0)), 2),
-            "ignition_state_v26669": r.get("ignition_state_v26669", ""),
-            "ignition_note_v26669": r.get("ignition_note_v26669", ""),
             "liquidity_level": r.get("liquidity_level", ""),
             "liquidity_tag": r.get("liquidity_tag", ""),
             "liquidity_score": round(float(r.get("liquidity_score", 0)), 2),
@@ -649,7 +533,7 @@ def main():
 
     meta = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "source": "v266_9_strategy_engine_stable_v26669_ignition_filter",
+        "source": "v266_9_strategy_engine_stable",
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
         "data_state": "fresh",
