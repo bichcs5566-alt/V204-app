@@ -803,6 +803,82 @@ def build_trade_plan(core, alpha, regime, signal_date):
     return pd.DataFrame(rows)
 
 
+
+
+def apply_final_output_hardblock_v26676(d):
+    """
+    v266.76 FINAL OUTPUT HARDBLOCK
+    只補最後輸出前封殺層：
+    - distribution_hardblock_v26675 == 1 直接移除
+    - fake_breakout / 出貨風險 / 跌停風險直接不准進最終名單
+    不改 UI / pipeline / 檔名 / 原策略核心。
+    """
+    d = d.copy()
+
+    block_cols = [
+        "distribution_hardblock_v26675",
+        "hard_fake_breakout_v26671",
+        "fake_breakout_v26670",
+        "fake_breakout_memory_v26672",
+    ]
+
+    hard_block = pd.Series(False, index=d.index)
+
+    for c in block_cols:
+        if c in d.columns:
+            hard_block = hard_block | (_clip_series(d[c]) >= 1)
+
+    close = _clip_series(d.get("close", 0))
+    high = _clip_series(d.get("high", close))
+    open_ = _clip_series(d.get("open", close))
+    ma5 = _clip_series(d.get("ma5", close))
+    ma10 = _clip_series(d.get("ma10", close))
+    ma20 = _clip_series(d.get("ma20", close))
+    vol_ratio = _clip_series(d.get("volume_ratio", 1))
+    mom5 = _clip_series(d.get("mom5", 0))
+    mom20 = _clip_series(d.get("mom20", 0))
+
+    intraday_drop_from_high = (
+        ((close - high) / high.replace(0, np.nan))
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0)
+    )
+
+    upper_shadow_ratio = (
+        ((high - close) / (high - open_).abs().replace(0, np.nan))
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0)
+    )
+
+    final_dump_block = (
+        (intraday_drop_from_high <= -0.085) |
+        ((close < open_) & (close < ma5) & (vol_ratio >= 2.2)) |
+        ((close < ma10) & (mom20 >= 0.25)) |
+        ((close > ma20 * 1.15) & (close < ma5)) |
+        ((mom5 >= 0.15) & (close < ma5)) |
+        (upper_shadow_ratio >= 0.65)
+    )
+
+    hard_block = hard_block | final_dump_block
+
+    d["final_output_hardblock_v26676"] = hard_block.astype(int)
+    d["final_output_hardblock_reason_v26676"] = ""
+
+    d.loc[intraday_drop_from_high <= -0.085, "final_output_hardblock_reason_v26676"] += "高檔回落/近跌停｜"
+    d.loc[(close < open_) & (close < ma5) & (vol_ratio >= 2.2), "final_output_hardblock_reason_v26676"] += "爆量長黑跌破MA5｜"
+    d.loc[(close < ma10) & (mom20 >= 0.25), "final_output_hardblock_reason_v26676"] += "主升後跌破MA10｜"
+    d.loc[(close > ma20 * 1.15) & (close < ma5), "final_output_hardblock_reason_v26676"] += "乖離過大轉弱｜"
+    d.loc[(mom5 >= 0.15) & (close < ma5), "final_output_hardblock_reason_v26676"] += "短線過熱轉弱｜"
+    d.loc[upper_shadow_ratio >= 0.65, "final_output_hardblock_reason_v26676"] += "長上影出貨風險｜"
+
+    before = len(d)
+    d = d.loc[~hard_block].copy()
+    after = len(d)
+
+    print(f"[v266.76] final output hardblock removed {before - after} rows, kept {after}")
+
+    return d
+
 def main():
     df = load_feature()
     signal_date, latest = latest_valid(df)
