@@ -247,6 +247,110 @@ def apply_ignition_rank_v26670(d):
     return d
 
 
+
+
+def apply_master_trigger_v26670(d):
+    """
+    v266.70 master trigger patch
+    只補：主力收斂、低量壓縮、第一根轉強K、假突破排除、master_trigger_score。
+    不改 pipeline / UI / 輸出檔名 / 原始欄位結構。
+    """
+    d = d.copy()
+
+    close = _clip_series(d.get("close", 0))
+    high = _clip_series(d.get("high", close))
+    low = _clip_series(d.get("low", close))
+    open_ = _clip_series(d.get("open", close))
+    volume = _clip_series(d.get("volume", 0))
+    ma5 = _clip_series(d.get("ma5", close))
+    ma10 = _clip_series(d.get("ma10", close))
+    ma20 = _clip_series(d.get("ma20", close))
+    mom20 = _clip_series(d.get("mom20", 0))
+    vol_ratio = _clip_series(d.get("volume_ratio", 1))
+    chip = _clip_series(d.get("chip_concentration_score", d.get("chip_score", 0)))
+    ignition_rank = _clip_series(d.get("ignition_rank_v26670", 0))
+
+    # 1) 波動壓縮：K棒振幅小、均線靠近、靠近 MA20
+    range_pct = ((high - low) / close.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).fillna(0)
+    ma_gap = ((ma5 - ma20).abs() / ma20.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).fillna(9)
+
+    range_compress = (
+        (range_pct <= 0.055) |
+        (ma_gap <= 0.055) |
+        ((close > ma20 * 0.96) & (close < ma20 * 1.07))
+    )
+
+    # 2) 低量壓縮後溫和放量：不要爆量追高
+    low_volume_ready = (
+        (vol_ratio >= 0.65) &
+        (vol_ratio <= 2.20)
+    )
+
+    first_trigger_k = (
+        (close > open_) &
+        (close >= ma5 * 0.98) &
+        (close >= ma10 * 0.97) &
+        (vol_ratio >= 1.05) &
+        (vol_ratio <= 2.60)
+    )
+
+    # 3) 主力籌碼區間：偏好 20~65，過高當成後段
+    chip_collect = (
+        (chip >= 20) &
+        (chip <= 65)
+    )
+
+    # 4) 假突破/第二段排除
+    upper_shadow_ratio = ((high - close) / (high - low + 0.001)).replace([np.inf, -np.inf], np.nan).fillna(0)
+    fake_breakout = (
+        (upper_shadow_ratio > 0.55) |
+        (vol_ratio > 3.50) |
+        (mom20 > 0.28) |
+        (close > ma20 * 1.15)
+    )
+
+    master_score = (
+        range_compress.astype(int) * 20 +
+        low_volume_ready.astype(int) * 15 +
+        first_trigger_k.astype(int) * 30 +
+        chip_collect.astype(int) * 20 +
+        ((close > ma20) & (ma5 >= ma10)).astype(int) * 15 +
+        ignition_rank.clip(lower=-40, upper=50) * 0.35 -
+        fake_breakout.astype(int) * 35
+    )
+
+    d["range_compress_v26670"] = range_compress
+    d["low_volume_ready_v26670"] = low_volume_ready
+    d["first_trigger_k_v26670"] = first_trigger_k
+    d["chip_collect_v26670"] = chip_collect
+    d["fake_breakout_v26670"] = fake_breakout
+    d["master_trigger_score_v26670"] = master_score.round(2)
+
+    phase = pd.Series("WATCH", index=d.index, dtype=object)
+    phase.loc[(master_score >= 58) & (~fake_breakout)] = "MASTER_TRIGGER"
+    phase.loc[(master_score >= 48) & (master_score < 58) & (~fake_breakout)] = "PRE_MASTER"
+    phase.loc[fake_breakout] = "FAKE_BREAKOUT_RISK"
+    d["master_trigger_phase_v26670"] = phase
+
+    d["master_trigger_reason_v26670"] = ""
+    d.loc[range_compress, "master_trigger_reason_v26670"] += "波動壓縮｜"
+    d.loc[low_volume_ready, "master_trigger_reason_v26670"] += "低量溫和｜"
+    d.loc[first_trigger_k, "master_trigger_reason_v26670"] += "第一根轉強K｜"
+    d.loc[chip_collect, "master_trigger_reason_v26670"] += "籌碼20-65佈局｜"
+    d.loc[fake_breakout, "master_trigger_reason_v26670"] += "假突破/追高風險｜"
+    d["master_trigger_reason_v26670"] = d["master_trigger_reason_v26670"].str.rstrip("｜")
+
+    # 只在 entry_score 存在時做補分，不破壞其他欄位
+    if "entry_score" in d.columns:
+        d["entry_score"] = _clip_series(d["entry_score"]) + master_score.clip(lower=-25, upper=45)
+
+    # 如果有 action/watch_mode，僅用 master phase 做輔助分層
+    if "watch_mode" in d.columns:
+        d.loc[d["master_trigger_phase_v26670"].isin(["MASTER_TRIGGER", "PRE_MASTER"]), "watch_mode"] = "TEST"
+        d.loc[d["master_trigger_phase_v26670"].eq("FAKE_BREAKOUT_RISK"), "watch_mode"] = "WATCH"
+
+    return d
+
 def core_engine(x):
     """
     CORE：早期卡位策略。
