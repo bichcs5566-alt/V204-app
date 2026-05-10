@@ -5,7 +5,7 @@
   "changed_original_score": false,
   "changed_action": false,
   "changed_position": false,
-  "feature_rows": 4808094,
+  "feature_rows": 4809173,
   "files": {
     "candidates.csv": 120,
     "mobile_dashboard_v1/data/candidates.csv": 120,
@@ -13,18 +13,18 @@
     "mobile_dashboard_v1/data/core_candidates.csv": 60,
     "alpha_candidates.csv": 60,
     "mobile_dashboard_v1/data/alpha_candidates.csv": 60,
-    "trade_plan.csv": 10,
-    "mobile_dashboard_v1/data/trade_plan.csv": 10,
-    "pre_move_candidates.csv": 455,
-    "mobile_dashboard_v1/data/pre_move_candidates.csv": 455,
-    "top_opportunities.csv": 18,
-    "mobile_dashboard_v1/data/top_opportunities.csv": 18,
-    "final_action_plan.csv": 527,
-    "mobile_dashboard_v1/data/final_action_plan.csv": 527
+    "trade_plan.csv": 11,
+    "mobile_dashboard_v1/data/trade_plan.csv": 11,
+    "pre_move_candidates.csv": 487,
+    "mobile_dashboard_v1/data/pre_move_candidates.csv": 487,
+    "top_opportunities.csv": 16,
+    "mobile_dashboard_v1/data/top_opportunities.csv": 16,
+    "final_action_plan.csv": 560,
+    "mobile_dashboard_v1/data/final_action_plan.csv": 560
   },
-  "updated_at": "2026-05-10 10:44:03",
+  "updated_at": "2026-05-10 12:02:02",
   "description": "最後補寫結構前置分、續強品質分、IGNITION突破品質分與測試排序分；不覆蓋原策略。",
   "structure_stock_count": 1960,
   "continuation_stock_count": 1960,
-  "ignition_power_stock_count": 1925
+  "ignition_power_stock_count": 1926
 }
