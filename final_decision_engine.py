@@ -985,6 +985,169 @@ def apply_v275_edge_expansion_patch(out):
     return out.reset_index(drop=True)
 
 
+
+# ===== v277 MAX OPPORTUNITY DIRECT LANE PATCH =====
+# 目的：
+# 1. 不改原本 TEST / WATCH / BUY 主清單
+# 2. 不動 pipeline / UI / 持倉 / macro / export schema
+# 3. 只從已產出的最終清單中，挑出「最大機會」寫入 IGNITION / EVOLUTION 區塊
+# 4. IGNITION = 今日最大機會直通區；EVOLUTION = 正在升級中的候選區
+
+def _v277_num(out, col, default=0.0):
+    if out is None or col not in out.columns:
+        return pd.Series(default, index=out.index if out is not None else [])
+    return pd.to_numeric(out[col], errors="coerce").fillna(default)
+
+
+def _v277_pct(s):
+    s = pd.to_numeric(s, errors="coerce").fillna(0)
+    if len(s) <= 1:
+        return pd.Series(1.0, index=s.index)
+    return s.rank(method="average", pct=True).fillna(0)
+
+
+def _v277_clean_action_series(out):
+    if out is None or out.empty:
+        return pd.Series(dtype=str)
+    if "final_action" in out.columns:
+        return out["final_action"].astype(str).str.upper()
+    if "action" in out.columns:
+        return out["action"].astype(str).str.upper()
+    return pd.Series("", index=out.index)
+
+
+def build_v277_max_opportunity_lanes(out):
+    """
+    從 final_action_plan 的已確認候選裡，抽出兩個直通區：
+    - ignition_candidates.csv：Top 1~3，最大機會，直接進場評估
+    - strategy_evolution.csv：次強 4~8，準備升級，等確認/分批試單
+
+    注意：這裡不改 out 主表，只另外產生兩個區塊資料，避免破壞原流程。
+    """
+    if out is None or out.empty:
+        return pd.DataFrame(), pd.DataFrame()
+
+    df = out.copy()
+    action = _v277_clean_action_series(df)
+
+    # 只從可交易/可觀察池抽最大機會；不碰出場、減碼、禁止。
+    tradable = action.isin(["BUY", "TEST", "WATCH"])
+    df = df.loc[tradable].copy()
+    if df.empty:
+        return pd.DataFrame(), pd.DataFrame()
+
+    action = _v277_clean_action_series(df)
+
+    score = _v277_num(df, "score", 0)
+    opportunity = _v277_num(df, "opportunity_score", 0)
+    liquidity = _v277_num(df, "liquidity_score", 0)
+    volume = _v277_num(df, "volume", 0)
+    turnover = _v277_num(df, "turnover", 0)
+    chip = _v277_num(df, "chip_score", 0)
+
+    score_pct = _v277_pct(score)
+    opp_pct = _v277_pct(opportunity)
+    liq_pct = _v277_pct(liquidity)
+    vol_pct = _v277_pct(volume)
+    turn_pct = _v277_pct(turnover)
+    chip_pct = _v277_pct(chip)
+
+    # TEST 比 WATCH 更接近可執行；BUY 如果存在則最高。
+    action_bonus = pd.Series(0.0, index=df.index)
+    action_bonus.loc[action.eq("BUY")] = 0.10
+    action_bonus.loc[action.eq("TEST")] = 0.06
+    action_bonus.loc[action.eq("WATCH")] = 0.02
+
+    text = (
+        df.get("reason", pd.Series("", index=df.index)).astype(str) + " " +
+        df.get("system_note", pd.Series("", index=df.index)).astype(str) + " " +
+        df.get("entry_type", pd.Series("", index=df.index)).astype(str) + " " +
+        df.get("top_opportunity", pd.Series("", index=df.index)).astype(str) + " " +
+        df.get("section_top_opportunity", pd.Series("", index=df.index)).astype(str)
+    ).str.upper()
+
+    ignition_hint = text.str.contains("TOP|突破|BREAK|IGNITION|起漲|點火|轉強|強勢|主力", regex=True)
+    risk_hint = text.str.contains("過熱|追高|長上影|出貨|誘多|AVOID|RISK|禁止|BLOCK", regex=True)
+
+    ignition_bonus = pd.Series(0.0, index=df.index)
+    ignition_bonus.loc[ignition_hint] = 0.07
+
+    risk_penalty = pd.Series(0.0, index=df.index)
+    risk_penalty.loc[risk_hint] = 0.18
+
+    # v277 最大機會分數：不是拿來重寫主策略，只用於兩個直通區排序。
+    direct_score = (
+        score_pct * 0.38 +
+        opp_pct * 0.24 +
+        liq_pct * 0.12 +
+        vol_pct * 0.10 +
+        turn_pct * 0.08 +
+        chip_pct * 0.08 +
+        action_bonus +
+        ignition_bonus -
+        risk_penalty
+    )
+
+    df["v277_direct_entry_score"] = (60 + direct_score.clip(0, 1) * 39).round(1)
+    df["v277_direct_entry_rank"] = df["v277_direct_entry_score"].rank(method="first", ascending=False).astype(int)
+    df["v277_direct_entry_tag"] = "B_NORMAL"
+    df.loc[df["v277_direct_entry_rank"] <= 3, "v277_direct_entry_tag"] = "S_DIRECT_ENTRY"
+    df.loc[(df["v277_direct_entry_rank"] > 3) & (df["v277_direct_entry_rank"] <= 8), "v277_direct_entry_tag"] = "A_EVOLUTION_UPGRADE"
+    df.loc[risk_hint, "v277_direct_entry_tag"] = "AVOID_RISK"
+
+    df = df.sort_values(["v277_direct_entry_score", "score", "stock_id"], ascending=[False, False, True]).reset_index(drop=True)
+
+    # 避免過熱/風險直接進 IGNITION。
+    safe_df = df[df["v277_direct_entry_tag"].ne("AVOID_RISK")].copy()
+    if safe_df.empty:
+        return pd.DataFrame(), pd.DataFrame()
+
+    ignition = safe_df.head(3).copy()
+    evolution = safe_df.iloc[3:8].copy()
+
+    if not ignition.empty:
+        ignition["source"] = "IGNITION"
+        ignition["bucket"] = "IGNITION"
+        ignition["strategy_type"] = "IGNITION"
+        ignition["strategy_name"] = "v277 最大機會直通"
+        ignition["final_action"] = "BUY"
+        ignition["action"] = "BUY"
+        ignition["entry_type"] = "最大機會直通"
+        ignition["action_sub"] = "DIRECT_ENTRY"
+        ignition["score"] = ignition["v277_direct_entry_score"]
+        ignition["entry_score"] = ignition["v277_direct_entry_score"]
+        ignition["execution_flag"] = "TOP"
+        ignition["reason"] = ignition.apply(
+            lambda r: f"v277最大機會直通｜排名 {int(r.get('v277_direct_entry_rank', 0))}｜原訊號：{clean_text(r.get('reason', ''), '依策略判斷')}",
+            axis=1
+        )
+        ignition["system_note"] = "最大機會直通：可直接進場評估；建議仍分批、小倉、避免開高追價。"
+        ignition["operation_advice_zh"] = "可直接進場評估，但不要一次重倉；若開高過熱，等回測不破再進。"
+        ignition["ignition_hint_zh"] = "由 TEST / WATCH / BUY 候選池升級：具備當日最大機會特徵。"
+        ignition["fake_risk_tag"] = "PASS_V277"
+        ignition["fake_reason_zh"] = "已排除明顯過熱、出貨、誘多文字風險。"
+
+    if not evolution.empty:
+        evolution["source"] = "EVOLUTION"
+        evolution["bucket"] = "EVOLUTION"
+        evolution["strategy_type"] = "EVOLUTION"
+        evolution["strategy_name"] = "v277 策略進化候選"
+        evolution["final_action"] = "TEST"
+        evolution["action"] = "TEST"
+        evolution["entry_type"] = "準備升級"
+        evolution["action_sub"] = "EVOLUTION_UPGRADE"
+        evolution["score"] = evolution["v277_direct_entry_score"]
+        evolution["entry_score"] = evolution["v277_direct_entry_score"]
+        evolution["execution_flag"] = "TOP"
+        evolution["evolution_phase"] = "WATCH/TEST → DIRECT候選"
+        evolution["reason"] = evolution.apply(
+            lambda r: f"v277策略進化候選｜排名 {int(r.get('v277_direct_entry_rank', 0))}｜原訊號：{clean_text(r.get('reason', ''), '依策略判斷')}",
+            axis=1
+        )
+        evolution["system_note"] = "策略進化候選：接近最大機會，但仍需確認量價延續，不建議一次重倉。"
+
+    return ignition.reset_index(drop=True), evolution.reset_index(drop=True)
+
 def main():
     generated_at = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
     lookup = make_lookup()
@@ -1274,8 +1437,18 @@ def main():
         except Exception:
             pass
 
+    # v277 MAX OPPORTUNITY DIRECT LANE PATCH：
+    # 不改 final_action_plan 主表，只另外寫入 IGNITION / EVOLUTION 兩個最大機會直通區。
+    try:
+        ignition_v277_df, evolution_v277_df = build_v277_max_opportunity_lanes(out)
+    except Exception as e:
+        print("v277 max opportunity lane skipped:", e)
+        ignition_v277_df, evolution_v277_df = pd.DataFrame(), pd.DataFrame()
+
     write_csv_both(out, "final_action_plan.csv")
     write_csv_both(top_opportunity_df, "top_opportunities.csv")
+    write_csv_both(ignition_v277_df, "ignition_candidates.csv")
+    write_csv_both(evolution_v277_df, "strategy_evolution.csv")
 
     summary = {
         "generated_at": generated_at,
@@ -1306,6 +1479,8 @@ def main():
         ],
         "with_name_count": int((out["stock_name"].astype(str).str.strip() != "").sum()) if not out.empty else 0,
         "top_opportunity_count": int((out["top_opportunity"].astype(str).str.strip() != "").sum()) if "top_opportunity" in out.columns and not out.empty else 0,
+        "v277_ignition_count": int(len(ignition_v277_df)) if "ignition_v277_df" in locals() else 0,
+        "v277_evolution_count": int(len(evolution_v277_df)) if "evolution_v277_df" in locals() else 0,
         "chip_high_count": int((pd.to_numeric(out.get("chip_score", pd.Series(dtype=float)), errors="coerce").fillna(0) >= 80).sum()) if not out.empty and "chip_score" in out.columns else 0,
         "macro_regime": macro_guard.get("macro_regime", ""),
         "macro_label": macro_guard.get("macro_label", ""),
