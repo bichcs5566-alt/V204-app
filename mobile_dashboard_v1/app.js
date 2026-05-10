@@ -4697,3 +4697,155 @@ try { injectTurnStyleV266654(); } catch(e) {}
 document.addEventListener("DOMContentLoaded", function() {
   try { injectTurnStyleV266654(); } catch(e) {}
 });
+/* =========================================================
+   v273 FINAL UI SCORE PATCH / 連續分數前端顯示修補
+   目的：
+   - 不動 pipeline / strategy / 持倉 / watchlist / macro / workflow
+   - 只修最後 UI 顯示與排序分數
+   - 優先顯示 v273_continuous_score 等真實連續分數
+   - 避免 58 / 52 / 80 模板分數蓋住畫面
+   ========================================================= */
+const V273_FINAL_UI_SCORE_PATCH = "v273_final_ui_score_patch_only";
+
+function v273ScoreNumber(v) {
+  if (v === undefined || v === null) return null;
+  const s = String(v).trim().replace(/,/g, "").replace("分", "");
+  if (!s || ["--", "-", "nan", "NaN", "undefined", "null", "None"].includes(s)) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+function v273IsTemplateScore(n) {
+  if (!Number.isFinite(n)) return false;
+  return [50, 52, 58, 62, 80].some(x => Math.abs(n - x) < 0.0001);
+}
+
+function v273PickRealScore(row) {
+  row = row || {};
+
+  const preferredFields = [
+    "v273_continuous_score",
+    "continuous_score",
+    "final_continuous_score",
+    "real_score",
+    "true_score",
+    "raw_score",
+    "opportunity_score",
+    "total_score",
+    "entry_score",
+    "rank_score",
+    "composite_score",
+    "ai_score",
+    "alpha_score",
+    "core_score"
+  ];
+
+  for (const k of preferredFields) {
+    const n = v273ScoreNumber(row[k]);
+    if (n !== null && !v273IsTemplateScore(n)) return n;
+  }
+
+  // 如果只有 v273_continuous_score 但剛好等於 80，也尊重 v273 欄位。
+  for (const k of ["v273_continuous_score", "continuous_score", "final_continuous_score"]) {
+    const n = v273ScoreNumber(row[k]);
+    if (n !== null) return n;
+  }
+
+  const score = v273ScoreNumber(row.score);
+  if (score !== null) return score;
+
+  for (const k of preferredFields) {
+    const n = v273ScoreNumber(row[k]);
+    if (n !== null) return n;
+  }
+
+  return null;
+}
+
+function v273FormatScore(row) {
+  const n = v273PickRealScore(row);
+  if (n === null) return safeText?.(row?.score, "--") || "--";
+  return n.toFixed(1);
+}
+
+function v273NormalizeRowScore(row) {
+  const out = { ...(row || {}) };
+  const score = v273FormatScore(out);
+  out.score = score;
+  out.entry_score = score;
+  out.total_score = score;
+  out.opportunity_score = score;
+  out.rank_score = score;
+  return out;
+}
+
+function v273InjectScoreStyle() {
+  if (document.getElementById("v273-final-ui-score-style")) return;
+  const style = document.createElement("style");
+  style.id = "v273-final-ui-score-style";
+  style.textContent = `
+    .scan-score {
+      min-width: 64px !important;
+      width: auto !important;
+      max-width: none !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
+      white-space: nowrap !important;
+      font-variant-numeric: tabular-nums !important;
+    }
+    .scan-main-live {
+      grid-template-columns: auto minmax(72px, 1fr) minmax(58px, auto) auto minmax(72px, auto) auto minmax(58px, auto) !important;
+    }
+    @media (max-width: 430px) {
+      .scan-score {
+        min-width: 56px !important;
+        font-size: 0.92em !important;
+      }
+      .scan-main-live {
+        column-gap: 8px !important;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+// 覆寫 rowScore：排序直接吃真實連續分數。
+const __rowScoreBeforeV273 = typeof rowScoreV26630 === "function" ? rowScoreV26630 : null;
+rowScoreV26630 = function(row) {
+  const n = v273PickRealScore(row);
+  if (n !== null) return n;
+  return __rowScoreBeforeV273 ? __rowScoreBeforeV273(row) : 0;
+};
+
+// 覆寫 render：只把 row.score 換成真實分數，不動原本卡片 HTML / 展開 / 持倉 / workflow。
+const __renderScanRowBeforeV273 = typeof renderScanRow === "function" ? renderScanRow : null;
+renderScanRow = function(row, key) {
+  v273InjectScoreStyle();
+  const patchedRow = v273NormalizeRowScore(row);
+  return __renderScanRowBeforeV273 ? __renderScanRowBeforeV273(patchedRow, key) : "";
+};
+
+// 覆寫 splitRows：分組後再以真實分數排序，避免 TEST / WATCH 仍沿用模板順序。
+const __splitRowsBeforeV273 = typeof splitRows === "function" ? splitRows : null;
+splitRows = function(rows) {
+  const patched = (rows || []).map(v273NormalizeRowScore);
+  const groups = __splitRowsBeforeV273 ? __splitRowsBeforeV273(patched) : { main: [], test: [], watch: [], block: [] };
+  ["main", "test", "watch", "block"].forEach(k => {
+    groups[k] = (groups[k] || []).slice().sort((a, b) => {
+      const pa = ACTION_PRIORITY?.[normalizeAction(a.final_action || a.action)] || 99;
+      const pb = ACTION_PRIORITY?.[normalizeAction(b.final_action || b.action)] || 99;
+      if (pa !== pb) return pa - pb;
+      const sb = v273PickRealScore(b) ?? 0;
+      const sa = v273PickRealScore(a) ?? 0;
+      if (sb !== sa) return sb - sa;
+      return String(a.stock_id || "").localeCompare(String(b.stock_id || ""));
+    });
+  });
+  return groups;
+};
+
+try { v273InjectScoreStyle(); } catch(e) {}
+document.addEventListener("DOMContentLoaded", function() {
+  try { v273InjectScoreStyle(); } catch(e) {}
+});
+/* ===== end v273 FINAL UI SCORE PATCH ===== */
