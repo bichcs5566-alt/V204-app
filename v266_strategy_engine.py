@@ -1130,7 +1130,7 @@ def apply_v270_trend_dominant_core(d):
     d["v270_trend_reason"] = d["v270_trend_reason"].str.rstrip("｜")
 
     # v270 核心：趨勢排序主導，舊分數只保留 20% 作穩定參考
-    new_score = (v270_trend_core_score * 0.80 + old_score * 0.20).round(2)
+    new_score = (v270_trend_core_score * 0.95 + old_score * 0.05).round(2)
 
     if "total_score" in d.columns:
         d["total_score"] = new_score
