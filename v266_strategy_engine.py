@@ -940,6 +940,83 @@ def apply_fallback_hardblock_sync_v26677(d):
 
     return d
 
+
+
+def apply_trend_acceleration_rank_v26678(d):
+    """
+    v266.78 主升段排序強化
+    不封殺股票，只重排 TEST / WATCH 強弱順序。
+    """
+
+    d = d.copy()
+
+    close = _clip_series(d.get("close", 0))
+    high = _clip_series(d.get("high", close))
+    ma5 = _clip_series(d.get("ma5", close))
+    ma10 = _clip_series(d.get("ma10", close))
+    ma20 = _clip_series(d.get("ma20", close))
+
+    volume_ratio = _clip_series(d.get("volume_ratio", 1))
+    mom5 = _clip_series(d.get("mom5", 0))
+    mom20 = _clip_series(d.get("mom20", 0))
+
+    trend_stack = (
+        (ma5 > ma10).astype(int) * 30 +
+        (ma10 > ma20).astype(int) * 25 +
+        (close > ma5).astype(int) * 20
+    )
+
+    ma5_slope = (
+        ((ma5 / ma5.shift(3)) - 1)
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0)
+    )
+
+    acceleration_score = (
+        ma5_slope.clip(-0.1, 0.2) * 200
+    )
+
+    close_near_high = (
+        (close / high.replace(0, np.nan))
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0)
+    )
+
+    close_strength = (
+        (close_near_high >= 0.97).astype(int) * 20 +
+        (close_near_high >= 0.985).astype(int) * 15
+    )
+
+    stable_volume = (
+        ((volume_ratio >= 1.2) & (volume_ratio <= 3.5)).astype(int) * 20
+    )
+
+    continuation_score = (
+        (mom5 >= 0.05).astype(int) * 15 +
+        (mom20 >= 0.12).astype(int) * 20
+    )
+
+    avoid_blowoff = (
+        ((close > ma20 * 1.25) & (close < ma5)).astype(int) * -40
+    )
+
+    d["trend_acceleration_rank_v26678"] = (
+        trend_stack +
+        acceleration_score +
+        close_strength +
+        stable_volume +
+        continuation_score +
+        avoid_blowoff
+    )
+
+    if "total_score" in d.columns:
+        d["total_score"] = (
+            _clip_series(d["total_score"]) +
+            d["trend_acceleration_rank_v26678"] * 0.35
+        )
+
+    return d
+
 def main():
     df = load_feature()
     signal_date, latest = latest_valid(df)
@@ -1195,4 +1272,3 @@ def apply_distribution_hardblock_patch_v26675(d):
         )
 
     return d
-
