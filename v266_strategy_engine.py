@@ -1017,6 +1017,133 @@ def apply_trend_acceleration_rank_v26678(d):
 
     return d
 
+
+
+def apply_v270_trend_dominant_core(d):
+    """
+    v270 TREND DOMINANT CORE
+    只補核心排序邏輯，不改 pipeline / UI / 輸出檔名 / 原本資料結構。
+
+    目標：
+    - 趨勢加速主導
+    - 均線斜率主導
+    - 回檔品質主導
+    - 低波動轉強主導
+    - 降低爆量、短線噴出、過熱動能的排序權重
+    """
+    d = d.copy()
+
+    close = _clip_series(d.get("close", 0))
+    high = _clip_series(d.get("high", close))
+    low = _clip_series(d.get("low", close))
+    open_ = _clip_series(d.get("open", close))
+
+    ma5 = _clip_series(d.get("ma5", close))
+    ma10 = _clip_series(d.get("ma10", close))
+    ma20 = _clip_series(d.get("ma20", close))
+
+    volume_ratio = _clip_series(d.get("volume_ratio", 1))
+    mom5 = _clip_series(d.get("mom5", 0))
+    mom10 = _clip_series(d.get("mom10", 0))
+    mom20 = _clip_series(d.get("mom20", 0))
+
+    old_score = _clip_series(d.get("total_score", d.get("entry_score", d.get("score", 0))))
+
+    # 1) 趨勢排列：只看是否進入健康多頭結構
+    trend_stack_score = (
+        (ma5 > ma10).astype(int) * 22 +
+        (ma10 > ma20).astype(int) * 24 +
+        (close > ma20).astype(int) * 18 +
+        (close > ma10).astype(int) * 12
+    )
+
+    # 2) 均線斜率：ma5 / ma10 是否開始上彎
+    ma5_slope = ((ma5 / ma5.shift(3) - 1).replace([np.inf, -np.inf], np.nan).fillna(0))
+    ma10_slope = ((ma10 / ma10.shift(5) - 1).replace([np.inf, -np.inf], np.nan).fillna(0))
+
+    slope_score = (
+        ma5_slope.clip(-0.05, 0.12) * 260 +
+        ma10_slope.clip(-0.04, 0.10) * 220
+    )
+
+    # 3) 回檔品質：靠近 MA10/MA20 但沒破壞，優於追高
+    dist_ma10 = (((close - ma10) / ma10.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).fillna(9))
+    dist_ma20 = (((close - ma20) / ma20.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).fillna(9))
+
+    pullback_quality_score = (
+        (dist_ma10.between(-0.015, 0.060)).astype(int) * 22 +
+        (dist_ma20.between(0.000, 0.120)).astype(int) * 16 -
+        (dist_ma10 > 0.120).astype(int) * 22 -
+        (dist_ma20 > 0.220).astype(int) * 30
+    )
+
+    # 4) 低波動轉強：溫和放量 + 收斂後轉強
+    daily_range = (((high - low) / close.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).fillna(9))
+    close_position = (((close - low) / (high - low + 0.001)).replace([np.inf, -np.inf], np.nan).fillna(0))
+
+    controlled_breakout_score = (
+        (daily_range.between(0.018, 0.070)).astype(int) * 14 +
+        (close_position >= 0.62).astype(int) * 14 +
+        (volume_ratio.between(0.85, 2.30)).astype(int) * 18 -
+        (volume_ratio > 3.50).astype(int) * 34
+    )
+
+    # 5) 趨勢動能：保留早期主升段，降低過熱
+    momentum_quality_score = (
+        (mom5.between(0.015, 0.120)).astype(int) * 18 +
+        (mom10.between(0.020, 0.180)).astype(int) * 18 +
+        (mom20.between(0.040, 0.260)).astype(int) * 16 -
+        (mom5 > 0.180).astype(int) * 24 -
+        (mom20 > 0.360).astype(int) * 34
+    )
+
+    # 6) 出貨風險降權
+    weak_close_penalty = (
+        ((close < open_) & (close < ma5)).astype(int) * -30 +
+        ((close < ma10) & (mom20 > 0.18)).astype(int) * -38 +
+        (close_position < 0.35).astype(int) * -22
+    )
+
+    v270_trend_core_score = (
+        trend_stack_score +
+        slope_score +
+        pullback_quality_score +
+        controlled_breakout_score +
+        momentum_quality_score +
+        weak_close_penalty
+    ).round(2)
+
+    d["v270_trend_core_score"] = v270_trend_core_score
+
+    d["v270_trend_phase"] = "WATCH"
+    d.loc[v270_trend_core_score >= 105, "v270_trend_phase"] = "TREND_LEADER"
+    d.loc[v270_trend_core_score.between(82, 104.999), "v270_trend_phase"] = "TREND_READY"
+    d.loc[v270_trend_core_score.between(65, 81.999), "v270_trend_phase"] = "PULLBACK_READY"
+
+    d["v270_trend_reason"] = ""
+    d.loc[(ma5 > ma10) & (ma10 > ma20), "v270_trend_reason"] += "均線多頭｜"
+    d.loc[(ma5_slope > 0) & (ma10_slope > 0), "v270_trend_reason"] += "斜率上彎｜"
+    d.loc[dist_ma10.between(-0.015, 0.060), "v270_trend_reason"] += "靠近MA10｜"
+    d.loc[volume_ratio.between(0.85, 2.30), "v270_trend_reason"] += "溫和量能｜"
+    d.loc[close_position >= 0.62, "v270_trend_reason"] += "收盤偏強｜"
+    d.loc[(volume_ratio > 3.50) | (mom20 > 0.36), "v270_trend_reason"] += "過熱降權｜"
+    d["v270_trend_reason"] = d["v270_trend_reason"].str.rstrip("｜")
+
+    # v270 核心：趨勢排序主導，舊分數只保留 20% 作穩定參考
+    new_score = (v270_trend_core_score * 0.80 + old_score * 0.20).round(2)
+
+    if "total_score" in d.columns:
+        d["total_score"] = new_score
+    elif "entry_score" in d.columns:
+        d["entry_score"] = new_score
+    else:
+        d["v270_final_score"] = new_score
+
+    if "system_rank" in d.columns:
+        d["system_rank"] = new_score
+
+    return d
+
 def main():
     df = load_feature()
     signal_date, latest = latest_valid(df)
