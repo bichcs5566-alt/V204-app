@@ -1195,10 +1195,20 @@ def apply_v272_final_csv_output_override(df):
 
 
 
-def apply_v273_continuous_score_engine(df):
+
+
+
+def apply_v2731_final_export_continuous_score(df):
     """
-    v273 CONTINUOUS SCORE ENGINE - SAFE FIX
-    只處理 DataFrame；若傳入 Timestamp / 日期 / 非 DataFrame，直接原樣返回。
+    v273.1 FINAL EXPORT CONTINUOUS SCORE PATCH
+
+    只在最後輸出前處理 DataFrame：
+    - 產生 v273_continuous_score
+    - 用 v273_continuous_score 覆蓋 score / entry_score / total_score / system_rank
+    - 依 v273_continuous_score 重新排序
+    - 移除明顯高檔出貨/爆量長黑/弱收盤風險
+
+    不處理 Timestamp / date / scalar，避免影響 next_trade_date。
     """
     if df is None:
         return df
@@ -1225,11 +1235,22 @@ def apply_v273_continuous_score_engine(df):
     mom20 = _clip_series(s.get("mom20", 0))
 
     base_score = _clip_series(
-        s.get("v270_trend_core_score", s.get("total_score", s.get("entry_score", s.get("score", 50))))
+        s.get(
+            "v270_trend_core_score",
+            s.get("total_score", s.get("entry_score", s.get("score", 50)))
+        )
     )
 
-    ma5_slope = ((ma5 / ma5.shift(3) - 1).replace([np.inf, -np.inf], np.nan).fillna(0))
-    ma10_slope = ((ma10 / ma10.shift(5) - 1).replace([np.inf, -np.inf], np.nan).fillna(0))
+    ma5_slope = (
+        (ma5 / ma5.shift(3) - 1)
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0)
+    )
+    ma10_slope = (
+        (ma10 / ma10.shift(5) - 1)
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0)
+    )
 
     trend_strength = (
         (ma5 > ma10).astype(int) * 7.5 +
@@ -1243,8 +1264,16 @@ def apply_v273_continuous_score_engine(df):
         ma10_slope.clip(-0.03, 0.08) * 160
     )
 
-    dist_ma10 = (((close - ma10) / ma10.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).fillna(9))
-    dist_ma20 = (((close - ma20) / ma20.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).fillna(9))
+    dist_ma10 = (
+        ((close - ma10) / ma10.replace(0, np.nan))
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(9)
+    )
+    dist_ma20 = (
+        ((close - ma20) / ma20.replace(0, np.nan))
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(9)
+    )
 
     pullback_quality = (
         dist_ma10.between(-0.015, 0.055).astype(int) * 8.2 +
@@ -1253,8 +1282,16 @@ def apply_v273_continuous_score_engine(df):
         (dist_ma20 > 0.220).astype(int) * 12.5
     )
 
-    daily_range = (((high - low) / close.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).fillna(9))
-    close_position = (((close - low) / (high - low + 0.001)).replace([np.inf, -np.inf], np.nan).fillna(0))
+    daily_range = (
+        ((high - low) / close.replace(0, np.nan))
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(9)
+    )
+    close_position = (
+        ((close - low) / (high - low + 0.001))
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0)
+    )
 
     candle_quality = (
         daily_range.between(0.015, 0.070).astype(int) * 5.5 +
@@ -1283,7 +1320,11 @@ def apply_v273_continuous_score_engine(df):
     weak_pattern_penalty = (
         ((close < open_) & (close < ma5)).astype(int) * -12.0 +
         ((close < ma10) & (mom20 > 0.16)).astype(int) * -14.0 +
-        (((high / close.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).fillna(1)) > 1.08).astype(int) * -12.0
+        (
+            ((high / close.replace(0, np.nan))
+             .replace([np.inf, -np.inf], np.nan)
+             .fillna(1)) > 1.08
+        ).astype(int) * -12.0
     )
 
     continuous_score = (
@@ -1309,10 +1350,55 @@ def apply_v273_continuous_score_engine(df):
     s.loc[(volume_ratio > 3.50) | (mom20 > 0.34), "v273_score_reason"] += "過熱降權｜"
     s["v273_score_reason"] = s["v273_score_reason"].str.rstrip("｜")
 
-    for col in ["total_score", "entry_score", "score", "system_rank"]:
-        if col in s.columns:
-            s[col] = continuous_score
+    # 最終輸出前強制排除明顯高檔轉弱 / 出貨型態
+    upper_shadow_ratio = (
+        ((high - close) / (high - low + 0.001))
+        .replace([np.inf, -np.inf], np.nan)
+        .fillna(0)
+    )
 
+    hard_remove = (
+        ((close < open_) & (close < ma5) & (volume_ratio > 2.20)) |
+        ((close < ma10) & (mom20 > 0.18)) |
+        (((high / close.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).fillna(1)) > 1.08) |
+        (((close / ma20.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).fillna(1)) > 1.22) |
+        ((mom5 > 0.16) & (close < ma5)) |
+        ((upper_shadow_ratio > 0.62) & (volume_ratio > 1.8)) |
+        (close_position < 0.22)
+    )
+
+    for c in [
+        "distribution_hardblock_v26675",
+        "final_output_hardblock_v26676",
+        "fallback_hardblock_sync_v26677",
+        "hard_fake_breakout_v26671",
+        "fake_breakout_memory_v26672",
+    ]:
+        if c in s.columns:
+            hard_remove = hard_remove | (_clip_series(s[c]) >= 1)
+
+    before = len(s)
+    s = s.loc[~hard_remove].copy()
+    removed = before - len(s)
+
+    # 覆蓋前端既有分數欄位，不改欄位名稱
+    for col in ["score", "entry_score", "total_score", "system_rank"]:
+        if col in s.columns:
+            s[col] = s["v273_continuous_score"].round(2)
+
+    # 排序
+    sort_cols = ["v273_continuous_score"]
+    for c in ["liquidity_score", "mom20", "volume_ratio"]:
+        if c in s.columns:
+            sort_cols.append(c)
+
+    s = (
+        s.sort_values(sort_cols, ascending=[False] * len(sort_cols))
+         .drop_duplicates(subset=["symbol"] if "symbol" in s.columns else None)
+         .reset_index(drop=True)
+    )
+
+    print(f"[v273.1] final export continuous score removed {removed} rows, kept {len(s)}")
     return s
 
 def main():
