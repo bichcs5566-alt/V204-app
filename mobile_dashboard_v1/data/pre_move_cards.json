@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-10 01:14:30",
+  "generated_at": "2026-05-10 02:27:16",
   "count": 30,
   "cards": [
     {
@@ -73,6 +73,19 @@
       "label": "小倉試單",
       "score": 86.0,
       "close": 148.0,
+      "price_tier": "100-500",
+      "target_weight": 0.01,
+      "suggested_amount": 10000,
+      "setup_type": "主力佈局完成",
+      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可",
+      "color": "green"
+    },
+    {
+      "stock_id": "1268",
+      "action": "BUY",
+      "label": "小倉試單",
+      "score": 86.0,
+      "close": 158.5,
       "price_tier": "100-500",
       "target_weight": 0.01,
       "suggested_amount": 10000,
@@ -354,19 +367,6 @@
       "color": "green"
     },
     {
-      "stock_id": "4535",
-      "action": "BUY",
-      "label": "小倉試單",
-      "score": 86.0,
-      "close": 27.65,
-      "price_tier": "50以下",
-      "target_weight": 0.01,
-      "suggested_amount": 10000,
-      "setup_type": "主力佈局完成",
-      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可",
-      "color": "green"
-    },
-    {
       "stock_id": "4735",
       "action": "BUY",
       "label": "小倉試單",
@@ -380,11 +380,11 @@
       "color": "green"
     },
     {
-      "stock_id": "5523",
+      "stock_id": "5487",
       "action": "BUY",
       "label": "小倉試單",
       "score": 86.0,
-      "close": 30.35,
+      "close": 28.3,
       "price_tier": "50以下",
       "target_weight": 0.01,
       "suggested_amount": 10000,
