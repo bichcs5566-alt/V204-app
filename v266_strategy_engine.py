@@ -1130,7 +1130,7 @@ def apply_v270_trend_dominant_core(d):
     d["v270_trend_reason"] = d["v270_trend_reason"].str.rstrip("｜")
 
     # v270 核心：趨勢排序主導，舊分數只保留 20% 作穩定參考
-    new_score = (v270_trend_core_score * 0.95 + old_score * 0.05).round(2)
+    new_score = (v270_trend_core_score * 0.80 + old_score * 0.20).round(2)
 
     if "total_score" in d.columns:
         d["total_score"] = new_score
@@ -1143,6 +1143,55 @@ def apply_v270_trend_dominant_core(d):
         d["system_rank"] = new_score
 
     return d
+
+
+
+def apply_v272_final_csv_output_override(df):
+    """v272 FINAL CSV OUTPUT OVERRIDE：輸出 CSV 前接管排序與物理剔除。"""
+    if df is None or len(df) == 0:
+        return df
+    s = df.copy()
+    if "v270_trend_core_score" not in s.columns:
+        try:
+            s = apply_v270_trend_dominant_core(s)
+        except Exception as e:
+            print(f"[v272] skip v270 score build: {e}")
+    close = _clip_series(s.get("close", 0))
+    high = _clip_series(s.get("high", close))
+    low = _clip_series(s.get("low", close))
+    open_ = _clip_series(s.get("open", close))
+    ma5 = _clip_series(s.get("ma5", close))
+    ma10 = _clip_series(s.get("ma10", close))
+    ma20 = _clip_series(s.get("ma20", close))
+    volume_ratio = _clip_series(s.get("volume_ratio", 1))
+    mom5 = _clip_series(s.get("mom5", 0))
+    mom20 = _clip_series(s.get("mom20", 0))
+    close_position = (((close - low) / (high - low + 0.001)).replace([np.inf, -np.inf], np.nan).fillna(0))
+    upper_shadow_ratio = (((high - close) / (high - low + 0.001)).replace([np.inf, -np.inf], np.nan).fillna(0))
+    hard_remove = (
+        ((close < open_) & (close < ma5) & (volume_ratio > 2.20)) |
+        ((close < ma10) & (mom20 > 0.18)) |
+        (((high / close.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).fillna(1)) > 1.08) |
+        (((close / ma20.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).fillna(1)) > 1.22) |
+        ((mom5 > 0.16) & (close < ma5)) |
+        ((upper_shadow_ratio > 0.62) & (volume_ratio > 1.8)) |
+        (close_position < 0.22)
+    )
+    for c in ["distribution_hardblock_v26675", "final_output_hardblock_v26676", "fallback_hardblock_sync_v26677", "hard_fake_breakout_v26671", "fake_breakout_memory_v26672"]:
+        if c in s.columns:
+            hard_remove = hard_remove | (_clip_series(s[c]) >= 1)
+    before = len(s)
+    s = s.loc[~hard_remove].copy()
+    removed = before - len(s)
+    sort_col = "v270_trend_core_score" if "v270_trend_core_score" in s.columns else ("v272_final_rank_score" if "v272_final_rank_score" in s.columns else ("total_score" if "total_score" in s.columns else "entry_score"))
+    extra_cols = [c for c in ["liquidity_score", "mom20", "volume_ratio"] if c in s.columns]
+    sort_cols = [sort_col] + extra_cols
+    s = s.sort_values(sort_cols, ascending=[False]*len(sort_cols))
+    if "symbol" in s.columns:
+        s = s.drop_duplicates(subset=["symbol"])
+    s = s.reset_index(drop=True)
+    print(f"[v272] final csv override removed {removed} rows, sorted by {sort_col}, kept {len(s)}")
+    return s
 
 def main():
     df = load_feature()
