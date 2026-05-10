@@ -749,6 +749,118 @@ def apply_top_opportunities_v26614(out):
 
 
 
+
+# ===== v274 FINAL TRUE EXPORT PATCH / 最後輸出分數正規化 =====
+# 目的：
+# 1. 不動策略核心
+# 2. 不動 UI / pipeline / 持倉 / macro
+# 3. 只在 final_decision_engine 最後輸出前，把 raw score 正規化為 60~99
+# 4. TEST / WATCH / BUY 各自區間內依真實分數排序，避免 139 / 138 這種未正規化分數直接顯示
+def v274_pick_raw_score_col(df):
+    if df is None or df.empty:
+        return None
+
+    candidates = [
+        "v273_continuous_score",
+        "continuous_score",
+        "raw_score",
+        "score",
+        "total_score",
+        "entry_score",
+        "opportunity_score",
+    ]
+
+    for c in candidates:
+        if c in df.columns:
+            s = pd.to_numeric(df[c], errors="coerce")
+            if s.notna().sum() > 0:
+                return c
+
+    return None
+
+
+def v274_percentile_normalize_series(s, low=60.0, high=99.0):
+    s = pd.to_numeric(s, errors="coerce")
+    valid = s.notna()
+
+    out = pd.Series(index=s.index, dtype="float64")
+    out.loc[~valid] = low
+
+    if valid.sum() <= 1:
+        out.loc[valid] = high
+        return out.round(1)
+
+    pct = s.loc[valid].rank(method="average", pct=True)
+    out.loc[valid] = low + pct * (high - low)
+    return out.round(1)
+
+
+def apply_v274_final_true_export_patch(out):
+    if out is None or out.empty:
+        return out
+
+    out = out.copy()
+
+    score_col = v274_pick_raw_score_col(out)
+    if score_col is None:
+        return out
+
+    action_upper = out["final_action"].astype(str).str.upper() if "final_action" in out.columns else pd.Series("", index=out.index)
+    protected = action_upper.isin(["SELL", "REDUCE", "BLOCK"])
+
+    out["v274_raw_score"] = pd.to_numeric(out[score_col], errors="coerce").fillna(0)
+
+    # 只正規化可比較的進場/觀察類；出場/禁止保留原本風控排序，不影響持倉。
+    tradable_mask = ~protected
+
+    out["v274_normalized_score"] = pd.to_numeric(out.get("score", 0), errors="coerce").fillna(0)
+
+    if tradable_mask.any():
+        # 各 action 分區正規化，避免 TEST / WATCH 混在一起互相扭曲。
+        for action_name in ["BUY", "TEST", "WATCH"]:
+            m = tradable_mask & action_upper.eq(action_name)
+            if m.any():
+                out.loc[m, "v274_normalized_score"] = v274_percentile_normalize_series(
+                    out.loc[m, "v274_raw_score"],
+                    low=60.0,
+                    high=99.0
+                )
+
+        # 若有其他非出場 action，也補一次全體正規化。
+        other = tradable_mask & ~action_upper.isin(["BUY", "TEST", "WATCH"])
+        if other.any():
+            out.loc[other, "v274_normalized_score"] = v274_percentile_normalize_series(
+                out.loc[other, "v274_raw_score"],
+                low=60.0,
+                high=99.0
+            )
+
+    # UI 主要吃 score，因此最後輸出前強制覆蓋。
+    out["score"] = pd.to_numeric(out["v274_normalized_score"], errors="coerce").fillna(0).round(1)
+
+    # 相容其他舊欄位：有就同步，不新增太多策略欄。
+    for c in ["entry_score", "total_score", "rank_score"]:
+        if c in out.columns:
+            out[c] = out["score"]
+
+    # opportunity_score 保留欄位，但重新對齊最後 UI 排序的可讀分數。
+    if "opportunity_score" in out.columns:
+        out["opportunity_score"] = out["score"]
+
+    if "priority" in out.columns:
+        out["_priority_num_v274"] = pd.to_numeric(out["priority"], errors="coerce").fillna(9)
+    else:
+        out["_priority_num_v274"] = 9
+
+    out["_score_num_v274"] = pd.to_numeric(out["score"], errors="coerce").fillna(0)
+    out = out.sort_values(
+        ["_priority_num_v274", "_score_num_v274", "stock_id"],
+        ascending=[True, False, True]
+    ).drop(columns=["_priority_num_v274", "_score_num_v274"], errors="ignore")
+
+    return out.reset_index(drop=True)
+
+
 def main():
     generated_at = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
     lookup = make_lookup()
@@ -1022,6 +1134,18 @@ def main():
             lambda r: _date_text(r.get("trade_date", "")) or next_tw_trading_day(r.get("signal_date", "")),
             axis=1
         )
+
+    # v274 FINAL TRUE EXPORT PATCH：
+    # 只在最後輸出前正規化分數，不改前面策略判斷。
+    out = apply_v274_final_true_export_patch(out)
+
+    # TOP 機會表同步使用 v274 最終分數，避免 dashboard 與主表排序不同步。
+    if not out.empty:
+        try:
+            _, top_opportunity_df = apply_top_opportunities_v26614(out)
+            top_opportunity_df = apply_v274_final_true_export_patch(top_opportunity_df)
+        except Exception:
+            pass
 
     write_csv_both(out, "final_action_plan.csv")
     write_csv_both(top_opportunity_df, "top_opportunities.csv")
