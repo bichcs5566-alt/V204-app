@@ -58,7 +58,6 @@ def next_trade_date(signal_date):
         d += pd.Timedelta(days=2)
     elif d.weekday() == 6:
         d += pd.Timedelta(days=1)
-    d = apply_v273_continuous_score_engine(d)
     return d
 
 
@@ -1198,11 +1197,14 @@ def apply_v272_final_csv_output_override(df):
 
 def apply_v273_continuous_score_engine(df):
     """
-    v273 CONTINUOUS SCORE ENGINE
-    只補：把 52 / 58 / 80 模板分數轉成連續分數。
-    不動 pipeline / UI / 輸出檔名 / 持倉邏輯。
+    v273 CONTINUOUS SCORE ENGINE - SAFE FIX
+    只處理 DataFrame；若傳入 Timestamp / 日期 / 非 DataFrame，直接原樣返回。
     """
-    if df is None or len(df) == 0:
+    if df is None:
+        return df
+    if not hasattr(df, "columns") or not hasattr(df, "copy"):
+        return df
+    if len(df) == 0:
         return df
 
     s = df.copy()
