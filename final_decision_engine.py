@@ -861,6 +861,130 @@ def apply_v274_final_true_export_patch(out):
     return out.reset_index(drop=True)
 
 
+
+# ===== v275 EDGE EXPANSION PATCH / 分數差距拉開補丁 =====
+# 目的：
+# 1. 不動策略核心、不動 UI、不動 pipeline、不動持倉、不動 macro。
+# 2. 只在 v274 最後正規化之後，把過度集中在 98/97 的分數拉開。
+# 3. 用 raw score + 成交/流動性 + 原始排名做穩定排序，避免大量同分。
+# 4. 每個 action 分區內獨立處理，TEST 不會跟 WATCH 互相干擾。
+def v275_num_series(df, col, default=0.0):
+    if df is None or col not in df.columns:
+        return pd.Series(default, index=df.index, dtype='float64')
+    return pd.to_numeric(df[col], errors='coerce').fillna(default)
+
+
+def v275_pick_edge_base(out):
+    candidates = [
+        'v274_raw_score',
+        'v273_continuous_score',
+        'continuous_score',
+        'raw_score',
+        'total_score',
+        'entry_score',
+        'opportunity_score',
+        'score',
+    ]
+    for c in candidates:
+        if c in out.columns:
+            s = pd.to_numeric(out[c], errors='coerce')
+            if s.notna().sum() > 0:
+                return c
+    return None
+
+
+def apply_v275_edge_expansion_patch(out):
+    if out is None or out.empty:
+        return out
+
+    out = out.copy()
+    base_col = v275_pick_edge_base(out)
+    if base_col is None:
+        return out
+
+    action_upper = out['final_action'].astype(str).str.upper() if 'final_action' in out.columns else pd.Series('', index=out.index)
+    protected = action_upper.isin(['SELL', 'REDUCE', 'BLOCK'])
+
+    base = pd.to_numeric(out[base_col], errors='coerce').fillna(0)
+    liq = v275_num_series(out, 'liquidity_score', 0)
+    volume = v275_num_series(out, 'volume', 0)
+    turnover = v275_num_series(out, 'turnover', 0)
+    opp_rank = v275_num_series(out, 'opportunity_rank', 9999)
+
+    # secondary 只用來打散同分，不改策略方向。
+    liq_pct = liq.rank(method='average', pct=True).fillna(0)
+    vol_pct = volume.rank(method='average', pct=True).fillna(0)
+    turn_pct = turnover.rank(method='average', pct=True).fillna(0)
+    rank_bonus = (1 / (opp_rank.replace(0, np.nan))).replace([np.inf, -np.inf], np.nan).fillna(0)
+    rank_pct = rank_bonus.rank(method='average', pct=True).fillna(0)
+
+    edge_base = (
+        base.astype(float) * 1000000
+        + liq_pct * 1000
+        + vol_pct * 500
+        + turn_pct * 300
+        + rank_pct * 200
+    )
+
+    out['v275_edge_base'] = edge_base
+    out['v275_edge_score'] = pd.to_numeric(out.get('score', 0), errors='coerce').fillna(0)
+
+    # 分區處理：每個 action 區內拉成 70~99，並用 ordinal rank 避免同分。
+    for action_name in ['BUY', 'TEST', 'WATCH']:
+        m = (~protected) & action_upper.eq(action_name)
+        n = int(m.sum())
+        if n <= 0:
+            continue
+
+        vals = edge_base.loc[m]
+        order = vals.rank(method='first', ascending=True, pct=True)
+
+        # 非線性：前段拉開，後段保留距離。
+        expanded = np.power(order, 0.72)
+
+        # 不同 action 給不同可讀區間，但不改 action 本身。
+        if action_name == 'BUY':
+            low, high = 72.0, 99.5
+        elif action_name == 'TEST':
+            low, high = 68.0, 99.0
+        else:  # WATCH
+            low, high = 62.0, 98.5
+
+        scores = low + expanded * (high - low)
+        out.loc[m, 'v275_edge_score'] = pd.Series(scores, index=out.loc[m].index).round(1)
+
+    # 其他非出場 action，保守套用全體排序。
+    other = (~protected) & (~action_upper.isin(['BUY', 'TEST', 'WATCH']))
+    if other.any():
+        vals = edge_base.loc[other]
+        order = vals.rank(method='first', ascending=True, pct=True)
+        scores = 60.0 + np.power(order, 0.72) * 38.0
+        out.loc[other, 'v275_edge_score'] = pd.Series(scores, index=out.loc[other].index).round(1)
+
+    # 最後輸出 score 給 UI。
+    out['score'] = pd.to_numeric(out['v275_edge_score'], errors='coerce').fillna(0).round(1)
+
+    for c in ['entry_score', 'total_score', 'rank_score', 'opportunity_score']:
+        if c in out.columns:
+            out[c] = out['score']
+
+    # action priority 保持原本邏輯，只在同 action 內依 v275 score 排序。
+    if 'priority' in out.columns:
+        out['_priority_num_v275'] = pd.to_numeric(out['priority'], errors='coerce').fillna(9)
+    else:
+        out['_priority_num_v275'] = 9
+
+    out['_score_num_v275'] = pd.to_numeric(out['score'], errors='coerce').fillna(0)
+    out['_edge_num_v275'] = pd.to_numeric(out['v275_edge_base'], errors='coerce').fillna(0)
+
+    out = out.sort_values(
+        ['_priority_num_v275', '_score_num_v275', '_edge_num_v275', 'stock_id'],
+        ascending=[True, False, False, True]
+    ).drop(columns=['_priority_num_v275', '_score_num_v275', '_edge_num_v275'], errors='ignore')
+
+    return out.reset_index(drop=True)
+
+
 def main():
     generated_at = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
     lookup = make_lookup()
@@ -1138,12 +1262,15 @@ def main():
     # v274 FINAL TRUE EXPORT PATCH：
     # 只在最後輸出前正規化分數，不改前面策略判斷。
     out = apply_v274_final_true_export_patch(out)
+    # v275 EDGE EXPANSION PATCH：只拉開最後可讀分數差距，不改策略判斷。
+    out = apply_v275_edge_expansion_patch(out)
 
     # TOP 機會表同步使用 v274 最終分數，避免 dashboard 與主表排序不同步。
     if not out.empty:
         try:
             _, top_opportunity_df = apply_top_opportunities_v26614(out)
             top_opportunity_df = apply_v274_final_true_export_patch(top_opportunity_df)
+            top_opportunity_df = apply_v275_edge_expansion_patch(top_opportunity_df)
         except Exception:
             pass
 
