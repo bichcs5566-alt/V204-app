@@ -62,6 +62,56 @@ def next_trade_date(signal_date):
 
 
 def write_both(df, name):
+    # v273 FINAL EXPORT PATCH
+    # 只接管最後輸出層，不動策略核心
+    try:
+        export_targets = {
+            "trade_plan.csv",
+            "candidates.csv",
+            "core_candidates.csv",
+            "alpha_candidates.csv",
+            "selection_debug.csv",
+        }
+
+        if (
+            name in export_targets
+            and df is not None
+            and hasattr(df, "columns")
+            and len(df) > 0
+        ):
+            patched = apply_v2731_final_export_continuous_score(df.copy())
+
+            if (
+                patched is not None
+                and hasattr(patched, "columns")
+                and "v273_continuous_score" in patched.columns
+            ):
+                patched["score"] = patched["v273_continuous_score"]
+
+                if "entry_score" in patched.columns:
+                    patched["entry_score"] = patched["v273_continuous_score"]
+
+                if "total_score" in patched.columns:
+                    patched["total_score"] = patched["v273_continuous_score"]
+
+                if "system_rank" in patched.columns:
+                    patched["system_rank"] = patched["v273_continuous_score"]
+
+                patched = patched.sort_values(
+                    by="v273_continuous_score",
+                    ascending=False
+                ).reset_index(drop=True)
+
+                df = patched
+
+                print(
+                    f"[v273 FINAL EXPORT PATCH] {name} "
+                    f"continuous score applied"
+                )
+
+    except Exception as e:
+        print(f"[v273 FINAL EXPORT PATCH ERROR] {e}")
+
     df.to_csv(ROOT / name, index=False, encoding="utf-8-sig")
     df.to_csv(DATA_DIR / name, index=False, encoding="utf-8-sig")
 
