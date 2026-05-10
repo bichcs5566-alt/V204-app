@@ -37,6 +37,107 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 INITIAL_CAPITAL = 1_000_000
 
 
+
+
+# ===== v276 MAX OPPORTUNITY PATCH =====
+# 只做最大機會加權補丁
+# 不重寫策略、不改 pipeline、不改 UI、不改欄位 schema
+
+def _v276_num(series, default=0.0):
+    return pd.to_numeric(series, errors="coerce").fillna(default)
+
+def apply_v276_max_opportunity_patch(df):
+    if df is None or len(df) == 0:
+        return df
+
+    df = df.copy()
+
+    score_col = None
+    for c in [
+        "v273_continuous_score",
+        "score",
+        "total_score",
+        "entry_score",
+    ]:
+        if c in df.columns:
+            score_col = c
+            break
+
+    if score_col is None:
+        return df
+
+    base_score = _v276_num(df[score_col], 0)
+
+    close = _v276_num(df["close"], 0) if "close" in df.columns else pd.Series(0, index=df.index)
+    ma5 = _v276_num(df["ma5"], 0) if "ma5" in df.columns else pd.Series(0, index=df.index)
+    ma10 = _v276_num(df["ma10"], 0) if "ma10" in df.columns else pd.Series(0, index=df.index)
+    ma20 = _v276_num(df["ma20"], 0) if "ma20" in df.columns else pd.Series(0, index=df.index)
+
+    volume = _v276_num(df["volume"], 0) if "volume" in df.columns else pd.Series(0, index=df.index)
+
+    trend_start = (
+        (close > ma5) &
+        (ma5 >= ma10) &
+        (ma10 >= ma20) &
+        (ma20 > 0)
+    )
+
+    near_breakout = (
+        (ma20 > 0) &
+        ((close / ma20 - 1) <= 0.18)
+    )
+
+    volume_expand = volume >= volume.quantile(0.65)
+
+    early_turn = trend_start & near_breakout & volume_expand
+
+    strong_leader = (
+        trend_start &
+        (volume >= volume.quantile(0.85))
+    )
+
+    overheat = (
+        (ma20 > 0) &
+        ((close / ma20 - 1) > 0.30)
+    )
+
+    boost = pd.Series(1.0, index=df.index)
+
+    boost = np.where(early_turn, boost * 1.08, boost)
+    boost = np.where(strong_leader, boost * 1.12, boost)
+    boost = np.where(overheat, boost * 0.75, boost)
+
+    boost = pd.Series(boost, index=df.index).clip(0.75, 1.25)
+
+    df["v276_opportunity_boost"] = boost.round(3)
+
+    enhanced = base_score * boost
+
+    pct = enhanced.rank(method="first", pct=True)
+    final_score = (65 + pct * 34).clip(0, 99.9).round(1)
+
+    df["score"] = final_score
+
+    for c in ["entry_score", "total_score", "rank_score"]:
+        if c in df.columns:
+            df[c] = final_score
+
+    df["v276_opportunity_tag"] = np.where(
+        overheat,
+        "AVOID_OVERHEAT",
+        np.where(
+            strong_leader,
+            "S_LEADER",
+            np.where(
+                early_turn,
+                "A_EARLY_TURN",
+                "B_NORMAL"
+            )
+        )
+    )
+
+    return df
+
 def price_tier(p):
     p = float(p)
     if p < 50:
