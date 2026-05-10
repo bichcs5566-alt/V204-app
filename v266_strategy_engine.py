@@ -61,6 +61,73 @@ def next_trade_date(signal_date):
     return d
 
 
+# =========================================================
+# v274 SCORE NORMALIZATION PATCH
+# 只修最後輸出分數尺度：
+# - 保留 v273_continuous_score 原始真實分數
+# - 另外輸出 v274_normalized_score
+# - 前端顯示用 score / entry_score / total_score / system_rank 改為 60~99
+# - 不動策略核心 / pipeline / UI / 持倉 / macro
+# =========================================================
+
+def apply_v274_score_normalization(df):
+    if df is None:
+        return df
+    if not hasattr(df, "columns") or not hasattr(df, "copy"):
+        return df
+    if len(df) == 0:
+        return df
+
+    s = df.copy()
+
+    # 只處理股票清單型輸出，避免 meta/debug 純統計列被誤改。
+    if "stock_id" not in s.columns and "symbol" not in s.columns:
+        return s
+
+    score_col = None
+    for c in [
+        "v273_continuous_score",
+        "v270_trend_core_score",
+        "total_score",
+        "entry_score",
+        "score",
+    ]:
+        if c in s.columns:
+            score_col = c
+            break
+
+    if score_col is None:
+        return s
+
+    raw = pd.to_numeric(s[score_col], errors="coerce")
+    if raw.notna().sum() == 0:
+        return s
+
+    # 保留原始真實分數，方便後續檢查，不拿掉。
+    if "v273_raw_score_before_normalize" not in s.columns:
+        s["v273_raw_score_before_normalize"] = raw.round(2)
+
+    # 百分位正規化：避免 139 / 138 這種累加分數直接顯示。
+    # top 接近 99，尾端仍保留 60 以上，讓 UI 可讀。
+    rank_pct = raw.rank(method="average", pct=True, ascending=True)
+    normalized = (60 + rank_pct * 39).clip(60, 99).round(1)
+
+    s["v274_normalized_score"] = normalized
+
+    for col in ["score", "entry_score", "total_score", "system_rank"]:
+        if col in s.columns:
+            s[col] = normalized
+
+    sort_cols = ["v274_normalized_score"]
+    for c in ["v273_continuous_score", "liquidity_score", "mom20", "volume_ratio"]:
+        if c in s.columns:
+            sort_cols.append(c)
+
+    s = s.sort_values(sort_cols, ascending=[False] * len(sort_cols)).reset_index(drop=True)
+
+    return s
+
+
 def write_both(df, name):
     # v273 FINAL EXPORT PATCH
     # 只接管最後輸出層，不動策略核心
@@ -102,11 +169,15 @@ def write_both(df, name):
                     ascending=False
                 ).reset_index(drop=True)
 
+                # v274：只在最後輸出前把顯示分數壓回 60~99，
+                # 不改 v273_continuous_score 原始真實分數。
+                patched = apply_v274_score_normalization(patched)
+
                 df = patched
 
                 print(
-                    f"[v273 FINAL EXPORT PATCH] {name} "
-                    f"continuous score applied"
+                    f"[v273 FINAL EXPORT PATCH + v274 NORMALIZE] {name} "
+                    f"continuous score normalized"
                 )
 
     except Exception as e:
