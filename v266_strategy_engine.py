@@ -58,6 +58,7 @@ def next_trade_date(signal_date):
         d += pd.Timedelta(days=2)
     elif d.weekday() == 6:
         d += pd.Timedelta(days=1)
+    d = apply_v273_continuous_score_engine(d)
     return d
 
 
@@ -1191,6 +1192,125 @@ def apply_v272_final_csv_output_override(df):
         s = s.drop_duplicates(subset=["symbol"])
     s = s.reset_index(drop=True)
     print(f"[v272] final csv override removed {removed} rows, sorted by {sort_col}, kept {len(s)}")
+    return s
+
+
+
+def apply_v273_continuous_score_engine(df):
+    """
+    v273 CONTINUOUS SCORE ENGINE
+    只補：把 52 / 58 / 80 模板分數轉成連續分數。
+    不動 pipeline / UI / 輸出檔名 / 持倉邏輯。
+    """
+    if df is None or len(df) == 0:
+        return df
+
+    s = df.copy()
+
+    close = _clip_series(s.get("close", 0))
+    high = _clip_series(s.get("high", close))
+    low = _clip_series(s.get("low", close))
+    open_ = _clip_series(s.get("open", close))
+
+    ma5 = _clip_series(s.get("ma5", close))
+    ma10 = _clip_series(s.get("ma10", close))
+    ma20 = _clip_series(s.get("ma20", close))
+
+    volume_ratio = _clip_series(s.get("volume_ratio", 1))
+    liquidity_score = _clip_series(s.get("liquidity_score", 50))
+    mom5 = _clip_series(s.get("mom5", 0))
+    mom10 = _clip_series(s.get("mom10", 0))
+    mom20 = _clip_series(s.get("mom20", 0))
+
+    base_score = _clip_series(
+        s.get("v270_trend_core_score", s.get("total_score", s.get("entry_score", s.get("score", 50))))
+    )
+
+    ma5_slope = ((ma5 / ma5.shift(3) - 1).replace([np.inf, -np.inf], np.nan).fillna(0))
+    ma10_slope = ((ma10 / ma10.shift(5) - 1).replace([np.inf, -np.inf], np.nan).fillna(0))
+
+    trend_strength = (
+        (ma5 > ma10).astype(int) * 7.5 +
+        (ma10 > ma20).astype(int) * 8.5 +
+        (close > ma5).astype(int) * 5.5 +
+        (close > ma20).astype(int) * 4.5
+    )
+
+    slope_strength = (
+        ma5_slope.clip(-0.04, 0.10) * 180 +
+        ma10_slope.clip(-0.03, 0.08) * 160
+    )
+
+    dist_ma10 = (((close - ma10) / ma10.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).fillna(9))
+    dist_ma20 = (((close - ma20) / ma20.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).fillna(9))
+
+    pullback_quality = (
+        dist_ma10.between(-0.015, 0.055).astype(int) * 8.2 +
+        dist_ma20.between(0.000, 0.120).astype(int) * 5.8 -
+        (dist_ma10 > 0.115).astype(int) * 8.5 -
+        (dist_ma20 > 0.220).astype(int) * 12.5
+    )
+
+    daily_range = (((high - low) / close.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).fillna(9))
+    close_position = (((close - low) / (high - low + 0.001)).replace([np.inf, -np.inf], np.nan).fillna(0))
+
+    candle_quality = (
+        daily_range.between(0.015, 0.070).astype(int) * 5.5 +
+        (close_position >= 0.62).astype(int) * 6.8 +
+        (close_position >= 0.78).astype(int) * 4.2 -
+        (close_position < 0.30).astype(int) * 10.0
+    )
+
+    volume_quality = (
+        volume_ratio.between(0.85, 1.80).astype(int) * 7.0 +
+        volume_ratio.between(1.80, 2.60).astype(int) * 4.0 -
+        (volume_ratio > 3.50).astype(int) * 15.0 -
+        (volume_ratio < 0.45).astype(int) * 5.0
+    )
+
+    momentum_quality = (
+        mom5.between(0.010, 0.090).astype(int) * 6.5 +
+        mom10.between(0.015, 0.140).astype(int) * 6.5 +
+        mom20.between(0.030, 0.240).astype(int) * 5.8 -
+        (mom5 > 0.160).astype(int) * 8.5 -
+        (mom20 > 0.340).astype(int) * 12.0
+    )
+
+    liquidity_quality = (liquidity_score.clip(0, 100) / 100.0) * 8.0
+
+    weak_pattern_penalty = (
+        ((close < open_) & (close < ma5)).astype(int) * -12.0 +
+        ((close < ma10) & (mom20 > 0.16)).astype(int) * -14.0 +
+        (((high / close.replace(0, np.nan)).replace([np.inf, -np.inf], np.nan).fillna(1)) > 1.08).astype(int) * -12.0
+    )
+
+    continuous_score = (
+        base_score * 0.30 +
+        trend_strength +
+        slope_strength +
+        pullback_quality +
+        candle_quality +
+        volume_quality +
+        momentum_quality +
+        liquidity_quality +
+        weak_pattern_penalty
+    ).clip(0, 100).round(2)
+
+    s["v273_continuous_score"] = continuous_score
+    s["v273_score_reason"] = ""
+
+    s.loc[(ma5 > ma10) & (ma10 > ma20), "v273_score_reason"] += "趨勢多頭｜"
+    s.loc[(ma5_slope > 0) & (ma10_slope > 0), "v273_score_reason"] += "均線上彎｜"
+    s.loc[dist_ma10.between(-0.015, 0.055), "v273_score_reason"] += "貼近MA10｜"
+    s.loc[volume_ratio.between(0.85, 2.60), "v273_score_reason"] += "量能健康｜"
+    s.loc[close_position >= 0.62, "v273_score_reason"] += "收盤偏強｜"
+    s.loc[(volume_ratio > 3.50) | (mom20 > 0.34), "v273_score_reason"] += "過熱降權｜"
+    s["v273_score_reason"] = s["v273_score_reason"].str.rstrip("｜")
+
+    for col in ["total_score", "entry_score", "score", "system_rank"]:
+        if col in s.columns:
+            s[col] = continuous_score
+
     return s
 
 def main():
