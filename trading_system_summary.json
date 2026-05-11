@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-11 02:59:51",
+  "generated_at": "2026-05-11 04:52:30",
   "source": "final_trading_system_allocator",
   "capital_assumption": 1000000,
   "regime": "RANGE",
@@ -24,20 +24,20 @@
       "watch": 5
     }
   },
-  "total_rows": 587,
+  "total_rows": 531,
   "top_rows": 5,
-  "watch_rows": 12,
-  "block_rows": 570,
+  "watch_rows": 9,
+  "block_rows": 517,
   "allowed_rows": 5,
   "entry_counts": {
-    "WAIT": 572,
-    "BREAK": 12,
-    "PULLBACK": 3
+    "WAIT": 509,
+    "BREAK": 17,
+    "PULLBACK": 5
   },
   "bucket_counts": {
-    "PRE": 518,
+    "PRE": 465,
     "ALPHA": 60,
-    "CORE": 9
+    "CORE": 6
   },
   "allowed_amount": 80000,
   "rule": "市場狀態 + 策略分流 + TOP標註 + entry timing + 總曝險。只做 allowed=True。"
