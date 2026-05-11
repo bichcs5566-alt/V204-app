@@ -31,6 +31,17 @@ ROOT = Path(".")
 DATA_DIR = ROOT / "mobile_dashboard_v1" / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+# v302.2：所有 final decision 會被 loc 指派的欄位統一鎖 object。
+V302_MUTABLE_COLS = [
+    "final_action", "entry_type", "execution_flag", "allowed",
+    "suggested_amount", "target_weight", "priority",
+    "system_note", "reason", "source", "bucket", "strategy_type",
+    "top_opportunity", "section_top_opportunity",
+    "opportunity_rank", "section_opportunity_rank",
+    "stock_name", "liquidity_level", "liquidity_tag",
+]
+
+
 OUTPUT_COLUMNS = [
     "final_action", "signal_date", "trade_date", "stock_id", "stock_name", "source", "bucket", "strategy_type", "score", "entry_type",
     "execution_flag", "allowed", "close", "suggested_amount", "target_weight",
@@ -450,28 +461,22 @@ def apply_market_guard(out):
         test_mask = (~protected) & final_upper.eq("TEST")
 
         out.loc[buy_mask, "final_action"] = "TEST"
-        out.loc[buy_mask, "priority"] = 3
+        out.loc[buy_mask, "priority"] = "3"
         out.loc[test_mask, "final_action"] = "WATCH"
-        out.loc[test_mask, "priority"] = 8
-        out.loc[test_mask, "suggested_amount"] = 0
-        out.loc[test_mask, "target_weight"] = 0
+        out.loc[test_mask, "priority"] = "8"
+        out.loc[test_mask, "suggested_amount"] = "0"
+        out.loc[test_mask, "target_weight"] = "0"
 
         macro_note = f"{macro_label}：{macro_policy}"
         affected = buy_mask | test_mask
-        out.loc[affected, "system_note"] = (
-            out.loc[affected, "system_note"].astype(str).replace(["nan", "None", "null"], "")
-            .apply(lambda x: (x + "｜" if x else "") + macro_note)
-        )
+        out.loc[affected, "system_note"] = _v302_append_note(out.loc[affected, "system_note"], macro_note)
 
     elif macro_regime == "NEUTRAL":
         # 總經中性：ALPHA BUY 降 TEST；CORE 小倉可以保留
         alpha_buy = (~protected) & final_upper.eq("BUY") & strategy_upper.str.contains("ALPHA", na=False)
         out.loc[alpha_buy, "final_action"] = "TEST"
-        out.loc[alpha_buy, "priority"] = 3
-        out.loc[alpha_buy, "system_note"] = (
-            out.loc[alpha_buy, "system_note"].astype(str).replace(["nan", "None", "null"], "")
-            .apply(lambda x: (x + "｜" if x else "") + f"{macro_label}：ALPHA 降級 TEST")
-        )
+        out.loc[alpha_buy, "priority"] = "3"
+        out.loc[alpha_buy, "system_note"] = _v302_append_note(out.loc[alpha_buy, "system_note"], f"{macro_label}：ALPHA 降級 TEST")
 
     # 重新抓一次 final_action，避免前面已改動
     final_upper = out["final_action"].astype(str).str.upper()
@@ -480,22 +485,16 @@ def apply_market_guard(out):
     if market_mode == "MID":
         mask = (~protected) & final_upper.eq("BUY")
         out.loc[mask, "final_action"] = "TEST"
-        out.loc[mask, "priority"] = 3
-        out.loc[mask, "system_note"] = (
-            out.loc[mask, "system_note"].astype(str).replace(["nan", "None", "null"], "")
-            .apply(lambda x: (x + "｜" if x else "") + market_label)
-        )
+        out.loc[mask, "priority"] = "3"
+        out.loc[mask, "system_note"] = _v302_append_note(out.loc[mask, "system_note"], market_label)
 
     elif market_mode == "WEAK":
         mask = (~protected) & final_upper.isin(["BUY", "TEST"])
         out.loc[mask, "final_action"] = "WATCH"
-        out.loc[mask, "priority"] = 8
-        out.loc[mask, "suggested_amount"] = 0
-        out.loc[mask, "target_weight"] = 0
-        out.loc[mask, "system_note"] = (
-            out.loc[mask, "system_note"].astype(str).replace(["nan", "None", "null"], "")
-            .apply(lambda x: (x + "｜" if x else "") + market_label)
-        )
+        out.loc[mask, "priority"] = "8"
+        out.loc[mask, "suggested_amount"] = "0"
+        out.loc[mask, "target_weight"] = "0"
+        out.loc[mask, "system_note"] = _v302_append_note(out.loc[mask, "system_note"], market_label)
 
     return out, guard
 
@@ -660,22 +659,16 @@ def apply_macro_strength_v26614(out):
     if regime in ["RISK_OFF", "BEAR", "BAD"]:
         mask = (~protected) & out["final_action"].astype(str).str.upper().isin(["BUY", "TEST"])
         out.loc[mask, "final_action"] = "WATCH"
-        out.loc[mask, "priority"] = 8
-        out.loc[mask, "suggested_amount"] = 0
-        out.loc[mask, "target_weight"] = 0
-        out.loc[mask, "system_note"] = (
-            out.loc[mask, "system_note"].astype(str).replace(["nan", "None", "null"], "")
-            .apply(lambda x: (x + "｜" if x else "") + f"{label}：總經偏保守，降級觀察")
-        )
+        out.loc[mask, "priority"] = "8"
+        out.loc[mask, "suggested_amount"] = "0"
+        out.loc[mask, "target_weight"] = "0"
+        out.loc[mask, "system_note"] = _v302_append_note(out.loc[mask, "system_note"], f"{label}：總經偏保守，降級觀察")
 
     elif regime in ["NEUTRAL", "MID"]:
         mask = (~protected) & out["final_action"].astype(str).str.upper().eq("BUY")
         out.loc[mask, "final_action"] = "TEST"
-        out.loc[mask, "priority"] = 3
-        out.loc[mask, "system_note"] = (
-            out.loc[mask, "system_note"].astype(str).replace(["nan", "None", "null"], "")
-            .apply(lambda x: (x + "｜" if x else "") + f"{label}：BUY 降級 TEST，控制追高")
-        )
+        out.loc[mask, "priority"] = "3"
+        out.loc[mask, "system_note"] = _v302_append_note(out.loc[mask, "system_note"], f"{label}：BUY 降級 TEST，控制追高")
 
     else:
         # RISK_ON：保留進攻
@@ -933,10 +926,10 @@ def apply_final_main_force_gate_v302(out):
     if target.any():
         # v302.1：所有文字欄位都已強制 object，這裡只塞純字串，避免 pandas string dtype TypeError。
         out.loc[target, "final_action"] = "BLOCK"
-        out.loc[target, "priority"] = 9
-        out.loc[target, "allowed"] = False
-        out.loc[target, "suggested_amount"] = 0
-        out.loc[target, "target_weight"] = 0
+        out.loc[target, "priority"] = "9"
+        out.loc[target, "allowed"] = "False"
+        out.loc[target, "suggested_amount"] = "0"
+        out.loc[target, "target_weight"] = "0"
         out.loc[target, "execution_flag"] = "BLOCK"
         out.loc[target, "entry_type"] = "未通過主力Gate"
         out.loc[target, "system_note"] = _v302_append_note(
@@ -1214,6 +1207,10 @@ def main():
     if not out.empty:
         out["stock_id"] = out["stock_id"].apply(normalize_stock_id)
 
+        # v302.2：在 market_guard / macro / top / hard_gate 之前先鎖定所有會被改的欄位型別。
+        # 這是本次修正的核心，避免 pandas string dtype 在後面 loc 指派 0/False/BLOCK 時爆炸。
+        out = _v302_force_object_cols(out, V302_MUTABLE_COLS)
+
         # v266.32D：最後保險，日期永遠優先由 trade_plan.csv 回填。
         if "signal_date" not in out.columns:
             out["signal_date"] = fallback_signal_date
@@ -1270,13 +1267,19 @@ def main():
 
         out["stock_name"] = out.apply(fill_stock_name, axis=1)
 
+        # v302.2：名稱補完後再次鎖欄位，因為前面的 apply/merge 可能讓 dtype 回到 string。
+        out = _v302_force_object_cols(out, V302_MUTABLE_COLS)
+
         out, market_guard = apply_market_guard(out)
+        out = _v302_force_object_cols(out, V302_MUTABLE_COLS)
 
         # v266.15：總經攻擊強度
         out, macro_guard = apply_macro_strength_v26614(out)
+        out = _v302_force_object_cols(out, V302_MUTABLE_COLS)
 
         # v302：最後決策主力硬門檻。這一步在 TOP5 前執行，避免舊 opportunity_score 把垃圾重新標回 TEST/WATCH。
         out = apply_final_main_force_gate_v302(out)
+        out = _v302_force_object_cols(out, V302_MUTABLE_COLS)
 
         # TOP5 機會評測只允許在通過 v302 主力 Gate 後的 BUY/TEST/WATCH 內產生。
         out, top_opportunity_df = apply_top_opportunities_v26614(out)
@@ -1297,13 +1300,8 @@ def main():
 
     out = add_chip_columns(out)
 
-    # v302.1：籌碼欄位合併後再次鎖定文字欄位型別，避免後續輸出/摘要前 dtype 衝突。
-    out = _v302_force_object_cols(out, [
-        "final_action", "entry_type", "execution_flag", "system_note", "reason",
-        "source", "bucket", "strategy_type", "top_opportunity",
-        "section_top_opportunity", "opportunity_rank", "section_opportunity_rank",
-        "stock_name", "liquidity_level", "liquidity_tag",
-    ])
+    # v302.2：籌碼欄位合併後再次鎖定文字欄位型別，避免後續輸出/摘要前 dtype 衝突。
+    out = _v302_force_object_cols(out, V302_MUTABLE_COLS)
 
     # v266.32D：籌碼欄位合併後再次保險，避免日期欄位遺失或被覆蓋。
     if not out.empty:
@@ -1324,7 +1322,7 @@ def main():
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v302_1_main_force_hard_gate_dtype_safe",
+        "source": "final_decision_engine_v302_2_main_force_hard_gate_dtype_safe",
         "signal_date": str(out["signal_date"].iloc[0]) if not out.empty and "signal_date" in out.columns else "",
         "trade_date": str(out["trade_date"].iloc[0]) if not out.empty and "trade_date" in out.columns else "",
         "rows": int(len(out)),
