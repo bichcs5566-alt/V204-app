@@ -1175,244 +1175,209 @@ def apply_v284_accumulation_stage_ranking_patch(d, mode="ALPHA"):
     return d
 
 
-# ===== v285 MAIN FORCE TOP5 RESTORE PATCH / 主力發動 TOP5 修復補丁 =====
-# 修補目標：
-# 1. 不重寫策略、不改 pipeline / UI / 持倉 / macro / workflow
-# 2. 回退 v284 造成的「建倉初期誤抓低攻擊性防禦股」
-# 3. 保留流動性 Gate：500 張內/低流動性不參考
-# 4. TOP5 才是主力發動前核心，不把整份 TEST/WATCH 都改成 TOP 模型
-# 5. 主力判斷順序：流動性合格 → 籌碼開始集中 → 剛轉強 → 量能剛啟動 → 未過熱
+# ===== v300 ALPHA RESTORE + TOP5 MAIN FORCE LABEL PATCH =====
+# 核心原則：
+# 1. 回到原始 ALPHA / CORE，不讓 v282 / v284 接管整份 TEST/WATCH 排序。
+# 2. 流動性仍是門票：低量、低成交金額不標 TOP。
+# 3. TOP5 是獨立標示層，只標示「主力發動前」候選，不改 action、不改 entry_score。
+# 4. 主力發動前 = 流動性合格 + 籌碼開始集中 + 剛轉強 + 量能剛啟動 + 未過熱。
+# 5. 不動 pipeline / UI / 持倉 / macro / workflow / 原輸出檔名。
 
-def _v285_num(d, col, default=0.0):
+def _v300_num(d, col, default=0.0):
     if col in d.columns:
         return pd.to_numeric(d[col], errors="coerce").fillna(default)
     return pd.Series(default, index=d.index, dtype="float64")
 
 
-def _v285_rank01(s):
+def _v300_rank01(s):
     s = pd.to_numeric(s, errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0)
     if len(s) <= 1 or float(s.max()) == float(s.min()):
         return pd.Series(0.5, index=s.index, dtype="float64")
     return s.rank(method="first", pct=True).fillna(0.5)
 
 
-def _v285_band(x, low, sweet_low, sweet_high, high):
+def _v300_band(x, low, sweet_low, sweet_high, high):
     x = pd.to_numeric(x, errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0)
     left = ((x - low) / max(sweet_low - low, 1e-9)).clip(0, 1)
     right = ((high - x) / max(high - sweet_high, 1e-9)).clip(0, 1)
     return np.minimum(left, right)
 
 
-def apply_v285_main_force_model(d, mode="ALPHA"):
+def apply_v300_alpha_restore_top5_labels(d, mode="ALPHA", limit=5):
     if d is None or len(d) == 0:
         return d
 
     d = d.copy()
     mode = str(mode or "ALPHA").upper()
 
-    close = _v285_num(d, "close", 0)
-    high = _v285_num(d, "high", close)
-    open_ = _v285_num(d, "open", close)
-    volume = _v285_num(d, "volume", 0)
-    turnover = _v285_num(d, "turnover", close * volume * 1000)
-    vol_ratio = _v285_num(d, "volume_ratio", 1)
-    vol20 = _v285_num(d, "vol20", 0)
+    close = _v300_num(d, "close", 0)
+    high = _v300_num(d, "high", close)
+    open_ = _v300_num(d, "open", close)
+    volume = _v300_num(d, "volume", 0)
+    turnover = _v300_num(d, "turnover", close * volume * 1000)
+    vol_ratio = _v300_num(d, "volume_ratio", 1)
+    vol20 = _v300_num(d, "vol20", 0)
 
-    mom3 = _v285_num(d, "mom3", 0)
-    mom5 = _v285_num(d, "mom5", 0)
-    mom10 = _v285_num(d, "mom10", 0)
-    mom20 = _v285_num(d, "mom20", 0)
-    mom60 = _v285_num(d, "mom60", 0)
+    mom5 = _v300_num(d, "mom5", 0)
+    mom10 = _v300_num(d, "mom10", 0)
+    mom20 = _v300_num(d, "mom20", 0)
 
-    ma5 = _v285_num(d, "ma5", close)
-    ma10 = _v285_num(d, "ma10", close)
-    ma20 = _v285_num(d, "ma20", close)
-    ma60 = _v285_num(d, "ma60", close)
-    ma20_slope = _v285_num(d, "ma20_slope", 0)
+    ma5 = _v300_num(d, "ma5", close)
+    ma10 = _v300_num(d, "ma10", close)
+    ma20 = _v300_num(d, "ma20", close)
+    ma60 = _v300_num(d, "ma60", close)
+    ma20_slope = _v300_num(d, "ma20_slope", 0)
 
-    high20 = _v285_num(d, "high_20", close)
-    high60 = _v285_num(d, "high_60", close)
-    low20 = _v285_num(d, "low_20", close)
-    ma_converge = _v285_num(d, "ma_converge_pct", 999)
+    high20 = _v300_num(d, "high_20", close)
+    high60 = _v300_num(d, "high_60", close)
+    ma_converge = _v300_num(d, "ma_converge_pct", 999)
 
-    obv_mom5 = _v285_num(d, "obv_mom5", 0)
-    obv_up5 = _v285_num(d, "obv_up_count_5", 0)
-    low_hold5 = _v285_num(d, "low_non_down_count_5", 0)
+    obv_mom5 = _v300_num(d, "obv_mom5", 0)
+    obv_up5 = _v300_num(d, "obv_up_count_5", 0)
+    low_hold5 = _v300_num(d, "low_non_down_count_5", 0)
 
     liq_level = d["liquidity_level"].astype(str).str.upper() if "liquidity_level" in d.columns else pd.Series("", index=d.index)
+    action = d["action"].astype(str).str.upper() if "action" in d.columns else pd.Series("", index=d.index)
 
-    # 1) 流動性是門票，不是主因。低於 1000 張或成交金額不足直接排除主力模型。
-    base_liq_gate = (
-        (volume >= 1000) |
-        (turnover >= 30_000_000) |
+    # 門票：流動性合格。500張內不碰；實戰 TOP 需要更高一點的可成交性。
+    liquidity_gate = (
+        (volume >= 1500) |
+        (turnover >= 50_000_000) |
         liq_level.isin(["MEDIUM", "HIGH"])
     )
-    alpha_liq_gate = (
-        (volume >= 2000) |
-        (turnover >= 60_000_000) |
-        liq_level.eq("HIGH")
-    )
-    liquidity_gate = alpha_liq_gate if mode == "ALPHA" else base_liq_gate
 
-    # 2) 攻擊性 Gate：避免食品、水泥、防禦股、低波動權值只因高流動性被拉進 TOP。
-    # 主力發動至少要有價格/均線/動能其中的攻擊跡象。
+    # 攻擊性門票：避免防禦股、牛皮股、純穩定大成交量。
     ma20_gap = ((close / ma20) - 1).replace([np.inf, -np.inf], 0).fillna(0)
-    near_high20 = (high20 > 0) & (close >= high20 * 0.965)
-    near_high60 = (high60 > 0) & (close >= high60 * 0.88)
+    high20_gap = ((close / high20) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+    high60_gap = ((close / high60) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+
     attack_gate = (
         liquidity_gate &
+        action.isin(["BUY", "TEST", "WATCH"]) &
         (close >= 15) &
-        (close > ma20 * 0.99) &
+        (close > ma20 * 0.985) &
         (ma5 >= ma10 * 0.985) &
-        (mom5 > -0.01) &
+        (ma10 >= ma20 * 0.965) &
+        (ma20 >= ma60 * 0.940) &
+        (mom5 > -0.015) &
         (mom10 > 0.000) &
-        (mom20 > 0.015) &
-        (mom20 < 0.38) &
-        near_high60 &
+        (mom20 > 0.020) &
+        (mom20 < 0.420) &
+        (high60 > 0) &
+        (close >= high60 * 0.860) &
         (vol_ratio >= 0.95) &
         (vol_ratio <= 4.80) &
-        (ma20_gap <= 0.22)
+        (ma20_gap <= 0.240)
     )
 
-    # 3) 主力開始集中代理：OBV、低點墊高、溫和放量。
-    chip_start = (
-        _v285_rank01(obv_mom5) * 28 +
-        _v285_rank01(obv_up5) * 20 +
-        _v285_rank01(low_hold5) * 18 +
-        _v285_band(vol_ratio, 0.95, 1.08, 2.60, 4.20) * 20 +
-        (ma_converge.clip(0, 0.25).rsub(0.25) / 0.25).clip(0, 1) * 14
+    # 籌碼開始集中代理：OBV / 低點墊高 / 溫和量增 / 均線收斂。
+    chip_start_score = (
+        _v300_rank01(obv_mom5) * 30 +
+        _v300_rank01(obv_up5) * 20 +
+        _v300_rank01(low_hold5) * 18 +
+        _v300_band(vol_ratio, 0.95, 1.10, 2.70, 4.20) * 18 +
+        (ma_converge.clip(0, 0.28).rsub(0.28) / 0.28).clip(0, 1) * 14
     )
 
-    # 4) 剛轉強：不是低位階，不是已過熱，而是主力準備發動。
-    turn_start = (
-        _v285_band(mom5, -0.01, 0.006, 0.080, 0.160) * 18 +
-        _v285_band(mom10, 0.000, 0.012, 0.120, 0.240) * 20 +
-        _v285_band(mom20, 0.015, 0.040, 0.220, 0.380) * 18 +
+    # 剛轉強：不是過熱，不是死魚。
+    turn_start_score = (
+        _v300_band(mom5, -0.010, 0.006, 0.085, 0.170) * 20 +
+        _v300_band(mom10, 0.000, 0.012, 0.135, 0.260) * 20 +
+        _v300_band(mom20, 0.020, 0.045, 0.240, 0.420) * 18 +
         (close > ma5).astype(int) * 8 +
         (close > ma10).astype(int) * 8 +
         (close > ma20).astype(int) * 10 +
         (ma20_slope >= 0).astype(int) * 8
     )
 
-    # 5) 量能剛啟動：不是爆量追高。
-    volume_start = (
-        _v285_band(vol_ratio, 0.95, 1.12, 2.80, 4.50) * 28 +
-        ((vol20 > 0) & (volume >= vol20 * 1.05) & (volume <= vol20 * 4.2)).astype(int) * 12
+    # 量能剛啟動：溫和放量，不追爆量。
+    volume_start_score = (
+        _v300_band(vol_ratio, 0.95, 1.12, 2.80, 4.80) * 30 +
+        ((vol20 > 0) & (volume >= vol20 * 1.05) & (volume <= vol20 * 4.50)).astype(int) * 10
     )
 
-    # 6) 突破初期：接近整理突破，不是離均線太遠。
-    high20_gap = ((close / high20) - 1).replace([np.inf, -np.inf], 0).fillna(0)
-    high60_gap = ((close / high60) - 1).replace([np.inf, -np.inf], 0).fillna(0)
-    breakout_early = (
-        _v285_band(high20_gap, -0.055, -0.020, 0.020, 0.075) * 22 +
-        _v285_band(high60_gap, -0.140, -0.060, 0.050, 0.140) * 12 +
-        _v285_band(ma20_gap, -0.020, 0.010, 0.120, 0.220) * 18 +
-        near_high20.astype(int) * 8
+    # 突破初期：接近突破，但不是離均線太遠。
+    breakout_early_score = (
+        _v300_band(high20_gap, -0.060, -0.020, 0.025, 0.085) * 24 +
+        _v300_band(high60_gap, -0.150, -0.060, 0.060, 0.160) * 14 +
+        _v300_band(ma20_gap, -0.020, 0.010, 0.130, 0.240) * 18
     )
 
-    # 7) 過熱/出貨扣分。
+    # 過熱 / 出貨風險扣分。
     upper_shadow = ((high - close) / high).replace([np.inf, -np.inf], 0).fillna(0)
     intraday_weak = ((close - open_) / open_).replace([np.inf, -np.inf], 0).fillna(0)
 
-    overheat = (
-        (mom5 > 0.16).astype(int) * 24 +
-        (mom20 > 0.38).astype(int) * 30 +
-        (ma20_gap > 0.22).astype(int) * 28 +
-        (vol_ratio > 5.00).astype(int) * 26 +
-        ((upper_shadow > 0.055) & (vol_ratio > 1.60)).astype(int) * 26 +
-        ((intraday_weak < -0.025) & (vol_ratio > 1.80)).astype(int) * 24
+    overheat_penalty = (
+        (mom5 > 0.170).astype(int) * 24 +
+        (mom20 > 0.420).astype(int) * 32 +
+        (ma20_gap > 0.240).astype(int) * 30 +
+        (vol_ratio > 5.20).astype(int) * 28 +
+        ((upper_shadow > 0.060) & (vol_ratio > 1.60)).astype(int) * 26 +
+        ((intraday_weak < -0.030) & (vol_ratio > 1.80)).astype(int) * 24
     )
 
-    # 主力發動分：這是 TOP5 使用，不覆蓋整份 TEST/WATCH。
     raw = (
-        chip_start * 0.35 +
-        turn_start * 0.25 +
-        volume_start * 0.20 +
-        breakout_early * 0.15 -
-        overheat * 0.35
+        chip_start_score * 0.35 +
+        turn_start_score * 0.25 +
+        volume_start_score * 0.20 +
+        breakout_early_score * 0.15 -
+        overheat_penalty * 0.35
     )
 
     raw = pd.Series(raw, index=d.index).replace([np.inf, -np.inf], np.nan).fillna(-999)
     raw.loc[~attack_gate] = -999
 
-    valid = raw > -900
     score = pd.Series(0.0, index=d.index, dtype="float64")
+    valid = raw > -900
     if valid.any():
         score.loc[valid] = (60 + raw.loc[valid].rank(method="first", pct=True) * 39).clip(0, 99.9)
 
-    d["v285_liquidity_gate"] = liquidity_gate.astype(int)
-    d["v285_attack_gate"] = attack_gate.astype(int)
-    d["v285_chip_start_score"] = pd.Series(chip_start, index=d.index).round(2)
-    d["v285_turn_start_score"] = pd.Series(turn_start, index=d.index).round(2)
-    d["v285_volume_start_score"] = pd.Series(volume_start, index=d.index).round(2)
-    d["v285_breakout_early_score"] = pd.Series(breakout_early, index=d.index).round(2)
-    d["v285_overheat_penalty"] = pd.Series(overheat, index=d.index).round(2)
-    d["v285_main_force_raw"] = raw.round(3)
-    d["v285_main_force_score"] = score.round(1)
-    d["v285_main_force_tag"] = np.where(
-        ~liquidity_gate,
-        "BLOCK_LOW_LIQUIDITY",
-        np.where(
-            ~attack_gate,
-            "NO_ATTACK_STRUCTURE",
-            np.where(
-                (score >= 92),
-                "S_MAIN_FORCE_PRELAUNCH",
-                np.where(score >= 82, "A_MAIN_FORCE_WARMING", "B_CANDIDATE")
-            )
-        )
-    )
+    d["v300_liquidity_gate"] = liquidity_gate.astype(int)
+    d["v300_attack_gate"] = attack_gate.astype(int)
+    d["v300_chip_start_score"] = pd.Series(chip_start_score, index=d.index).round(2)
+    d["v300_turn_start_score"] = pd.Series(turn_start_score, index=d.index).round(2)
+    d["v300_volume_start_score"] = pd.Series(volume_start_score, index=d.index).round(2)
+    d["v300_breakout_early_score"] = pd.Series(breakout_early_score, index=d.index).round(2)
+    d["v300_overheat_penalty"] = pd.Series(overheat_penalty, index=d.index).round(2)
+    d["v300_main_force_raw"] = raw.round(3)
+    d["v300_main_force_score"] = score.round(1)
 
-    if "note" in d.columns:
-        d["note"] = d["note"].astype(str) + "｜v285主力發動模型"
-    else:
-        d["note"] = "v285主力發動模型"
+    d["top_opportunity"] = ""
+    d["section_top_opportunity"] = ""
+    d["opportunity_rank"] = ""
+    d["section_opportunity_rank"] = ""
+    d["top_reason"] = ""
 
-    return d
+    # TOP5 是標示層：不改 action、不改 entry_score、不改排序核心。
+    groups = [
+        ("TOP5_TEST", action.isin(["BUY", "TEST"]) & valid & (score >= 82)),
+        ("TOP5_WATCH", action.eq("WATCH") & valid & (score >= 78)),
+    ]
 
-
-def apply_v285_top5_labels(df, limit=5):
-    """
-    TOP5 是獨立標示層，不改整份 TEST/WATCH。
-    只有符合主力發動前條件的前 5 名才標示 TOP。
-    """
-    if df is None or len(df) == 0:
-        return df
-
-    df = df.copy()
-    if "v285_main_force_score" not in df.columns:
-        df = apply_v285_main_force_model(df)
-
-    df["top_opportunity"] = ""
-    df["section_top_opportunity"] = ""
-    df["top_rank"] = ""
-    df["top_reason"] = ""
-
-    action = df["action"].astype(str).str.upper() if "action" in df.columns else pd.Series("", index=df.index)
-    score = pd.to_numeric(df["v285_main_force_score"], errors="coerce").fillna(0)
-    gate = pd.to_numeric(df.get("v285_attack_gate", 0), errors="coerce").fillna(0).eq(1)
-
-    # TEST / BUY 是可操作主池；WATCH 是醞釀池。兩者分開標，避免整份清單混在一起。
-    for group_name, mask in [
-        ("TOP5_TEST", action.isin(["BUY", "TEST"]) & gate & (score >= 82)),
-        ("TOP5_WATCH", action.eq("WATCH") & gate & (score >= 78)),
-    ]:
-        idx = df.loc[mask].sort_values(
-            ["v285_main_force_score", "v285_chip_start_score", "v285_volume_start_score", "stock_id"],
+    for label, mask in groups:
+        idx = d.loc[mask].sort_values(
+            ["v300_main_force_score", "v300_chip_start_score", "v300_turn_start_score", "stock_id"],
             ascending=[False, False, False, True]
         ).head(limit).index
 
         if len(idx) == 0:
             continue
 
-        df.loc[idx, "top_opportunity"] = "🔥TOP"
-        df.loc[idx, "section_top_opportunity"] = group_name
-        df.loc[idx, "top_rank"] = range(1, len(idx) + 1)
-        df.loc[idx, "top_reason"] = (
-            "流動性合格｜籌碼開始集中｜剛轉強｜量能剛啟動｜未過熱"
+        ranks = list(range(1, len(idx) + 1))
+        d.loc[idx, "top_opportunity"] = "🔥TOP"
+        d.loc[idx, "section_top_opportunity"] = label
+        d.loc[idx, "opportunity_rank"] = ranks
+        d.loc[idx, "section_opportunity_rank"] = ranks
+        d.loc[idx, "top_reason"] = "主力發動前：流動性合格｜籌碼開始集中｜剛轉強｜量能剛啟動｜未過熱"
+
+    if "note" in d.columns:
+        d["note"] = np.where(
+            d["top_opportunity"].astype(str).ne(""),
+            d["note"].astype(str) + "｜v300主力TOP",
+            d["note"].astype(str)
         )
 
-    return df
+    return d
 
 def core_engine(x):
     """
@@ -1450,11 +1415,8 @@ def core_engine(x):
     d["entry_score"] -= (d["mom20"] > 0.40).astype(int) * 10
     d["entry_score"] -= (d["volume_ratio"] > 5.5).astype(int) * 8
 
-    # v282：流動性先合格，接著看籌碼開始集中；低流動性直接排除。
-    d = apply_v282_liquidity_chip_opportunity_patch(d, mode="CORE")
-    # v285：只建立主力發動分與 TOP5 標示基礎；不再用 v284 改整份 TEST/WATCH。
-    d = apply_v285_main_force_model(d, mode="CORE")
-
+    # v300：回到原始 CORE 分數；v282/v284 不再接管整份 TEST/WATCH。
+    # TOP5 主力發動標示會在 set_action 後獨立套用。
     core_liq_ok = (d["volume"] >= 1000) & d["liquidity_level"].isin(["MEDIUM", "HIGH"])
     low_liq = d["liquidity_level"].eq("LOW")
 
@@ -1464,7 +1426,6 @@ def core_engine(x):
         & (d["close"] > d["ma20"])
         & (d["close"] >= 20)
         & core_liq_ok
-        & d["v285_attack_gate"].eq(1)
     )
 
     # 低流動性即使分數夠，也只允許試單，避免你資金被卡住。
@@ -1474,19 +1435,20 @@ def core_engine(x):
         & (d["mom10"] > 0.01)
         & (d["close"] > d["ma20"] * 0.97)
         & (d["volume"] >= 1000)
-        & d["v285_attack_gate"].eq(1)
     )
 
     watch = (d["entry_score"] >= 34) & ~buy & ~test
 
     set_action(d, buy, test, watch, "早期卡位", "低量試單", "早期觀察")
+    # v300：只標示 TOP5，不改 action / entry_score。
+    d = apply_v300_alpha_restore_top5_labels(d, mode="CORE", limit=5)
 
     d["note"] = (
         "CORE早期卡位｜剛轉強｜靠近MA20｜量能回溫｜"
         + d["liquidity_tag"].astype(str)
     )
 
-    return d.sort_values(["entry_score", "v285_main_force_score", "v282_opportunity_score", "mom20", "mom10"], ascending=False) if "v285_main_force_score" in d.columns else d.sort_values(["v282_opportunity_score", "entry_score", "mom20", "mom10"], ascending=False) if "v282_opportunity_score" in d.columns else d.sort_values(["entry_score", "mom20", "mom10"], ascending=False)
+    return d.sort_values(["entry_score", "v300_main_force_score", "mom20", "mom10"], ascending=False) if "v300_main_force_score" in d.columns else d.sort_values(["entry_score", "mom20", "mom10"], ascending=False)
 
 
 def alpha_engine(x):
@@ -1531,11 +1493,8 @@ def alpha_engine(x):
     d["entry_score"] -= (d["volume_ratio"] > 8.0).astype(int) * 10
     d["entry_score"] -= (~mid_or_high).astype(int) * 30
 
-    # v282：流動性是 Gate，不是 alpha；流動性合格後，籌碼開始集中才優先。
-    d = apply_v282_liquidity_chip_opportunity_patch(d, mode="ALPHA")
-    # v285：只建立主力發動分與 TOP5 標示基礎；不再用 v284 改整份 TEST/WATCH。
-    d = apply_v285_main_force_model(d, mode="ALPHA")
-
+    # v300：回到原始 ALPHA 分數；v282/v284 不再接管整份 TEST/WATCH。
+    # TOP5 主力發動標示會在 set_action 後獨立套用。
     buy = (
         (d["entry_score"] >= 70)
         & high_liq
@@ -1543,7 +1502,6 @@ def alpha_engine(x):
         & (d["ma20"] > d["ma60"])
         & (d["mom10"] > 0.03)
         & (d["volume_ratio"] >= 1.25)
-        & d["v285_attack_gate"].eq(1)
     )
 
     test = (
@@ -1552,19 +1510,20 @@ def alpha_engine(x):
         & mid_or_high
         & (d["close"] > d["ma20"])
         & (d["mom5"] > 0)
-        & d["v285_attack_gate"].eq(1)
     )
 
     watch = (d["entry_score"] >= 46) & ~buy & ~test
 
     set_action(d, buy, test, watch, "高流動性強勢買進", "強勢試單", "高流動性觀察")
+    # v300：只標示 TOP5，不改 action / entry_score。
+    d = apply_v300_alpha_restore_top5_labels(d, mode="ALPHA", limit=5)
 
     d["note"] = (
         "ALPHA高流動性強勢延續｜成交量/成交金額優先｜突破/趨勢確認｜"
         + d["liquidity_tag"].astype(str)
     )
 
-    return d.sort_values(["entry_score", "v285_main_force_score", "v282_opportunity_score", "liquidity_score", "mom20"], ascending=False) if "v285_main_force_score" in d.columns else d.sort_values(["v282_opportunity_score", "entry_score", "liquidity_score", "mom20"], ascending=False) if "v282_opportunity_score" in d.columns else d.sort_values(["entry_score", "liquidity_score", "mom20"], ascending=False)
+    return d.sort_values(["entry_score", "v300_main_force_score", "liquidity_score", "mom20"], ascending=False) if "v300_main_force_score" in d.columns else d.sort_values(["entry_score", "liquidity_score", "mom20"], ascending=False)
 
 
 def build_trade_plan(core, alpha, regime, signal_date):
@@ -1607,10 +1566,16 @@ def build_trade_plan(core, alpha, regime, signal_date):
 
     # ALPHA 優先，CORE 次之；同層比分數與流動性。
     s["priority"] = np.where(s["strategy_type"] == "ALPHA", 1, 2)
+    if "top_opportunity" in s.columns:
+        s["_top_sort"] = s["top_opportunity"].astype(str).ne("").astype(int)
+    else:
+        s["_top_sort"] = 0
+
     s = (
-        s.sort_values(["priority", "entry_score", "liquidity_score"], ascending=[True, False, False])
+        s.sort_values(["priority", "_top_sort", "entry_score", "liquidity_score"], ascending=[True, False, False, False])
         .drop_duplicates("stock_id")
         .head(36)
+        .drop(columns=["_top_sort"], errors="ignore")
     )
 
     trade_date = next_trade_date(signal_date)
@@ -1664,6 +1629,19 @@ def build_trade_plan(core, alpha, regime, signal_date):
             "reason": r.get("reason", r["note"]),
             "system_note": r.get("system_note", r["note"]),
             "note": r["note"],
+            "top_opportunity": r.get("top_opportunity", ""),
+            "section_top_opportunity": r.get("section_top_opportunity", ""),
+            "opportunity_rank": r.get("opportunity_rank", ""),
+            "section_opportunity_rank": r.get("section_opportunity_rank", ""),
+            "top_reason": r.get("top_reason", ""),
+            "v300_main_force_score": r.get("v300_main_force_score", ""),
+            "v300_main_force_raw": r.get("v300_main_force_raw", ""),
+            "v300_attack_gate": r.get("v300_attack_gate", ""),
+            "v300_chip_start_score": r.get("v300_chip_start_score", ""),
+            "v300_turn_start_score": r.get("v300_turn_start_score", ""),
+            "v300_volume_start_score": r.get("v300_volume_start_score", ""),
+            "v300_breakout_early_score": r.get("v300_breakout_early_score", ""),
+            "v300_overheat_penalty": r.get("v300_overheat_penalty", ""),
         })
 
     return pd.DataFrame(rows)
@@ -2277,11 +2255,6 @@ def main():
 
     plan = build_trade_plan(core, alpha, regime, signal_date)
 
-    # v285：恢復 TOP5 為獨立主力發動標示層，不再把整份 TEST/WATCH 改成 TOP 模型。
-    core = apply_v285_top5_labels(core, limit=5)
-    alpha = apply_v285_top5_labels(alpha, limit=5)
-    plan = apply_v285_top5_labels(plan, limit=5)
-
     debug = pd.DataFrame([{
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "market_regime": regime,
@@ -2317,7 +2290,7 @@ def main():
 
     meta = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "source": "v285_main_force_top5_restore_patch",
+        "source": "v300_alpha_restore_top5_patch",
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
         "data_state": "fresh",
