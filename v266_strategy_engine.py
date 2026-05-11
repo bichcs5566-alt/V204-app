@@ -1521,7 +1521,9 @@ def apply_v301_chip_confirm_top5(df, limit=5):
         df["top_reason"] = ""
 
     if "opportunity_rank" not in df.columns:
-        df["opportunity_rank"] = ""
+        df["opportunity_rank"] = pd.NA
+    else:
+        df["opportunity_rank"] = df["opportunity_rank"].astype("object")
 
     action = df["action"].astype(str).str.upper() if "action" in df.columns else pd.Series("", index=df.index)
 
@@ -1554,7 +1556,7 @@ def apply_v301_chip_confirm_top5(df, limit=5):
             "法人開始買｜籌碼開始集中｜剛轉強｜量能啟動｜未過熱"
         )
 
-        ranks = list(range(1, len(idx) + 1))
+        ranks = [str(x) for x in range(1, len(idx) + 1)]
         df.loc[idx, "opportunity_rank"] = ranks
 
     return df
@@ -2551,3 +2553,140 @@ def apply_dynamic_trigger_patch_v26673(d):
         warm_volume.astype(int) * 15 -
         avoid_dead_pool.astype(int) * 20
     )
+
+    d["dynamic_trigger_score_v26673"] = dynamic_score
+
+    if "entry_score" in d.columns:
+        d["entry_score"] = (
+            _clip_series(d["entry_score"]) +
+            dynamic_score.clip(lower=-15, upper=35)
+        )
+
+    return d
+
+
+# =========================================================
+# v266.74 VOLATILITY EXPANSION PATCH
+# 只補：
+# - 波動開始擴張
+# - 主升段前夕優先
+# - 壓低過度穩定股
+# 不動原本 pipeline / UI / output。
+# =========================================================
+
+def apply_volatility_expansion_patch_v26674(d):
+    d = d.copy()
+
+    atr_ratio = _clip_series(d.get("atr_ratio", 1))
+    vol_ratio = _clip_series(d.get("volume_ratio", 1))
+    mom5 = _clip_series(d.get("mom5", 0))
+    mom10 = _clip_series(d.get("mom10", 0))
+    breakout_score = _clip_series(d.get("breakout_score", 0))
+    entry_score = _clip_series(d.get("entry_score", 0))
+
+    expanding_volatility = (
+        (atr_ratio > 1.08) &
+        (atr_ratio < 2.20)
+    )
+
+    ignition_volume = (
+        (vol_ratio > 1.20) &
+        (vol_ratio < 3.50)
+    )
+
+    early_momentum = (
+        (mom5 > 0.02) &
+        (mom10 > 0.01)
+    )
+
+    breakout_ready = (
+        breakout_score > 55
+    )
+
+    over_stable = (
+        (atr_ratio < 0.92) &
+        (vol_ratio < 1.05)
+    )
+
+    expansion_bonus = (
+        expanding_volatility.astype(int) * 20 +
+        ignition_volume.astype(int) * 15 +
+        early_momentum.astype(int) * 18 +
+        breakout_ready.astype(int) * 12 -
+        over_stable.astype(int) * 25
+    )
+
+    d["volatility_expansion_score_v26674"] = expansion_bonus
+
+    if "entry_score" in d.columns:
+        d["entry_score"] = (
+            entry_score +
+            expansion_bonus.clip(lower=-20, upper=40)
+        )
+
+    return d
+
+
+# =========================================================
+# v266.75 DISTRIBUTION HARD BLOCK PATCH
+# =========================================================
+
+def apply_distribution_hardblock_patch_v26675(d):
+    d = d.copy()
+
+    close = _clip_series(d.get("close", 0))
+    high = _clip_series(d.get("high", close))
+    open_ = _clip_series(d.get("open", close))
+
+    vol_ratio = _clip_series(d.get("volume_ratio", 1))
+    mom5 = _clip_series(d.get("mom5", 0))
+    mom20 = _clip_series(d.get("mom20", 0))
+
+    ma5 = _clip_series(d.get("ma5", close))
+    ma10 = _clip_series(d.get("ma10", close))
+
+    entry_score = _clip_series(d.get("entry_score", 0))
+
+    intraday_drop = (close - high) / high
+
+    limitdown_like = (
+        intraday_drop < -0.085
+    )
+
+    high_volume_dump = (
+        (vol_ratio > 2.8) &
+        (close < open_) &
+        (close < ma5)
+    )
+
+    fake_breakout = (
+        (mom20 > 0.35) &
+        (close < ma10)
+    )
+
+    long_black_distribution = (
+        (((close - open_) / open_) < -0.06) &
+        (vol_ratio > 2.0)
+    )
+
+    exhaustion_move = (
+        (mom5 > 0.18) &
+        (close < ma5)
+    )
+
+    hard_block = (
+        limitdown_like |
+        high_volume_dump |
+        fake_breakout |
+        long_black_distribution |
+        exhaustion_move
+    )
+
+    d["distribution_hardblock_v26675"] = hard_block.astype(int)
+
+    if "entry_score" in d.columns:
+        d.loc[hard_block, "entry_score"] = (
+            entry_score[hard_block] - 999
+        )
+
+    return d
