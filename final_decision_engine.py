@@ -1735,6 +1735,248 @@ def build_v280_event_promotion_lanes(out):
 
     return ignition.reset_index(drop=True), evolution.reset_index(drop=True)
 
+
+# ===== v283 ALPHA RANKING ENGINE / 最大機會排序補丁 =====
+# 目的：
+# 1. 不改 UI / pipeline / 持倉 / macro / workflow
+# 2. 不新增重型資料依賴，只補最後 ranking
+# 3. 流動性是 Gate，不是主要加分；低於 500 張直接排除/降級
+# 4. 流動性合格後，優先看「籌碼開始集中 + 剛轉強 + 未過熱 + 量能剛啟動」
+# 5. 修正 100 / 141 大量同分，讓 TEST / WATCH / FINAL 真的有排序差異
+
+def _v283_num(s, default=0.0):
+    try:
+        return pd.to_numeric(s, errors="coerce").fillna(default)
+    except Exception:
+        return pd.Series(default)
+
+
+def _v283_num_col(df, names, default=0.0):
+    if df is None or df.empty:
+        return pd.Series(dtype="float64")
+    for c in names:
+        if c in df.columns:
+            return pd.to_numeric(df[c], errors="coerce").fillna(default)
+    return pd.Series(default, index=df.index, dtype="float64")
+
+
+def _v283_load_latest_feature_context():
+    try:
+        f = read_csv_any([
+            ROOT / "feature_panel_daily.csv",
+            DATA_DIR / "feature_panel_daily.csv",
+            ROOT / "mobile_dashboard_v1" / "data" / "feature_panel_daily.csv",
+        ])
+        if f is None or f.empty or "stock_id" not in f.columns:
+            return pd.DataFrame()
+        f = f.copy()
+        f["stock_id"] = f["stock_id"].apply(normalize_stock_id)
+        if "date" in f.columns:
+            f["_v283_date"] = pd.to_datetime(f["date"], errors="coerce")
+            latest = f["_v283_date"].max()
+            f = f[f["_v283_date"] == latest].copy()
+        keep = [
+            "stock_id", "open", "high", "low", "close", "volume",
+            "mom3", "mom5", "mom10", "mom20", "mom60",
+            "ma5", "ma10", "ma20", "ma60", "ma20_slope",
+            "vol20", "volume_ratio", "high_20", "high_60", "low_20",
+            "range_20", "ma_converge_pct", "obv_mom5", "obv_up_count_5",
+            "low_non_down_count_5",
+        ]
+        keep = [c for c in keep if c in f.columns]
+        return f[keep].drop_duplicates("stock_id", keep="last")
+    except Exception as e:
+        print("v283 feature context skipped:", e)
+        return pd.DataFrame()
+
+
+def apply_v283_alpha_ranking_engine(out):
+    if out is None or out.empty:
+        return out
+
+    df = out.copy()
+    if "stock_id" not in df.columns:
+        return df
+
+    df["stock_id"] = df["stock_id"].apply(normalize_stock_id)
+
+    # 補 feature context，但不覆蓋主表原欄位；只用 _v283_* 參考欄。
+    ctx = _v283_load_latest_feature_context()
+    if ctx is not None and not ctx.empty:
+        ctx = ctx.rename(columns={c: f"_v283_{c}" for c in ctx.columns if c != "stock_id"})
+        df = df.merge(ctx, on="stock_id", how="left")
+
+    action = df["final_action"].astype(str).str.upper() if "final_action" in df.columns else pd.Series("", index=df.index)
+    tradable = action.isin(["BUY", "TEST", "WATCH"])
+
+    if not tradable.any():
+        return df
+
+    close = _v283_num_col(df, ["_v283_close", "close", "ref_price", "price"], 0.0)
+    open_ = _v283_num_col(df, ["_v283_open", "open"], close)
+    high = _v283_num_col(df, ["_v283_high", "high"], close)
+    volume = _v283_num_col(df, ["_v283_volume", "volume", "vol"], 0.0)
+    turnover = _v283_num_col(df, ["turnover", "amount"], 0.0)
+    turnover = np.where(turnover > 0, turnover, close * volume * 1000)
+    turnover = pd.Series(turnover, index=df.index)
+
+    ma5 = _v283_num_col(df, ["_v283_ma5", "ma5"], close)
+    ma10 = _v283_num_col(df, ["_v283_ma10", "ma10"], close)
+    ma20 = _v283_num_col(df, ["_v283_ma20", "ma20"], close)
+    ma60 = _v283_num_col(df, ["_v283_ma60", "ma60"], close)
+    ma20_slope = _v283_num_col(df, ["_v283_ma20_slope", "ma20_slope"], 0.0)
+
+    mom3 = _v283_num_col(df, ["_v283_mom3", "mom3"], 0.0)
+    mom5 = _v283_num_col(df, ["_v283_mom5", "mom5"], 0.0)
+    mom10 = _v283_num_col(df, ["_v283_mom10", "mom10"], 0.0)
+    mom20 = _v283_num_col(df, ["_v283_mom20", "mom20"], 0.0)
+
+    vol_ratio = _v283_num_col(df, ["_v283_volume_ratio", "volume_ratio"], 1.0)
+    high20 = _v283_num_col(df, ["_v283_high_20", "high_20"], close)
+    high60 = _v283_num_col(df, ["_v283_high_60", "high_60"], close)
+    ma_converge = _v283_num_col(df, ["_v283_ma_converge_pct", "ma_converge_pct"], 999.0)
+    obv_mom5 = _v283_num_col(df, ["_v283_obv_mom5", "obv_mom5"], 0.0)
+    obv_up5 = _v283_num_col(df, ["_v283_obv_up_count_5", "obv_up_count_5"], 0.0)
+    low_non_down5 = _v283_num_col(df, ["_v283_low_non_down_count_5", "low_non_down_count_5"], 0.0)
+    chip_score = _v283_num_col(df, ["chip_score", "chip_concentration_score"], 0.0)
+    liquidity_score = _v283_num_col(df, ["liquidity_score"], 0.0)
+
+    # ===== Gate：流動性先合格 =====
+    strict_low_liq = (volume < 500) & (turnover < 15_000_000)
+    liquidity_gate = (volume >= 1000) | (turnover >= 30_000_000) | (liquidity_score >= 45)
+
+    # ===== alpha：流動性合格後，籌碼剛開始集中 =====
+    chip_start = (
+        (obv_mom5 > 0).astype(int) * 16 +
+        (obv_up5 >= 3).astype(int) * 14 +
+        (low_non_down5 >= 3).astype(int) * 12 +
+        ((chip_score >= 35) & (chip_score <= 85)).astype(int) * 14 +
+        vol_ratio.between(1.05, 2.80).astype(int) * 10 +
+        (ma_converge <= 0.14).astype(int) * 8
+    )
+
+    # ===== 剛轉強：不是死股，也不是已經噴太遠 =====
+    ma20_gap = ((close / ma20) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+    early_turn = (
+        (close > ma5).astype(int) * 8 +
+        (close > ma10).astype(int) * 7 +
+        (ma5 >= ma10 * 0.995).astype(int) * 7 +
+        (ma10 >= ma20 * 0.985).astype(int) * 7 +
+        (ma20_slope >= 0).astype(int) * 6 +
+        mom3.between(-0.01, 0.08).astype(int) * 5 +
+        mom5.between(0.002, 0.12).astype(int) * 8 +
+        mom10.between(0.003, 0.18).astype(int) * 8 +
+        mom20.between(0.015, 0.32).astype(int) * 8 +
+        ma20_gap.between(-0.02, 0.18).astype(int) * 8
+    )
+
+    # ===== 突破初期 / 量能剛啟動 =====
+    volume_start = (
+        vol_ratio.between(1.12, 2.80).astype(int) * 18 +
+        vol_ratio.between(1.00, 3.50).astype(int) * 8
+    )
+    breakout_initial = (
+        ((high20 > 0) & (close >= high20 * 0.985)).astype(int) * 12 +
+        ((high20 > 0) & ((close / high20 - 1).abs() <= 0.045)).astype(int) * 10 +
+        ((high60 > 0) & (close >= high60 * 0.90) & (close <= high60 * 1.035)).astype(int) * 10
+    )
+
+    # ===== 過熱 / 出貨扣分 =====
+    upper_shadow = ((high - close) / high).replace([np.inf, -np.inf], 0).fillna(0)
+    overheat_penalty = (
+        (ma20_gap > 0.22).astype(int) * 24 +
+        (mom5 > 0.16).astype(int) * 16 +
+        (mom20 > 0.38).astype(int) * 22 +
+        (vol_ratio > 4.80).astype(int) * 18 +
+        ((upper_shadow > 0.055) & (vol_ratio > 1.80)).astype(int) * 22 +
+        ((close < open_) & (vol_ratio > 2.20)).astype(int) * 24
+    )
+
+    # 流動性只給少量 quality，不再讓成交量最大 = 分數最高。
+    liquidity_quality = (
+        (liquidity_gate).astype(int) * 8 +
+        ((volume >= 3000) | (turnover >= 80_000_000)).astype(int) * 4
+    )
+
+    raw = (
+        35 +
+        liquidity_quality +
+        chip_start * 0.85 +
+        early_turn * 0.65 +
+        volume_start * 0.75 +
+        breakout_initial * 0.75 -
+        overheat_penalty * 1.10
+    )
+    raw = pd.Series(raw, index=df.index).round(2)
+    raw.loc[~liquidity_gate] = raw.loc[~liquidity_gate] - 35
+    raw.loc[strict_low_liq] = raw.loc[strict_low_liq] - 999
+
+    # 顯示分數：保留 100+ 機會，但不再全部 141。
+    final_score = raw.clip(lower=0, upper=128).round(1)
+
+    df["v283_liquidity_gate"] = liquidity_gate.astype(int)
+    df["v283_strict_low_liq"] = strict_low_liq.astype(int)
+    df["v283_chip_start_score"] = pd.Series(chip_start, index=df.index).round(1)
+    df["v283_early_turn_score"] = pd.Series(early_turn, index=df.index).round(1)
+    df["v283_volume_start_score"] = pd.Series(volume_start, index=df.index).round(1)
+    df["v283_breakout_initial_score"] = pd.Series(breakout_initial, index=df.index).round(1)
+    df["v283_overheat_penalty"] = pd.Series(overheat_penalty, index=df.index).round(1)
+    df["v283_alpha_score"] = final_score
+    df["v283_alpha_tag"] = np.where(
+        strict_low_liq,
+        "BLOCK_UNDER_500_SHARES",
+        np.where(
+            liquidity_gate & (chip_start >= 40) & (overheat_penalty <= 18),
+            "S_CHIP_START_ALPHA",
+            np.where(
+                liquidity_gate & (chip_start >= 28),
+                "A_ACCUMULATION_CANDIDATE",
+                np.where(liquidity_gate, "B_LIQUID_ONLY", "C_LOW_LIQUIDITY")
+            )
+        )
+    )
+
+    # 低於 500 張或金額太小，直接 BLOCK；500~1000 張不允許 BUY/TEST，只能 WATCH。
+    df.loc[tradable & strict_low_liq, "final_action"] = "BLOCK"
+    df.loc[tradable & strict_low_liq, "allowed"] = False
+    df.loc[tradable & strict_low_liq, "priority"] = 9
+
+    weak_liq = tradable & (~liquidity_gate) & (~strict_low_liq)
+    df.loc[weak_liq & action.isin(["BUY", "TEST"]), "final_action"] = "WATCH"
+    df.loc[weak_liq, "priority"] = 8
+
+    # 只覆蓋進場/試單/觀察類分數，出場與減碼不碰。
+    tradable_after = df["final_action"].astype(str).str.upper().isin(["BUY", "TEST", "WATCH"])
+    df.loc[tradable_after, "score"] = final_score.loc[tradable_after]
+    for c in ["entry_score", "total_score", "rank_score", "opportunity_score"]:
+        if c in df.columns:
+            df.loc[tradable_after, c] = df.loc[tradable_after, "score"]
+
+    # TEST / WATCH 分工：真正接近進場才 TEST；只是流動但籌碼弱，留 WATCH。
+    can_test = liquidity_gate & (chip_start >= 28) & (early_turn >= 36) & (overheat_penalty <= 32)
+    can_buy = liquidity_gate & (chip_start >= 42) & (early_turn >= 46) & (volume_start >= 18) & (overheat_penalty <= 24)
+
+    act_now = df["final_action"].astype(str).str.upper()
+    df.loc[tradable_after & act_now.eq("BUY") & ~can_buy, "final_action"] = "TEST"
+    df.loc[tradable_after & act_now.eq("TEST") & ~can_test, "final_action"] = "WATCH"
+
+    # 若原本 WATCH 但條件很好，可以提升 TEST，不直接亂升 BUY。
+    act_now = df["final_action"].astype(str).str.upper()
+    df.loc[tradable_after & act_now.eq("WATCH") & can_test & (final_score >= 78), "final_action"] = "TEST"
+
+    priority_map = {"SELL": 0, "REDUCE": 1, "BUY": 2, "TEST": 3, "WATCH": 8, "BLOCK": 9}
+    df["priority"] = df["final_action"].astype(str).str.upper().map(priority_map).fillna(df.get("priority", 9)).astype(int)
+
+    if "system_note" in df.columns:
+        df["system_note"] = df["system_note"].astype(str) + "｜v283：流動性Gate後看籌碼初期/剛轉強/未過熱"
+
+    df["_v283_priority"] = pd.to_numeric(df["priority"], errors="coerce").fillna(9)
+    df["_v283_score_sort"] = pd.to_numeric(df["score"], errors="coerce").fillna(0)
+    df = df.sort_values(["_v283_priority", "_v283_score_sort", "stock_id"], ascending=[True, False, True])
+    df = df.drop(columns=["_v283_priority", "_v283_score_sort"], errors="ignore")
+
+    return df.reset_index(drop=True)
+
 def main():
     generated_at = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
     lookup = make_lookup()
@@ -2013,4 +2255,98 @@ def main():
     # 只在最後輸出前正規化分數，不改前面策略判斷。
     out = apply_v274_final_true_export_patch(out)
     # v275 EDGE EXPANSION PATCH：只拉開最後可讀分數差距，不改策略判斷。
-    out = apply_v2
+    out = apply_v275_edge_expansion_patch(out)
+    # v279 EVENT BOOST PATCH：只補真正觸發事件加權，讓最大機會跳脫 98~99 排行榜。
+    out = apply_v279_event_boost_patch(out)
+    # v283 ALPHA RANKING ENGINE：修正 100/141 同分，改成「流動性Gate後看籌碼初期、剛轉強、未過熱」。
+    out = apply_v283_alpha_ranking_engine(out)
+
+    # TOP 機會表同步使用 v274 最終分數，避免 dashboard 與主表排序不同步。
+    if not out.empty:
+        try:
+            _, top_opportunity_df = apply_top_opportunities_v26614(out)
+            top_opportunity_df = apply_v274_final_true_export_patch(top_opportunity_df)
+            top_opportunity_df = apply_v275_edge_expansion_patch(top_opportunity_df)
+            top_opportunity_df = apply_v279_event_boost_patch(top_opportunity_df)
+            top_opportunity_df = apply_v283_alpha_ranking_engine(top_opportunity_df)
+        except Exception:
+            pass
+
+    # v280 EVENT PROMOTION ENGINE：
+    # 不改 final_action_plan 主表，只把真正事件股直接升級到 IGNITION / EVOLUTION 專區。
+    try:
+        ignition_v277_df, evolution_v277_df = build_v280_event_promotion_lanes(out)
+    except Exception as e:
+        print("v280 event promotion lane skipped:", e)
+        # 若 v280 條件不足，保留 v278/v277 作為安全 fallback，避免 UI 區塊空白。
+        try:
+            ignition_v277_df, evolution_v277_df = build_v278_true_trigger_lanes(out)
+        except Exception as e2:
+            print("v278 fallback lane skipped:", e2)
+            try:
+                ignition_v277_df, evolution_v277_df = build_v277_max_opportunity_lanes(out)
+            except Exception as e3:
+                print("v277 fallback lane skipped:", e3)
+                ignition_v277_df, evolution_v277_df = pd.DataFrame(), pd.DataFrame()
+
+    write_csv_both(out, "final_action_plan.csv")
+    write_csv_both(top_opportunity_df, "top_opportunities.csv")
+    write_csv_both(ignition_v277_df, "ignition_candidates.csv")
+    write_csv_both(evolution_v277_df, "strategy_evolution.csv")
+
+    summary = {
+        "generated_at": generated_at,
+        "source": "final_decision_engine_v283_alpha_ranking_engine",
+        "signal_date": str(out["signal_date"].iloc[0]) if not out.empty and "signal_date" in out.columns else "",
+        "trade_date": str(out["trade_date"].iloc[0]) if not out.empty and "trade_date" in out.columns else "",
+        "rows": int(len(out)),
+        "sell_count": int((out["final_action"] == "SELL").sum()) if not out.empty else 0,
+        "reduce_count": int((out["final_action"] == "REDUCE").sum()) if not out.empty else 0,
+        "buy_count": int((out["final_action"] == "BUY").sum()) if not out.empty else 0,
+        "test_count": int((out["final_action"] == "TEST").sum()) if not out.empty else 0,
+        "watch_count": int((out["final_action"] == "WATCH").sum()) if not out.empty else 0,
+        "block_count": int((out["final_action"] == "BLOCK").sum()) if not out.empty else 0,
+        "alpha_count": int((out["strategy_type"].astype(str).str.upper() == "ALPHA").sum()) if not out.empty else 0,
+        "core_count": int((out["strategy_type"].astype(str).str.upper() == "CORE").sum()) if not out.empty else 0,
+        "high_liquidity_count": int((out["liquidity_level"].astype(str).str.upper() == "HIGH").sum()) if (not out.empty and "liquidity_level" in out.columns) else 0,
+        "medium_liquidity_count": int((out["liquidity_level"].astype(str).str.upper() == "MEDIUM").sum()) if (not out.empty and "liquidity_level" in out.columns) else 0,
+        "low_liquidity_count": int((out["liquidity_level"].astype(str).str.upper() == "LOW").sum()) if (not out.empty and "liquidity_level" in out.columns) else 0,
+        "backfill_source": "feature_panel_daily.csv",
+        "extra_lookup_sources": [
+            "trade_plan.csv",
+            "trading_system_plan.csv",
+            "candidates.csv",
+            "alpha_candidates.csv",
+            "core_candidates.csv",
+            "pre_move_candidates.csv",
+            "timing_candidates.csv"
+        ],
+        "with_name_count": int((out["stock_name"].astype(str).str.strip() != "").sum()) if not out.empty else 0,
+        "top_opportunity_count": int((out["top_opportunity"].astype(str).str.strip() != "").sum()) if "top_opportunity" in out.columns and not out.empty else 0,
+        "v277_ignition_count": int(len(ignition_v277_df)) if "ignition_v277_df" in locals() else 0,
+        "v277_evolution_count": int(len(evolution_v277_df)) if "evolution_v277_df" in locals() else 0,
+        "chip_high_count": int((pd.to_numeric(out.get("chip_score", pd.Series(dtype=float)), errors="coerce").fillna(0) >= 80).sum()) if not out.empty and "chip_score" in out.columns else 0,
+        "macro_regime": macro_guard.get("macro_regime", ""),
+        "macro_label": macro_guard.get("macro_label", ""),
+        "macro_score": macro_guard.get("macro_score", 0),
+        "macro_score_ratio": macro_guard.get("macro_score_ratio", 0),
+        "macro_policy": macro_guard.get("macro_policy", ""),
+        "macro_raw_regime": macro_guard.get("macro_raw_regime", ""),
+        "macro_raw_label": macro_guard.get("macro_raw_label", ""),
+        "macro_adjusted_score": macro_guard.get("macro_adjusted_score", 0),
+        "macro_confidence": macro_guard.get("macro_confidence", ""),
+        "macro_confidence_label": macro_guard.get("macro_confidence_label", ""),
+        "macro_confidence_ratio": macro_guard.get("macro_confidence_ratio", 0),
+        "valid_indicator_count": macro_guard.get("valid_indicator_count", 0),
+        "total_indicator_count": macro_guard.get("total_indicator_count", 0),
+        "unknown_count": macro_guard.get("unknown_count", 0),
+        "encoding": "utf-8-sig",
+    }
+
+    for p in [ROOT / "final_action_summary.json", DATA_DIR / "final_action_summary.json"]:
+        p.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+
+if __name__ == "__main__":
+    main()
