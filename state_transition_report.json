@@ -4,16 +4,16 @@
   "changed_strategy_logic": false,
   "changed_action": false,
   "changed_position": false,
-  "updated_at": "2026-05-11 20:28:00",
+  "updated_at": "2026-05-11 21:26:47",
   "files": {
     "trade_plan.csv": {
       "trade_plan.csv": {
         "status": "updated",
-        "rows": 10
+        "rows": 9
       },
       "mobile_dashboard_v1/data/trade_plan.csv": {
         "status": "updated",
-        "rows": 10
+        "rows": 9
       }
     },
     "watchlist_monitor.csv": {
@@ -29,11 +29,11 @@
     "final_action_plan.csv": {
       "final_action_plan.csv": {
         "status": "updated",
-        "rows": 498
+        "rows": 521
       },
       "mobile_dashboard_v1/data/final_action_plan.csv": {
         "status": "updated",
-        "rows": 498
+        "rows": 521
       }
     },
     "candidates.csv": {
@@ -69,45 +69,43 @@
     "pre_move_candidates.csv": {
       "pre_move_candidates.csv": {
         "status": "updated",
-        "rows": 452
+        "rows": 464
       },
       "mobile_dashboard_v1/data/pre_move_candidates.csv": {
         "status": "updated",
-        "rows": 452
+        "rows": 464
       }
     },
     "top_opportunities.csv": {
       "top_opportunities.csv": {
         "status": "updated",
-        "rows": 15
+        "rows": 4
       },
       "mobile_dashboard_v1/data/top_opportunities.csv": {
         "status": "updated",
-        "rows": 15
+        "rows": 4
       }
     }
   },
-  "memory_rows": 498,
+  "memory_rows": 521,
   "states": {
-    "觀察": 208,
-    "突破中": 156,
-    "出貨疑慮": 81,
-    "吸籌中": 33,
-    "試盤中": 17,
-    "發動中": 3
+    "觀察": 224,
+    "突破中": 169,
+    "出貨疑慮": 83,
+    "吸籌中": 27,
+    "試盤中": 12,
+    "發動中": 6
   },
   "transition_labels": {
-    "持續觀察": 241,
-    "準IGNITION": 157,
-    "降級風險": 81,
-    "升級觀察": 17,
-    "IGNITION": 2
+    "持續觀察": 255,
+    "準IGNITION": 171,
+    "降級風險": 83,
+    "升級觀察": 12
   },
   "ignition_flags": {
-    "NO": 241,
-    "READY": 157,
-    "RISK": 81,
-    "WATCH_UP": 17,
-    "YES": 2
+    "NO": 255,
+    "READY": 171,
+    "RISK": 83,
+    "WATCH_UP": 12
   }
 }
