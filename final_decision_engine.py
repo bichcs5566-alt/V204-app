@@ -987,16 +987,11 @@ def apply_final_main_force_gate_v302(out):
 
 def apply_test_ignition_evolution_v303(out):
     """
-    v303.1 實戰版狀態機：
-    TEST = 最大機會池（主力 Gate 通過，但還沒確認點火）
-    IGNITION = TEST 裡開始點火
-    EVOLUTION = IGNITION 後主升前夕
-
-    修正 v303 問題：
-    - 不再把 TEST 吸乾
-    - WATCH 若通過主力 Gate，會升回 TEST
-    - IGNITION / EVOLUTION 條件改成實戰門檻，不再過度嚴苛
-    - SELL / REDUCE / EXIT 完全不動
+    v303.3 實戰升級版：
+    - TEST：保留 v303.2 的主力早期佈局池，不吸乾。
+    - IGNITION：從 TEST 中挑出「剛要點火」標的，不再過度嚴格。
+    - EVOLUTION：從 IGNITION 中挑出「主升前夕」標的，仍維持少量精選。
+    - 不動 SELL / REDUCE / EXIT。
     """
     if out is None or out.empty:
         return out, pd.DataFrame(), pd.DataFrame()
@@ -1051,9 +1046,7 @@ def apply_test_ignition_evolution_v303(out):
     upper_shadow = ((high - close) / high).replace([np.inf, -np.inf], 0).fillna(0)
     intraday = ((close - open_) / open_).replace([np.inf, -np.inf], 0).fillna(0)
 
-    # TEST 最大機會池：
-    # 只要主力 Gate 通過、未過熱、不是持倉出場，就應該保留在 TEST，
-    # 而不是被降到 WATCH 或被吸乾。
+    # TEST 最大機會池：通過主力早期 Gate 者，都先保留 TEST。
     test_pool = (
         (~protected)
         & final_upper.isin(["BUY", "TEST", "WATCH", "IGNITION", "EVOLUTION"])
@@ -1061,78 +1054,87 @@ def apply_test_ignition_evolution_v303(out):
         & not_overheat
     )
 
-    # IGNITION 起漲點火：
-    # 從 TEST 升級，條件比 v303 放寬，但仍要求主力痕跡 + 轉強 + 量能。
+    # 實戰版 IGNITION：從 TEST 中挑「剛轉強 + 量開始啟動 + 主力痕跡」。
+    # 不強迫已突破，只要求開始靠近點火。
     ignition_gate = (
         test_pool
         & (chip_trace | obv_trace)
-        & attack_structure
-        & volume_start
-        & (close > ma20 * 0.99)
-        & (ma5 >= ma10 * 0.975)
-        & (mom5 > -0.005)
-        & (mom10 > 0.005)
-        & (mom20.between(0.025, 0.38))
-        & (volume_ratio.between(1.05, 4.20))
-        & (ma20_gap.between(-0.03, 0.22))
-        & (high60_pos >= 0.84)
-        & (upper_shadow <= 0.085)
+        & (
+            attack_structure
+            | (
+                (close > ma20 * 0.975)
+                & (ma5 >= ma10 * 0.965)
+                & (mom10 > -0.002)
+                & (mom20 > 0.010)
+            )
+        )
+        & (
+            volume_start
+            | volume_ratio.between(0.95, 4.30)
+        )
+        & (mom5 > -0.018)
+        & (mom10 > -0.006)
+        & (mom20.between(0.010, 0.42))
+        & (ma20_gap.between(-0.045, 0.255))
+        & (high60_pos >= 0.80)
+        & (upper_shadow <= 0.095)
     )
 
-    # EVOLUTION 主升前夕：
-    # 從 IGNITION 再升級，要求延續性更好，但不強求過度完美。
+    # 實戰版 EVOLUTION：主升前夕，仍比 IGNITION 嚴格，但不要嚴到永遠 0。
     evolution_gate = (
         ignition_gate
-        & (mom10 > 0.020)
-        & (mom20.between(0.055, 0.42))
-        & (close > ma10 * 0.995)
-        & (ma5 >= ma10 * 0.985)
-        & (ma10 >= ma20 * 0.975)
-        & (volume_ratio.between(1.08, 3.80))
-        & (ma20_gap.between(0.00, 0.24))
-        & (high20_pos >= 0.96)
+        & (mom10 > 0.010)
+        & (mom20.between(0.035, 0.45))
+        & (close > ma10 * 0.985)
+        & (ma5 >= ma10 * 0.975)
+        & (ma10 >= ma20 * 0.955)
+        & (volume_ratio.between(1.00, 4.00))
+        & (ma20_gap.between(-0.010, 0.270))
+        & (high20_pos >= 0.93)
         & (
             (inst > 0)
             | (trust > 0)
             | (foreign > 0)
-            | (inst_days >= 2)
+            | (inst_days >= 1)
             | obv_trace
         )
-        & (upper_shadow <= 0.075)
-        & (intraday > -0.035)
+        & (upper_shadow <= 0.085)
+        & (intraday > -0.045)
     )
 
+    # 分數：用來排序與 TOP，不作為硬性唯一 Gate。
     ignition_score = (
         main_score
         + chip_trace.astype(int) * 18
         + obv_trace.astype(int) * 16
-        + attack_structure.astype(int) * 12
+        + attack_structure.astype(int) * 14
         + volume_start.astype(int) * 12
         + (trust > 0).astype(int) * 10
         + (foreign > 0).astype(int) * 6
-        + (mom10 > 0.015).astype(int) * 8
-        + (mom20 > 0.05).astype(int) * 8
-        - (ma20_gap > 0.24).astype(int) * 35
-        - (volume_ratio > 4.5).astype(int) * 25
-        - (upper_shadow > 0.09).astype(int) * 25
+        + (inst > 0).astype(int) * 8
+        + (mom10 > 0.010).astype(int) * 8
+        + (mom20 > 0.030).astype(int) * 8
+        + (close > ma20).astype(int) * 6
+        - (ma20_gap > 0.27).astype(int) * 35
+        - (volume_ratio > 4.8).astype(int) * 25
+        - (upper_shadow > 0.10).astype(int) * 25
     ).round(1)
 
     evolution_score = (
         ignition_score
-        + (mom10 > 0.035).astype(int) * 12
-        + (mom20 > 0.085).astype(int) * 12
-        + (close > high20 * 0.985).astype(int) * 10
+        + (mom10 > 0.025).astype(int) * 12
+        + (mom20 > 0.060).astype(int) * 12
+        + (close > high20 * 0.970).astype(int) * 10
         + (ma5 >= ma10).astype(int) * 8
-        + (ma10 >= ma20 * 0.99).astype(int) * 8
+        + (ma10 >= ma20 * 0.975).astype(int) * 8
         + ((inst > 0) | (trust > 0) | (foreign > 0)).astype(int) * 10
-        - (ma20_gap > 0.26).astype(int) * 35
-        - (volume_ratio > 4.0).astype(int) * 20
+        - (ma20_gap > 0.30).astype(int) * 35
+        - (volume_ratio > 4.3).astype(int) * 20
     ).round(1)
 
     out["ignition_score_v303"] = ignition_score.astype("object")
     out["evolution_score_v303"] = evolution_score.astype("object")
 
-    # 清空狀態後重建。
     out.loc[test_pool, "signal_stage_v303"] = "TEST"
     out.loc[test_pool, "stage_reason_v303"] = "主力Gate通過｜最大機會TEST池"
 
@@ -1142,17 +1144,15 @@ def apply_test_ignition_evolution_v303(out):
     out.loc[evolution_gate, "signal_stage_v303"] = "EVOLUTION"
     out.loc[evolution_gate, "stage_reason_v303"] = "IGNITION升級：主升前夕｜籌碼續強＋量價延續"
 
-    # 關鍵修正：
-    # TEST_POOL 通過者，如果還不是 IGNITION / EVOLUTION，強制保留為 TEST。
-    # 這樣 TEST 不會被 macro/market 降級後吸乾。
     plain_test = test_pool & (~ignition_gate) & (~evolution_gate)
+
     out.loc[plain_test, "final_action"] = "TEST"
     out.loc[plain_test, "priority"] = "3"
     out.loc[plain_test, "entry_type"] = "最大機會試單"
     out.loc[plain_test, "execution_flag"] = "TEST"
     out.loc[plain_test, "system_note"] = _v302_append_note(
         out.loc[plain_test, "system_note"],
-        "v303.1：主力Gate通過，保留於 TEST 最大機會池"
+        "v303.3：主力Gate通過，保留於 TEST 最大機會池"
     )
 
     out.loc[ignition_gate, "final_action"] = "IGNITION"
@@ -1161,7 +1161,7 @@ def apply_test_ignition_evolution_v303(out):
     out.loc[ignition_gate, "execution_flag"] = "IGNITION"
     out.loc[ignition_gate, "system_note"] = _v302_append_note(
         out.loc[ignition_gate, "system_note"],
-        "v303.1：由 TEST 升級 IGNITION，起漲訊號成立"
+        "v303.3：由 TEST 升級 IGNITION，起漲訊號成立"
     )
 
     out.loc[evolution_gate, "final_action"] = "EVOLUTION"
@@ -1170,10 +1170,10 @@ def apply_test_ignition_evolution_v303(out):
     out.loc[evolution_gate, "execution_flag"] = "EVOLUTION"
     out.loc[evolution_gate, "system_note"] = _v302_append_note(
         out.loc[evolution_gate, "system_note"],
-        "v303.1：由 IGNITION 升級 EVOLUTION，主升前夕訊號成立"
+        "v303.3：由 IGNITION 升級 EVOLUTION，主升前夕訊號成立"
     )
 
-    # 排名：TEST / IGNITION / EVOLUTION 各自排名，UI 仍可依 final_action 分區讀取。
+    # 排名限制：TEST 可多，IGNITION 少量，EVOLUTION 精選。
     for stage, score_col, limit in [
         ("EVOLUTION", "evolution_score_v303", 5),
         ("IGNITION", "ignition_score_v303", 8),
@@ -1588,7 +1588,7 @@ def main():
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v303_2_test_gate_layered",
+        "source": "final_decision_engine_v303_3_ignition_evolution_practical",
         "signal_date": str(out["signal_date"].iloc[0]) if not out.empty and "signal_date" in out.columns else "",
         "trade_date": str(out["trade_date"].iloc[0]) if not out.empty and "trade_date" in out.columns else "",
         "rows": int(len(out)),
