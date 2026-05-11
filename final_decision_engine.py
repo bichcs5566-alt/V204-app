@@ -769,6 +769,11 @@ def _v302_append_note(series, msg):
 
 
 def apply_final_main_force_gate_v302(out):
+    """
+    v303.2 主力 Gate 分級修正版：
+    TEST = 主力早期佈局 Gate，不要求已經點火。
+    IGNITION / EVOLUTION 交給 apply_test_ignition_evolution_v303() 升級。
+    """
     if out is None or out.empty:
         return out
 
@@ -776,7 +781,6 @@ def apply_final_main_force_gate_v302(out):
     out = _v302_force_all_object(out)
     out["stock_id"] = out["stock_id"].apply(normalize_stock_id)
 
-    # v302.3：先鎖整張表 object，再鎖定 final decision 會被 loc 指派的欄位型別。
     out = _v302_force_object_cols(out, [
         "final_action", "entry_type", "execution_flag", "system_note", "reason",
         "source", "bucket", "strategy_type", "top_opportunity",
@@ -786,7 +790,6 @@ def apply_final_main_force_gate_v302(out):
     feature = _v302_load_feature_latest()
     chip = _v302_load_chip_source()
 
-    # 合併 feature：只補 final decision 需要的技術/量價欄位。
     if not feature.empty:
         need = [
             "stock_id", "close", "open", "high", "low", "volume", "turnover", "volume_ratio",
@@ -799,10 +802,8 @@ def apply_final_main_force_gate_v302(out):
         ]
         need = [c for c in need if c in feature.columns]
         out = out.merge(feature[need], on="stock_id", how="left", suffixes=("", "_fx"))
-        # v302.3：merge 後 pandas 可能把欄位推回 string dtype，先整張表轉 object。
         out = _v302_force_all_object(out)
 
-        # 若原欄位空值，用 feature 補。
         for c in ["close", "volume", "turnover", "liquidity_score", "liquidity_level", "liquidity_tag"]:
             fx = c + "_fx"
             if fx in out.columns:
@@ -812,12 +813,10 @@ def apply_final_main_force_gate_v302(out):
                     out[c] = out[c].astype("object")
                     out[fx] = out[fx].astype("object")
                     empty = out[c].astype(str).str.strip().isin(["", "nan", "None", "null", "0", "0.0"])
-                    # v302.3：右側也轉 object，避免 string dtype 指派數字爆炸。
                     out.loc[empty, c] = out.loc[empty, fx].astype("object")
                 out = out.drop(columns=[fx], errors="ignore")
         out = _v302_force_all_object(out)
 
-    # 合併 chip：每日籌碼驗證。
     if not chip.empty:
         need = [
             "stock_id", "foreign_net_buy", "trust_net_buy", "dealer_net_buy", "inst_net_buy",
@@ -841,7 +840,6 @@ def apply_final_main_force_gate_v302(out):
     turnover = _v302_num(out, "turnover", close * volume * 1000)
     volume_ratio = _v302_num(out, "volume_ratio", 1)
 
-    mom5 = _v302_num(out, "mom5", 0)
     mom10 = _v302_num(out, "mom10", 0)
     mom20 = _v302_num(out, "mom20", 0)
 
@@ -868,70 +866,85 @@ def apply_final_main_force_gate_v302(out):
 
     protected = source_upper.eq("EXIT") | final_upper.isin(["SELL", "REDUCE"])
 
-    # 這裡是硬門檻：低量/低成交金額不做；流動性只是門票。
+    # TEST 流動性門票：避免 500 張內雜訊，但不只收大型高流動股。
     liquidity_gate = (
-        (volume >= 1500) |
-        (turnover >= 50_000_000) |
-        (liq_score >= 55) |
-        liq_level.isin(["MEDIUM", "HIGH"])
+        (volume >= 800)
+        | (turnover >= 25_000_000)
+        | (liq_score >= 45)
+        | liq_level.isin(["MEDIUM", "HIGH"])
     )
 
-    # 真正主力痕跡：法人開始買，或 OBV/低點墊高明顯。
+    # TEST 主力早期痕跡：法人開始動，或 OBV/低點墊高做代理。
     chip_trace = (
-        (inst_valid >= 1) &
-        (
-            (inst > 0) |
-            (foreign > 0) |
-            (trust > 0) |
-            (inst_days >= 2)
+        (inst_valid >= 1)
+        & (
+            (inst > 0)
+            | (foreign > 0)
+            | (trust > 0)
+            | (inst_days >= 1)
         )
     )
 
     obv_trace = (
-        (obv_mom5 > 0) &
-        (obv_up5 >= 2) &
-        (low_hold5 >= 3)
+        (obv_mom5 > 0)
+        & (obv_up5 >= 1)
+        & (low_hold5 >= 2)
     )
 
     main_force_trace = chip_trace | obv_trace
 
     ma20_gap = ((close / ma20) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+    high60_pos = (close / high60).replace([np.inf, -np.inf], 0).fillna(0)
     upper_shadow = ((high - close) / high).replace([np.inf, -np.inf], 0).fillna(0)
     intraday = ((close - open_) / open_).replace([np.inf, -np.inf], 0).fillna(0)
 
-    # 攻擊結構：擋水泥/食品/防禦/牛皮股。
-    attack_structure = (
-        (close >= 15) &
-        (close > ma20 * 0.99) &
-        (ma5 >= ma10 * 0.985) &
-        (ma10 >= ma20 * 0.965) &
-        (ma20 >= ma60 * 0.94) &
-        (mom10 > 0.005) &
-        (mom20 > 0.035) &
-        (close >= high60 * 0.88)
+    # TEST 結構：只要求「沒壞、開始轉強」，不要求已經攻擊。
+    basic_structure = (
+        (close >= 12)
+        & (close > ma20 * 0.955)
+        & (ma5 >= ma10 * 0.955)
+        & (ma10 >= ma20 * 0.930)
+        & (ma20 >= ma60 * 0.900)
+        & (mom10 > -0.020)
+        & (mom20 > -0.015)
+        & (high60_pos >= 0.78)
     )
 
-    # 量能剛啟動，不追過熱爆量。
-    volume_start = volume_ratio.between(1.08, 4.20)
+    # TEST 量能：微增即可；過熱爆量交給排除。
+    early_volume = volume_ratio.between(0.82, 4.80)
 
     not_overheat = (
-        (mom20 <= 0.42) &
-        (ma20_gap <= 0.24) &
-        (volume_ratio <= 5.2) &
-        ~((upper_shadow > 0.06) & (volume_ratio > 1.6)) &
-        ~((intraday < -0.03) & (volume_ratio > 1.8))
+        (mom20 <= 0.48)
+        & (ma20_gap <= 0.30)
+        & (volume_ratio <= 5.8)
+        & ~((upper_shadow > 0.095) & (volume_ratio > 1.8))
+        & ~((intraday < -0.045) & (volume_ratio > 2.0))
     )
 
-    main_force_gate = liquidity_gate & main_force_trace & attack_structure & volume_start & not_overheat
+    main_force_gate = liquidity_gate & main_force_trace & basic_structure & early_volume & not_overheat
+
+    # 這兩個是後面升級用，不是 TEST 基本門檻。
+    attack_structure = (
+        (close > ma20 * 0.985)
+        & (ma5 >= ma10 * 0.975)
+        & (mom10 > 0.005)
+        & (mom20 > 0.025)
+        & (high60_pos >= 0.84)
+    )
+
+    volume_start = volume_ratio.between(1.03, 4.20)
 
     score = (
-        chip_trace.astype(int) * 36 +
-        obv_trace.astype(int) * 28 +
-        (trust > 0).astype(int) * 12 +
-        (foreign > 0).astype(int) * 8 +
-        volume_start.astype(int) * 10 +
-        attack_structure.astype(int) * 10 -
-        (~not_overheat).astype(int) * 30
+        liquidity_gate.astype(int) * 8
+        + chip_trace.astype(int) * 34
+        + obv_trace.astype(int) * 26
+        + basic_structure.astype(int) * 18
+        + early_volume.astype(int) * 10
+        + attack_structure.astype(int) * 10
+        + volume_start.astype(int) * 8
+        + (trust > 0).astype(int) * 10
+        + (foreign > 0).astype(int) * 6
+        - (~not_overheat).astype(int) * 35
     )
 
     out["main_force_gate_v302"] = main_force_gate.astype(int)
@@ -942,47 +955,35 @@ def apply_final_main_force_gate_v302(out):
     out["volume_start_v302"] = volume_start.astype(int)
     out["not_overheat_v302"] = not_overheat.astype(int)
 
-    # 核心：新進場/試單/觀察若沒有主力 Gate，一律 BLOCK，避免垃圾顯示在 TEST/WATCH。
-    target = (~protected) & final_upper.isin(["BUY", "TEST", "WATCH"]) & (~main_force_gate)
+    target = (~protected) & final_upper.isin(["BUY", "TEST", "WATCH", "IGNITION", "EVOLUTION"]) & (~main_force_gate)
 
     if target.any():
-        # v302.1：所有文字欄位都已強制 object，這裡只塞純字串，避免 pandas string dtype TypeError。
         out.loc[target, "final_action"] = "BLOCK"
         out.loc[target, "priority"] = "9"
         out.loc[target, "allowed"] = "False"
         out.loc[target, "suggested_amount"] = "0"
         out.loc[target, "target_weight"] = "0"
         out.loc[target, "execution_flag"] = "BLOCK"
-        out.loc[target, "entry_type"] = "未通過主力Gate"
+        out.loc[target, "entry_type"] = "未通過TEST早期Gate"
         out.loc[target, "system_note"] = _v302_append_note(
             out.loc[target, "system_note"],
-            "v302主力硬門檻：無籌碼/OBV主力痕跡或攻擊結構不足，禁止進 TEST/WATCH"
+            "v303.2：未通過TEST早期主力Gate，禁止進入 TEST/IGNITION/EVOLUTION"
         )
 
-    # 通過 Gate 的標的，補註記，但不亂改原本 action。
-    passed = (~protected) & final_upper.isin(["BUY", "TEST", "WATCH"]) & main_force_gate
+    passed = (~protected) & final_upper.isin(["BUY", "TEST", "WATCH", "IGNITION", "EVOLUTION"]) & main_force_gate
     if passed.any():
         out.loc[passed, "system_note"] = _v302_append_note(
             out.loc[passed, "system_note"],
-            "v302主力Gate通過：籌碼/OBV痕跡＋剛轉強＋量能啟動＋未過熱"
+            "v303.2：TEST早期主力Gate通過，交由狀態機判斷是否升級"
         )
 
-    # v302.1：函式出口再次鎖定輸出文字欄位，避免後續 apply_top_opportunities_v26614 再遇到 string dtype。
     out = _v302_force_object_cols(out, [
         "final_action", "entry_type", "execution_flag", "system_note", "reason",
         "top_opportunity", "section_top_opportunity", "opportunity_rank", "section_opportunity_rank",
     ])
+    out = _v302_force_all_object(out)
 
     return out
-
-
-# ===== v303 TEST → IGNITION → EVOLUTION STATE MACHINE =====
-# 核心目的：
-# - TEST：最大機會候選池，不是最後答案。
-# - IGNITION：從 TEST 裡升級，代表「起漲點火」。
-# - EVOLUTION：從 IGNITION 條件再升級，代表「主升前夕」。
-# - 不動持倉 SELL / REDUCE，不動 UI，不重寫 pipeline。
-# - 只在 final_decision_engine 的最後決策層建立狀態升級。
 
 def apply_test_ignition_evolution_v303(out):
     """
@@ -1587,7 +1588,7 @@ def main():
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v303_1_test_pool_not_empty",
+        "source": "final_decision_engine_v303_2_test_gate_layered",
         "signal_date": str(out["signal_date"].iloc[0]) if not out.empty and "signal_date" in out.columns else "",
         "trade_date": str(out["trade_date"].iloc[0]) if not out.empty and "trade_date" in out.columns else "",
         "rows": int(len(out)),
