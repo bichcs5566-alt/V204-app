@@ -953,6 +953,227 @@ def apply_v282_liquidity_chip_opportunity_patch(d, mode="ALPHA"):
 
     return d
 
+
+# ===== v284 ACCUMULATION STAGE RANKING PATCH / 建倉初期排序補丁 =====
+# 目的：
+# - 不重寫原策略、不改 pipeline / UI / 持倉 / macro / workflow
+# - 修正 v282 後大量同分 128 / 141 的問題
+# - 流動性仍是 Gate，不當主要 alpha
+# - 以「流動性合格後，籌碼開始集中 + 剛轉強 + 量能剛啟動 + 未過熱」做連續排序
+# - 抓起漲前夕，而不是追已經噴完的熱門股
+
+def _v284_num(d, col, default=0.0):
+    if col in d.columns:
+        return pd.to_numeric(d[col], errors="coerce").fillna(default)
+    return pd.Series(default, index=d.index, dtype="float64")
+
+
+def _v284_rank01(s):
+    s = pd.to_numeric(s, errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0)
+    if len(s) <= 1 or float(s.max()) == float(s.min()):
+        return pd.Series(0.5, index=s.index, dtype="float64")
+    return s.rank(method="first", pct=True).fillna(0.5)
+
+
+def _v284_band_score(x, low, sweet_low, sweet_high, high):
+    """
+    連續帶狀分數：
+    - low 以下 = 0
+    - sweet_low ~ sweet_high = 1
+    - high 以上逐步歸 0
+    用來避免「全部符合條件就同分」。
+    """
+    x = pd.to_numeric(x, errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0)
+    left = ((x - low) / max(sweet_low - low, 1e-9)).clip(0, 1)
+    mid = pd.Series(1.0, index=x.index)
+    right = ((high - x) / max(high - sweet_high, 1e-9)).clip(0, 1)
+    return np.minimum(np.minimum(left, mid), right)
+
+
+def apply_v284_accumulation_stage_ranking_patch(d, mode="ALPHA"):
+    if d is None or len(d) == 0:
+        return d
+
+    d = d.copy()
+    mode = str(mode or "ALPHA").upper()
+
+    close = _v284_num(d, "close", 0)
+    high = _v284_num(d, "high", close)
+    open_ = _v284_num(d, "open", close)
+    volume = _v284_num(d, "volume", 0)
+    turnover = _v284_num(d, "turnover", close * volume * 1000)
+    vol_ratio = _v284_num(d, "volume_ratio", 1)
+    vol20 = _v284_num(d, "vol20", 0)
+
+    mom3 = _v284_num(d, "mom3", 0)
+    mom5 = _v284_num(d, "mom5", 0)
+    mom10 = _v284_num(d, "mom10", 0)
+    mom20 = _v284_num(d, "mom20", 0)
+    mom60 = _v284_num(d, "mom60", 0)
+
+    ma5 = _v284_num(d, "ma5", close)
+    ma10 = _v284_num(d, "ma10", close)
+    ma20 = _v284_num(d, "ma20", close)
+    ma60 = _v284_num(d, "ma60", close)
+    ma20_slope = _v284_num(d, "ma20_slope", 0)
+
+    high20 = _v284_num(d, "high_20", close)
+    high60 = _v284_num(d, "high_60", close)
+    low20 = _v284_num(d, "low_20", close)
+    range20 = _v284_num(d, "range_20", 0)
+    ma_converge = _v284_num(d, "ma_converge_pct", 999)
+
+    obv_mom5 = _v284_num(d, "obv_mom5", 0)
+    obv_up5 = _v284_num(d, "obv_up_count_5", 0)
+    low_non_down5 = _v284_num(d, "low_non_down_count_5", 0)
+
+    liq_level = d["liquidity_level"].astype(str).str.upper() if "liquidity_level" in d.columns else pd.Series("", index=d.index)
+
+    # 1) 流動性 Gate：符合才進排序；不把「越大量」當主 alpha。
+    base_liq_gate = (volume >= 1000) | (turnover >= 30_000_000) | liq_level.isin(["MEDIUM", "HIGH"])
+    alpha_liq_gate = (volume >= 3000) | (turnover >= 80_000_000) | liq_level.eq("HIGH")
+    liquidity_gate = alpha_liq_gate if mode == "ALPHA" else base_liq_gate
+
+    # 2) 籌碼「剛開始集中」：用 OBV、低點墊高、溫和量增做代理。
+    # 注意：是初期，不是已經爆量完成。
+    obv_rank = _v284_rank01(obv_mom5)
+    low_hold_rank = _v284_rank01(low_non_down5)
+    obv_up_rank = _v284_rank01(obv_up5)
+
+    chip_early = (
+        obv_rank * 28 +
+        obv_up_rank * 20 +
+        low_hold_rank * 18 +
+        _v284_band_score(vol_ratio, 0.95, 1.10, 2.20, 3.80) * 18 +
+        (ma_converge.clip(0, 0.30).rsub(0.30) / 0.30).clip(0, 1) * 16
+    )
+
+    # 3) 剛轉強：太弱不要，太強也可能已經過熱。
+    mom5_band = _v284_band_score(mom5, -0.005, 0.008, 0.065, 0.145)
+    mom10_band = _v284_band_score(mom10, -0.003, 0.010, 0.105, 0.220)
+    mom20_band = _v284_band_score(mom20, 0.000, 0.030, 0.180, 0.360)
+
+    ma_position = (
+        (close > ma5).astype(int) * 8 +
+        (close > ma10).astype(int) * 8 +
+        (close > ma20).astype(int) * 10 +
+        (ma5 >= ma10 * 0.995).astype(int) * 8 +
+        (ma10 >= ma20 * 0.985).astype(int) * 8 +
+        (ma20 >= ma60 * 0.975).astype(int) * 6 +
+        (ma20_slope >= 0).astype(int) * 6
+    )
+
+    early_turn = (
+        mom5_band * 18 +
+        mom10_band * 18 +
+        mom20_band * 18 +
+        ma_position
+    )
+
+    # 4) 量能剛啟動：1.1~2.6 最佳；過大視為末升/隔日沖風險。
+    volume_start = (
+        _v284_band_score(vol_ratio, 0.95, 1.12, 2.60, 4.20) * 34 +
+        ((vol20 > 0) & (volume >= vol20 * 1.05) & (volume <= vol20 * 3.80)).astype(int) * 12
+    )
+
+    # 5) 突破初期：接近高點/剛突破，但不要離太遠。
+    dist_high20 = ((close / high20) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+    dist_high60 = ((close / high60) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+    ma20_gap = ((close / ma20) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+    range_pos = ((close - low20) / (high20 - low20)).replace([np.inf, -np.inf], 0).fillna(0).clip(0, 1)
+
+    breakout_early = (
+        _v284_band_score(dist_high20, -0.045, -0.015, 0.018, 0.070) * 24 +
+        _v284_band_score(dist_high60, -0.120, -0.060, 0.030, 0.120) * 14 +
+        _v284_band_score(ma20_gap, -0.015, 0.015, 0.115, 0.220) * 20 +
+        range_pos * 10
+    )
+
+    # 6) 過熱/出貨扣分。
+    upper_shadow = ((high - close) / high).replace([np.inf, -np.inf], 0).fillna(0)
+    intraday_weak = ((close - open_) / open_).replace([np.inf, -np.inf], 0).fillna(0)
+
+    overheat = (
+        (mom5 > 0.15).astype(int) * 20 +
+        (mom20 > 0.36).astype(int) * 28 +
+        (ma20_gap > 0.22).astype(int) * 28 +
+        (vol_ratio > 4.80).astype(int) * 24 +
+        ((upper_shadow > 0.055) & (vol_ratio > 1.60)).astype(int) * 24 +
+        ((intraday_weak < -0.025) & (vol_ratio > 1.80)).astype(int) * 22
+    )
+
+    # 7) 連續排序分：避免 128 / 141 這種桶狀同分。
+    raw_stage_score = (
+        chip_early * 0.34 +
+        early_turn * 0.26 +
+        volume_start * 0.18 +
+        breakout_early * 0.18 -
+        overheat * 0.30
+    )
+
+    raw_stage_score = pd.Series(raw_stage_score, index=d.index).replace([np.inf, -np.inf], np.nan).fillna(-999)
+    raw_stage_score.loc[~liquidity_gate] = -999
+
+    # 轉成 0~100 內的差異化分數；再用小數拉開同名次。
+    valid = raw_stage_score > -900
+    stage_score = pd.Series(0.0, index=d.index, dtype="float64")
+    if valid.any():
+        ranked = raw_stage_score[valid].rank(method="first", pct=True)
+        detail = (
+            _v284_rank01(chip_early[valid]) * 0.37 +
+            _v284_rank01(early_turn[valid]) * 0.25 +
+            _v284_rank01(volume_start[valid]) * 0.18 +
+            _v284_rank01(breakout_early[valid]) * 0.14 -
+            _v284_rank01(overheat[valid]) * 0.06
+        )
+        stage_score.loc[valid] = (55 + ranked * 38 + detail * 7).clip(0, 99.9)
+
+    # CORE / ALPHA 稍微不同定位。
+    if mode == "CORE":
+        stage_score = (stage_score + _v284_band_score(mom20, 0.000, 0.020, 0.135, 0.280) * 5).clip(0, 99.9)
+    else:
+        stage_score = (stage_score + _v284_band_score(turnover, 30_000_000, 80_000_000, 260_000_000, 900_000_000) * 3).clip(0, 99.9)
+
+    d["v284_liquidity_gate"] = liquidity_gate.astype(int)
+    d["v284_chip_early_score"] = pd.Series(chip_early, index=d.index).round(2)
+    d["v284_early_turn_score"] = pd.Series(early_turn, index=d.index).round(2)
+    d["v284_volume_start_score"] = pd.Series(volume_start, index=d.index).round(2)
+    d["v284_breakout_early_score"] = pd.Series(breakout_early, index=d.index).round(2)
+    d["v284_overheat_penalty"] = pd.Series(overheat, index=d.index).round(2)
+    d["v284_stage_raw_score"] = raw_stage_score.round(3)
+    d["v284_stage_score"] = stage_score.round(1)
+    d["v284_stage_tag"] = np.where(
+        ~liquidity_gate,
+        "BLOCK_LOW_LIQUIDITY",
+        np.where(
+            (chip_early >= chip_early[valid].quantile(0.70) if valid.any() else False) & (overheat <= 24),
+            "S_ACCUMULATION_EARLY",
+            np.where(
+                (early_turn >= pd.Series(early_turn, index=d.index)[valid].quantile(0.70) if valid.any() else False),
+                "A_EARLY_TURN",
+                "B_NORMAL"
+            )
+        )
+    )
+
+    # 關鍵：不要再用桶狀 entry_score 排序；保留原策略基礎，只把 v284 變成主排序。
+    base_entry = pd.to_numeric(d.get("entry_score", 0), errors="coerce").fillna(0)
+    d["entry_score_before_v284"] = base_entry.round(2)
+
+    # 流動性不合格直接壓掉；合格者用 stage_score 拉開。
+    d["entry_score"] = np.where(
+        liquidity_gate,
+        (stage_score + (base_entry.rank(method="first", pct=True).fillna(0.5) * 8)).round(1),
+        -999
+    )
+
+    if "note" in d.columns:
+        d["note"] = d["note"].astype(str) + "｜v284建倉初期排序"
+    else:
+        d["note"] = "v284建倉初期排序"
+
+    return d
+
 def core_engine(x):
     """
     CORE：早期卡位策略。
@@ -991,6 +1212,8 @@ def core_engine(x):
 
     # v282：流動性先合格，接著看籌碼開始集中；低流動性直接排除。
     d = apply_v282_liquidity_chip_opportunity_patch(d, mode="CORE")
+    # v284：建倉初期連續排序，修正大量同分，抓起漲前夕。
+    d = apply_v284_accumulation_stage_ranking_patch(d, mode="CORE")
 
     core_liq_ok = (d["volume"] >= 1000) & d["liquidity_level"].isin(["MEDIUM", "HIGH"])
     low_liq = d["liquidity_level"].eq("LOW")
@@ -1021,7 +1244,7 @@ def core_engine(x):
         + d["liquidity_tag"].astype(str)
     )
 
-    return d.sort_values(["v282_opportunity_score", "entry_score", "mom20", "mom10"], ascending=False) if "v282_opportunity_score" in d.columns else d.sort_values(["entry_score", "mom20", "mom10"], ascending=False)
+    return d.sort_values(["v284_stage_score", "entry_score", "v282_opportunity_score", "mom20", "mom10"], ascending=False) if "v284_stage_score" in d.columns else d.sort_values(["v282_opportunity_score", "entry_score", "mom20", "mom10"], ascending=False) if "v282_opportunity_score" in d.columns else d.sort_values(["entry_score", "mom20", "mom10"], ascending=False)
 
 
 def alpha_engine(x):
@@ -1068,6 +1291,8 @@ def alpha_engine(x):
 
     # v282：流動性是 Gate，不是 alpha；流動性合格後，籌碼開始集中才優先。
     d = apply_v282_liquidity_chip_opportunity_patch(d, mode="ALPHA")
+    # v284：建倉初期連續排序，修正大量同分，抓起漲前夕。
+    d = apply_v284_accumulation_stage_ranking_patch(d, mode="ALPHA")
 
     buy = (
         (d["entry_score"] >= 70)
@@ -1095,7 +1320,7 @@ def alpha_engine(x):
         + d["liquidity_tag"].astype(str)
     )
 
-    return d.sort_values(["v282_opportunity_score", "entry_score", "liquidity_score", "mom20"], ascending=False) if "v282_opportunity_score" in d.columns else d.sort_values(["entry_score", "liquidity_score", "mom20"], ascending=False)
+    return d.sort_values(["v284_stage_score", "entry_score", "v282_opportunity_score", "liquidity_score", "mom20"], ascending=False) if "v284_stage_score" in d.columns else d.sort_values(["v282_opportunity_score", "entry_score", "liquidity_score", "mom20"], ascending=False) if "v282_opportunity_score" in d.columns else d.sort_values(["entry_score", "liquidity_score", "mom20"], ascending=False)
 
 
 def build_trade_plan(core, alpha, regime, signal_date):
