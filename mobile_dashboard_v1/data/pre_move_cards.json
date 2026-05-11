@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-10 23:41:20",
+  "generated_at": "2026-05-11 01:24:18",
   "count": 30,
   "cards": [
     {
@@ -289,12 +289,12 @@
       "color": "green"
     },
     {
-      "stock_id": "2729",
+      "stock_id": "2751",
       "action": "BUY",
       "label": "小倉試單",
       "score": 86.0,
-      "close": 166.0,
-      "price_tier": "100-500",
+      "close": 55.4,
+      "price_tier": "50-100",
       "target_weight": 0.01,
       "suggested_amount": 10000,
       "setup_type": "主力佈局完成",
@@ -328,19 +328,6 @@
       "color": "green"
     },
     {
-      "stock_id": "2937",
-      "action": "BUY",
-      "label": "小倉試單",
-      "score": 86.0,
-      "close": 43.5,
-      "price_tier": "50以下",
-      "target_weight": 0.01,
-      "suggested_amount": 10000,
-      "setup_type": "主力佈局完成",
-      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可",
-      "color": "green"
-    },
-    {
       "stock_id": "3046",
       "action": "BUY",
       "label": "小倉試單",
@@ -354,11 +341,11 @@
       "color": "green"
     },
     {
-      "stock_id": "3541",
+      "stock_id": "5310",
       "action": "BUY",
       "label": "小倉試單",
       "score": 86.0,
-      "close": 23.15,
+      "close": 26.0,
       "price_tier": "50以下",
       "target_weight": 0.01,
       "suggested_amount": 10000,
@@ -367,11 +354,11 @@
       "color": "green"
     },
     {
-      "stock_id": "4120",
+      "stock_id": "5487",
       "action": "BUY",
       "label": "小倉試單",
       "score": 86.0,
-      "close": 46.55,
+      "close": 28.3,
       "price_tier": "50以下",
       "target_weight": 0.01,
       "suggested_amount": 10000,
@@ -380,12 +367,25 @@
       "color": "green"
     },
     {
-      "stock_id": "4754",
+      "stock_id": "5523",
       "action": "BUY",
       "label": "小倉試單",
       "score": 86.0,
-      "close": 37.2,
+      "close": 30.35,
       "price_tier": "50以下",
+      "target_weight": 0.01,
+      "suggested_amount": 10000,
+      "setup_type": "主力佈局完成",
+      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可",
+      "color": "green"
+    },
+    {
+      "stock_id": "6581",
+      "action": "BUY",
+      "label": "小倉試單",
+      "score": 86.0,
+      "close": 110.0,
+      "price_tier": "100-500",
       "target_weight": 0.01,
       "suggested_amount": 10000,
       "setup_type": "主力佈局完成",

@@ -1,32 +1,32 @@
 ﻿{
-  "generated_at": "2026-05-11 07:44:11",
+  "generated_at": "2026-05-11 09:27:04",
   "source": "v266_57_source_safe_string",
-  "signal_date": "2026-05-08",
-  "trade_date": "2026-05-11",
+  "signal_date": "2026-05-11",
+  "trade_date": "2026-05-12",
   "data_state": "fresh",
   "market_regime": "RANGE",
   "regime_info": {
-    "pct_above_ma20": 0.4789,
-    "pct_above_ma60": 0.5155,
-    "pct_mom20_pos": 0.5661,
-    "pct_strong": 0.1546,
-    "median_mom20": 0.0143,
-    "regime_score": 3
+    "pct_above_ma20": 0.442,
+    "pct_above_ma60": 0.4937,
+    "pct_mom20_pos": 0.5166,
+    "pct_strong": 0.1734,
+    "median_mom20": 0.0037,
+    "regime_score": 2
   },
-  "trade_plan_count": 11,
-  "buy_count": 8,
-  "test_count": 3,
-  "watch_count": 0,
+  "trade_plan_count": 9,
+  "buy_count": 3,
+  "test_count": 0,
+  "watch_count": 6,
   "dual_strategy": {
     "CORE": "早期卡位 / 1000張以上小倉",
     "ALPHA": "高流動性強勢延續 / 3000張以上主力倉位"
   },
   "version": "v266.57",
-  "latest_date": "2026-05-08",
-  "updated_at": "2026-05-11 07:45:56",
+  "latest_date": "2026-05-11",
+  "updated_at": "2026-05-11 09:29:34",
   "date_lock_source": "feature_panel_daily.csv",
   "date_state": "locked_from_latest_feature",
-  "last_update": "2026-05-11 07:45:00",
+  "last_update": "2026-05-11 09:28:32",
   "timezone": "Asia/Taipei",
   "time_source": "github_actions_taipei"
 }
