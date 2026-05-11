@@ -39,6 +39,7 @@ V302_MUTABLE_COLS = [
     "top_opportunity", "section_top_opportunity",
     "opportunity_rank", "section_opportunity_rank",
     "stock_name", "liquidity_level", "liquidity_tag",
+    "signal_stage_v303", "signal_stage_rank_v303", "stage_reason_v303",
 ]
 
 
@@ -56,6 +57,11 @@ OUTPUT_COLUMNS = [
     "attack_structure_v302",
     "volume_start_v302",
     "not_overheat_v302",
+    "signal_stage_v303",
+    "signal_stage_rank_v303",
+    "ignition_score_v303",
+    "evolution_score_v303",
+    "stage_reason_v303",
 ]
 
 def clean_text(v, default=""):
@@ -969,6 +975,206 @@ def apply_final_main_force_gate_v302(out):
 
     return out
 
+
+# ===== v303 TEST → IGNITION → EVOLUTION STATE MACHINE =====
+# 核心目的：
+# - TEST：最大機會候選池，不是最後答案。
+# - IGNITION：從 TEST 裡升級，代表「起漲點火」。
+# - EVOLUTION：從 IGNITION 條件再升級，代表「主升前夕」。
+# - 不動持倉 SELL / REDUCE，不動 UI，不重寫 pipeline。
+# - 只在 final_decision_engine 的最後決策層建立狀態升級。
+
+def apply_test_ignition_evolution_v303(out):
+    if out is None or out.empty:
+        return out, pd.DataFrame(), pd.DataFrame()
+
+    out = _v302_force_all_object(out.copy())
+
+    for c in [
+        "signal_stage_v303", "signal_stage_rank_v303",
+        "ignition_score_v303", "evolution_score_v303", "stage_reason_v303",
+    ]:
+        if c not in out.columns:
+            out[c] = ""
+        out[c] = out[c].astype("object").where(out[c].notna(), "")
+
+    final_upper = out["final_action"].astype(str).str.upper()
+    source_upper = out["source"].astype(str).str.upper() if "source" in out.columns else pd.Series("", index=out.index)
+
+    protected = source_upper.eq("EXIT") | final_upper.isin(["SELL", "REDUCE"])
+
+    close = _v302_num(out, "close", 0)
+    open_ = _v302_num(out, "open", close)
+    high = _v302_num(out, "high", close)
+    volume_ratio = _v302_num(out, "volume_ratio", 1)
+    mom5 = _v302_num(out, "mom5", 0)
+    mom10 = _v302_num(out, "mom10", 0)
+    mom20 = _v302_num(out, "mom20", 0)
+
+    ma5 = _v302_num(out, "ma5", close)
+    ma10 = _v302_num(out, "ma10", close)
+    ma20 = _v302_num(out, "ma20", close)
+    ma60 = _v302_num(out, "ma60", close)
+    high20 = _v302_num(out, "high_20", close)
+    high60 = _v302_num(out, "high_60", close)
+    low20 = _v302_num(out, "low_20", close)
+
+    main_gate = _v302_num(out, "main_force_gate_v302", 0) >= 1
+    main_score = _v302_num(out, "main_force_score_v302", 0)
+    chip_trace = _v302_num(out, "chip_trace_v302", 0) >= 1
+    obv_trace = _v302_num(out, "obv_trace_v302", 0) >= 1
+    attack_structure = _v302_num(out, "attack_structure_v302", 0) >= 1
+    volume_start = _v302_num(out, "volume_start_v302", 0) >= 1
+    not_overheat = _v302_num(out, "not_overheat_v302", 0) >= 1
+
+    foreign = _v302_num(out, "foreign_net_buy", 0)
+    trust = _v302_num(out, "trust_net_buy", 0)
+    inst = _v302_num(out, "inst_net_buy", 0)
+    inst_days = _v302_num(out, "inst_buy_days", 0)
+
+    ma20_gap = ((close / ma20) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+    high20_gap = ((close / high20) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+    high60_pos = (close / high60).replace([np.inf, -np.inf], 0).fillna(0)
+    base_range = ((high20 - low20) / close).replace([np.inf, -np.inf], 0).fillna(999)
+    upper_shadow = ((high - close) / high).replace([np.inf, -np.inf], 0).fillna(0)
+    intraday = ((close - open_) / open_).replace([np.inf, -np.inf], 0).fillna(0)
+
+    # TEST 來源：必須先通過主力 Gate，且原本屬於 BUY/TEST/WATCH。
+    base = (
+        (~protected)
+        & final_upper.isin(["BUY", "TEST", "WATCH", "IGNITION", "EVOLUTION"])
+        & main_gate
+        & not_overheat
+    )
+
+    # IGNITION：從 TEST 裡升級到「起漲點火」
+    # 必須：主力痕跡 + 攻擊結構 + 量剛啟動 + 剛突破/站上均線 + 不過熱。
+    ignition_gate = (
+        base
+        & (chip_trace | obv_trace)
+        & attack_structure
+        & volume_start
+        & (close > ma5 * 0.995)
+        & (ma5 >= ma10 * 0.985)
+        & (mom5 > 0.005)
+        & (mom10 > 0.015)
+        & (mom20.between(0.035, 0.32))
+        & (volume_ratio.between(1.12, 3.60))
+        & (ma20_gap.between(-0.015, 0.18))
+        & (high60_pos >= 0.88)
+        & (upper_shadow <= 0.065)
+    )
+
+    # EVOLUTION：主升前夕。比 IGNITION 更嚴格：
+    # 主力 Gate 已通過，量價延續，均線擴散但未過熱，法人/OBV 持續。
+    evolution_gate = (
+        ignition_gate
+        & (mom10 > 0.035)
+        & (mom20.between(0.07, 0.36))
+        & (close > ma10)
+        & (ma5 >= ma10)
+        & (ma10 >= ma20 * 0.99)
+        & (ma20 >= ma60 * 0.96)
+        & (volume_ratio.between(1.15, 3.20))
+        & (ma20_gap.between(0.015, 0.20))
+        & (high60_pos >= 0.92)
+        & (
+            (inst > 0)
+            | (trust > 0)
+            | (foreign > 0)
+            | (inst_days >= 2)
+            | obv_trace
+        )
+        & (upper_shadow <= 0.055)
+        & (intraday > -0.025)
+    )
+
+    ignition_score = (
+        main_score
+        + chip_trace.astype(int) * 18
+        + obv_trace.astype(int) * 15
+        + attack_structure.astype(int) * 12
+        + volume_start.astype(int) * 12
+        + (trust > 0).astype(int) * 10
+        + (foreign > 0).astype(int) * 6
+        + (mom10 > 0.025).astype(int) * 8
+        + (mom20 > 0.06).astype(int) * 8
+        - (ma20_gap > 0.20).astype(int) * 35
+        - (volume_ratio > 4.0).astype(int) * 25
+        - (upper_shadow > 0.065).astype(int) * 25
+    ).round(1)
+
+    evolution_score = (
+        ignition_score
+        + (mom10 > 0.04).astype(int) * 12
+        + (mom20 > 0.10).astype(int) * 12
+        + (close > high20 * 0.995).astype(int) * 10
+        + (ma5 >= ma10).astype(int) * 8
+        + (ma10 >= ma20).astype(int) * 8
+        + ((inst > 0) | (trust > 0) | (foreign > 0)).astype(int) * 10
+        - (ma20_gap > 0.22).astype(int) * 35
+        - (volume_ratio > 3.8).astype(int) * 20
+    ).round(1)
+
+    out["ignition_score_v303"] = ignition_score.astype("object")
+    out["evolution_score_v303"] = evolution_score.astype("object")
+
+    # 先清空，再標狀態。
+    active = base
+    out.loc[active, "signal_stage_v303"] = "TEST"
+    out.loc[active, "stage_reason_v303"] = "主力Gate通過｜列入最大機會TEST池"
+
+    out.loc[ignition_gate, "signal_stage_v303"] = "IGNITION"
+    out.loc[ignition_gate, "stage_reason_v303"] = "TEST升級：點火起漲｜主力痕跡＋剛轉強＋量能啟動＋未過熱"
+
+    out.loc[evolution_gate, "signal_stage_v303"] = "EVOLUTION"
+    out.loc[evolution_gate, "stage_reason_v303"] = "IGNITION升級：主升前夕｜籌碼續強＋量價延續＋均線轉強＋未過熱"
+
+    # 讓 UI 的 IGNITION / EVOLUTION 區塊能吃到資料：直接把 final_action 升級成對應狀態。
+    # TEST 仍保留原 TEST；只有最強的狀態才升級。
+    out.loc[ignition_gate, "final_action"] = "IGNITION"
+    out.loc[ignition_gate, "priority"] = "2.5"
+    out.loc[ignition_gate, "entry_type"] = "起漲點火"
+    out.loc[ignition_gate, "execution_flag"] = "IGNITION"
+    out.loc[ignition_gate, "system_note"] = _v302_append_note(
+        out.loc[ignition_gate, "system_note"],
+        "v303：由 TEST 升級 IGNITION，起漲訊號成立"
+    )
+
+    out.loc[evolution_gate, "final_action"] = "EVOLUTION"
+    out.loc[evolution_gate, "priority"] = "2"
+    out.loc[evolution_gate, "entry_type"] = "主升前夕"
+    out.loc[evolution_gate, "execution_flag"] = "EVOLUTION"
+    out.loc[evolution_gate, "system_note"] = _v302_append_note(
+        out.loc[evolution_gate, "system_note"],
+        "v303：由 IGNITION 升級 EVOLUTION，主升前夕訊號成立"
+    )
+
+    # 排名：EVOLUTION 用 evolution_score，IGNITION 用 ignition_score。
+    for stage, score_col in [("EVOLUTION", "evolution_score_v303"), ("IGNITION", "ignition_score_v303")]:
+        m = out["signal_stage_v303"].astype(str).str.upper().eq(stage)
+        if not m.any():
+            continue
+        idx = (
+            out.loc[m]
+            .assign(_stage_score=pd.to_numeric(out.loc[m, score_col], errors="coerce").fillna(0))
+            .sort_values(["_stage_score", "main_force_score_v302", "stock_id"], ascending=[False, False, True])
+            .head(8 if stage == "IGNITION" else 5)
+            .index
+        )
+        out.loc[idx, "signal_stage_rank_v303"] = [str(i) for i in range(1, len(idx) + 1)]
+
+    ignition_df = out[out["signal_stage_v303"].astype(str).str.upper().eq("IGNITION")].copy()
+    evolution_df = out[out["signal_stage_v303"].astype(str).str.upper().eq("EVOLUTION")].copy()
+
+    ignition_df["_rank"] = pd.to_numeric(ignition_df["signal_stage_rank_v303"], errors="coerce").fillna(999)
+    evolution_df["_rank"] = pd.to_numeric(evolution_df["signal_stage_rank_v303"], errors="coerce").fillna(999)
+    ignition_df = ignition_df.sort_values(["_rank", "ignition_score_v303"], ascending=[True, False]).drop(columns=["_rank"], errors="ignore")
+    evolution_df = evolution_df.sort_values(["_rank", "evolution_score_v303"], ascending=[True, False]).drop(columns=["_rank"], errors="ignore")
+
+    out = _v302_force_all_object(out)
+    return out, ignition_df, evolution_df
+
 def apply_top_opportunities_v26614(out):
     """
     v266.15.2：
@@ -1300,8 +1506,12 @@ def main():
         out = apply_final_main_force_gate_v302(out)
         out = _v302_force_object_cols(out, V302_MUTABLE_COLS)
 
-        # TOP5 機會評測只允許在通過 v302 主力 Gate 後的 BUY/TEST/WATCH 內產生。
+        # v303：TEST → IGNITION → EVOLUTION 狀態升級。
+        # 最大機會先在 TEST；起漲確認進 IGNITION；主升前夕進 EVOLUTION。
+        out, ignition_signal_df, evolution_signal_df = apply_test_ignition_evolution_v303(out)
         out = _v302_force_all_object(out)
+
+        # TOP5 機會評測只允許在通過 v302/v303 後的有效池內產生。
         out, top_opportunity_df = apply_top_opportunities_v26614(out)
         out = _v302_force_all_object(out)
 
@@ -1316,7 +1526,13 @@ def main():
     if "macro_guard" not in locals():
         macro_guard = load_macro_regime_for_v26614()
 
+    if "ignition_signal_df" not in locals():
+        ignition_signal_df = pd.DataFrame()
+    if "evolution_signal_df" not in locals():
+        evolution_signal_df = pd.DataFrame()
+
     if "top_opportunity_df" not in locals():
+        out, ignition_signal_df, evolution_signal_df = apply_test_ignition_evolution_v303(out)
         out, top_opportunity_df = apply_top_opportunities_v26614(out)
 
     out = add_chip_columns(out)
@@ -1340,10 +1556,12 @@ def main():
 
     write_csv_both(out, "final_action_plan.csv")
     write_csv_both(top_opportunity_df, "top_opportunities.csv")
+    write_csv_both(ignition_signal_df, "ignition_signals.csv")
+    write_csv_both(evolution_signal_df, "evolution_signals.csv")
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v302_3_main_force_hard_gate_dtype_safe",
+        "source": "final_decision_engine_v303_test_to_ignition_to_evolution",
         "signal_date": str(out["signal_date"].iloc[0]) if not out.empty and "signal_date" in out.columns else "",
         "trade_date": str(out["trade_date"].iloc[0]) if not out.empty and "trade_date" in out.columns else "",
         "rows": int(len(out)),
@@ -1353,6 +1571,11 @@ def main():
         "test_count": int((out["final_action"] == "TEST").sum()) if not out.empty else 0,
         "watch_count": int((out["final_action"] == "WATCH").sum()) if not out.empty else 0,
         "block_count": int((out["final_action"] == "BLOCK").sum()) if not out.empty else 0,
+        "ignition_count": int((out["final_action"] == "IGNITION").sum()) if not out.empty else 0,
+        "evolution_count": int((out["final_action"] == "EVOLUTION").sum()) if not out.empty else 0,
+        "stage_test_count": int((out["signal_stage_v303"].astype(str).str.upper() == "TEST").sum()) if not out.empty and "signal_stage_v303" in out.columns else 0,
+        "stage_ignition_count": int((out["signal_stage_v303"].astype(str).str.upper() == "IGNITION").sum()) if not out.empty and "signal_stage_v303" in out.columns else 0,
+        "stage_evolution_count": int((out["signal_stage_v303"].astype(str).str.upper() == "EVOLUTION").sum()) if not out.empty and "signal_stage_v303" in out.columns else 0,
         "alpha_count": int((out["strategy_type"].astype(str).str.upper() == "ALPHA").sum()) if not out.empty else 0,
         "core_count": int((out["strategy_type"].astype(str).str.upper() == "CORE").sum()) if not out.empty else 0,
         "high_liquidity_count": int((out["liquidity_level"].astype(str).str.upper() == "HIGH").sum()) if not out.empty else 0,
