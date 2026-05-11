@@ -738,12 +738,42 @@ def _v302_load_chip_source():
     return pd.DataFrame()
 
 
+def _v302_force_object_cols(df, cols):
+    """pandas string dtype 安全鎖定，避免 loc 指派 BLOCK / note / tag 時爆 Invalid value for dtype 'str'。"""
+    if df is None or df.empty:
+        return df
+    for c in cols:
+        if c not in df.columns:
+            df[c] = pd.Series([""] * len(df), index=df.index, dtype="object")
+        else:
+            df[c] = df[c].astype("object").where(df[c].notna(), "")
+    return df
+
+
+def _v302_append_note(series, msg):
+    """安全附加 system_note，全部轉 object/string，避免 pandas string dtype 報錯。"""
+    return (
+        series.astype("object")
+        .where(series.notna(), "")
+        .astype(str)
+        .replace(["nan", "None", "null"], "")
+        .apply(lambda x: (x + "｜" if x else "") + str(msg))
+    )
+
+
 def apply_final_main_force_gate_v302(out):
     if out is None or out.empty:
         return out
 
     out = out.copy()
     out["stock_id"] = out["stock_id"].apply(normalize_stock_id)
+
+    # v302.1：先鎖定 final decision 會被 loc 指派的欄位型別，避免 dtype='str' 爆炸。
+    out = _v302_force_object_cols(out, [
+        "final_action", "entry_type", "execution_flag", "system_note", "reason",
+        "source", "bucket", "strategy_type", "top_opportunity",
+        "section_top_opportunity", "opportunity_rank", "section_opportunity_rank",
+    ])
 
     feature = _v302_load_feature_latest()
     chip = _v302_load_chip_source()
@@ -901,6 +931,7 @@ def apply_final_main_force_gate_v302(out):
     target = (~protected) & final_upper.isin(["BUY", "TEST", "WATCH"]) & (~main_force_gate)
 
     if target.any():
+        # v302.1：所有文字欄位都已強制 object，這裡只塞純字串，避免 pandas string dtype TypeError。
         out.loc[target, "final_action"] = "BLOCK"
         out.loc[target, "priority"] = 9
         out.loc[target, "allowed"] = False
@@ -908,18 +939,24 @@ def apply_final_main_force_gate_v302(out):
         out.loc[target, "target_weight"] = 0
         out.loc[target, "execution_flag"] = "BLOCK"
         out.loc[target, "entry_type"] = "未通過主力Gate"
-        out.loc[target, "system_note"] = (
-            out.loc[target, "system_note"].astype(str).replace(["nan", "None", "null"], "")
-            .apply(lambda x: (x + "｜" if x else "") + "v302主力硬門檻：無籌碼/OBV主力痕跡或攻擊結構不足，禁止進 TEST/WATCH")
+        out.loc[target, "system_note"] = _v302_append_note(
+            out.loc[target, "system_note"],
+            "v302主力硬門檻：無籌碼/OBV主力痕跡或攻擊結構不足，禁止進 TEST/WATCH"
         )
 
     # 通過 Gate 的標的，補註記，但不亂改原本 action。
     passed = (~protected) & final_upper.isin(["BUY", "TEST", "WATCH"]) & main_force_gate
     if passed.any():
-        out.loc[passed, "system_note"] = (
-            out.loc[passed, "system_note"].astype(str).replace(["nan", "None", "null"], "")
-            .apply(lambda x: (x + "｜" if x else "") + "v302主力Gate通過：籌碼/OBV痕跡＋剛轉強＋量能啟動＋未過熱")
+        out.loc[passed, "system_note"] = _v302_append_note(
+            out.loc[passed, "system_note"],
+            "v302主力Gate通過：籌碼/OBV痕跡＋剛轉強＋量能啟動＋未過熱"
         )
+
+    # v302.1：函式出口再次鎖定輸出文字欄位，避免後續 apply_top_opportunities_v26614 再遇到 string dtype。
+    out = _v302_force_object_cols(out, [
+        "final_action", "entry_type", "execution_flag", "system_note", "reason",
+        "top_opportunity", "section_top_opportunity", "opportunity_rank", "section_opportunity_rank",
+    ])
 
     return out
 
@@ -938,10 +975,10 @@ def apply_top_opportunities_v26614(out):
     out = out.copy()
 
     out["opportunity_score"] = out.apply(calc_opportunity_score, axis=1)
-    out["opportunity_rank"] = ""
-    out["top_opportunity"] = ""
-    out["section_opportunity_rank"] = ""
-    out["section_top_opportunity"] = ""
+
+    # v302.1：TOP 欄位用 object，不用 pandas string dtype。
+    for _c in ["opportunity_rank", "top_opportunity", "section_opportunity_rank", "section_top_opportunity"]:
+        out[_c] = pd.Series([""] * len(out), index=out.index, dtype="object")
 
     base_mask = (
         out["final_action"].astype(str).str.upper().isin(["TEST", "WATCH", "BUY"])
@@ -961,9 +998,9 @@ def apply_top_opportunities_v26614(out):
         mask = out["stock_id"].astype(str).eq(str(sid))
         out.loc[mask, "opportunity_rank"] = str(rank)
         out.loc[mask, "top_opportunity"] = f"TOP{rank}"
-        out.loc[mask, "system_note"] = (
-            out.loc[mask, "system_note"].astype(str).replace(["nan", "None", "null"], "")
-            .apply(lambda x: (x + "｜" if x else "") + f"全清單 TOP{rank}：優先觀察發動機會")
+        out.loc[mask, "system_note"] = _v302_append_note(
+            out.loc[mask, "system_note"],
+            f"全清單 TOP{rank}：優先觀察發動機會"
         )
 
     # 分區 TOP5：讓 WATCH / TEST 各自有 TOP
@@ -977,9 +1014,9 @@ def apply_top_opportunities_v26614(out):
             mask = out["stock_id"].astype(str).eq(str(sid))
             out.loc[mask, "section_opportunity_rank"] = str(rank)
             out.loc[mask, "section_top_opportunity"] = f"{label}TOP{rank}"
-            out.loc[mask, "system_note"] = (
-                out.loc[mask, "system_note"].astype(str).replace(["nan", "None", "null"], "")
-                .apply(lambda x: (x + "｜" if x else "") + f"{label}清單 TOP{rank}：本區最可能發動")
+            out.loc[mask, "system_note"] = _v302_append_note(
+                out.loc[mask, "system_note"],
+                f"{label}清單 TOP{rank}：本區最可能發動"
             )
 
     top_df = out[
@@ -1260,6 +1297,14 @@ def main():
 
     out = add_chip_columns(out)
 
+    # v302.1：籌碼欄位合併後再次鎖定文字欄位型別，避免後續輸出/摘要前 dtype 衝突。
+    out = _v302_force_object_cols(out, [
+        "final_action", "entry_type", "execution_flag", "system_note", "reason",
+        "source", "bucket", "strategy_type", "top_opportunity",
+        "section_top_opportunity", "opportunity_rank", "section_opportunity_rank",
+        "stock_name", "liquidity_level", "liquidity_tag",
+    ])
+
     # v266.32D：籌碼欄位合併後再次保險，避免日期欄位遺失或被覆蓋。
     if not out.empty:
         if "signal_date" not in out.columns:
@@ -1279,7 +1324,7 @@ def main():
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v302_main_force_hard_gate",
+        "source": "final_decision_engine_v302_1_main_force_hard_gate_dtype_safe",
         "signal_date": str(out["signal_date"].iloc[0]) if not out.empty and "signal_date" in out.columns else "",
         "trade_date": str(out["trade_date"].iloc[0]) if not out.empty and "trade_date" in out.columns else "",
         "rows": int(len(out)),
