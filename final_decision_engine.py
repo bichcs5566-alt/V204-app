@@ -1148,6 +1148,256 @@ def build_v277_max_opportunity_lanes(out):
 
     return ignition.reset_index(drop=True), evolution.reset_index(drop=True)
 
+
+
+# ===== v278 TRUE TRIGGER DIRECT LANE PATCH =====
+# 目的：
+# 1. 不改原本 final_action_plan 主表
+# 2. 不動 pipeline / UI / 持倉 / macro / export schema
+# 3. 只把 TEST / WATCH / BUY 中「強 + 正在發動」的標的，寫入 IGNITION / EVOLUTION
+# 4. IGNITION = 最大機會且有觸發確認，可直接進場評估
+# 5. EVOLUTION = 接近觸發、準備升級
+
+def _v278_num_series(s, default=0.0):
+    try:
+        return pd.to_numeric(s, errors="coerce").fillna(default)
+    except Exception:
+        return pd.Series(default)
+
+
+def _v278_pct(s):
+    s = pd.to_numeric(s, errors="coerce").fillna(0)
+    if len(s) <= 1:
+        return pd.Series(1.0, index=s.index)
+    return s.rank(method="average", pct=True).fillna(0)
+
+
+def _v278_read_latest_feature_map():
+    """
+    只讀資料，不改主流程。
+    用 feature_panel_daily 補 MA / 均量 / K棒欄位，若沒有欄位則自動略過。
+    """
+    df = read_csv_any([ROOT / "feature_panel_daily.csv", DATA_DIR / "feature_panel_daily.csv"])
+    if df.empty or "stock_id" not in df.columns:
+        return {}
+
+    df = df.copy()
+    df["stock_id"] = df["stock_id"].apply(normalize_stock_id)
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        df = df.sort_values(["stock_id", "date"])
+        df = df.groupby("stock_id", as_index=False).tail(1).copy()
+    else:
+        df = df.drop_duplicates("stock_id", keep="last").copy()
+
+    return {str(r["stock_id"]): r.to_dict() for _, r in df.iterrows()}
+
+
+def _v278_pick_series(df, feature_map, names, default=0.0):
+    for c in names:
+        if c in df.columns:
+            return pd.to_numeric(df[c], errors="coerce").fillna(default)
+
+    # 從 feature_map 依 stock_id 補。
+    sid = df["stock_id"].astype(str).apply(normalize_stock_id) if "stock_id" in df.columns else pd.Series("", index=df.index)
+    vals = []
+    for s in sid:
+        item = feature_map.get(str(s), {})
+        v = default
+        for c in names:
+            if c in item and clean_text(item.get(c), "") not in ["", "--"]:
+                v = item.get(c)
+                break
+        vals.append(v)
+    return pd.to_numeric(pd.Series(vals, index=df.index), errors="coerce").fillna(default)
+
+
+def _v278_text_series(df, names):
+    out = pd.Series("", index=df.index)
+    for c in names:
+        if c in df.columns:
+            out = out + " " + df[c].astype(str).fillna("")
+    return out.str.upper()
+
+
+def build_v278_true_trigger_lanes(out):
+    """
+    v278 真觸發直通區：
+    - 先沿用 v277 的最大機會概念
+    - 再加入 Trigger：量能確認 / 均線結構 / 未過熱 / 文字突破訊號 / 假突破排除
+    - 只輸出 ignition_candidates.csv / strategy_evolution.csv，不改 final_action_plan
+    """
+    if out is None or out.empty:
+        return pd.DataFrame(), pd.DataFrame()
+
+    df = out.copy()
+    action = _v277_clean_action_series(df)
+    df = df.loc[action.isin(["BUY", "TEST", "WATCH"])].copy()
+    if df.empty:
+        return pd.DataFrame(), pd.DataFrame()
+
+    action = _v277_clean_action_series(df)
+    feature_map = _v278_read_latest_feature_map()
+
+    score = _v278_pick_series(df, feature_map, ["score", "entry_score", "total_score"], 0)
+    opportunity = _v278_pick_series(df, feature_map, ["opportunity_score", "v277_direct_entry_score"], 0)
+    liquidity = _v278_pick_series(df, feature_map, ["liquidity_score"], 0)
+    volume = _v278_pick_series(df, feature_map, ["volume", "vol", "成交量"], 0)
+    turnover = _v278_pick_series(df, feature_map, ["turnover", "amount", "成交金額"], 0)
+    chip = _v278_pick_series(df, feature_map, ["chip_score", "chip_concentration_score"], 0)
+
+    close = _v278_pick_series(df, feature_map, ["close", "ref_price", "price", "收盤價"], 0)
+    openp = _v278_pick_series(df, feature_map, ["open", "Open", "開盤價"], 0)
+    high = _v278_pick_series(df, feature_map, ["high", "High", "最高價"], 0)
+    low = _v278_pick_series(df, feature_map, ["low", "Low", "最低價"], 0)
+    ma5 = _v278_pick_series(df, feature_map, ["ma5", "MA5", "ma_5", "sma5"], 0)
+    ma10 = _v278_pick_series(df, feature_map, ["ma10", "MA10", "ma_10", "sma10"], 0)
+    ma20 = _v278_pick_series(df, feature_map, ["ma20", "MA20", "ma_20", "sma20"], 0)
+    vol_ma5 = _v278_pick_series(df, feature_map, ["volume_ma5", "vol_ma5", "avg_volume_5", "volume_5ma"], 0)
+
+    text = _v278_text_series(df, [
+        "reason", "system_note", "entry_type", "action_sub", "top_opportunity",
+        "section_top_opportunity", "v276_opportunity_tag", "v277_direct_entry_tag"
+    ])
+
+    # === Trigger 條件 ===
+    ma_ready = (close > 0) & (ma5 > 0) & (ma10 > 0) & (ma20 > 0) & (close >= ma5) & (ma5 >= ma10) & (ma10 >= ma20)
+    near_support = (ma5 > 0) & ((close / ma5 - 1).abs() <= 0.08)
+    not_overheat_ma = (ma20 > 0) & ((close / ma20 - 1) <= 0.24)
+
+    # 沒有均量欄位時，改用同批候選的成交量百分位。
+    vol_confirm_by_ma = (vol_ma5 > 0) & (volume >= vol_ma5 * 1.10)
+    vol_confirm_by_pct = _v278_pct(volume) >= 0.70
+    volume_confirm = vol_confirm_by_ma | vol_confirm_by_pct
+
+    body = (close - openp).fillna(0)
+    candle_range = (high - low).replace(0, np.nan)
+    upper_shadow_ratio = ((high - close) / candle_range).replace([np.inf, -np.inf], np.nan).fillna(0)
+    strong_candle = (openp > 0) & (close > openp) & (upper_shadow_ratio <= 0.45)
+
+    breakout_text = text.str.contains("突破|起漲|點火|轉強|主力|強勢|TOP|BREAK|BREAKOUT|IGNITION", regex=True)
+    risk_text = text.str.contains("過熱|追高|長上影|出貨|誘多|假突破|AVOID|RISK|禁止|BLOCK", regex=True)
+    fake_break_risk = risk_text | (upper_shadow_ratio >= 0.55) | ((ma20 > 0) & ((close / ma20 - 1) > 0.30))
+
+    trigger_confirm = (
+        (ma_ready & volume_confirm & not_overheat_ma) |
+        (breakout_text & volume_confirm & near_support)
+    ) & (~fake_break_risk)
+
+    near_trigger = (
+        ((ma_ready | breakout_text) & (~fake_break_risk)) |
+        (volume_confirm & near_support & not_overheat_ma)
+    )
+
+    action_bonus = pd.Series(0.0, index=df.index)
+    action_bonus.loc[action.eq("BUY")] = 0.10
+    action_bonus.loc[action.eq("TEST")] = 0.06
+    action_bonus.loc[action.eq("WATCH")] = 0.02
+
+    trigger_bonus = pd.Series(0.0, index=df.index)
+    trigger_bonus.loc[ma_ready] += 0.08
+    trigger_bonus.loc[volume_confirm] += 0.07
+    trigger_bonus.loc[breakout_text] += 0.06
+    trigger_bonus.loc[strong_candle] += 0.04
+    trigger_bonus.loc[trigger_confirm] += 0.13
+
+    risk_penalty = pd.Series(0.0, index=df.index)
+    risk_penalty.loc[fake_break_risk] = 0.35
+
+    # v278 直通分數：強度 + 觸發，觸發權重高於純分數。
+    trigger_score = (
+        _v278_pct(score) * 0.24 +
+        _v278_pct(opportunity) * 0.14 +
+        _v278_pct(liquidity) * 0.08 +
+        _v278_pct(volume) * 0.10 +
+        _v278_pct(turnover) * 0.07 +
+        _v278_pct(chip) * 0.07 +
+        trigger_bonus +
+        action_bonus -
+        risk_penalty
+    ).clip(0, 1)
+
+    df["v278_trigger_score"] = (60 + trigger_score * 39).round(1)
+    df["v278_trigger_confirm"] = np.where(trigger_confirm, "YES", np.where(near_trigger, "NEAR", "NO"))
+    df["v278_trigger_tag"] = np.where(
+        fake_break_risk,
+        "AVOID_FAKE_BREAK",
+        np.where(
+            trigger_confirm,
+            "S_TRUE_TRIGGER",
+            np.where(near_trigger, "A_NEAR_TRIGGER", "B_RANK_ONLY")
+        )
+    )
+    df["v278_trigger_reason"] = np.where(
+        fake_break_risk,
+        "排除：疑似過熱、假突破、長上影或出貨風險。",
+        np.where(
+            trigger_confirm,
+            "真觸發：強度、量能、均線/突破結構同時成立。",
+            np.where(near_trigger, "準觸發：接近發動，但仍需下一根確認。", "僅排名強，尚未出現明確觸發。")
+        )
+    )
+
+    df = df.sort_values(["v278_trigger_score", "score", "stock_id"], ascending=[False, False, True]).reset_index(drop=True)
+
+    ignition_pool = df[df["v278_trigger_tag"].eq("S_TRUE_TRIGGER")].copy()
+    evolution_pool = df[df["v278_trigger_tag"].isin(["A_NEAR_TRIGGER", "S_TRUE_TRIGGER"])].copy()
+
+    # 若當天沒有完美真觸發，不讓 IGNITION 空白到失去操作價值：取前 1~3 檔 NEAR 作為「待開盤確認」。
+    if ignition_pool.empty:
+        ignition_pool = df[df["v278_trigger_tag"].eq("A_NEAR_TRIGGER")].head(3).copy()
+
+    ignition = ignition_pool.head(3).copy()
+    used = set(ignition.get("stock_id", pd.Series(dtype=str)).astype(str).tolist()) if not ignition.empty else set()
+    evolution = evolution_pool[~evolution_pool["stock_id"].astype(str).isin(used)].head(5).copy()
+
+    if not ignition.empty:
+        ignition["source"] = "IGNITION"
+        ignition["bucket"] = "IGNITION"
+        ignition["strategy_type"] = "IGNITION"
+        ignition["strategy_name"] = "v278 真觸發最大機會"
+        ignition["final_action"] = "BUY"
+        ignition["action"] = "BUY"
+        ignition["entry_type"] = np.where(
+            ignition["v278_trigger_confirm"].eq("YES"),
+            "真觸發直通",
+            "準觸發直通"
+        )
+        ignition["action_sub"] = "TRUE_TRIGGER_ENTRY"
+        ignition["score"] = ignition["v278_trigger_score"]
+        ignition["entry_score"] = ignition["v278_trigger_score"]
+        ignition["execution_flag"] = "TOP"
+        ignition["reason"] = ignition.apply(
+            lambda r: f"v278最大機會直通｜{clean_text(r.get('v278_trigger_reason', ''))}｜原訊號：{clean_text(r.get('reason', ''), '依策略判斷')}",
+            axis=1
+        )
+        ignition["system_note"] = "真觸發最大機會：可直接進場評估；若開高過熱，等待回測不破再進。"
+        ignition["operation_advice_zh"] = "可直接進場評估，但仍建議分批；若開盤急拉或長上影，暫緩追價。"
+        ignition["ignition_hint_zh"] = "由 TEST / WATCH / BUY 升級：強度 + 量能 + 觸發確認。"
+        ignition["fake_risk_tag"] = "PASS_V278"
+        ignition["fake_reason_zh"] = "已排除明顯過熱、長上影、出貨與假突破風險。"
+
+    if not evolution.empty:
+        evolution["source"] = "EVOLUTION"
+        evolution["bucket"] = "EVOLUTION"
+        evolution["strategy_type"] = "EVOLUTION"
+        evolution["strategy_name"] = "v278 準觸發進化候選"
+        evolution["final_action"] = "TEST"
+        evolution["action"] = "TEST"
+        evolution["entry_type"] = "準觸發升級"
+        evolution["action_sub"] = "TRIGGER_UPGRADE"
+        evolution["score"] = evolution["v278_trigger_score"]
+        evolution["entry_score"] = evolution["v278_trigger_score"]
+        evolution["execution_flag"] = "TOP"
+        evolution["evolution_phase"] = "WATCH/TEST → TRUE_TRIGGER候選"
+        evolution["reason"] = evolution.apply(
+            lambda r: f"v278準觸發進化｜{clean_text(r.get('v278_trigger_reason', ''))}｜原訊號：{clean_text(r.get('reason', ''), '依策略判斷')}",
+            axis=1
+        )
+        evolution["system_note"] = "準觸發進化候選：接近最大機會，需確認量價延續，不建議一次重倉。"
+
+    return ignition.reset_index(drop=True), evolution.reset_index(drop=True)
+
 def main():
     generated_at = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
     lookup = make_lookup()
@@ -1437,13 +1687,18 @@ def main():
         except Exception:
             pass
 
-    # v277 MAX OPPORTUNITY DIRECT LANE PATCH：
-    # 不改 final_action_plan 主表，只另外寫入 IGNITION / EVOLUTION 兩個最大機會直通區。
+    # v278 TRUE TRIGGER DIRECT LANE PATCH：
+    # 不改 final_action_plan 主表，只另外寫入 IGNITION / EVOLUTION 真觸發直通區。
     try:
-        ignition_v277_df, evolution_v277_df = build_v277_max_opportunity_lanes(out)
+        ignition_v277_df, evolution_v277_df = build_v278_true_trigger_lanes(out)
     except Exception as e:
-        print("v277 max opportunity lane skipped:", e)
-        ignition_v277_df, evolution_v277_df = pd.DataFrame(), pd.DataFrame()
+        print("v278 true trigger lane skipped:", e)
+        # 若 v278 讀不到技術欄位，保留 v277 作為安全 fallback，避免 UI 區塊空白。
+        try:
+            ignition_v277_df, evolution_v277_df = build_v277_max_opportunity_lanes(out)
+        except Exception as e2:
+            print("v277 fallback lane skipped:", e2)
+            ignition_v277_df, evolution_v277_df = pd.DataFrame(), pd.DataFrame()
 
     write_csv_both(out, "final_action_plan.csv")
     write_csv_both(top_opportunity_df, "top_opportunities.csv")
@@ -1452,7 +1707,7 @@ def main():
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v26632D_trade_plan_date_force_fill",
+        "source": "final_decision_engine_v278_true_trigger_direct_lane",
         "signal_date": str(out["signal_date"].iloc[0]) if not out.empty and "signal_date" in out.columns else "",
         "trade_date": str(out["trade_date"].iloc[0]) if not out.empty and "trade_date" in out.columns else "",
         "rows": int(len(out)),
