@@ -1,14 +1,13 @@
 {
-  "generated_at": "2026-05-11 15:50:40",
+  "generated_at": "2026-05-11 18:19:27",
   "source": "feature_timing_engine",
-  "rows": 506,
+  "rows": 499,
   "entry_counts": {
-    "WAIT": 498,
-    "BREAK": 7,
-    "PULLBACK": 1
+    "WAIT": 492,
+    "BREAK": 7
   },
   "lane_counts": {
-    "PRE": 462,
+    "PRE": 455,
     "ALPHA": 35,
     "CORE": 9
   },
