@@ -732,15 +732,23 @@ def _v302_load_chip_source():
 
 
 def _v302_force_object_cols(df, cols):
-    """pandas string dtype 安全鎖定，避免 loc 指派 BLOCK / note / tag 時爆 Invalid value for dtype 'str'。"""
+    """pandas string dtype 安全鎖定，避免 loc 指派 BLOCK / note / tag / 數值補欄時爆 Invalid value for dtype 'str'。"""
     if df is None or df.empty:
         return df
+    df = df.astype("object")
     for c in cols:
         if c not in df.columns:
             df[c] = pd.Series([""] * len(df), index=df.index, dtype="object")
         else:
             df[c] = df[c].astype("object").where(df[c].notna(), "")
     return df
+
+
+def _v302_force_all_object(df):
+    """v302.3：整張表鎖成 object，防止 pandas string dtype 在 loc 指派數字/布林時爆炸。"""
+    if df is None or df.empty:
+        return df
+    return df.astype("object")
 
 
 def _v302_append_note(series, msg):
@@ -759,9 +767,10 @@ def apply_final_main_force_gate_v302(out):
         return out
 
     out = out.copy()
+    out = _v302_force_all_object(out)
     out["stock_id"] = out["stock_id"].apply(normalize_stock_id)
 
-    # v302.1：先鎖定 final decision 會被 loc 指派的欄位型別，避免 dtype='str' 爆炸。
+    # v302.3：先鎖整張表 object，再鎖定 final decision 會被 loc 指派的欄位型別。
     out = _v302_force_object_cols(out, [
         "final_action", "entry_type", "execution_flag", "system_note", "reason",
         "source", "bucket", "strategy_type", "top_opportunity",
@@ -784,17 +793,23 @@ def apply_final_main_force_gate_v302(out):
         ]
         need = [c for c in need if c in feature.columns]
         out = out.merge(feature[need], on="stock_id", how="left", suffixes=("", "_fx"))
+        # v302.3：merge 後 pandas 可能把欄位推回 string dtype，先整張表轉 object。
+        out = _v302_force_all_object(out)
 
         # 若原欄位空值，用 feature 補。
         for c in ["close", "volume", "turnover", "liquidity_score", "liquidity_level", "liquidity_tag"]:
             fx = c + "_fx"
             if fx in out.columns:
                 if c not in out.columns:
-                    out[c] = out[fx]
+                    out[c] = out[fx].astype("object")
                 else:
+                    out[c] = out[c].astype("object")
+                    out[fx] = out[fx].astype("object")
                     empty = out[c].astype(str).str.strip().isin(["", "nan", "None", "null", "0", "0.0"])
-                    out.loc[empty, c] = out.loc[empty, fx]
+                    # v302.3：右側也轉 object，避免 string dtype 指派數字爆炸。
+                    out.loc[empty, c] = out.loc[empty, fx].astype("object")
                 out = out.drop(columns=[fx], errors="ignore")
+        out = _v302_force_all_object(out)
 
     # 合併 chip：每日籌碼驗證。
     if not chip.empty:
@@ -804,6 +819,7 @@ def apply_final_main_force_gate_v302(out):
         ]
         need = [c for c in need if c in chip.columns]
         out = out.merge(chip[need], on="stock_id", how="left")
+        out = _v302_force_all_object(out)
 
     for c in [
         "foreign_net_buy", "trust_net_buy", "dealer_net_buy", "inst_net_buy",
@@ -966,8 +982,10 @@ def apply_top_opportunities_v26614(out):
         return out, pd.DataFrame()
 
     out = out.copy()
+    out = _v302_force_all_object(out)
 
     out["opportunity_score"] = out.apply(calc_opportunity_score, axis=1)
+    out = _v302_force_all_object(out)
 
     # v302.1：TOP 欄位用 object，不用 pandas string dtype。
     for _c in ["opportunity_rank", "top_opportunity", "section_opportunity_rank", "section_top_opportunity"]:
@@ -1203,6 +1221,7 @@ def main():
             })
 
     out = pd.DataFrame(rows, columns=OUTPUT_COLUMNS)
+    out = _v302_force_all_object(out)
 
     if not out.empty:
         out["stock_id"] = out["stock_id"].apply(normalize_stock_id)
@@ -1282,7 +1301,9 @@ def main():
         out = _v302_force_object_cols(out, V302_MUTABLE_COLS)
 
         # TOP5 機會評測只允許在通過 v302 主力 Gate 後的 BUY/TEST/WATCH 內產生。
+        out = _v302_force_all_object(out)
         out, top_opportunity_df = apply_top_opportunities_v26614(out)
+        out = _v302_force_all_object(out)
 
         out["_score_num"] = pd.to_numeric(out["score"], errors="coerce").fillna(0)
         out["_priority_num"] = pd.to_numeric(out["priority"], errors="coerce").fillna(9)
@@ -1322,7 +1343,7 @@ def main():
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v302_2_main_force_hard_gate_dtype_safe",
+        "source": "final_decision_engine_v302_3_main_force_hard_gate_dtype_safe",
         "signal_date": str(out["signal_date"].iloc[0]) if not out.empty and "signal_date" in out.columns else "",
         "trade_date": str(out["trade_date"].iloc[0]) if not out.empty and "trade_date" in out.columns else "",
         "rows": int(len(out)),
