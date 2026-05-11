@@ -40,6 +40,7 @@ V302_MUTABLE_COLS = [
     "opportunity_rank", "section_opportunity_rank",
     "stock_name", "liquidity_level", "liquidity_tag",
     "signal_stage_v303", "signal_stage_rank_v303", "stage_reason_v303",
+    "test_rank_score_v304", "test_rank_v304", "test_top_tag_v304", "test_rank_reason_v304",
 ]
 
 
@@ -62,6 +63,10 @@ OUTPUT_COLUMNS = [
     "ignition_score_v303",
     "evolution_score_v303",
     "stage_reason_v303",
+    "test_rank_score_v304",
+    "test_rank_v304",
+    "test_top_tag_v304",
+    "test_rank_reason_v304",
 ]
 
 def clean_text(v, default=""):
@@ -1202,6 +1207,141 @@ def apply_test_ignition_evolution_v303(out):
     out = _v302_force_all_object(out)
     return out, ignition_df, evolution_df
 
+# ===== v304 TEST INTERNAL RANKING / TEST 內部排序強化 =====
+def apply_test_internal_rank_v304(out):
+    if out is None or out.empty:
+        return out
+
+    out = _v302_force_all_object(out.copy())
+
+    for c in ["test_rank_score_v304", "test_rank_v304", "test_top_tag_v304", "test_rank_reason_v304"]:
+        if c not in out.columns:
+            out[c] = ""
+        out[c] = out[c].astype("object").where(out[c].notna(), "")
+
+    final_upper = out["final_action"].astype(str).str.upper()
+    stage_upper = out["signal_stage_v303"].astype(str).str.upper() if "signal_stage_v303" in out.columns else pd.Series("", index=out.index)
+    test_mask = final_upper.eq("TEST") | stage_upper.eq("TEST")
+    if not test_mask.any():
+        return out
+
+    close = _v302_num(out, "close", 0)
+    high = _v302_num(out, "high", close)
+    open_ = _v302_num(out, "open", close)
+    volume_ratio = _v302_num(out, "volume_ratio", 1)
+
+    mom5 = _v302_num(out, "mom5", 0)
+    mom10 = _v302_num(out, "mom10", 0)
+    mom20 = _v302_num(out, "mom20", 0)
+
+    ma5 = _v302_num(out, "ma5", close)
+    ma10 = _v302_num(out, "ma10", close)
+    ma20 = _v302_num(out, "ma20", close)
+    high20 = _v302_num(out, "high_20", close)
+    high60 = _v302_num(out, "high_60", close)
+
+    main_score = _v302_num(out, "main_force_score_v302", 0)
+    chip_trace = _v302_num(out, "chip_trace_v302", 0) >= 1
+    obv_trace = _v302_num(out, "obv_trace_v302", 0) >= 1
+    attack_structure = _v302_num(out, "attack_structure_v302", 0) >= 1
+    volume_start = _v302_num(out, "volume_start_v302", 0) >= 1
+    not_overheat = _v302_num(out, "not_overheat_v302", 0) >= 1
+
+    foreign = _v302_num(out, "foreign_net_buy", 0)
+    trust = _v302_num(out, "trust_net_buy", 0)
+    inst = _v302_num(out, "inst_net_buy", 0)
+    inst_days = _v302_num(out, "inst_buy_days", 0)
+
+    ma20_gap = ((close / ma20) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+    high20_pos = (close / high20).replace([np.inf, -np.inf], 0).fillna(0)
+    high60_pos = (close / high60).replace([np.inf, -np.inf], 0).fillna(0)
+    upper_shadow = ((high - close) / high).replace([np.inf, -np.inf], 0).fillna(0)
+    intraday = ((close - open_) / open_).replace([np.inf, -np.inf], 0).fillna(0)
+
+    near_ignition = (
+        (close > ma20 * 0.975)
+        & (ma5 >= ma10 * 0.965)
+        & (mom10 > -0.006)
+        & (mom20 > 0.010)
+        & (volume_ratio.between(0.95, 4.30))
+        & (high60_pos >= 0.80)
+        & (upper_shadow <= 0.095)
+    )
+
+    compression_to_break = (
+        (high20_pos >= 0.90)
+        & (high20_pos <= 1.03)
+        & (ma20_gap.between(-0.045, 0.255))
+        & (upper_shadow <= 0.095)
+    )
+
+    chip_strength = (
+        (inst > 0).astype(int) * 16
+        + (trust > 0).astype(int) * 14
+        + (foreign > 0).astype(int) * 8
+        + (inst_days >= 1).astype(int) * 6
+        + chip_trace.astype(int) * 18
+        + obv_trace.astype(int) * 16
+    )
+
+    structure_strength = (
+        attack_structure.astype(int) * 15
+        + near_ignition.astype(int) * 14
+        + compression_to_break.astype(int) * 10
+        + (close > ma20).astype(int) * 6
+        + (ma5 >= ma10).astype(int) * 6
+        + (mom5 > -0.01).astype(int) * 4
+        + (mom10 > 0.00).astype(int) * 6
+        + (mom20 > 0.03).astype(int) * 6
+    )
+
+    volume_strength = (
+        volume_start.astype(int) * 12
+        + volume_ratio.between(1.00, 2.20).astype(int) * 12
+        + volume_ratio.between(2.20, 3.50).astype(int) * 7
+        - (volume_ratio > 4.80).astype(int) * 25
+    )
+
+    risk_penalty = (
+        (ma20_gap > 0.28).astype(int) * 30
+        + (mom20 > 0.48).astype(int) * 30
+        + (upper_shadow > 0.10).astype(int) * 25
+        + ((intraday < -0.045) & (volume_ratio > 2.0)).astype(int) * 25
+        + (~not_overheat).astype(int) * 35
+    )
+
+    test_rank_score = (main_score * 0.55 + chip_strength + structure_strength + volume_strength - risk_penalty).round(1)
+
+    out.loc[test_mask, "test_rank_score_v304"] = test_rank_score.loc[test_mask].astype("object")
+    out.loc[test_mask, "test_rank_reason_v304"] = "TEST排序：主力痕跡＋剛轉強＋接近點火＋未過熱"
+
+    ranked = (
+        out.loc[test_mask]
+        .assign(_test_rank_score=pd.to_numeric(out.loc[test_mask, "test_rank_score_v304"], errors="coerce").fillna(0))
+        .sort_values(["_test_rank_score", "main_force_score_v302", "stock_id"], ascending=[False, False, True])
+    )
+
+    if not ranked.empty:
+        ordered_idx = ranked.index.tolist()
+        out.loc[ordered_idx, "test_rank_v304"] = [str(i) for i in range(1, len(ordered_idx) + 1)]
+        top5_idx = ordered_idx[:5]
+        top10_idx = ordered_idx[5:10]
+
+        if top5_idx:
+            out.loc[top5_idx, "test_top_tag_v304"] = "🔥TOP5"
+            out.loc[top5_idx, "top_opportunity"] = "🔥TEST TOP5"
+            out.loc[top5_idx, "section_top_opportunity"] = "🔥TEST TOP5"
+            out.loc[top5_idx, "system_note"] = _v302_append_note(
+                out.loc[top5_idx, "system_note"],
+                "v304：TEST TOP5，最接近 IGNITION 的最大機會"
+            )
+
+        if top10_idx:
+            out.loc[top10_idx, "test_top_tag_v304"] = "TOP10"
+
+    out = _v302_force_all_object(out)
+    return out
+
 def apply_top_opportunities_v26614(out):
     """
     v266.15.2：
@@ -1538,7 +1678,11 @@ def main():
         out, ignition_signal_df, evolution_signal_df = apply_test_ignition_evolution_v303(out)
         out = _v302_force_all_object(out)
 
-        # TOP5 機會評測只允許在通過 v302/v303 後的有效池內產生。
+        # v304：TEST 內部排序強化，只排序 TEST，不動 Gate / IGNITION / EVOLUTION。
+        out = apply_test_internal_rank_v304(out)
+        out = _v302_force_all_object(out)
+
+        # TOP5 機會評測只允許在通過 v302/v303/v304 後的有效池內產生。
         out, top_opportunity_df = apply_top_opportunities_v26614(out)
         out = _v302_force_all_object(out)
 
@@ -1560,6 +1704,7 @@ def main():
 
     if "top_opportunity_df" not in locals():
         out, ignition_signal_df, evolution_signal_df = apply_test_ignition_evolution_v303(out)
+        out = apply_test_internal_rank_v304(out)
         out, top_opportunity_df = apply_top_opportunities_v26614(out)
 
     out = add_chip_columns(out)
@@ -1588,7 +1733,7 @@ def main():
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v303_3_ignition_evolution_practical",
+        "source": "final_decision_engine_v304_test_internal_rank_top5",
         "signal_date": str(out["signal_date"].iloc[0]) if not out.empty and "signal_date" in out.columns else "",
         "trade_date": str(out["trade_date"].iloc[0]) if not out.empty and "trade_date" in out.columns else "",
         "rows": int(len(out)),
@@ -1603,6 +1748,7 @@ def main():
         "stage_test_count": int((out["signal_stage_v303"].astype(str).str.upper() == "TEST").sum()) if not out.empty and "signal_stage_v303" in out.columns else 0,
         "stage_ignition_count": int((out["signal_stage_v303"].astype(str).str.upper() == "IGNITION").sum()) if not out.empty and "signal_stage_v303" in out.columns else 0,
         "stage_evolution_count": int((out["signal_stage_v303"].astype(str).str.upper() == "EVOLUTION").sum()) if not out.empty and "signal_stage_v303" in out.columns else 0,
+        "test_top5_count_v304": int((out["test_top_tag_v304"].astype(str).str.upper() == "🔥TOP5").sum()) if not out.empty and "test_top_tag_v304" in out.columns else 0,
         "alpha_count": int((out["strategy_type"].astype(str).str.upper() == "ALPHA").sum()) if not out.empty else 0,
         "core_count": int((out["strategy_type"].astype(str).str.upper() == "CORE").sum()) if not out.empty else 0,
         "high_liquidity_count": int((out["liquidity_level"].astype(str).str.upper() == "HIGH").sum()) if not out.empty else 0,
