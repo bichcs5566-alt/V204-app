@@ -1363,7 +1363,7 @@ def apply_v300_alpha_restore_top5_labels(d, mode="ALPHA", limit=5):
         if len(idx) == 0:
             continue
 
-        ranks = list(range(1, len(idx) + 1))
+        ranks = [str(x) for x in range(1, len(idx) + 1)]
         d.loc[idx, "top_opportunity"] = "🔥TOP"
         d.loc[idx, "section_top_opportunity"] = label
         d.loc[idx, "opportunity_rank"] = ranks
@@ -1511,19 +1511,20 @@ def apply_v301_chip_confirm_top5(df, limit=5):
     df["v301_chip_confirm"] = top_gate.astype(int)
     df["v301_main_force_score"] = chip_score
 
-    if "top_opportunity" not in df.columns:
-        df["top_opportunity"] = ""
-
-    if "section_top_opportunity" not in df.columns:
-        df["section_top_opportunity"] = ""
-
-    if "top_reason" not in df.columns:
-        df["top_reason"] = ""
-
-    if "opportunity_rank" not in df.columns:
-        df["opportunity_rank"] = pd.NA
-    else:
-        df["opportunity_rank"] = df["opportunity_rank"].astype("object")
+    # v301 TYPEFIX 2：
+    # GitHub runner / pandas 3.x 會把部分空字串欄位推成 string dtype；
+    # 後面 loc 指派非純字串時會報 TypeError。
+    # 這裡將 TOP5 相關欄位全部鎖成 object，避免 dtype 再炸。
+    for _c in [
+        "top_opportunity",
+        "section_top_opportunity",
+        "top_reason",
+        "opportunity_rank",
+    ]:
+        if _c not in df.columns:
+            df[_c] = pd.Series([""] * len(df), index=df.index, dtype="object")
+        else:
+            df[_c] = df[_c].astype("object").where(df[_c].notna(), "")
 
     action = df["action"].astype(str).str.upper() if "action" in df.columns else pd.Series("", index=df.index)
 
@@ -1551,8 +1552,8 @@ def apply_v301_chip_confirm_top5(df, limit=5):
             continue
 
         df.loc[idx, "top_opportunity"] = "🔥TOP"
-        df.loc[idx, "section_top_opportunity"] = label
-        df.loc[idx, "top_reason"] = (
+        df.loc[idx, "section_top_opportunity"] = str(label)
+        df.loc[idx, "top_reason"] = str(
             "法人開始買｜籌碼開始集中｜剛轉強｜量能啟動｜未過熱"
         )
 
