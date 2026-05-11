@@ -784,6 +784,175 @@ def apply_time_structure_patch_v26672(d):
 
     return d
 
+
+# ===== v282 LIQUIDITY GATE + CHIP ACCUMULATION OPPORTUNITY PATCH =====
+# 只補最大機會核心排序：
+# 1. 流動性先合格，低於門檻直接排除/降權
+# 2. 流動性合格後，籌碼開始集中才是 alpha
+# 3. 優先剛轉強、未過熱、突破初期、量能剛啟動
+# 不重寫原策略、不改輸出檔名、不改 UI / pipeline / 持倉 / macro
+
+def _v282_num(d, col, default=0.0):
+    if col in d.columns:
+        return pd.to_numeric(d[col], errors="coerce").fillna(default)
+    return pd.Series(default, index=d.index, dtype="float64")
+
+
+def apply_v282_liquidity_chip_opportunity_patch(d, mode="ALPHA"):
+    if d is None or len(d) == 0:
+        return d
+
+    d = d.copy()
+    mode = str(mode or "ALPHA").upper()
+
+    close = _v282_num(d, "close", 0)
+    high = _v282_num(d, "high", close)
+    open_ = _v282_num(d, "open", close)
+    volume = _v282_num(d, "volume", 0)
+    turnover = _v282_num(d, "turnover", close * volume * 1000)
+    vol_ratio = _v282_num(d, "volume_ratio", 1)
+    vol20 = _v282_num(d, "vol20", 0)
+
+    mom3 = _v282_num(d, "mom3", 0)
+    mom5 = _v282_num(d, "mom5", 0)
+    mom10 = _v282_num(d, "mom10", 0)
+    mom20 = _v282_num(d, "mom20", 0)
+    mom60 = _v282_num(d, "mom60", 0)
+
+    ma5 = _v282_num(d, "ma5", close)
+    ma10 = _v282_num(d, "ma10", close)
+    ma20 = _v282_num(d, "ma20", close)
+    ma60 = _v282_num(d, "ma60", close)
+    ma20_slope = _v282_num(d, "ma20_slope", 0)
+
+    high20 = _v282_num(d, "high_20", close)
+    high60 = _v282_num(d, "high_60", close)
+    low20 = _v282_num(d, "low_20", close)
+    range20 = _v282_num(d, "range_20", 0)
+    ma_converge = _v282_num(d, "ma_converge_pct", 999)
+
+    obv_mom5 = _v282_num(d, "obv_mom5", 0)
+    obv_up5 = _v282_num(d, "obv_up_count_5", 0)
+    low_non_down5 = _v282_num(d, "low_non_down_count_5", 0)
+
+    # 1) 流動性 Gate：
+    # 使用者明確要求 500 張內沒有參考價值，風險過大。
+    # ALPHA 更嚴，CORE 仍最低要 >=1000 張或成交金額達標。
+    base_liq_gate = (
+        (volume >= 1000) |
+        (turnover >= 30_000_000)
+    )
+
+    alpha_liq_gate = (
+        (volume >= 3000) |
+        (turnover >= 80_000_000) |
+        (d.get("liquidity_level", "").astype(str).str.upper().eq("HIGH") if "liquidity_level" in d.columns else False)
+    )
+
+    if mode == "ALPHA":
+        liquidity_gate = alpha_liq_gate
+    else:
+        liquidity_gate = base_liq_gate
+
+    # 2) 籌碼開始集中：
+    # 沒有法人資料時，用 OBV、低點不破、溫和量增作為「資金建倉」代理。
+    chip_accumulation_score = (
+        (obv_mom5 > 0).astype(int) * 18 +
+        (obv_up5 >= 3).astype(int) * 16 +
+        (low_non_down5 >= 3).astype(int) * 12 +
+        vol_ratio.between(1.05, 3.20).astype(int) * 12 +
+        ((volume >= vol20 * 1.05) & (vol20 > 0)).astype(int) * 8 +
+        (ma_converge <= 0.12).astype(int) * 8
+    )
+
+    chip_accumulating = chip_accumulation_score >= 34
+
+    # 3) 剛轉強：不是死股，也不是已經噴很遠。
+    early_turn_score = (
+        (close > ma5).astype(int) * 8 +
+        (close > ma10).astype(int) * 8 +
+        (ma5 >= ma10 * 0.995).astype(int) * 8 +
+        (ma10 >= ma20 * 0.985).astype(int) * 8 +
+        (ma20_slope >= 0).astype(int) * 6 +
+        mom5.between(0.005, 0.12).astype(int) * 8 +
+        mom10.between(0.005, 0.18).astype(int) * 8 +
+        mom20.between(0.02, 0.32).astype(int) * 8
+    )
+
+    # 4) 突破初期 / 量能剛啟動：避免只抓到已經噴完的熱門股。
+    breakout_initial_score = (
+        (close >= high20 * 0.985).astype(int) * 10 +
+        (close >= high60 * 0.90).astype(int) * 6 +
+        (close <= high60 * 1.03).astype(int) * 8 +
+        vol_ratio.between(1.10, 3.80).astype(int) * 10 +
+        ((high20 > 0) & ((close / high20 - 1).abs() <= 0.04)).astype(int) * 8
+    )
+
+    # 5) 過熱 / 出貨風險：強勢但風報比變差，直接扣。
+    upper_shadow = ((high - close) / high).replace([np.inf, -np.inf], 0).fillna(0)
+    close_ma20_gap = ((close / ma20) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+
+    overheat_penalty = (
+        (mom5 > 0.16).astype(int) * 18 +
+        (mom20 > 0.38).astype(int) * 22 +
+        (close_ma20_gap > 0.25).astype(int) * 24 +
+        (vol_ratio > 5.50).astype(int) * 18 +
+        ((upper_shadow > 0.055) & (vol_ratio > 1.80)).astype(int) * 18 +
+        ((close < open_) & (vol_ratio > 2.20)).astype(int) * 20
+    )
+
+    opportunity_score = (
+        chip_accumulation_score * 1.30 +
+        early_turn_score * 1.00 +
+        breakout_initial_score * 0.95 -
+        overheat_penalty * 1.20
+    )
+
+    # 流動性不合格：直接壓掉，不讓 500 張內股票混入最大機會池。
+    opportunity_score = pd.Series(opportunity_score, index=d.index)
+    opportunity_score.loc[~liquidity_gate] = opportunity_score.loc[~liquidity_gate] - 999
+
+    # 流動性合格但沒有籌碼集中：不是最大機會，只能保守降權。
+    opportunity_score.loc[liquidity_gate & ~chip_accumulating] = (
+        opportunity_score.loc[liquidity_gate & ~chip_accumulating] - 18
+    )
+
+    # 寫入可檢查欄位。
+    d["v282_liquidity_gate"] = liquidity_gate.astype(int)
+    d["v282_chip_accumulation_score"] = pd.Series(chip_accumulation_score, index=d.index).round(1)
+    d["v282_early_turn_score"] = pd.Series(early_turn_score, index=d.index).round(1)
+    d["v282_breakout_initial_score"] = pd.Series(breakout_initial_score, index=d.index).round(1)
+    d["v282_overheat_penalty"] = pd.Series(overheat_penalty, index=d.index).round(1)
+    d["v282_opportunity_score"] = opportunity_score.round(1)
+    d["v282_opportunity_tag"] = np.where(
+        ~liquidity_gate,
+        "BLOCK_LOW_LIQUIDITY",
+        np.where(
+            chip_accumulating & (overheat_penalty <= 18),
+            "S_CHIP_ACCUMULATION",
+            np.where(
+                chip_accumulating,
+                "A_CHIP_WITH_RISK_CHECK",
+                "B_LIQUID_BUT_NO_CHIP"
+            )
+        )
+    )
+
+    if "entry_score" in d.columns:
+        # 補丁只影響最大機會排序，不完全重寫原始分數。
+        # 限制單次加權範圍，避免炸掉原本策略，但低流動性仍直接封殺。
+        add_score = opportunity_score.clip(lower=-80, upper=55)
+        d["entry_score"] = pd.to_numeric(d["entry_score"], errors="coerce").fillna(0) + add_score
+        d.loc[~liquidity_gate, "entry_score"] = d.loc[~liquidity_gate, "entry_score"] - 999
+
+    # note 補充，不覆蓋原本內容。
+    if "note" in d.columns:
+        d["note"] = d["note"].astype(str) + "｜v282流動性Gate後看籌碼集中"
+    else:
+        d["note"] = "v282流動性Gate後看籌碼集中"
+
+    return d
+
 def core_engine(x):
     """
     CORE：早期卡位策略。
@@ -820,6 +989,9 @@ def core_engine(x):
     d["entry_score"] -= (d["mom20"] > 0.40).astype(int) * 10
     d["entry_score"] -= (d["volume_ratio"] > 5.5).astype(int) * 8
 
+    # v282：流動性先合格，接著看籌碼開始集中；低流動性直接排除。
+    d = apply_v282_liquidity_chip_opportunity_patch(d, mode="CORE")
+
     core_liq_ok = (d["volume"] >= 1000) & d["liquidity_level"].isin(["MEDIUM", "HIGH"])
     low_liq = d["liquidity_level"].eq("LOW")
 
@@ -849,7 +1021,7 @@ def core_engine(x):
         + d["liquidity_tag"].astype(str)
     )
 
-    return d.sort_values(["entry_score", "mom20", "mom10"], ascending=False)
+    return d.sort_values(["v282_opportunity_score", "entry_score", "mom20", "mom10"], ascending=False) if "v282_opportunity_score" in d.columns else d.sort_values(["entry_score", "mom20", "mom10"], ascending=False)
 
 
 def alpha_engine(x):
@@ -894,6 +1066,9 @@ def alpha_engine(x):
     d["entry_score"] -= (d["volume_ratio"] > 8.0).astype(int) * 10
     d["entry_score"] -= (~mid_or_high).astype(int) * 30
 
+    # v282：流動性是 Gate，不是 alpha；流動性合格後，籌碼開始集中才優先。
+    d = apply_v282_liquidity_chip_opportunity_patch(d, mode="ALPHA")
+
     buy = (
         (d["entry_score"] >= 70)
         & high_liq
@@ -920,7 +1095,7 @@ def alpha_engine(x):
         + d["liquidity_tag"].astype(str)
     )
 
-    return d.sort_values(["entry_score", "liquidity_score", "mom20"], ascending=False)
+    return d.sort_values(["v282_opportunity_score", "entry_score", "liquidity_score", "mom20"], ascending=False) if "v282_opportunity_score" in d.columns else d.sort_values(["entry_score", "liquidity_score", "mom20"], ascending=False)
 
 
 def build_trade_plan(core, alpha, regime, signal_date):
