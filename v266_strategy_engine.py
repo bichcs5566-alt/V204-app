@@ -1379,6 +1379,186 @@ def apply_v300_alpha_restore_top5_labels(d, mode="ALPHA", limit=5):
 
     return d
 
+
+# ===== v301 CHIP CONFIRM TOP5 PATCH =====
+# 目的：
+# - 不改原始 alpha/core ranking
+# - 不污染 TEST/WATCH
+# - 只讓 TOP5 使用每日更新的 chip_source_twse.csv 做主力驗證
+# - 核心：法人開始買 + 剛轉強 + 量能啟動 + 未過熱
+
+def apply_v301_chip_confirm_top5(df, limit=5):
+    if df is None or len(df) == 0:
+        return df
+
+    df = df.copy()
+
+    chip_paths = [
+        Path("chip_source_twse.csv"),
+        Path("mobile_dashboard_v1/data/chip_source_twse.csv"),
+    ]
+
+    chip = None
+    for p in chip_paths:
+        if p.exists():
+            try:
+                chip = pd.read_csv(p)
+                break
+            except Exception:
+                pass
+
+    if chip is None or len(chip) == 0:
+        return df
+
+    chip["stock_id"] = chip["stock_id"].astype(str).str.extract(r"(\\d{4})", expand=False)
+
+    use_cols = [
+        "stock_id",
+        "foreign_net_buy",
+        "trust_net_buy",
+        "dealer_net_buy",
+        "inst_net_buy",
+        "inst_buy_days",
+        "margin_balance_change",
+        "short_balance_change",
+        "inst_valid",
+    ]
+
+    use_cols = [c for c in use_cols if c in chip.columns]
+
+    chip = chip[use_cols].copy()
+
+    df["stock_id"] = df["stock_id"].astype(str)
+
+    df = df.merge(chip, on="stock_id", how="left")
+
+    for c in [
+        "foreign_net_buy",
+        "trust_net_buy",
+        "dealer_net_buy",
+        "inst_net_buy",
+        "inst_buy_days",
+        "margin_balance_change",
+        "short_balance_change",
+        "inst_valid",
+    ]:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
+
+    close = pd.to_numeric(df.get("close", 0), errors="coerce").fillna(0)
+    ma20 = pd.to_numeric(df.get("ma20", close), errors="coerce").fillna(close)
+    mom10 = pd.to_numeric(df.get("mom10", 0), errors="coerce").fillna(0)
+    mom20 = pd.to_numeric(df.get("mom20", 0), errors="coerce").fillna(0)
+    volume_ratio = pd.to_numeric(df.get("volume_ratio", 1), errors="coerce").fillna(1)
+    liquidity_score = pd.to_numeric(df.get("liquidity_score", 0), errors="coerce").fillna(0)
+
+    ma20_gap = ((close / ma20) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+
+    # 主力開始進場（不是已經噴完）
+    chip_confirm = (
+        (df["inst_valid"] >= 1)
+        & (
+            (df["foreign_net_buy"] > 0)
+            | (df["trust_net_buy"] > 0)
+            | (df["inst_net_buy"] > 0)
+        )
+        & (df["inst_buy_days"] >= 1)
+    )
+
+    # 結構開始轉強
+    structure_confirm = (
+        (close > ma20 * 0.985)
+        & (mom10 > 0)
+        & (mom20 > 0.02)
+    )
+
+    # 量能剛啟動，不追爆量
+    volume_confirm = (
+        (volume_ratio >= 1.05)
+        & (volume_ratio <= 3.8)
+    )
+
+    # 避免過熱
+    not_overheat = (
+        (ma20_gap <= 0.22)
+        & (mom20 <= 0.40)
+    )
+
+    # 流動性只是門票
+    liquidity_gate = (
+        (liquidity_score >= 50)
+        | (df.get("volume", 0) >= 1500)
+    )
+
+    top_gate = (
+        chip_confirm
+        & structure_confirm
+        & volume_confirm
+        & not_overheat
+        & liquidity_gate
+    )
+
+    chip_score = (
+        (df["foreign_net_buy"] > 0).astype(int) * 25
+        + (df["trust_net_buy"] > 0).astype(int) * 25
+        + (df["inst_net_buy"] > 0).astype(int) * 20
+        + (df["inst_buy_days"].clip(0, 5)) * 6
+        + ((volume_ratio >= 1.1) & (volume_ratio <= 2.8)).astype(int) * 12
+        + (mom10 > 0.03).astype(int) * 10
+        + (mom20 > 0.05).astype(int) * 10
+    )
+
+    df["v301_chip_confirm"] = top_gate.astype(int)
+    df["v301_main_force_score"] = chip_score
+
+    if "top_opportunity" not in df.columns:
+        df["top_opportunity"] = ""
+
+    if "section_top_opportunity" not in df.columns:
+        df["section_top_opportunity"] = ""
+
+    if "top_reason" not in df.columns:
+        df["top_reason"] = ""
+
+    if "opportunity_rank" not in df.columns:
+        df["opportunity_rank"] = ""
+
+    action = df["action"].astype(str).str.upper() if "action" in df.columns else pd.Series("", index=df.index)
+
+    for label, mask in [
+        ("TOP5_TEST", action.isin(["BUY", "TEST"]) & top_gate),
+        ("TOP5_WATCH", action.eq("WATCH") & top_gate),
+    ]:
+
+        idx = (
+            df.loc[mask]
+            .sort_values(
+                [
+                    "v301_main_force_score",
+                    "inst_net_buy",
+                    "mom20",
+                    "entry_score",
+                ],
+                ascending=False,
+            )
+            .head(limit)
+            .index
+        )
+
+        if len(idx) == 0:
+            continue
+
+        df.loc[idx, "top_opportunity"] = "🔥TOP"
+        df.loc[idx, "section_top_opportunity"] = label
+        df.loc[idx, "top_reason"] = (
+            "法人開始買｜籌碼開始集中｜剛轉強｜量能啟動｜未過熱"
+        )
+
+        ranks = list(range(1, len(idx) + 1))
+        df.loc[idx, "opportunity_rank"] = ranks
+
+    return df
+
 def core_engine(x):
     """
     CORE：早期卡位策略。
@@ -1440,6 +1620,7 @@ def core_engine(x):
     watch = (d["entry_score"] >= 34) & ~buy & ~test
 
     set_action(d, buy, test, watch, "早期卡位", "低量試單", "早期觀察")
+    d = apply_v301_chip_confirm_top5(d, limit=5)
     # v300：只標示 TOP5，不改 action / entry_score。
     d = apply_v300_alpha_restore_top5_labels(d, mode="CORE", limit=5)
 
@@ -1515,6 +1696,7 @@ def alpha_engine(x):
     watch = (d["entry_score"] >= 46) & ~buy & ~test
 
     set_action(d, buy, test, watch, "高流動性強勢買進", "強勢試單", "高流動性觀察")
+    d = apply_v301_chip_confirm_top5(d, limit=5)
     # v300：只標示 TOP5，不改 action / entry_score。
     d = apply_v300_alpha_restore_top5_labels(d, mode="ALPHA", limit=5)
 
@@ -1629,6 +1811,12 @@ def build_trade_plan(core, alpha, regime, signal_date):
             "reason": r.get("reason", r["note"]),
             "system_note": r.get("system_note", r["note"]),
             "note": r["note"],
+            "top_opportunity": r.get("top_opportunity", ""),
+            "section_top_opportunity": r.get("section_top_opportunity", ""),
+            "top_reason": r.get("top_reason", ""),
+            "opportunity_rank": r.get("opportunity_rank", ""),
+            "v301_main_force_score": r.get("v301_main_force_score", ""),
+            "v301_chip_confirm": r.get("v301_chip_confirm", ""),
             "top_opportunity": r.get("top_opportunity", ""),
             "section_top_opportunity": r.get("section_top_opportunity", ""),
             "opportunity_rank": r.get("opportunity_rank", ""),
@@ -2363,140 +2551,3 @@ def apply_dynamic_trigger_patch_v26673(d):
         warm_volume.astype(int) * 15 -
         avoid_dead_pool.astype(int) * 20
     )
-
-    d["dynamic_trigger_score_v26673"] = dynamic_score
-
-    if "entry_score" in d.columns:
-        d["entry_score"] = (
-            _clip_series(d["entry_score"]) +
-            dynamic_score.clip(lower=-15, upper=35)
-        )
-
-    return d
-
-
-# =========================================================
-# v266.74 VOLATILITY EXPANSION PATCH
-# 只補：
-# - 波動開始擴張
-# - 主升段前夕優先
-# - 壓低過度穩定股
-# 不動原本 pipeline / UI / output。
-# =========================================================
-
-def apply_volatility_expansion_patch_v26674(d):
-    d = d.copy()
-
-    atr_ratio = _clip_series(d.get("atr_ratio", 1))
-    vol_ratio = _clip_series(d.get("volume_ratio", 1))
-    mom5 = _clip_series(d.get("mom5", 0))
-    mom10 = _clip_series(d.get("mom10", 0))
-    breakout_score = _clip_series(d.get("breakout_score", 0))
-    entry_score = _clip_series(d.get("entry_score", 0))
-
-    expanding_volatility = (
-        (atr_ratio > 1.08) &
-        (atr_ratio < 2.20)
-    )
-
-    ignition_volume = (
-        (vol_ratio > 1.20) &
-        (vol_ratio < 3.50)
-    )
-
-    early_momentum = (
-        (mom5 > 0.02) &
-        (mom10 > 0.01)
-    )
-
-    breakout_ready = (
-        breakout_score > 55
-    )
-
-    over_stable = (
-        (atr_ratio < 0.92) &
-        (vol_ratio < 1.05)
-    )
-
-    expansion_bonus = (
-        expanding_volatility.astype(int) * 20 +
-        ignition_volume.astype(int) * 15 +
-        early_momentum.astype(int) * 18 +
-        breakout_ready.astype(int) * 12 -
-        over_stable.astype(int) * 25
-    )
-
-    d["volatility_expansion_score_v26674"] = expansion_bonus
-
-    if "entry_score" in d.columns:
-        d["entry_score"] = (
-            entry_score +
-            expansion_bonus.clip(lower=-20, upper=40)
-        )
-
-    return d
-
-
-# =========================================================
-# v266.75 DISTRIBUTION HARD BLOCK PATCH
-# =========================================================
-
-def apply_distribution_hardblock_patch_v26675(d):
-    d = d.copy()
-
-    close = _clip_series(d.get("close", 0))
-    high = _clip_series(d.get("high", close))
-    open_ = _clip_series(d.get("open", close))
-
-    vol_ratio = _clip_series(d.get("volume_ratio", 1))
-    mom5 = _clip_series(d.get("mom5", 0))
-    mom20 = _clip_series(d.get("mom20", 0))
-
-    ma5 = _clip_series(d.get("ma5", close))
-    ma10 = _clip_series(d.get("ma10", close))
-
-    entry_score = _clip_series(d.get("entry_score", 0))
-
-    intraday_drop = (close - high) / high
-
-    limitdown_like = (
-        intraday_drop < -0.085
-    )
-
-    high_volume_dump = (
-        (vol_ratio > 2.8) &
-        (close < open_) &
-        (close < ma5)
-    )
-
-    fake_breakout = (
-        (mom20 > 0.35) &
-        (close < ma10)
-    )
-
-    long_black_distribution = (
-        (((close - open_) / open_) < -0.06) &
-        (vol_ratio > 2.0)
-    )
-
-    exhaustion_move = (
-        (mom5 > 0.18) &
-        (close < ma5)
-    )
-
-    hard_block = (
-        limitdown_like |
-        high_volume_dump |
-        fake_breakout |
-        long_black_distribution |
-        exhaustion_move
-    )
-
-    d["distribution_hardblock_v26675"] = hard_block.astype(int)
-
-    if "entry_score" in d.columns:
-        d.loc[hard_block, "entry_score"] = (
-            entry_score[hard_block] - 999
-        )
-
-    return d
