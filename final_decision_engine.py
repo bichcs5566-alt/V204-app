@@ -1398,6 +1398,152 @@ def build_v278_true_trigger_lanes(out):
 
     return ignition.reset_index(drop=True), evolution.reset_index(drop=True)
 
+
+# ===== v279 EVENT BOOST PATCH / 事件觸發加權補丁 =====
+# 目的：
+# 1. 不重寫原策略
+# 2. 不改 pipeline / UI / 持倉 / macro / watchlist
+# 3. 只在 v274/v275 後、IGNITION/EVOLUTION 輸出前，對「真正觸發事件」加權
+# 4. 讓真突破 / 放量突破 / 起漲事件可以跳脫 98~99 排行榜，成為最大機會
+
+def _v279_num_col(df, names, default=0.0):
+    if df is None or df.empty:
+        return pd.Series(dtype="float64")
+    for c in names:
+        if c in df.columns:
+            return pd.to_numeric(df[c], errors="coerce").fillna(default)
+    return pd.Series(default, index=df.index, dtype="float64")
+
+
+def _v279_text_cols(df, names):
+    if df is None or df.empty:
+        return pd.Series(dtype=str)
+    out = pd.Series("", index=df.index, dtype=str)
+    for c in names:
+        if c in df.columns:
+            out = out + " " + df[c].astype(str).fillna("")
+    return out.str.upper()
+
+
+def _v279_bool_from_text(text, pattern):
+    try:
+        return text.str.contains(pattern, regex=True, na=False)
+    except Exception:
+        return pd.Series(False, index=text.index)
+
+
+def apply_v279_event_boost_patch(out):
+    if out is None or out.empty:
+        return out
+
+    out = out.copy()
+
+    action = out["final_action"].astype(str).str.upper() if "final_action" in out.columns else pd.Series("", index=out.index)
+    tradable = action.isin(["BUY", "TEST", "WATCH"])
+
+    if not tradable.any():
+        return out
+
+    base_score = _v279_num_col(out, ["score", "opportunity_score", "entry_score", "total_score"], 0.0)
+
+    close = _v279_num_col(out, ["close", "ref_price", "price"], 0.0)
+    ma5 = _v279_num_col(out, ["ma5", "MA5", "ma_5", "sma5"], 0.0)
+    ma10 = _v279_num_col(out, ["ma10", "MA10", "ma_10", "sma10"], 0.0)
+    ma20 = _v279_num_col(out, ["ma20", "MA20", "ma_20", "sma20"], 0.0)
+
+    volume = _v279_num_col(out, ["volume", "vol", "成交量"], 0.0)
+    turnover = _v279_num_col(out, ["turnover", "amount", "成交金額"], 0.0)
+    liquidity_score = _v279_num_col(out, ["liquidity_score"], 0.0)
+    chip_score = _v279_num_col(out, ["chip_score", "chip_concentration_score"], 0.0)
+
+    text = _v279_text_cols(out, [
+        "reason", "system_note", "entry_type", "execution_flag",
+        "top_opportunity", "section_top_opportunity",
+        "v276_opportunity_tag", "v277_direct_entry_tag", "v278_trigger_tag"
+    ])
+
+    # ===== 事件偵測：有欄位用欄位，沒欄位用文字/相對分位 =====
+    ma_structure = (close > ma5) & (ma5 >= ma10) & (ma10 >= ma20) & (ma20 > 0)
+    above_ma20_not_far = (ma20 > 0) & ((close / ma20 - 1) <= 0.22)
+    overheat_distance = (ma20 > 0) & ((close / ma20 - 1) > 0.30)
+
+    volume_q70 = volume.quantile(0.70) if volume.notna().any() else 0
+    volume_q88 = volume.quantile(0.88) if volume.notna().any() else 0
+    turnover_q70 = turnover.quantile(0.70) if turnover.notna().any() else 0
+    liquidity_q70 = liquidity_score.quantile(0.70) if liquidity_score.notna().any() else 0
+
+    volume_confirm = (volume > 0) & (volume >= volume_q70)
+    volume_surge = (volume > 0) & (volume >= volume_q88)
+    money_confirm = ((turnover > 0) & (turnover >= turnover_q70)) | ((liquidity_score > 0) & (liquidity_score >= liquidity_q70))
+
+    breakout_text = _v279_bool_from_text(text, r"BREAK|BREAKOUT|突破|轉強|點火|起漲|IGNITION|TURN_FIRST|EARLY_TURN|主升")
+    fake_or_risk_text = _v279_bool_from_text(text, r"假突破|長上影|出貨|誘多|過熱|追高|AVOID|RISK|轉弱|跌破")
+
+    clean_breakout = tradable & ma_structure & above_ma20_not_far & volume_confirm & money_confirm
+    explosive_breakout = clean_breakout & volume_surge
+    ignition_event = tradable & above_ma20_not_far & (breakout_text | clean_breakout) & ~fake_or_risk_text
+    leader_event = tradable & ma_structure & volume_surge & (chip_score >= chip_score.quantile(0.65)) & ~overheat_distance
+    fake_breakout = tradable & (fake_or_risk_text | overheat_distance)
+
+    # ===== 事件加分：讓真正事件跳脫 98~99 排行榜 =====
+    bonus = pd.Series(0.0, index=out.index)
+
+    bonus = bonus + np.where(clean_breakout, 16.0, 0.0)
+    bonus = bonus + np.where(explosive_breakout, 18.0, 0.0)
+    bonus = bonus + np.where(ignition_event, 22.0, 0.0)
+    bonus = bonus + np.where(leader_event, 14.0, 0.0)
+    bonus = bonus + np.where(fake_breakout, -35.0, 0.0)
+
+    # 出場/減碼/禁止完全不碰。
+    bonus = pd.Series(bonus, index=out.index)
+    bonus.loc[~tradable] = 0.0
+
+    # 避免單次補丁過度失控，但允許最大機會跳到 100+。
+    bonus = bonus.clip(lower=-40.0, upper=55.0)
+
+    event_score = base_score + bonus
+
+    out["v279_event_bonus"] = bonus.round(1)
+    out["v279_event_score"] = event_score.round(1)
+
+    out["v279_event_tag"] = np.where(
+        fake_breakout,
+        "AVOID_FAKE_BREAKOUT",
+        np.where(
+            explosive_breakout | ignition_event,
+            "S_TRUE_TRIGGER",
+            np.where(
+                clean_breakout,
+                "A_CLEAN_BREAKOUT",
+                np.where(
+                    leader_event,
+                    "A_LEADER_CONTINUATION",
+                    "B_NO_EVENT"
+                )
+            )
+        )
+    )
+
+    # 只有可交易/觀察類覆蓋分數，讓事件真正反映在 TEST/WATCH/IGNITION 排名。
+    out.loc[tradable, "score"] = event_score.loc[tradable].round(1)
+
+    for c in ["entry_score", "total_score", "rank_score", "opportunity_score"]:
+        if c in out.columns:
+            out.loc[tradable, c] = out.loc[tradable, "score"]
+
+    # 排序維持原 action priority，再看事件分數與事件 bonus。
+    priority_map = {"SELL": 1, "REDUCE": 2, "BUY": 3, "TEST": 4, "WATCH": 5, "BLOCK": 6}
+    out["_v279_priority"] = action.map(priority_map).fillna(9)
+    out["_v279_score"] = pd.to_numeric(out["score"], errors="coerce").fillna(0)
+    out["_v279_bonus"] = pd.to_numeric(out["v279_event_bonus"], errors="coerce").fillna(0)
+
+    out = out.sort_values(
+        ["_v279_priority", "_v279_score", "_v279_bonus", "stock_id"],
+        ascending=[True, False, False, True]
+    ).drop(columns=["_v279_priority", "_v279_score", "_v279_bonus"], errors="ignore")
+
+    return out.reset_index(drop=True)
+
 def main():
     generated_at = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
     lookup = make_lookup()
@@ -1677,6 +1823,8 @@ def main():
     out = apply_v274_final_true_export_patch(out)
     # v275 EDGE EXPANSION PATCH：只拉開最後可讀分數差距，不改策略判斷。
     out = apply_v275_edge_expansion_patch(out)
+    # v279 EVENT BOOST PATCH：只補真正觸發事件加權，讓最大機會跳脫 98~99 排行榜。
+    out = apply_v279_event_boost_patch(out)
 
     # TOP 機會表同步使用 v274 最終分數，避免 dashboard 與主表排序不同步。
     if not out.empty:
@@ -1684,6 +1832,7 @@ def main():
             _, top_opportunity_df = apply_top_opportunities_v26614(out)
             top_opportunity_df = apply_v274_final_true_export_patch(top_opportunity_df)
             top_opportunity_df = apply_v275_edge_expansion_patch(top_opportunity_df)
+            top_opportunity_df = apply_v279_event_boost_patch(top_opportunity_df)
         except Exception:
             pass
 
@@ -1707,7 +1856,7 @@ def main():
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v278_true_trigger_direct_lane",
+        "source": "final_decision_engine_v279_event_boost_patch",
         "signal_date": str(out["signal_date"].iloc[0]) if not out.empty and "signal_date" in out.columns else "",
         "trade_date": str(out["trade_date"].iloc[0]) if not out.empty and "trade_date" in out.columns else "",
         "rows": int(len(out)),
