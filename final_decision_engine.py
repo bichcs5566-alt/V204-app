@@ -38,6 +38,13 @@ OUTPUT_COLUMNS = [
     "opportunity_score", "opportunity_rank", "top_opportunity",
     "liquidity_level", "liquidity_tag", "liquidity_score", "volume", "turnover",
     "chip_score", "chip_label", "chip_display", "chip_reason", "chip_hint", "chip_valid_count", "chip_missing", "chip_confidence",
+    "main_force_gate_v302",
+    "main_force_score_v302",
+    "chip_trace_v302",
+    "obv_trace_v302",
+    "attack_structure_v302",
+    "volume_start_v302",
+    "not_overheat_v302",
 ]
 
 def clean_text(v, default=""):
@@ -677,6 +684,245 @@ def apply_macro_strength_v26614(out):
     return out, macro
 
 
+
+# ===== v302 FINAL MAIN-FORCE HARD GATE / 最後決策主力硬門檻 =====
+# 目的：
+# - 修正 final_decision_engine 用舊 opportunity_score 把垃圾高流動股重新放回 TEST/WATCH。
+# - 不改 UI / pipeline / 持倉出場。
+# - 持倉 SELL / REDUCE / WATCH 不動。
+# - 只處理新進場 BUY / TEST / WATCH。
+# - 不符合「主力痕跡 + 攻擊結構 + 量能啟動 + 未過熱」者，直接 BLOCK。
+
+def _v302_num(df, col, default=0.0):
+    if col in df.columns:
+        return pd.to_numeric(df[col], errors="coerce").fillna(default)
+    return pd.Series(default, index=df.index, dtype="float64")
+
+
+def _v302_load_feature_latest():
+    for p in [
+        ROOT / "feature_panel_daily.csv",
+        DATA_DIR / "feature_panel_daily.csv",
+        ROOT / "mobile_dashboard_v1" / "data" / "feature_panel_daily.csv",
+    ]:
+        df = read_csv_any([p])
+        if df.empty or "stock_id" not in df.columns:
+            continue
+        df = df.copy()
+        df["stock_id"] = df["stock_id"].apply(normalize_stock_id)
+
+        if "date" in df.columns:
+            df["_date_key"] = df["date"].astype(str)
+            df = df.sort_values("_date_key").drop_duplicates("stock_id", keep="last").drop(columns=["_date_key"], errors="ignore")
+        elif "signal_date" in df.columns:
+            df["_date_key"] = df["signal_date"].astype(str)
+            df = df.sort_values("_date_key").drop_duplicates("stock_id", keep="last").drop(columns=["_date_key"], errors="ignore")
+        else:
+            df = df.drop_duplicates("stock_id", keep="last")
+        return df
+    return pd.DataFrame()
+
+
+def _v302_load_chip_source():
+    for p in [
+        ROOT / "chip_source_twse.csv",
+        DATA_DIR / "chip_source_twse.csv",
+        ROOT / "mobile_dashboard_v1" / "data" / "chip_source_twse.csv",
+    ]:
+        df = read_csv_any([p])
+        if df.empty or "stock_id" not in df.columns:
+            continue
+        df = df.copy()
+        df["stock_id"] = df["stock_id"].apply(normalize_stock_id)
+        return df.drop_duplicates("stock_id", keep="last")
+    return pd.DataFrame()
+
+
+def apply_final_main_force_gate_v302(out):
+    if out is None or out.empty:
+        return out
+
+    out = out.copy()
+    out["stock_id"] = out["stock_id"].apply(normalize_stock_id)
+
+    feature = _v302_load_feature_latest()
+    chip = _v302_load_chip_source()
+
+    # 合併 feature：只補 final decision 需要的技術/量價欄位。
+    if not feature.empty:
+        need = [
+            "stock_id", "close", "open", "high", "low", "volume", "turnover", "volume_ratio",
+            "mom5", "mom10", "mom20", "mom60",
+            "ma5", "ma10", "ma20", "ma60", "ma20_slope",
+            "high_20", "high_60", "low_20",
+            "ma_converge_pct", "range_20",
+            "obv_mom5", "obv_up_count_5", "low_non_down_count_5",
+            "vol20", "liquidity_score", "liquidity_level", "liquidity_tag",
+        ]
+        need = [c for c in need if c in feature.columns]
+        out = out.merge(feature[need], on="stock_id", how="left", suffixes=("", "_fx"))
+
+        # 若原欄位空值，用 feature 補。
+        for c in ["close", "volume", "turnover", "liquidity_score", "liquidity_level", "liquidity_tag"]:
+            fx = c + "_fx"
+            if fx in out.columns:
+                if c not in out.columns:
+                    out[c] = out[fx]
+                else:
+                    empty = out[c].astype(str).str.strip().isin(["", "nan", "None", "null", "0", "0.0"])
+                    out.loc[empty, c] = out.loc[empty, fx]
+                out = out.drop(columns=[fx], errors="ignore")
+
+    # 合併 chip：每日籌碼驗證。
+    if not chip.empty:
+        need = [
+            "stock_id", "foreign_net_buy", "trust_net_buy", "dealer_net_buy", "inst_net_buy",
+            "inst_buy_days", "inst_valid", "margin_balance_change", "short_balance_change",
+        ]
+        need = [c for c in need if c in chip.columns]
+        out = out.merge(chip[need], on="stock_id", how="left")
+
+    for c in [
+        "foreign_net_buy", "trust_net_buy", "dealer_net_buy", "inst_net_buy",
+        "inst_buy_days", "inst_valid", "margin_balance_change", "short_balance_change",
+    ]:
+        if c not in out.columns:
+            out[c] = 0
+
+    close = _v302_num(out, "close", 0)
+    open_ = _v302_num(out, "open", close)
+    high = _v302_num(out, "high", close)
+    volume = _v302_num(out, "volume", 0)
+    turnover = _v302_num(out, "turnover", close * volume * 1000)
+    volume_ratio = _v302_num(out, "volume_ratio", 1)
+
+    mom5 = _v302_num(out, "mom5", 0)
+    mom10 = _v302_num(out, "mom10", 0)
+    mom20 = _v302_num(out, "mom20", 0)
+
+    ma5 = _v302_num(out, "ma5", close)
+    ma10 = _v302_num(out, "ma10", close)
+    ma20 = _v302_num(out, "ma20", close)
+    ma60 = _v302_num(out, "ma60", close)
+    high60 = _v302_num(out, "high_60", close)
+
+    obv_mom5 = _v302_num(out, "obv_mom5", 0)
+    obv_up5 = _v302_num(out, "obv_up_count_5", 0)
+    low_hold5 = _v302_num(out, "low_non_down_count_5", 0)
+
+    foreign = _v302_num(out, "foreign_net_buy", 0)
+    trust = _v302_num(out, "trust_net_buy", 0)
+    inst = _v302_num(out, "inst_net_buy", 0)
+    inst_days = _v302_num(out, "inst_buy_days", 0)
+    inst_valid = _v302_num(out, "inst_valid", 0)
+    liq_score = _v302_num(out, "liquidity_score", 0)
+
+    liq_level = out["liquidity_level"].astype(str).str.upper() if "liquidity_level" in out.columns else pd.Series("", index=out.index)
+    final_upper = out["final_action"].astype(str).str.upper()
+    source_upper = out["source"].astype(str).str.upper() if "source" in out.columns else pd.Series("", index=out.index)
+
+    protected = source_upper.eq("EXIT") | final_upper.isin(["SELL", "REDUCE"])
+
+    # 這裡是硬門檻：低量/低成交金額不做；流動性只是門票。
+    liquidity_gate = (
+        (volume >= 1500) |
+        (turnover >= 50_000_000) |
+        (liq_score >= 55) |
+        liq_level.isin(["MEDIUM", "HIGH"])
+    )
+
+    # 真正主力痕跡：法人開始買，或 OBV/低點墊高明顯。
+    chip_trace = (
+        (inst_valid >= 1) &
+        (
+            (inst > 0) |
+            (foreign > 0) |
+            (trust > 0) |
+            (inst_days >= 2)
+        )
+    )
+
+    obv_trace = (
+        (obv_mom5 > 0) &
+        (obv_up5 >= 2) &
+        (low_hold5 >= 3)
+    )
+
+    main_force_trace = chip_trace | obv_trace
+
+    ma20_gap = ((close / ma20) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+    upper_shadow = ((high - close) / high).replace([np.inf, -np.inf], 0).fillna(0)
+    intraday = ((close - open_) / open_).replace([np.inf, -np.inf], 0).fillna(0)
+
+    # 攻擊結構：擋水泥/食品/防禦/牛皮股。
+    attack_structure = (
+        (close >= 15) &
+        (close > ma20 * 0.99) &
+        (ma5 >= ma10 * 0.985) &
+        (ma10 >= ma20 * 0.965) &
+        (ma20 >= ma60 * 0.94) &
+        (mom10 > 0.005) &
+        (mom20 > 0.035) &
+        (close >= high60 * 0.88)
+    )
+
+    # 量能剛啟動，不追過熱爆量。
+    volume_start = volume_ratio.between(1.08, 4.20)
+
+    not_overheat = (
+        (mom20 <= 0.42) &
+        (ma20_gap <= 0.24) &
+        (volume_ratio <= 5.2) &
+        ~((upper_shadow > 0.06) & (volume_ratio > 1.6)) &
+        ~((intraday < -0.03) & (volume_ratio > 1.8))
+    )
+
+    main_force_gate = liquidity_gate & main_force_trace & attack_structure & volume_start & not_overheat
+
+    score = (
+        chip_trace.astype(int) * 36 +
+        obv_trace.astype(int) * 28 +
+        (trust > 0).astype(int) * 12 +
+        (foreign > 0).astype(int) * 8 +
+        volume_start.astype(int) * 10 +
+        attack_structure.astype(int) * 10 -
+        (~not_overheat).astype(int) * 30
+    )
+
+    out["main_force_gate_v302"] = main_force_gate.astype(int)
+    out["main_force_score_v302"] = pd.Series(score, index=out.index).round(1)
+    out["chip_trace_v302"] = chip_trace.astype(int)
+    out["obv_trace_v302"] = obv_trace.astype(int)
+    out["attack_structure_v302"] = attack_structure.astype(int)
+    out["volume_start_v302"] = volume_start.astype(int)
+    out["not_overheat_v302"] = not_overheat.astype(int)
+
+    # 核心：新進場/試單/觀察若沒有主力 Gate，一律 BLOCK，避免垃圾顯示在 TEST/WATCH。
+    target = (~protected) & final_upper.isin(["BUY", "TEST", "WATCH"]) & (~main_force_gate)
+
+    if target.any():
+        out.loc[target, "final_action"] = "BLOCK"
+        out.loc[target, "priority"] = 9
+        out.loc[target, "allowed"] = False
+        out.loc[target, "suggested_amount"] = 0
+        out.loc[target, "target_weight"] = 0
+        out.loc[target, "execution_flag"] = "BLOCK"
+        out.loc[target, "entry_type"] = "未通過主力Gate"
+        out.loc[target, "system_note"] = (
+            out.loc[target, "system_note"].astype(str).replace(["nan", "None", "null"], "")
+            .apply(lambda x: (x + "｜" if x else "") + "v302主力硬門檻：無籌碼/OBV主力痕跡或攻擊結構不足，禁止進 TEST/WATCH")
+        )
+
+    # 通過 Gate 的標的，補註記，但不亂改原本 action。
+    passed = (~protected) & final_upper.isin(["BUY", "TEST", "WATCH"]) & main_force_gate
+    if passed.any():
+        out.loc[passed, "system_note"] = (
+            out.loc[passed, "system_note"].astype(str).replace(["nan", "None", "null"], "")
+            .apply(lambda x: (x + "｜" if x else "") + "v302主力Gate通過：籌碼/OBV痕跡＋剛轉強＋量能啟動＋未過熱")
+        )
+
+    return out
+
 def apply_top_opportunities_v26614(out):
     """
     v266.15.2：
@@ -748,1234 +994,6 @@ def apply_top_opportunities_v26614(out):
     return out, top_df
 
 
-
-
-# ===== v274 FINAL TRUE EXPORT PATCH / 最後輸出分數正規化 =====
-# 目的：
-# 1. 不動策略核心
-# 2. 不動 UI / pipeline / 持倉 / macro
-# 3. 只在 final_decision_engine 最後輸出前，把 raw score 正規化為 60~99
-# 4. TEST / WATCH / BUY 各自區間內依真實分數排序，避免 139 / 138 這種未正規化分數直接顯示
-def v274_pick_raw_score_col(df):
-    if df is None or df.empty:
-        return None
-
-    candidates = [
-        "v273_continuous_score",
-        "continuous_score",
-        "raw_score",
-        "score",
-        "total_score",
-        "entry_score",
-        "opportunity_score",
-    ]
-
-    for c in candidates:
-        if c in df.columns:
-            s = pd.to_numeric(df[c], errors="coerce")
-            if s.notna().sum() > 0:
-                return c
-
-    return None
-
-
-def v274_percentile_normalize_series(s, low=60.0, high=99.0):
-    s = pd.to_numeric(s, errors="coerce")
-    valid = s.notna()
-
-    out = pd.Series(index=s.index, dtype="float64")
-    out.loc[~valid] = low
-
-    if valid.sum() <= 1:
-        out.loc[valid] = high
-        return out.round(1)
-
-    pct = s.loc[valid].rank(method="average", pct=True)
-    out.loc[valid] = low + pct * (high - low)
-    return out.round(1)
-
-
-def apply_v274_final_true_export_patch(out):
-    if out is None or out.empty:
-        return out
-
-    out = out.copy()
-
-    score_col = v274_pick_raw_score_col(out)
-    if score_col is None:
-        return out
-
-    action_upper = out["final_action"].astype(str).str.upper() if "final_action" in out.columns else pd.Series("", index=out.index)
-    protected = action_upper.isin(["SELL", "REDUCE", "BLOCK"])
-
-    out["v274_raw_score"] = pd.to_numeric(out[score_col], errors="coerce").fillna(0)
-
-    # 只正規化可比較的進場/觀察類；出場/禁止保留原本風控排序，不影響持倉。
-    tradable_mask = ~protected
-
-    out["v274_normalized_score"] = pd.to_numeric(out.get("score", 0), errors="coerce").fillna(0)
-
-    if tradable_mask.any():
-        # 各 action 分區正規化，避免 TEST / WATCH 混在一起互相扭曲。
-        for action_name in ["BUY", "TEST", "WATCH"]:
-            m = tradable_mask & action_upper.eq(action_name)
-            if m.any():
-                out.loc[m, "v274_normalized_score"] = v274_percentile_normalize_series(
-                    out.loc[m, "v274_raw_score"],
-                    low=60.0,
-                    high=99.0
-                )
-
-        # 若有其他非出場 action，也補一次全體正規化。
-        other = tradable_mask & ~action_upper.isin(["BUY", "TEST", "WATCH"])
-        if other.any():
-            out.loc[other, "v274_normalized_score"] = v274_percentile_normalize_series(
-                out.loc[other, "v274_raw_score"],
-                low=60.0,
-                high=99.0
-            )
-
-    # UI 主要吃 score，因此最後輸出前強制覆蓋。
-    out["score"] = pd.to_numeric(out["v274_normalized_score"], errors="coerce").fillna(0).round(1)
-
-    # 相容其他舊欄位：有就同步，不新增太多策略欄。
-    for c in ["entry_score", "total_score", "rank_score"]:
-        if c in out.columns:
-            out[c] = out["score"]
-
-    # opportunity_score 保留欄位，但重新對齊最後 UI 排序的可讀分數。
-    if "opportunity_score" in out.columns:
-        out["opportunity_score"] = out["score"]
-
-    if "priority" in out.columns:
-        out["_priority_num_v274"] = pd.to_numeric(out["priority"], errors="coerce").fillna(9)
-    else:
-        out["_priority_num_v274"] = 9
-
-    out["_score_num_v274"] = pd.to_numeric(out["score"], errors="coerce").fillna(0)
-    out = out.sort_values(
-        ["_priority_num_v274", "_score_num_v274", "stock_id"],
-        ascending=[True, False, True]
-    ).drop(columns=["_priority_num_v274", "_score_num_v274"], errors="ignore")
-
-    return out.reset_index(drop=True)
-
-
-
-# ===== v275 EDGE EXPANSION PATCH / 分數差距拉開補丁 =====
-# 目的：
-# 1. 不動策略核心、不動 UI、不動 pipeline、不動持倉、不動 macro。
-# 2. 只在 v274 最後正規化之後，把過度集中在 98/97 的分數拉開。
-# 3. 用 raw score + 成交/流動性 + 原始排名做穩定排序，避免大量同分。
-# 4. 每個 action 分區內獨立處理，TEST 不會跟 WATCH 互相干擾。
-def v275_num_series(df, col, default=0.0):
-    if df is None or col not in df.columns:
-        return pd.Series(default, index=df.index, dtype='float64')
-    return pd.to_numeric(df[col], errors='coerce').fillna(default)
-
-
-def v275_pick_edge_base(out):
-    candidates = [
-        'v274_raw_score',
-        'v273_continuous_score',
-        'continuous_score',
-        'raw_score',
-        'total_score',
-        'entry_score',
-        'opportunity_score',
-        'score',
-    ]
-    for c in candidates:
-        if c in out.columns:
-            s = pd.to_numeric(out[c], errors='coerce')
-            if s.notna().sum() > 0:
-                return c
-    return None
-
-
-def apply_v275_edge_expansion_patch(out):
-    if out is None or out.empty:
-        return out
-
-    out = out.copy()
-    base_col = v275_pick_edge_base(out)
-    if base_col is None:
-        return out
-
-    action_upper = out['final_action'].astype(str).str.upper() if 'final_action' in out.columns else pd.Series('', index=out.index)
-    protected = action_upper.isin(['SELL', 'REDUCE', 'BLOCK'])
-
-    base = pd.to_numeric(out[base_col], errors='coerce').fillna(0)
-    liq = v275_num_series(out, 'liquidity_score', 0)
-    volume = v275_num_series(out, 'volume', 0)
-    turnover = v275_num_series(out, 'turnover', 0)
-    opp_rank = v275_num_series(out, 'opportunity_rank', 9999)
-
-    # secondary 只用來打散同分，不改策略方向。
-    liq_pct = liq.rank(method='average', pct=True).fillna(0)
-    vol_pct = volume.rank(method='average', pct=True).fillna(0)
-    turn_pct = turnover.rank(method='average', pct=True).fillna(0)
-    rank_bonus = (1 / (opp_rank.replace(0, np.nan))).replace([np.inf, -np.inf], np.nan).fillna(0)
-    rank_pct = rank_bonus.rank(method='average', pct=True).fillna(0)
-
-    edge_base = (
-        base.astype(float) * 1000000
-        + liq_pct * 1000
-        + vol_pct * 500
-        + turn_pct * 300
-        + rank_pct * 200
-    )
-
-    out['v275_edge_base'] = edge_base
-    out['v275_edge_score'] = pd.to_numeric(out.get('score', 0), errors='coerce').fillna(0)
-
-    # 分區處理：每個 action 區內拉成 70~99，並用 ordinal rank 避免同分。
-    for action_name in ['BUY', 'TEST', 'WATCH']:
-        m = (~protected) & action_upper.eq(action_name)
-        n = int(m.sum())
-        if n <= 0:
-            continue
-
-        vals = edge_base.loc[m]
-        order = vals.rank(method='first', ascending=True, pct=True)
-
-        # 非線性：前段拉開，後段保留距離。
-        expanded = np.power(order, 0.72)
-
-        # 不同 action 給不同可讀區間，但不改 action 本身。
-        if action_name == 'BUY':
-            low, high = 72.0, 99.5
-        elif action_name == 'TEST':
-            low, high = 68.0, 99.0
-        else:  # WATCH
-            low, high = 62.0, 98.5
-
-        scores = low + expanded * (high - low)
-        out.loc[m, 'v275_edge_score'] = pd.Series(scores, index=out.loc[m].index).round(1)
-
-    # 其他非出場 action，保守套用全體排序。
-    other = (~protected) & (~action_upper.isin(['BUY', 'TEST', 'WATCH']))
-    if other.any():
-        vals = edge_base.loc[other]
-        order = vals.rank(method='first', ascending=True, pct=True)
-        scores = 60.0 + np.power(order, 0.72) * 38.0
-        out.loc[other, 'v275_edge_score'] = pd.Series(scores, index=out.loc[other].index).round(1)
-
-    # 最後輸出 score 給 UI。
-    out['score'] = pd.to_numeric(out['v275_edge_score'], errors='coerce').fillna(0).round(1)
-
-    for c in ['entry_score', 'total_score', 'rank_score', 'opportunity_score']:
-        if c in out.columns:
-            out[c] = out['score']
-
-    # action priority 保持原本邏輯，只在同 action 內依 v275 score 排序。
-    if 'priority' in out.columns:
-        out['_priority_num_v275'] = pd.to_numeric(out['priority'], errors='coerce').fillna(9)
-    else:
-        out['_priority_num_v275'] = 9
-
-    out['_score_num_v275'] = pd.to_numeric(out['score'], errors='coerce').fillna(0)
-    out['_edge_num_v275'] = pd.to_numeric(out['v275_edge_base'], errors='coerce').fillna(0)
-
-    out = out.sort_values(
-        ['_priority_num_v275', '_score_num_v275', '_edge_num_v275', 'stock_id'],
-        ascending=[True, False, False, True]
-    ).drop(columns=['_priority_num_v275', '_score_num_v275', '_edge_num_v275'], errors='ignore')
-
-    return out.reset_index(drop=True)
-
-
-
-# ===== v277 MAX OPPORTUNITY DIRECT LANE PATCH =====
-# 目的：
-# 1. 不改原本 TEST / WATCH / BUY 主清單
-# 2. 不動 pipeline / UI / 持倉 / macro / export schema
-# 3. 只從已產出的最終清單中，挑出「最大機會」寫入 IGNITION / EVOLUTION 區塊
-# 4. IGNITION = 今日最大機會直通區；EVOLUTION = 正在升級中的候選區
-
-def _v277_num(out, col, default=0.0):
-    if out is None or col not in out.columns:
-        return pd.Series(default, index=out.index if out is not None else [])
-    return pd.to_numeric(out[col], errors="coerce").fillna(default)
-
-
-def _v277_pct(s):
-    s = pd.to_numeric(s, errors="coerce").fillna(0)
-    if len(s) <= 1:
-        return pd.Series(1.0, index=s.index)
-    return s.rank(method="average", pct=True).fillna(0)
-
-
-def _v277_clean_action_series(out):
-    if out is None or out.empty:
-        return pd.Series(dtype=str)
-    if "final_action" in out.columns:
-        return out["final_action"].astype(str).str.upper()
-    if "action" in out.columns:
-        return out["action"].astype(str).str.upper()
-    return pd.Series("", index=out.index)
-
-
-def build_v277_max_opportunity_lanes(out):
-    """
-    從 final_action_plan 的已確認候選裡，抽出兩個直通區：
-    - ignition_candidates.csv：Top 1~3，最大機會，直接進場評估
-    - strategy_evolution.csv：次強 4~8，準備升級，等確認/分批試單
-
-    注意：這裡不改 out 主表，只另外產生兩個區塊資料，避免破壞原流程。
-    """
-    if out is None or out.empty:
-        return pd.DataFrame(), pd.DataFrame()
-
-    df = out.copy()
-    action = _v277_clean_action_series(df)
-
-    # 只從可交易/可觀察池抽最大機會；不碰出場、減碼、禁止。
-    tradable = action.isin(["BUY", "TEST", "WATCH"])
-    df = df.loc[tradable].copy()
-    if df.empty:
-        return pd.DataFrame(), pd.DataFrame()
-
-    action = _v277_clean_action_series(df)
-
-    score = _v277_num(df, "score", 0)
-    opportunity = _v277_num(df, "opportunity_score", 0)
-    liquidity = _v277_num(df, "liquidity_score", 0)
-    volume = _v277_num(df, "volume", 0)
-    turnover = _v277_num(df, "turnover", 0)
-    chip = _v277_num(df, "chip_score", 0)
-
-    score_pct = _v277_pct(score)
-    opp_pct = _v277_pct(opportunity)
-    liq_pct = _v277_pct(liquidity)
-    vol_pct = _v277_pct(volume)
-    turn_pct = _v277_pct(turnover)
-    chip_pct = _v277_pct(chip)
-
-    # TEST 比 WATCH 更接近可執行；BUY 如果存在則最高。
-    action_bonus = pd.Series(0.0, index=df.index)
-    action_bonus.loc[action.eq("BUY")] = 0.10
-    action_bonus.loc[action.eq("TEST")] = 0.06
-    action_bonus.loc[action.eq("WATCH")] = 0.02
-
-    text = (
-        df.get("reason", pd.Series("", index=df.index)).astype(str) + " " +
-        df.get("system_note", pd.Series("", index=df.index)).astype(str) + " " +
-        df.get("entry_type", pd.Series("", index=df.index)).astype(str) + " " +
-        df.get("top_opportunity", pd.Series("", index=df.index)).astype(str) + " " +
-        df.get("section_top_opportunity", pd.Series("", index=df.index)).astype(str)
-    ).str.upper()
-
-    ignition_hint = text.str.contains("TOP|突破|BREAK|IGNITION|起漲|點火|轉強|強勢|主力", regex=True)
-    risk_hint = text.str.contains("過熱|追高|長上影|出貨|誘多|AVOID|RISK|禁止|BLOCK", regex=True)
-
-    ignition_bonus = pd.Series(0.0, index=df.index)
-    ignition_bonus.loc[ignition_hint] = 0.07
-
-    risk_penalty = pd.Series(0.0, index=df.index)
-    risk_penalty.loc[risk_hint] = 0.18
-
-    # v277 最大機會分數：不是拿來重寫主策略，只用於兩個直通區排序。
-    direct_score = (
-        score_pct * 0.38 +
-        opp_pct * 0.24 +
-        liq_pct * 0.12 +
-        vol_pct * 0.10 +
-        turn_pct * 0.08 +
-        chip_pct * 0.08 +
-        action_bonus +
-        ignition_bonus -
-        risk_penalty
-    )
-
-    df["v277_direct_entry_score"] = (60 + direct_score.clip(0, 1) * 39).round(1)
-    df["v277_direct_entry_rank"] = df["v277_direct_entry_score"].rank(method="first", ascending=False).astype(int)
-    df["v277_direct_entry_tag"] = "B_NORMAL"
-    df.loc[df["v277_direct_entry_rank"] <= 3, "v277_direct_entry_tag"] = "S_DIRECT_ENTRY"
-    df.loc[(df["v277_direct_entry_rank"] > 3) & (df["v277_direct_entry_rank"] <= 8), "v277_direct_entry_tag"] = "A_EVOLUTION_UPGRADE"
-    df.loc[risk_hint, "v277_direct_entry_tag"] = "AVOID_RISK"
-
-    df = df.sort_values(["v277_direct_entry_score", "score", "stock_id"], ascending=[False, False, True]).reset_index(drop=True)
-
-    # 避免過熱/風險直接進 IGNITION。
-    safe_df = df[df["v277_direct_entry_tag"].ne("AVOID_RISK")].copy()
-    if safe_df.empty:
-        return pd.DataFrame(), pd.DataFrame()
-
-    ignition = safe_df.head(3).copy()
-    evolution = safe_df.iloc[3:8].copy()
-
-    if not ignition.empty:
-        ignition["source"] = "IGNITION"
-        ignition["bucket"] = "IGNITION"
-        ignition["strategy_type"] = "IGNITION"
-        ignition["strategy_name"] = "v277 最大機會直通"
-        ignition["final_action"] = "BUY"
-        ignition["action"] = "BUY"
-        ignition["entry_type"] = "最大機會直通"
-        ignition["action_sub"] = "DIRECT_ENTRY"
-        ignition["score"] = ignition["v277_direct_entry_score"]
-        ignition["entry_score"] = ignition["v277_direct_entry_score"]
-        ignition["execution_flag"] = "TOP"
-        ignition["reason"] = ignition.apply(
-            lambda r: f"v277最大機會直通｜排名 {int(r.get('v277_direct_entry_rank', 0))}｜原訊號：{clean_text(r.get('reason', ''), '依策略判斷')}",
-            axis=1
-        )
-        ignition["system_note"] = "最大機會直通：可直接進場評估；建議仍分批、小倉、避免開高追價。"
-        ignition["operation_advice_zh"] = "可直接進場評估，但不要一次重倉；若開高過熱，等回測不破再進。"
-        ignition["ignition_hint_zh"] = "由 TEST / WATCH / BUY 候選池升級：具備當日最大機會特徵。"
-        ignition["fake_risk_tag"] = "PASS_V277"
-        ignition["fake_reason_zh"] = "已排除明顯過熱、出貨、誘多文字風險。"
-
-    if not evolution.empty:
-        evolution["source"] = "EVOLUTION"
-        evolution["bucket"] = "EVOLUTION"
-        evolution["strategy_type"] = "EVOLUTION"
-        evolution["strategy_name"] = "v277 策略進化候選"
-        evolution["final_action"] = "TEST"
-        evolution["action"] = "TEST"
-        evolution["entry_type"] = "準備升級"
-        evolution["action_sub"] = "EVOLUTION_UPGRADE"
-        evolution["score"] = evolution["v277_direct_entry_score"]
-        evolution["entry_score"] = evolution["v277_direct_entry_score"]
-        evolution["execution_flag"] = "TOP"
-        evolution["evolution_phase"] = "WATCH/TEST → DIRECT候選"
-        evolution["reason"] = evolution.apply(
-            lambda r: f"v277策略進化候選｜排名 {int(r.get('v277_direct_entry_rank', 0))}｜原訊號：{clean_text(r.get('reason', ''), '依策略判斷')}",
-            axis=1
-        )
-        evolution["system_note"] = "策略進化候選：接近最大機會，但仍需確認量價延續，不建議一次重倉。"
-
-    return ignition.reset_index(drop=True), evolution.reset_index(drop=True)
-
-
-
-# ===== v278 TRUE TRIGGER DIRECT LANE PATCH =====
-# 目的：
-# 1. 不改原本 final_action_plan 主表
-# 2. 不動 pipeline / UI / 持倉 / macro / export schema
-# 3. 只把 TEST / WATCH / BUY 中「強 + 正在發動」的標的，寫入 IGNITION / EVOLUTION
-# 4. IGNITION = 最大機會且有觸發確認，可直接進場評估
-# 5. EVOLUTION = 接近觸發、準備升級
-
-def _v278_num_series(s, default=0.0):
-    try:
-        return pd.to_numeric(s, errors="coerce").fillna(default)
-    except Exception:
-        return pd.Series(default)
-
-
-def _v278_pct(s):
-    s = pd.to_numeric(s, errors="coerce").fillna(0)
-    if len(s) <= 1:
-        return pd.Series(1.0, index=s.index)
-    return s.rank(method="average", pct=True).fillna(0)
-
-
-def _v278_read_latest_feature_map():
-    """
-    只讀資料，不改主流程。
-    用 feature_panel_daily 補 MA / 均量 / K棒欄位，若沒有欄位則自動略過。
-    """
-    df = read_csv_any([ROOT / "feature_panel_daily.csv", DATA_DIR / "feature_panel_daily.csv"])
-    if df.empty or "stock_id" not in df.columns:
-        return {}
-
-    df = df.copy()
-    df["stock_id"] = df["stock_id"].apply(normalize_stock_id)
-    if "date" in df.columns:
-        df["date"] = pd.to_datetime(df["date"], errors="coerce")
-        df = df.sort_values(["stock_id", "date"])
-        df = df.groupby("stock_id", as_index=False).tail(1).copy()
-    else:
-        df = df.drop_duplicates("stock_id", keep="last").copy()
-
-    return {str(r["stock_id"]): r.to_dict() for _, r in df.iterrows()}
-
-
-def _v278_pick_series(df, feature_map, names, default=0.0):
-    for c in names:
-        if c in df.columns:
-            return pd.to_numeric(df[c], errors="coerce").fillna(default)
-
-    # 從 feature_map 依 stock_id 補。
-    sid = df["stock_id"].astype(str).apply(normalize_stock_id) if "stock_id" in df.columns else pd.Series("", index=df.index)
-    vals = []
-    for s in sid:
-        item = feature_map.get(str(s), {})
-        v = default
-        for c in names:
-            if c in item and clean_text(item.get(c), "") not in ["", "--"]:
-                v = item.get(c)
-                break
-        vals.append(v)
-    return pd.to_numeric(pd.Series(vals, index=df.index), errors="coerce").fillna(default)
-
-
-def _v278_text_series(df, names):
-    out = pd.Series("", index=df.index)
-    for c in names:
-        if c in df.columns:
-            out = out + " " + df[c].astype(str).fillna("")
-    return out.str.upper()
-
-
-def build_v278_true_trigger_lanes(out):
-    """
-    v278 真觸發直通區：
-    - 先沿用 v277 的最大機會概念
-    - 再加入 Trigger：量能確認 / 均線結構 / 未過熱 / 文字突破訊號 / 假突破排除
-    - 只輸出 ignition_candidates.csv / strategy_evolution.csv，不改 final_action_plan
-    """
-    if out is None or out.empty:
-        return pd.DataFrame(), pd.DataFrame()
-
-    df = out.copy()
-    action = _v277_clean_action_series(df)
-    df = df.loc[action.isin(["BUY", "TEST", "WATCH"])].copy()
-    if df.empty:
-        return pd.DataFrame(), pd.DataFrame()
-
-    action = _v277_clean_action_series(df)
-    feature_map = _v278_read_latest_feature_map()
-
-    score = _v278_pick_series(df, feature_map, ["score", "entry_score", "total_score"], 0)
-    opportunity = _v278_pick_series(df, feature_map, ["opportunity_score", "v277_direct_entry_score"], 0)
-    liquidity = _v278_pick_series(df, feature_map, ["liquidity_score"], 0)
-    volume = _v278_pick_series(df, feature_map, ["volume", "vol", "成交量"], 0)
-    turnover = _v278_pick_series(df, feature_map, ["turnover", "amount", "成交金額"], 0)
-    chip = _v278_pick_series(df, feature_map, ["chip_score", "chip_concentration_score"], 0)
-
-    close = _v278_pick_series(df, feature_map, ["close", "ref_price", "price", "收盤價"], 0)
-    openp = _v278_pick_series(df, feature_map, ["open", "Open", "開盤價"], 0)
-    high = _v278_pick_series(df, feature_map, ["high", "High", "最高價"], 0)
-    low = _v278_pick_series(df, feature_map, ["low", "Low", "最低價"], 0)
-    ma5 = _v278_pick_series(df, feature_map, ["ma5", "MA5", "ma_5", "sma5"], 0)
-    ma10 = _v278_pick_series(df, feature_map, ["ma10", "MA10", "ma_10", "sma10"], 0)
-    ma20 = _v278_pick_series(df, feature_map, ["ma20", "MA20", "ma_20", "sma20"], 0)
-    vol_ma5 = _v278_pick_series(df, feature_map, ["volume_ma5", "vol_ma5", "avg_volume_5", "volume_5ma"], 0)
-
-    text = _v278_text_series(df, [
-        "reason", "system_note", "entry_type", "action_sub", "top_opportunity",
-        "section_top_opportunity", "v276_opportunity_tag", "v277_direct_entry_tag"
-    ])
-
-    # === Trigger 條件 ===
-    ma_ready = (close > 0) & (ma5 > 0) & (ma10 > 0) & (ma20 > 0) & (close >= ma5) & (ma5 >= ma10) & (ma10 >= ma20)
-    near_support = (ma5 > 0) & ((close / ma5 - 1).abs() <= 0.08)
-    not_overheat_ma = (ma20 > 0) & ((close / ma20 - 1) <= 0.24)
-
-    # 沒有均量欄位時，改用同批候選的成交量百分位。
-    vol_confirm_by_ma = (vol_ma5 > 0) & (volume >= vol_ma5 * 1.10)
-    vol_confirm_by_pct = _v278_pct(volume) >= 0.70
-    volume_confirm = vol_confirm_by_ma | vol_confirm_by_pct
-
-    body = (close - openp).fillna(0)
-    candle_range = (high - low).replace(0, np.nan)
-    upper_shadow_ratio = ((high - close) / candle_range).replace([np.inf, -np.inf], np.nan).fillna(0)
-    strong_candle = (openp > 0) & (close > openp) & (upper_shadow_ratio <= 0.45)
-
-    breakout_text = text.str.contains("突破|起漲|點火|轉強|主力|強勢|TOP|BREAK|BREAKOUT|IGNITION", regex=True)
-    risk_text = text.str.contains("過熱|追高|長上影|出貨|誘多|假突破|AVOID|RISK|禁止|BLOCK", regex=True)
-    fake_break_risk = risk_text | (upper_shadow_ratio >= 0.55) | ((ma20 > 0) & ((close / ma20 - 1) > 0.30))
-
-    trigger_confirm = (
-        (ma_ready & volume_confirm & not_overheat_ma) |
-        (breakout_text & volume_confirm & near_support)
-    ) & (~fake_break_risk)
-
-    near_trigger = (
-        ((ma_ready | breakout_text) & (~fake_break_risk)) |
-        (volume_confirm & near_support & not_overheat_ma)
-    )
-
-    action_bonus = pd.Series(0.0, index=df.index)
-    action_bonus.loc[action.eq("BUY")] = 0.10
-    action_bonus.loc[action.eq("TEST")] = 0.06
-    action_bonus.loc[action.eq("WATCH")] = 0.02
-
-    trigger_bonus = pd.Series(0.0, index=df.index)
-    trigger_bonus.loc[ma_ready] += 0.08
-    trigger_bonus.loc[volume_confirm] += 0.07
-    trigger_bonus.loc[breakout_text] += 0.06
-    trigger_bonus.loc[strong_candle] += 0.04
-    trigger_bonus.loc[trigger_confirm] += 0.13
-
-    risk_penalty = pd.Series(0.0, index=df.index)
-    risk_penalty.loc[fake_break_risk] = 0.35
-
-    # v278 直通分數：強度 + 觸發，觸發權重高於純分數。
-    trigger_score = (
-        _v278_pct(score) * 0.24 +
-        _v278_pct(opportunity) * 0.14 +
-        _v278_pct(liquidity) * 0.08 +
-        _v278_pct(volume) * 0.10 +
-        _v278_pct(turnover) * 0.07 +
-        _v278_pct(chip) * 0.07 +
-        trigger_bonus +
-        action_bonus -
-        risk_penalty
-    ).clip(0, 1)
-
-    df["v278_trigger_score"] = (60 + trigger_score * 39).round(1)
-    df["v278_trigger_confirm"] = np.where(trigger_confirm, "YES", np.where(near_trigger, "NEAR", "NO"))
-    df["v278_trigger_tag"] = np.where(
-        fake_break_risk,
-        "AVOID_FAKE_BREAK",
-        np.where(
-            trigger_confirm,
-            "S_TRUE_TRIGGER",
-            np.where(near_trigger, "A_NEAR_TRIGGER", "B_RANK_ONLY")
-        )
-    )
-    df["v278_trigger_reason"] = np.where(
-        fake_break_risk,
-        "排除：疑似過熱、假突破、長上影或出貨風險。",
-        np.where(
-            trigger_confirm,
-            "真觸發：強度、量能、均線/突破結構同時成立。",
-            np.where(near_trigger, "準觸發：接近發動，但仍需下一根確認。", "僅排名強，尚未出現明確觸發。")
-        )
-    )
-
-    df = df.sort_values(["v278_trigger_score", "score", "stock_id"], ascending=[False, False, True]).reset_index(drop=True)
-
-    ignition_pool = df[df["v278_trigger_tag"].eq("S_TRUE_TRIGGER")].copy()
-    evolution_pool = df[df["v278_trigger_tag"].isin(["A_NEAR_TRIGGER", "S_TRUE_TRIGGER"])].copy()
-
-    # 若當天沒有完美真觸發，不讓 IGNITION 空白到失去操作價值：取前 1~3 檔 NEAR 作為「待開盤確認」。
-    if ignition_pool.empty:
-        ignition_pool = df[df["v278_trigger_tag"].eq("A_NEAR_TRIGGER")].head(3).copy()
-
-    ignition = ignition_pool.head(3).copy()
-    used = set(ignition.get("stock_id", pd.Series(dtype=str)).astype(str).tolist()) if not ignition.empty else set()
-    evolution = evolution_pool[~evolution_pool["stock_id"].astype(str).isin(used)].head(5).copy()
-
-    if not ignition.empty:
-        ignition["source"] = "IGNITION"
-        ignition["bucket"] = "IGNITION"
-        ignition["strategy_type"] = "IGNITION"
-        ignition["strategy_name"] = "v278 真觸發最大機會"
-        ignition["final_action"] = "BUY"
-        ignition["action"] = "BUY"
-        ignition["entry_type"] = np.where(
-            ignition["v278_trigger_confirm"].eq("YES"),
-            "真觸發直通",
-            "準觸發直通"
-        )
-        ignition["action_sub"] = "TRUE_TRIGGER_ENTRY"
-        ignition["score"] = ignition["v278_trigger_score"]
-        ignition["entry_score"] = ignition["v278_trigger_score"]
-        ignition["execution_flag"] = "TOP"
-        ignition["reason"] = ignition.apply(
-            lambda r: f"v278最大機會直通｜{clean_text(r.get('v278_trigger_reason', ''))}｜原訊號：{clean_text(r.get('reason', ''), '依策略判斷')}",
-            axis=1
-        )
-        ignition["system_note"] = "真觸發最大機會：可直接進場評估；若開高過熱，等待回測不破再進。"
-        ignition["operation_advice_zh"] = "可直接進場評估，但仍建議分批；若開盤急拉或長上影，暫緩追價。"
-        ignition["ignition_hint_zh"] = "由 TEST / WATCH / BUY 升級：強度 + 量能 + 觸發確認。"
-        ignition["fake_risk_tag"] = "PASS_V278"
-        ignition["fake_reason_zh"] = "已排除明顯過熱、長上影、出貨與假突破風險。"
-
-    if not evolution.empty:
-        evolution["source"] = "EVOLUTION"
-        evolution["bucket"] = "EVOLUTION"
-        evolution["strategy_type"] = "EVOLUTION"
-        evolution["strategy_name"] = "v278 準觸發進化候選"
-        evolution["final_action"] = "TEST"
-        evolution["action"] = "TEST"
-        evolution["entry_type"] = "準觸發升級"
-        evolution["action_sub"] = "TRIGGER_UPGRADE"
-        evolution["score"] = evolution["v278_trigger_score"]
-        evolution["entry_score"] = evolution["v278_trigger_score"]
-        evolution["execution_flag"] = "TOP"
-        evolution["evolution_phase"] = "WATCH/TEST → TRUE_TRIGGER候選"
-        evolution["reason"] = evolution.apply(
-            lambda r: f"v278準觸發進化｜{clean_text(r.get('v278_trigger_reason', ''))}｜原訊號：{clean_text(r.get('reason', ''), '依策略判斷')}",
-            axis=1
-        )
-        evolution["system_note"] = "準觸發進化候選：接近最大機會，需確認量價延續，不建議一次重倉。"
-
-    return ignition.reset_index(drop=True), evolution.reset_index(drop=True)
-
-
-# ===== v279 EVENT BOOST PATCH / 事件觸發加權補丁 =====
-# 目的：
-# 1. 不重寫原策略
-# 2. 不改 pipeline / UI / 持倉 / macro / watchlist
-# 3. 只在 v274/v275 後、IGNITION/EVOLUTION 輸出前，對「真正觸發事件」加權
-# 4. 讓真突破 / 放量突破 / 起漲事件可以跳脫 98~99 排行榜，成為最大機會
-
-def _v279_num_col(df, names, default=0.0):
-    if df is None or df.empty:
-        return pd.Series(dtype="float64")
-    for c in names:
-        if c in df.columns:
-            return pd.to_numeric(df[c], errors="coerce").fillna(default)
-    return pd.Series(default, index=df.index, dtype="float64")
-
-
-def _v279_text_cols(df, names):
-    if df is None or df.empty:
-        return pd.Series(dtype=str)
-    out = pd.Series("", index=df.index, dtype=str)
-    for c in names:
-        if c in df.columns:
-            out = out + " " + df[c].astype(str).fillna("")
-    return out.str.upper()
-
-
-def _v279_bool_from_text(text, pattern):
-    try:
-        return text.str.contains(pattern, regex=True, na=False)
-    except Exception:
-        return pd.Series(False, index=text.index)
-
-
-def apply_v279_event_boost_patch(out):
-    if out is None or out.empty:
-        return out
-
-    out = out.copy()
-
-    action = out["final_action"].astype(str).str.upper() if "final_action" in out.columns else pd.Series("", index=out.index)
-    tradable = action.isin(["BUY", "TEST", "WATCH"])
-
-    if not tradable.any():
-        return out
-
-    base_score = _v279_num_col(out, ["score", "opportunity_score", "entry_score", "total_score"], 0.0)
-
-    close = _v279_num_col(out, ["close", "ref_price", "price"], 0.0)
-    ma5 = _v279_num_col(out, ["ma5", "MA5", "ma_5", "sma5"], 0.0)
-    ma10 = _v279_num_col(out, ["ma10", "MA10", "ma_10", "sma10"], 0.0)
-    ma20 = _v279_num_col(out, ["ma20", "MA20", "ma_20", "sma20"], 0.0)
-
-    volume = _v279_num_col(out, ["volume", "vol", "成交量"], 0.0)
-    turnover = _v279_num_col(out, ["turnover", "amount", "成交金額"], 0.0)
-    liquidity_score = _v279_num_col(out, ["liquidity_score"], 0.0)
-    chip_score = _v279_num_col(out, ["chip_score", "chip_concentration_score"], 0.0)
-
-    text = _v279_text_cols(out, [
-        "reason", "system_note", "entry_type", "execution_flag",
-        "top_opportunity", "section_top_opportunity",
-        "v276_opportunity_tag", "v277_direct_entry_tag", "v278_trigger_tag"
-    ])
-
-    # ===== 事件偵測：有欄位用欄位，沒欄位用文字/相對分位 =====
-    ma_structure = (close > ma5) & (ma5 >= ma10) & (ma10 >= ma20) & (ma20 > 0)
-    above_ma20_not_far = (ma20 > 0) & ((close / ma20 - 1) <= 0.22)
-    overheat_distance = (ma20 > 0) & ((close / ma20 - 1) > 0.30)
-
-    volume_q70 = volume.quantile(0.70) if volume.notna().any() else 0
-    volume_q88 = volume.quantile(0.88) if volume.notna().any() else 0
-    turnover_q70 = turnover.quantile(0.70) if turnover.notna().any() else 0
-    liquidity_q70 = liquidity_score.quantile(0.70) if liquidity_score.notna().any() else 0
-
-    volume_confirm = (volume > 0) & (volume >= volume_q70)
-    volume_surge = (volume > 0) & (volume >= volume_q88)
-    money_confirm = ((turnover > 0) & (turnover >= turnover_q70)) | ((liquidity_score > 0) & (liquidity_score >= liquidity_q70))
-
-    breakout_text = _v279_bool_from_text(text, r"BREAK|BREAKOUT|突破|轉強|點火|起漲|IGNITION|TURN_FIRST|EARLY_TURN|主升")
-    fake_or_risk_text = _v279_bool_from_text(text, r"假突破|長上影|出貨|誘多|過熱|追高|AVOID|RISK|轉弱|跌破")
-
-    clean_breakout = tradable & ma_structure & above_ma20_not_far & volume_confirm & money_confirm
-    explosive_breakout = clean_breakout & volume_surge
-    ignition_event = tradable & above_ma20_not_far & (breakout_text | clean_breakout) & ~fake_or_risk_text
-    leader_event = tradable & ma_structure & volume_surge & (chip_score >= chip_score.quantile(0.65)) & ~overheat_distance
-    fake_breakout = tradable & (fake_or_risk_text | overheat_distance)
-
-    # ===== 事件加分：讓真正事件跳脫 98~99 排行榜 =====
-    bonus = pd.Series(0.0, index=out.index)
-
-    bonus = bonus + np.where(clean_breakout, 16.0, 0.0)
-    bonus = bonus + np.where(explosive_breakout, 18.0, 0.0)
-    bonus = bonus + np.where(ignition_event, 22.0, 0.0)
-    bonus = bonus + np.where(leader_event, 14.0, 0.0)
-    bonus = bonus + np.where(fake_breakout, -35.0, 0.0)
-
-    # 出場/減碼/禁止完全不碰。
-    bonus = pd.Series(bonus, index=out.index)
-    bonus.loc[~tradable] = 0.0
-
-    # 避免單次補丁過度失控，但允許最大機會跳到 100+。
-    bonus = bonus.clip(lower=-40.0, upper=55.0)
-
-    event_score = base_score + bonus
-
-    out["v279_event_bonus"] = bonus.round(1)
-    out["v279_event_score"] = event_score.round(1)
-
-    out["v279_event_tag"] = np.where(
-        fake_breakout,
-        "AVOID_FAKE_BREAKOUT",
-        np.where(
-            explosive_breakout | ignition_event,
-            "S_TRUE_TRIGGER",
-            np.where(
-                clean_breakout,
-                "A_CLEAN_BREAKOUT",
-                np.where(
-                    leader_event,
-                    "A_LEADER_CONTINUATION",
-                    "B_NO_EVENT"
-                )
-            )
-        )
-    )
-
-    # 只有可交易/觀察類覆蓋分數，讓事件真正反映在 TEST/WATCH/IGNITION 排名。
-    out.loc[tradable, "score"] = event_score.loc[tradable].round(1)
-
-    for c in ["entry_score", "total_score", "rank_score", "opportunity_score"]:
-        if c in out.columns:
-            out.loc[tradable, c] = out.loc[tradable, "score"]
-
-    # 排序維持原 action priority，再看事件分數與事件 bonus。
-    priority_map = {"SELL": 1, "REDUCE": 2, "BUY": 3, "TEST": 4, "WATCH": 5, "BLOCK": 6}
-    out["_v279_priority"] = action.map(priority_map).fillna(9)
-    out["_v279_score"] = pd.to_numeric(out["score"], errors="coerce").fillna(0)
-    out["_v279_bonus"] = pd.to_numeric(out["v279_event_bonus"], errors="coerce").fillna(0)
-
-    out = out.sort_values(
-        ["_v279_priority", "_v279_score", "_v279_bonus", "stock_id"],
-        ascending=[True, False, False, True]
-    ).drop(columns=["_v279_priority", "_v279_score", "_v279_bonus"], errors="ignore")
-
-    return out.reset_index(drop=True)
-
-
-# ===== v280 EVENT PROMOTION ENGINE / 事件直接升級補丁 =====
-# 目的：
-# 1. 不重寫原策略
-# 2. 不動 pipeline / UI / 持倉 / macro / watchlist
-# 3. 不破壞 final_action_plan 主表欄位
-# 4. 只在最後輸出前，讓真正事件股直接跳層到 IGNITION / EVOLUTION 專區
-# 5. 避免最大機會被一般 TEST / WATCH 排行榜埋掉
-
-def _v280_num_col(df, names, default=0.0):
-    if df is None or df.empty:
-        return pd.Series(dtype="float64")
-    for c in names:
-        if c in df.columns:
-            return pd.to_numeric(df[c], errors="coerce").fillna(default)
-    return pd.Series(default, index=df.index, dtype="float64")
-
-
-def _v280_text_cols(df, names):
-    if df is None or df.empty:
-        return pd.Series(dtype=str)
-    out = pd.Series("", index=df.index, dtype=str)
-    for c in names:
-        if c in df.columns:
-            out = out + " " + df[c].astype(str).fillna("")
-    return out.str.upper()
-
-
-def _v280_pick_cols(df, cols):
-    keep = [c for c in cols if c in df.columns]
-    return df[keep].copy() if keep else df.copy()
-
-
-def build_v280_event_promotion_lanes(out):
-    """
-    事件直接升級：
-    - IGNITION：真突破 / 放量突破 / 起漲事件，Top 1~3
-    - EVOLUTION：接近觸發 / 正在升級，Top 4~8
-    - 不改原 TEST / WATCH / BUY 主清單，只另外輸出兩個專區 CSV
-    """
-    if out is None or out.empty:
-        return pd.DataFrame(), pd.DataFrame()
-
-    df = out.copy()
-
-    action = df["final_action"].astype(str).str.upper() if "final_action" in df.columns else pd.Series("", index=df.index)
-    tradable = action.isin(["BUY", "TEST", "WATCH"])
-
-    df = df.loc[tradable].copy()
-    if df.empty:
-        return pd.DataFrame(), pd.DataFrame()
-
-    action = df["final_action"].astype(str).str.upper() if "final_action" in df.columns else pd.Series("", index=df.index)
-
-    score = _v280_num_col(df, ["score", "v279_event_score", "opportunity_score", "entry_score", "total_score"], 0.0)
-    event_bonus = _v280_num_col(df, ["v279_event_bonus"], 0.0)
-    liquidity = _v280_num_col(df, ["liquidity_score"], 0.0)
-    volume = _v280_num_col(df, ["volume", "vol"], 0.0)
-    turnover = _v280_num_col(df, ["turnover", "amount"], 0.0)
-    chip = _v280_num_col(df, ["chip_score", "chip_concentration_score"], 0.0)
-
-    close = _v280_num_col(df, ["close", "ref_price", "price"], 0.0)
-    ma5 = _v280_num_col(df, ["ma5", "MA5", "ma_5", "sma5"], 0.0)
-    ma10 = _v280_num_col(df, ["ma10", "MA10", "ma_10", "sma10"], 0.0)
-    ma20 = _v280_num_col(df, ["ma20", "MA20", "ma_20", "sma20"], 0.0)
-
-    text = _v280_text_cols(df, [
-        "reason", "system_note", "entry_type", "execution_flag",
-        "top_opportunity", "section_top_opportunity",
-        "v276_opportunity_tag", "v277_direct_entry_tag",
-        "v278_trigger_tag", "v279_event_tag"
-    ])
-
-    ma_structure = (close > ma5) & (ma5 >= ma10) & (ma10 >= ma20) & (ma20 > 0)
-    not_overheat = ~((ma20 > 0) & ((close / ma20 - 1) > 0.30))
-
-    volume_q70 = volume.quantile(0.70) if volume.notna().any() else 0
-    volume_q85 = volume.quantile(0.85) if volume.notna().any() else 0
-    turnover_q65 = turnover.quantile(0.65) if turnover.notna().any() else 0
-    liquidity_q60 = liquidity.quantile(0.60) if liquidity.notna().any() else 0
-    chip_q60 = chip.quantile(0.60) if chip.notna().any() else 0
-
-    volume_confirm = (volume > 0) & (volume >= volume_q70)
-    volume_surge = (volume > 0) & (volume >= volume_q85)
-    money_confirm = ((turnover > 0) & (turnover >= turnover_q65)) | ((liquidity > 0) & (liquidity >= liquidity_q60))
-    chip_confirm = (chip > 0) & (chip >= chip_q60)
-
-    breakout_text = text.str.contains(r"BREAK|BREAKOUT|突破|轉強|點火|起漲|IGNITION|S_TRUE_TRIGGER|CLEAN_BREAKOUT|主升", regex=True, na=False)
-    risk_text = text.str.contains(r"假突破|長上影|出貨|誘多|過熱|追高|AVOID|RISK|轉弱|跌破", regex=True, na=False)
-
-    # 事件定義：不是只看分數，而是看「強 + 發動」。
-    true_trigger = (
-        not_overheat &
-        ~risk_text &
-        (
-            (event_bonus >= 20) |
-            (breakout_text & volume_confirm) |
-            (ma_structure & volume_surge & money_confirm)
-        )
-    )
-
-    evolution_trigger = (
-        not_overheat &
-        ~risk_text &
-        ~true_trigger &
-        (
-            (score >= score.quantile(0.80)) |
-            (ma_structure & volume_confirm) |
-            (volume_confirm & money_confirm) |
-            chip_confirm
-        )
-    )
-
-    # 事件排序分：事件優先，不再被一般 98~99 分排行榜壓住。
-    promote_score = (
-        score.fillna(0) +
-        event_bonus.fillna(0) * 1.8 +
-        np.where(true_trigger, 80, 0) +
-        np.where(evolution_trigger, 35, 0) +
-        np.where(volume_surge, 12, 0) +
-        np.where(money_confirm, 8, 0) +
-        np.where(chip_confirm, 6, 0) -
-        np.where(risk_text, 80, 0)
-    )
-
-    df["v280_event_promote_score"] = pd.Series(promote_score, index=df.index).round(1)
-    df["v280_event_lane"] = np.where(true_trigger, "IGNITION", np.where(evolution_trigger, "EVOLUTION", "NORMAL"))
-
-    promoted = df[df["v280_event_lane"].isin(["IGNITION", "EVOLUTION"])].copy()
-
-    # 如果今天完全沒有明確事件，保留舊邏輯 fallback，避免 UI 區塊空白。
-    if promoted.empty:
-        try:
-            return build_v278_true_trigger_lanes(out)
-        except Exception:
-            try:
-                return build_v277_max_opportunity_lanes(out)
-            except Exception:
-                return pd.DataFrame(), pd.DataFrame()
-
-    promoted = promoted.sort_values(
-        ["v280_event_lane", "v280_event_promote_score", "score", "stock_id"],
-        ascending=[True, False, False, True]
-    )
-
-    ignition = promoted[promoted["v280_event_lane"] == "IGNITION"].copy()
-    evolution = promoted[promoted["v280_event_lane"] == "EVOLUTION"].copy()
-
-    # 若 IGNITION 不足 3 檔，用 EVOLUTION 前排補足，但標註為準直通。
-    if len(ignition) < 3 and not evolution.empty:
-        need = 3 - len(ignition)
-        fill = evolution.head(need).copy()
-        fill["v280_event_lane"] = "IGNITION_CANDIDATE"
-        ignition = pd.concat([ignition, fill], ignore_index=True)
-        evolution = evolution.iloc[need:].copy()
-
-    ignition = ignition.sort_values(["v280_event_promote_score", "score", "stock_id"], ascending=[False, False, True]).head(3).copy()
-    evolution = evolution.sort_values(["v280_event_promote_score", "score", "stock_id"], ascending=[False, False, True]).head(5).copy()
-
-    if not ignition.empty:
-        ignition["final_action"] = "IGNITION"
-        ignition["execution_flag"] = "DIRECT"
-        ignition["entry_type"] = "MAX_EVENT"
-        ignition["priority"] = 2
-        ignition["allowed"] = True
-        ignition["score"] = pd.to_numeric(ignition["v280_event_promote_score"], errors="coerce").fillna(
-            pd.to_numeric(ignition.get("score", 0), errors="coerce").fillna(0)
-        ).round(1)
-        ignition["reason"] = ignition.apply(
-            lambda r: f"v280事件直通｜{r.get('stock_id','')}｜事件分 {r.get('v280_event_promote_score','')}｜原訊號：{clean_text(r.get('reason',''), '最大機會候選')}",
-            axis=1
-        )
-        ignition["system_note"] = "IGNITION：事件直接升級，不再只看一般 TEST/WATCH 排名；可直接進場評估，但仍需依資金控管分批。"
-
-    if not evolution.empty:
-        evolution["final_action"] = "EVOLUTION"
-        evolution["execution_flag"] = "READY"
-        evolution["entry_type"] = "PRE_EVENT"
-        evolution["priority"] = 3
-        evolution["allowed"] = True
-        evolution["score"] = pd.to_numeric(evolution["v280_event_promote_score"], errors="coerce").fillna(
-            pd.to_numeric(evolution.get("score", 0), errors="coerce").fillna(0)
-        ).round(1)
-        evolution["reason"] = evolution.apply(
-            lambda r: f"v280準事件升級｜{r.get('stock_id','')}｜事件分 {r.get('v280_event_promote_score','')}｜原訊號：{clean_text(r.get('reason',''), '準最大機會候選')}",
-            axis=1
-        )
-        evolution["system_note"] = "EVOLUTION：接近事件觸發，等待量價延續或突破確認，可列為優先觀察/小試單。"
-
-    return ignition.reset_index(drop=True), evolution.reset_index(drop=True)
-
-
-# ===== v283 ALPHA RANKING ENGINE / 最大機會排序補丁 =====
-# 目的：
-# 1. 不改 UI / pipeline / 持倉 / macro / workflow
-# 2. 不新增重型資料依賴，只補最後 ranking
-# 3. 流動性是 Gate，不是主要加分；低於 500 張直接排除/降級
-# 4. 流動性合格後，優先看「籌碼開始集中 + 剛轉強 + 未過熱 + 量能剛啟動」
-# 5. 修正 100 / 141 大量同分，讓 TEST / WATCH / FINAL 真的有排序差異
-
-def _v283_num(s, default=0.0):
-    try:
-        return pd.to_numeric(s, errors="coerce").fillna(default)
-    except Exception:
-        return pd.Series(default)
-
-
-def _v283_num_col(df, names, default=0.0):
-    if df is None or df.empty:
-        return pd.Series(dtype="float64")
-    for c in names:
-        if c in df.columns:
-            return pd.to_numeric(df[c], errors="coerce").fillna(default)
-    return pd.Series(default, index=df.index, dtype="float64")
-
-
-def _v283_load_latest_feature_context():
-    try:
-        f = read_csv_any([
-            ROOT / "feature_panel_daily.csv",
-            DATA_DIR / "feature_panel_daily.csv",
-            ROOT / "mobile_dashboard_v1" / "data" / "feature_panel_daily.csv",
-        ])
-        if f is None or f.empty or "stock_id" not in f.columns:
-            return pd.DataFrame()
-        f = f.copy()
-        f["stock_id"] = f["stock_id"].apply(normalize_stock_id)
-        if "date" in f.columns:
-            f["_v283_date"] = pd.to_datetime(f["date"], errors="coerce")
-            latest = f["_v283_date"].max()
-            f = f[f["_v283_date"] == latest].copy()
-        keep = [
-            "stock_id", "open", "high", "low", "close", "volume",
-            "mom3", "mom5", "mom10", "mom20", "mom60",
-            "ma5", "ma10", "ma20", "ma60", "ma20_slope",
-            "vol20", "volume_ratio", "high_20", "high_60", "low_20",
-            "range_20", "ma_converge_pct", "obv_mom5", "obv_up_count_5",
-            "low_non_down_count_5",
-        ]
-        keep = [c for c in keep if c in f.columns]
-        return f[keep].drop_duplicates("stock_id", keep="last")
-    except Exception as e:
-        print("v283 feature context skipped:", e)
-        return pd.DataFrame()
-
-
-def apply_v283_alpha_ranking_engine(out):
-    if out is None or out.empty:
-        return out
-
-    df = out.copy()
-    if "stock_id" not in df.columns:
-        return df
-
-    df["stock_id"] = df["stock_id"].apply(normalize_stock_id)
-
-    # 補 feature context，但不覆蓋主表原欄位；只用 _v283_* 參考欄。
-    ctx = _v283_load_latest_feature_context()
-    if ctx is not None and not ctx.empty:
-        ctx = ctx.rename(columns={c: f"_v283_{c}" for c in ctx.columns if c != "stock_id"})
-        df = df.merge(ctx, on="stock_id", how="left")
-
-    action = df["final_action"].astype(str).str.upper() if "final_action" in df.columns else pd.Series("", index=df.index)
-    tradable = action.isin(["BUY", "TEST", "WATCH"])
-
-    if not tradable.any():
-        return df
-
-    close = _v283_num_col(df, ["_v283_close", "close", "ref_price", "price"], 0.0)
-    open_ = _v283_num_col(df, ["_v283_open", "open"], close)
-    high = _v283_num_col(df, ["_v283_high", "high"], close)
-    volume = _v283_num_col(df, ["_v283_volume", "volume", "vol"], 0.0)
-    turnover = _v283_num_col(df, ["turnover", "amount"], 0.0)
-    turnover = np.where(turnover > 0, turnover, close * volume * 1000)
-    turnover = pd.Series(turnover, index=df.index)
-
-    ma5 = _v283_num_col(df, ["_v283_ma5", "ma5"], close)
-    ma10 = _v283_num_col(df, ["_v283_ma10", "ma10"], close)
-    ma20 = _v283_num_col(df, ["_v283_ma20", "ma20"], close)
-    ma60 = _v283_num_col(df, ["_v283_ma60", "ma60"], close)
-    ma20_slope = _v283_num_col(df, ["_v283_ma20_slope", "ma20_slope"], 0.0)
-
-    mom3 = _v283_num_col(df, ["_v283_mom3", "mom3"], 0.0)
-    mom5 = _v283_num_col(df, ["_v283_mom5", "mom5"], 0.0)
-    mom10 = _v283_num_col(df, ["_v283_mom10", "mom10"], 0.0)
-    mom20 = _v283_num_col(df, ["_v283_mom20", "mom20"], 0.0)
-
-    vol_ratio = _v283_num_col(df, ["_v283_volume_ratio", "volume_ratio"], 1.0)
-    high20 = _v283_num_col(df, ["_v283_high_20", "high_20"], close)
-    high60 = _v283_num_col(df, ["_v283_high_60", "high_60"], close)
-    ma_converge = _v283_num_col(df, ["_v283_ma_converge_pct", "ma_converge_pct"], 999.0)
-    obv_mom5 = _v283_num_col(df, ["_v283_obv_mom5", "obv_mom5"], 0.0)
-    obv_up5 = _v283_num_col(df, ["_v283_obv_up_count_5", "obv_up_count_5"], 0.0)
-    low_non_down5 = _v283_num_col(df, ["_v283_low_non_down_count_5", "low_non_down_count_5"], 0.0)
-    chip_score = _v283_num_col(df, ["chip_score", "chip_concentration_score"], 0.0)
-    liquidity_score = _v283_num_col(df, ["liquidity_score"], 0.0)
-
-    # ===== Gate：流動性先合格 =====
-    strict_low_liq = (volume < 500) & (turnover < 15_000_000)
-    liquidity_gate = (volume >= 1000) | (turnover >= 30_000_000) | (liquidity_score >= 45)
-
-    # ===== alpha：流動性合格後，籌碼剛開始集中 =====
-    chip_start = (
-        (obv_mom5 > 0).astype(int) * 16 +
-        (obv_up5 >= 3).astype(int) * 14 +
-        (low_non_down5 >= 3).astype(int) * 12 +
-        ((chip_score >= 35) & (chip_score <= 85)).astype(int) * 14 +
-        vol_ratio.between(1.05, 2.80).astype(int) * 10 +
-        (ma_converge <= 0.14).astype(int) * 8
-    )
-
-    # ===== 剛轉強：不是死股，也不是已經噴太遠 =====
-    ma20_gap = ((close / ma20) - 1).replace([np.inf, -np.inf], 0).fillna(0)
-    early_turn = (
-        (close > ma5).astype(int) * 8 +
-        (close > ma10).astype(int) * 7 +
-        (ma5 >= ma10 * 0.995).astype(int) * 7 +
-        (ma10 >= ma20 * 0.985).astype(int) * 7 +
-        (ma20_slope >= 0).astype(int) * 6 +
-        mom3.between(-0.01, 0.08).astype(int) * 5 +
-        mom5.between(0.002, 0.12).astype(int) * 8 +
-        mom10.between(0.003, 0.18).astype(int) * 8 +
-        mom20.between(0.015, 0.32).astype(int) * 8 +
-        ma20_gap.between(-0.02, 0.18).astype(int) * 8
-    )
-
-    # ===== 突破初期 / 量能剛啟動 =====
-    volume_start = (
-        vol_ratio.between(1.12, 2.80).astype(int) * 18 +
-        vol_ratio.between(1.00, 3.50).astype(int) * 8
-    )
-    breakout_initial = (
-        ((high20 > 0) & (close >= high20 * 0.985)).astype(int) * 12 +
-        ((high20 > 0) & ((close / high20 - 1).abs() <= 0.045)).astype(int) * 10 +
-        ((high60 > 0) & (close >= high60 * 0.90) & (close <= high60 * 1.035)).astype(int) * 10
-    )
-
-    # ===== 過熱 / 出貨扣分 =====
-    upper_shadow = ((high - close) / high).replace([np.inf, -np.inf], 0).fillna(0)
-    overheat_penalty = (
-        (ma20_gap > 0.22).astype(int) * 24 +
-        (mom5 > 0.16).astype(int) * 16 +
-        (mom20 > 0.38).astype(int) * 22 +
-        (vol_ratio > 4.80).astype(int) * 18 +
-        ((upper_shadow > 0.055) & (vol_ratio > 1.80)).astype(int) * 22 +
-        ((close < open_) & (vol_ratio > 2.20)).astype(int) * 24
-    )
-
-    # 流動性只給少量 quality，不再讓成交量最大 = 分數最高。
-    liquidity_quality = (
-        (liquidity_gate).astype(int) * 8 +
-        ((volume >= 3000) | (turnover >= 80_000_000)).astype(int) * 4
-    )
-
-    raw = (
-        35 +
-        liquidity_quality +
-        chip_start * 0.85 +
-        early_turn * 0.65 +
-        volume_start * 0.75 +
-        breakout_initial * 0.75 -
-        overheat_penalty * 1.10
-    )
-    raw = pd.Series(raw, index=df.index).round(2)
-    raw.loc[~liquidity_gate] = raw.loc[~liquidity_gate] - 35
-    raw.loc[strict_low_liq] = raw.loc[strict_low_liq] - 999
-
-    # 顯示分數：保留 100+ 機會，但不再全部 141。
-    final_score = raw.clip(lower=0, upper=128).round(1)
-
-    df["v283_liquidity_gate"] = liquidity_gate.astype(int)
-    df["v283_strict_low_liq"] = strict_low_liq.astype(int)
-    df["v283_chip_start_score"] = pd.Series(chip_start, index=df.index).round(1)
-    df["v283_early_turn_score"] = pd.Series(early_turn, index=df.index).round(1)
-    df["v283_volume_start_score"] = pd.Series(volume_start, index=df.index).round(1)
-    df["v283_breakout_initial_score"] = pd.Series(breakout_initial, index=df.index).round(1)
-    df["v283_overheat_penalty"] = pd.Series(overheat_penalty, index=df.index).round(1)
-    df["v283_alpha_score"] = final_score
-    df["v283_alpha_tag"] = np.where(
-        strict_low_liq,
-        "BLOCK_UNDER_500_SHARES",
-        np.where(
-            liquidity_gate & (chip_start >= 40) & (overheat_penalty <= 18),
-            "S_CHIP_START_ALPHA",
-            np.where(
-                liquidity_gate & (chip_start >= 28),
-                "A_ACCUMULATION_CANDIDATE",
-                np.where(liquidity_gate, "B_LIQUID_ONLY", "C_LOW_LIQUIDITY")
-            )
-        )
-    )
-
-    # 低於 500 張或金額太小，直接 BLOCK；500~1000 張不允許 BUY/TEST，只能 WATCH。
-    df.loc[tradable & strict_low_liq, "final_action"] = "BLOCK"
-    df.loc[tradable & strict_low_liq, "allowed"] = False
-    df.loc[tradable & strict_low_liq, "priority"] = 9
-
-    weak_liq = tradable & (~liquidity_gate) & (~strict_low_liq)
-    df.loc[weak_liq & action.isin(["BUY", "TEST"]), "final_action"] = "WATCH"
-    df.loc[weak_liq, "priority"] = 8
-
-    # 只覆蓋進場/試單/觀察類分數，出場與減碼不碰。
-    tradable_after = df["final_action"].astype(str).str.upper().isin(["BUY", "TEST", "WATCH"])
-    df.loc[tradable_after, "score"] = final_score.loc[tradable_after]
-    for c in ["entry_score", "total_score", "rank_score", "opportunity_score"]:
-        if c in df.columns:
-            df.loc[tradable_after, c] = df.loc[tradable_after, "score"]
-
-    # TEST / WATCH 分工：真正接近進場才 TEST；只是流動但籌碼弱，留 WATCH。
-    can_test = liquidity_gate & (chip_start >= 28) & (early_turn >= 36) & (overheat_penalty <= 32)
-    can_buy = liquidity_gate & (chip_start >= 42) & (early_turn >= 46) & (volume_start >= 18) & (overheat_penalty <= 24)
-
-    act_now = df["final_action"].astype(str).str.upper()
-    df.loc[tradable_after & act_now.eq("BUY") & ~can_buy, "final_action"] = "TEST"
-    df.loc[tradable_after & act_now.eq("TEST") & ~can_test, "final_action"] = "WATCH"
-
-    # 若原本 WATCH 但條件很好，可以提升 TEST，不直接亂升 BUY。
-    act_now = df["final_action"].astype(str).str.upper()
-    df.loc[tradable_after & act_now.eq("WATCH") & can_test & (final_score >= 78), "final_action"] = "TEST"
-
-    priority_map = {"SELL": 0, "REDUCE": 1, "BUY": 2, "TEST": 3, "WATCH": 8, "BLOCK": 9}
-    df["priority"] = df["final_action"].astype(str).str.upper().map(priority_map).fillna(df.get("priority", 9)).astype(int)
-
-    if "system_note" in df.columns:
-        df["system_note"] = df["system_note"].astype(str) + "｜v283：流動性Gate後看籌碼初期/剛轉強/未過熱"
-
-    df["_v283_priority"] = pd.to_numeric(df["priority"], errors="coerce").fillna(9)
-    df["_v283_score_sort"] = pd.to_numeric(df["score"], errors="coerce").fillna(0)
-    df = df.sort_values(["_v283_priority", "_v283_score_sort", "stock_id"], ascending=[True, False, True])
-    df = df.drop(columns=["_v283_priority", "_v283_score_sort"], errors="ignore")
-
-    return df.reset_index(drop=True)
 
 def main():
     generated_at = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
@@ -2217,8 +1235,13 @@ def main():
 
         out, market_guard = apply_market_guard(out)
 
-        # v266.15：總經攻擊強度 + TOP5 機會評測
+        # v266.15：總經攻擊強度
         out, macro_guard = apply_macro_strength_v26614(out)
+
+        # v302：最後決策主力硬門檻。這一步在 TOP5 前執行，避免舊 opportunity_score 把垃圾重新標回 TEST/WATCH。
+        out = apply_final_main_force_gate_v302(out)
+
+        # TOP5 機會評測只允許在通過 v302 主力 Gate 後的 BUY/TEST/WATCH 內產生。
         out, top_opportunity_df = apply_top_opportunities_v26614(out)
 
         out["_score_num"] = pd.to_numeric(out["score"], errors="coerce").fillna(0)
@@ -2251,52 +1274,12 @@ def main():
             axis=1
         )
 
-    # v274 FINAL TRUE EXPORT PATCH：
-    # 只在最後輸出前正規化分數，不改前面策略判斷。
-    out = apply_v274_final_true_export_patch(out)
-    # v275 EDGE EXPANSION PATCH：只拉開最後可讀分數差距，不改策略判斷。
-    out = apply_v275_edge_expansion_patch(out)
-    # v279 EVENT BOOST PATCH：只補真正觸發事件加權，讓最大機會跳脫 98~99 排行榜。
-    out = apply_v279_event_boost_patch(out)
-    # v283 ALPHA RANKING ENGINE：修正 100/141 同分，改成「流動性Gate後看籌碼初期、剛轉強、未過熱」。
-    out = apply_v283_alpha_ranking_engine(out)
-
-    # TOP 機會表同步使用 v274 最終分數，避免 dashboard 與主表排序不同步。
-    if not out.empty:
-        try:
-            _, top_opportunity_df = apply_top_opportunities_v26614(out)
-            top_opportunity_df = apply_v274_final_true_export_patch(top_opportunity_df)
-            top_opportunity_df = apply_v275_edge_expansion_patch(top_opportunity_df)
-            top_opportunity_df = apply_v279_event_boost_patch(top_opportunity_df)
-            top_opportunity_df = apply_v283_alpha_ranking_engine(top_opportunity_df)
-        except Exception:
-            pass
-
-    # v280 EVENT PROMOTION ENGINE：
-    # 不改 final_action_plan 主表，只把真正事件股直接升級到 IGNITION / EVOLUTION 專區。
-    try:
-        ignition_v277_df, evolution_v277_df = build_v280_event_promotion_lanes(out)
-    except Exception as e:
-        print("v280 event promotion lane skipped:", e)
-        # 若 v280 條件不足，保留 v278/v277 作為安全 fallback，避免 UI 區塊空白。
-        try:
-            ignition_v277_df, evolution_v277_df = build_v278_true_trigger_lanes(out)
-        except Exception as e2:
-            print("v278 fallback lane skipped:", e2)
-            try:
-                ignition_v277_df, evolution_v277_df = build_v277_max_opportunity_lanes(out)
-            except Exception as e3:
-                print("v277 fallback lane skipped:", e3)
-                ignition_v277_df, evolution_v277_df = pd.DataFrame(), pd.DataFrame()
-
     write_csv_both(out, "final_action_plan.csv")
     write_csv_both(top_opportunity_df, "top_opportunities.csv")
-    write_csv_both(ignition_v277_df, "ignition_candidates.csv")
-    write_csv_both(evolution_v277_df, "strategy_evolution.csv")
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v283_alpha_ranking_engine",
+        "source": "final_decision_engine_v302_main_force_hard_gate",
         "signal_date": str(out["signal_date"].iloc[0]) if not out.empty and "signal_date" in out.columns else "",
         "trade_date": str(out["trade_date"].iloc[0]) if not out.empty and "trade_date" in out.columns else "",
         "rows": int(len(out)),
@@ -2308,9 +1291,9 @@ def main():
         "block_count": int((out["final_action"] == "BLOCK").sum()) if not out.empty else 0,
         "alpha_count": int((out["strategy_type"].astype(str).str.upper() == "ALPHA").sum()) if not out.empty else 0,
         "core_count": int((out["strategy_type"].astype(str).str.upper() == "CORE").sum()) if not out.empty else 0,
-        "high_liquidity_count": int((out["liquidity_level"].astype(str).str.upper() == "HIGH").sum()) if (not out.empty and "liquidity_level" in out.columns) else 0,
-        "medium_liquidity_count": int((out["liquidity_level"].astype(str).str.upper() == "MEDIUM").sum()) if (not out.empty and "liquidity_level" in out.columns) else 0,
-        "low_liquidity_count": int((out["liquidity_level"].astype(str).str.upper() == "LOW").sum()) if (not out.empty and "liquidity_level" in out.columns) else 0,
+        "high_liquidity_count": int((out["liquidity_level"].astype(str).str.upper() == "HIGH").sum()) if not out.empty else 0,
+        "medium_liquidity_count": int((out["liquidity_level"].astype(str).str.upper() == "MEDIUM").sum()) if not out.empty else 0,
+        "low_liquidity_count": int((out["liquidity_level"].astype(str).str.upper() == "LOW").sum()) if not out.empty else 0,
         "backfill_source": "feature_panel_daily.csv",
         "extra_lookup_sources": [
             "trade_plan.csv",
@@ -2323,8 +1306,6 @@ def main():
         ],
         "with_name_count": int((out["stock_name"].astype(str).str.strip() != "").sum()) if not out.empty else 0,
         "top_opportunity_count": int((out["top_opportunity"].astype(str).str.strip() != "").sum()) if "top_opportunity" in out.columns and not out.empty else 0,
-        "v277_ignition_count": int(len(ignition_v277_df)) if "ignition_v277_df" in locals() else 0,
-        "v277_evolution_count": int(len(evolution_v277_df)) if "evolution_v277_df" in locals() else 0,
         "chip_high_count": int((pd.to_numeric(out.get("chip_score", pd.Series(dtype=float)), errors="coerce").fillna(0) >= 80).sum()) if not out.empty and "chip_score" in out.columns else 0,
         "macro_regime": macro_guard.get("macro_regime", ""),
         "macro_label": macro_guard.get("macro_label", ""),
