@@ -67,6 +67,10 @@ OUTPUT_COLUMNS = [
     "test_rank_v304",
     "test_top_tag_v304",
     "test_rank_reason_v304",
+    "section_opportunity_rank", "section_top_opportunity",
+    "attack_score_v309", "final_attack_score_v309", "final_sort_score_v309", "hard_reject_v309",
+    "short_turn_weak_v309", "ma_sticky_no_attack_v309", "box_middle_v309", "liquidity_only_v309",
+    "final_attack_score_final_v309", "final_sort_score_final_v309", "hard_reject_final_v309",
 ]
 
 def clean_text(v, default=""):
@@ -1602,6 +1606,131 @@ def apply_final_attack_sort_v3074(out):
     return d, top_df, ignition_df, evolution_df
 
 
+
+
+# ===== v309 FINAL DECISION ATTACK-FIRST PATCH / 最終決策攻擊排序 =====
+# 這段是最後一道門：不管前面哪裡給了舊 TOP，這裡都會重算、清掉舊 TOP、重新排序。
+def apply_final_attack_sort_v309(out):
+    import numpy as np
+    import pandas as pd
+
+    if out is None or out.empty:
+        return out, pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+    d = out.copy()
+
+    def n(col, default=0.0):
+        if col in d.columns:
+            return pd.to_numeric(d[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
+        return pd.Series(default, index=d.index, dtype="float64")
+
+    def t(col, default=""):
+        if col in d.columns:
+            return d[col].astype(str).fillna(default)
+        return pd.Series(default, index=d.index, dtype="object")
+
+    sid = t("stock_id")
+    finance = sid.str.startswith(("28", "58"))
+
+    base = n("score")
+    opportunity = n("opportunity_score")
+    liq = n("liquidity_score")
+    chip = n("chip_score")
+    main_force = n("main_force_score_v302")
+    ignition = n("ignition_score_v303")
+    evolution = n("evolution_score_v303")
+    test_rank = n("test_rank_score_v304")
+    upstream_attack = n("final_attack_score_v309")
+    upstream_sort = n("final_sort_score_v309")
+    upstream_reject = n("hard_reject_v309")
+    volume = n("volume")
+    turnover = n("turnover")
+
+    text_all = t("reason") + " " + t("system_note") + " " + t("entry_type") + " " + t("bucket") + " " + t("strategy_type")
+    strong = text_all.str.contains("攻擊|突破|發動|起漲|點火|轉強|放量|多頭|主力|強勢", regex=True, na=False)
+    weak = text_all.str.contains("轉弱|跌破|攻擊結構不足|弱攻擊|橫盤|牛皮|箱型|高流動性觀察|低信心", regex=True, na=False)
+    fake = text_all.str.contains("假突破|誘多|過熱|上影|追高|整理過久", regex=True, na=False)
+
+    attack = pd.Series(0.0, index=d.index)
+    # upstream strategy attack score has priority when present
+    attack += upstream_attack * 0.85
+    attack += upstream_sort * 0.10
+    # final-decision internal scores are only secondary
+    attack += test_rank * 0.30
+    attack += ignition * 0.28
+    attack += evolution * 0.32
+    attack += main_force * 0.20
+    attack += opportunity * 0.15
+    attack += chip.clip(lower=0, upper=100) * 0.05
+    attack += ((volume >= 1000) | (turnover >= 30_000_000)).astype(int) * 4
+    attack += strong.astype(int) * 12
+    attack -= weak.astype(int) * 36
+    attack -= fake.astype(int) * 26
+    attack -= finance.astype(int) * 120
+    attack -= upstream_reject.astype(int) * 120
+
+    liquidity_only = (liq >= 65) & (upstream_attack < 58) & (main_force < 50) & (ignition < 45) & (test_rank < 45) & (~strong)
+    attack -= liquidity_only.astype(int) * 50
+
+    hard_reject = finance | (upstream_reject.astype(int).eq(1)) | liquidity_only | weak | fake
+
+    d["final_attack_score_final_v309"] = attack.round(2)
+    d["final_sort_score_final_v309"] = (attack * 0.78 + base * 0.12 + opportunity * 0.10).round(2)
+    d["hard_reject_final_v309"] = hard_reject.astype(int)
+
+    for c in ["top_opportunity", "opportunity_rank", "section_top_opportunity", "section_opportunity_rank", "execution_flag"]:
+        if c not in d.columns:
+            d[c] = ""
+        d[c] = ""
+
+    action = t("final_action").str.upper()
+    # Hard reject cannot remain BUY/TEST. This is the key fix.
+    to_watch = action.isin(["BUY", "TEST"]) & (hard_reject | (d["final_attack_score_final_v309"] < 58))
+    d.loc[to_watch, "final_action"] = "WATCH"
+    d.loc[to_watch, "priority"] = 8
+    d.loc[to_watch, "entry_type"] = "攻擊結構不足，降回觀察"
+    d.loc[to_watch, "system_note"] = d.loc[to_watch, "system_note"].astype(str) + "｜v309：最終攻擊排序未達門檻，取消舊TOP/降回WATCH"
+
+    # Rebuild TOP only from valid attack pool.
+    action = d["final_action"].astype(str).str.upper()
+    for action_name, label, min_score in [("BUY", "買進", 70), ("TEST", "試單", 66), ("WATCH", "觀察", 62)]:
+        mask = action.eq(action_name) & (~hard_reject) & (d["final_attack_score_final_v309"] >= min_score)
+        idx = (
+            d.loc[mask]
+            .sort_values(["final_attack_score_final_v309", "final_sort_score_final_v309", "stock_id"], ascending=[False, False, True])
+            .head(5)
+            .index
+        )
+        for rank, ridx in enumerate(idx, start=1):
+            d.loc[ridx, "execution_flag"] = "TOP"
+            d.loc[ridx, "opportunity_rank"] = str(rank)
+            d.loc[ridx, "top_opportunity"] = f"TOP{rank}"
+            d.loc[ridx, "section_opportunity_rank"] = str(rank)
+            d.loc[ridx, "section_top_opportunity"] = f"{label}TOP{rank}"
+            d.loc[ridx, "system_note"] = str(d.loc[ridx, "system_note"]) + f"｜v309：攻擊結構{label}TOP{rank}"
+
+    # Rebuild signal dfs after final top/attack calculation.
+    if "signal_stage_v303" not in d.columns:
+        d["signal_stage_v303"] = ""
+    ignition_mask = (d["final_attack_score_final_v309"] >= 70) & (~hard_reject) & action.isin(["WATCH", "TEST", "BUY"])
+    evolution_mask = (d["final_attack_score_final_v309"] >= 82) & (~hard_reject) & action.isin(["TEST", "BUY"])
+    d.loc[ignition_mask, "signal_stage_v303"] = "IGNITION"
+    d.loc[evolution_mask, "signal_stage_v303"] = "EVOLUTION"
+
+    priority = pd.to_numeric(d.get("priority", 9), errors="coerce").fillna(9)
+    top_rank = pd.to_numeric(d["section_opportunity_rank"], errors="coerce").fillna(999)
+    d["_p_v309"] = priority
+    d["_top_v309"] = top_rank
+    d = d.sort_values(
+        ["_p_v309", "_top_v309", "final_attack_score_final_v309", "final_sort_score_final_v309", "stock_id"],
+        ascending=[True, True, False, False, True]
+    ).drop(columns=["_p_v309", "_top_v309"], errors="ignore")
+
+    top_df = d[(d["top_opportunity"].astype(str).str.strip() != "") | (d["section_top_opportunity"].astype(str).str.strip() != "")].copy()
+    ignition_df = d[d["signal_stage_v303"].astype(str).str.upper().eq("IGNITION")].copy()
+    evolution_df = d[d["signal_stage_v303"].astype(str).str.upper().eq("EVOLUTION")].copy()
+    return d, top_df, ignition_df, evolution_df
+
 def main():
     generated_at = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
     lookup = make_lookup()
@@ -1777,6 +1906,14 @@ def main():
                 "liquidity_score": pick(r, lookup, "liquidity_score", ""),
                 "volume": pick(r, lookup, "volume", ""),
                 "turnover": pick(r, lookup, "turnover", ""),
+                "attack_score_v309": pick(r, lookup, "attack_score_v309", ""),
+                "final_attack_score_v309": pick(r, lookup, "final_attack_score_v309", ""),
+                "final_sort_score_v309": pick(r, lookup, "final_sort_score_v309", ""),
+                "hard_reject_v309": pick(r, lookup, "hard_reject_v309", ""),
+                "short_turn_weak_v309": pick(r, lookup, "short_turn_weak_v309", ""),
+                "ma_sticky_no_attack_v309": pick(r, lookup, "ma_sticky_no_attack_v309", ""),
+                "box_middle_v309": pick(r, lookup, "box_middle_v309", ""),
+                "liquidity_only_v309": pick(r, lookup, "liquidity_only_v309", ""),
             })
 
     out = pd.DataFrame(rows, columns=OUTPUT_COLUMNS)
@@ -1919,7 +2056,7 @@ def main():
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v3074_final_attack_sort",
+        "source": "final_decision_engine_v309_attack_first_final",
         "signal_date": str(out["signal_date"].iloc[0]) if not out.empty and "signal_date" in out.columns else "",
         "trade_date": str(out["trade_date"].iloc[0]) if not out.empty and "trade_date" in out.columns else "",
         "rows": int(len(out)),
