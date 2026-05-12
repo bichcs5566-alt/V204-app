@@ -690,6 +690,96 @@ def sort_candidates_top_first_v3066(d):
         else: asc.append(False)
     return d.sort_values(cols, ascending=asc)
 
+
+# ===== v307.1 SAFE ATTACK STRUCTURE PATCH =====
+# 只修 TEST / WATCH 排序品質：
+# - 避免橫盤牛皮股靠流動性擠上來
+# - 強化真正有攻擊意圖的股票
+# - 不動 app.js、不動 UI、不動 TOP5 顯示
+def apply_attack_structure_patch_v3071(d, mode="core"):
+    import numpy as np
+    import pandas as pd
+
+    if d is None or len(d) == 0:
+        return d
+
+    d = d.copy()
+
+    def s(col, default=0):
+        if col in d.columns:
+            return pd.to_numeric(d[col], errors="coerce").fillna(default)
+        return pd.Series(default, index=d.index, dtype="float64")
+
+    close = s("close")
+    high = s("high", close)
+    low = s("low", close)
+    volume = s("volume")
+
+    ma5 = s("ma5", close)
+    ma10 = s("ma10", close)
+    ma20 = s("ma20", close)
+
+    # 若原本沒有 slope 欄位，用現有 MA 結構做安全近似，不會 KeyError。
+    if "ma5_slope" in d.columns:
+        ma5_slope = s("ma5_slope")
+    else:
+        ma5_slope = (ma5 / ma10.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+
+    if "ma10_slope" in d.columns:
+        ma10_slope = s("ma10_slope")
+    else:
+        ma10_slope = (ma10 / ma20.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+
+    # 攻擊量能：優先吃 volume_ratio；沒有就用 volume / volume_ma5；再沒有就不加分。
+    if "volume_ratio" in d.columns:
+        vol_ratio = s("volume_ratio", 1)
+    elif "volume_ma5" in d.columns:
+        vol_ratio = (volume / s("volume_ma5", 0).replace(0, np.nan)).replace([np.inf, -np.inf], 1).fillna(1)
+    elif "vol_ma5" in d.columns:
+        vol_ratio = (volume / s("vol_ma5", 0).replace(0, np.nan)).replace([np.inf, -np.inf], 1).fillna(1)
+    else:
+        vol_ratio = pd.Series(1, index=d.index, dtype="float64")
+
+    # 橫盤懲罰：優先吃 high_10/low_10；沒有就用當日 high/low，避免炸掉。
+    if "high_10" in d.columns and "low_10" in d.columns:
+        range_10 = ((s("high_10") - s("low_10")) / s("low_10").replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
+    else:
+        range_10 = ((high - low) / low.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
+
+    sid = d["stock_id"].astype(str) if "stock_id" in d.columns else pd.Series("", index=d.index)
+    finance_like = sid.str.startswith(("28", "58"))
+
+    # 防呆：沒有 entry_score 就建立，不讓流程炸掉
+    if "entry_score" not in d.columns:
+        d["entry_score"] = 0
+    d["entry_score"] = pd.to_numeric(d["entry_score"], errors="coerce").fillna(0)
+
+    # CORE / ALPHA 權重略有差異，但都不會炸欄位
+    if mode == "alpha":
+        d["entry_score"] += (ma5_slope > 0).astype(int) * 12
+        d["entry_score"] += (ma10_slope > 0).astype(int) * 8
+        d["entry_score"] += (vol_ratio >= 1.8).astype(int) * 18
+        d["entry_score"] -= (range_10 < 0.08).astype(int) * 20
+        d["entry_score"] -= finance_like.astype(int) * 50
+    else:
+        d["entry_score"] += (ma5_slope > 0).astype(int) * 15
+        d["entry_score"] += (ma10_slope > 0).astype(int) * 10
+        d["entry_score"] += (vol_ratio >= 1.8).astype(int) * 20
+        d["entry_score"] -= (range_10 < 0.08).astype(int) * 25
+        d["entry_score"] -= finance_like.astype(int) * 40
+
+    # 給 debug 用，不影響前端
+    d["attack_structure_score_v3071"] = (
+        (ma5_slope > 0).astype(int) * 30
+        + (ma10_slope > 0).astype(int) * 25
+        + (vol_ratio >= 1.8).astype(int) * 30
+        - (range_10 < 0.08).astype(int) * 25
+        - finance_like.astype(int) * 40
+    )
+
+    return d
+
+
 def core_engine(x):
     """
     CORE：早期卡位策略。
@@ -718,27 +808,6 @@ def core_engine(x):
     # 結構加分
     d["entry_score"] += (d["ma_converge_pct"] <= 0.12).astype(int) * 6
     d["entry_score"] += (d["low_non_down_count_5"] >= 3).astype(int) * 5
-
-    # ===== v307 ATTACK STRUCTURE PATCH =====
-    # 修正：
-    # 1. 牛皮金融股一直卡進 TEST
-    # 2. 橫盤股排序過高
-    # 3. 缺乏「準備發動」判斷
-
-    # 趨勢斜率（不是只看站上均線）
-    d["entry_score"] += (d["ma5_slope"] > 0).astype(int) * 15
-    d["entry_score"] += (d["ma10_slope"] > 0).astype(int) * 10
-
-    # 攻擊量能（突然放量）
-    d["entry_score"] += (d["volume_ratio"] >= 1.8).astype(int) * 20
-
-    # 橫盤懲罰
-    range_10 = ((d["high_10"] - d["low_10"]) / d["low_10"]).replace([float("inf"), -float("inf")], 0).fillna(0)
-    d["entry_score"] -= (range_10 < 0.08).astype(int) * 25
-
-    # 金融牛皮懲罰
-    finance_like = d["stock_id"].astype(str).str.startswith(("28", "58"))
-    d["entry_score"] -= finance_like.astype(int) * 40
 
     # 風險扣分
     d["entry_score"] -= (d["close"] < 10).astype(int) * 16
@@ -817,22 +886,8 @@ def alpha_engine(x):
     d["entry_score"] += (d["ma20"] > d["ma60"]).astype(int) * 8
     d["entry_score"] += (d["ma20_slope"] > 0).astype(int) * 6
 
-    # ===== v307 ATTACK STRUCTURE PATCH =====
-    # 強化真正準備發動的股票
-
-    d["entry_score"] += (d["ma5_slope"] > 0).astype(int) * 12
-    d["entry_score"] += (d["ma10_slope"] > 0).astype(int) * 8
-
-    # 量能突然啟動
-    d["entry_score"] += (d["volume_ratio"] >= 1.8).astype(int) * 18
-
-    # 橫盤股懲罰
-    range_10 = ((d["high_10"] - d["low_10"]) / d["low_10"]).replace([float("inf"), -float("inf")], 0).fillna(0)
-    d["entry_score"] -= (range_10 < 0.08).astype(int) * 20
-
-    # 金融股硬限制
-    finance_like = d["stock_id"].astype(str).str.startswith(("28", "58"))
-    d["entry_score"] -= finance_like.astype(int) * 50
+    # v307.1：安全攻擊結構修正，避免牛皮橫盤股靠流動性上來
+    d = apply_attack_structure_patch_v3071(d, mode="alpha")
 
     # 突破/接近高點
     d["entry_score"] += (d["close"] >= d["high_20"] * 0.995).astype(int) * 10
