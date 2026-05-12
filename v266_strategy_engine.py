@@ -643,6 +643,198 @@ def apply_main_force_gate_v300(d, mode="ALPHA"):
     return d
 
 
+
+# ===== v307.2 FINAL ATTACK SORT CORE =====
+# 只修策略排序核心：
+# - TEST / WATCH 排名改看「攻擊結構」而不是只看高流動性與穩定
+# - 明顯橫盤牛皮股不再靠高流動性擠到前排
+# - TOP1~TOP5 重新以攻擊結構分數產生
+# - 不動 app.js、不動 UI、不動持倉、不動輸出欄位名稱
+def apply_final_attack_sort_v3072(d, mode="CORE"):
+    import numpy as np
+    import pandas as pd
+
+    if d is None or len(d) == 0:
+        return d
+
+    d = d.copy()
+    mode = str(mode or "CORE").upper()
+
+    def n(col, default=0.0):
+        if col in d.columns:
+            return pd.to_numeric(d[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
+        return pd.Series(default, index=d.index, dtype="float64")
+
+    def txt(col, default=""):
+        if col in d.columns:
+            return d[col].astype(str).fillna(default)
+        return pd.Series(default, index=d.index, dtype="object")
+
+    close = n("close")
+    open_ = n("open", close)
+    high = n("high", close)
+    low = n("low", close)
+    volume = n("volume")
+    turnover = n("turnover", close * volume * 1000)
+
+    mom3 = n("mom3")
+    mom5 = n("mom5")
+    mom10 = n("mom10")
+    mom20 = n("mom20")
+    mom60 = n("mom60")
+
+    ma5 = n("ma5", close)
+    ma10 = n("ma10", close)
+    ma20 = n("ma20", close)
+    ma60 = n("ma60", close)
+
+    high20 = n("high_20", high)
+    low20 = n("low_20", low)
+    high60 = n("high_60", high)
+    low60 = n("low_60", low)
+
+    range20 = n("range_20")
+    if float(range20.abs().sum()) == 0:
+        range20 = ((high20 - low20) / low20.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
+
+    ma_conv = n("ma_converge_pct")
+    ma20_slope = n("ma20_slope")
+    vol_ratio = n("volume_ratio", 1)
+    vol_dry = n("vol_dry_ratio", 1)
+    obv = n("obv_mom5")
+    obv_up5 = n("obv_up_count_5")
+    low_hold = n("low_non_down_count_5")
+    liq_score = n("liquidity_score")
+
+    sid = txt("stock_id")
+    finance_like = sid.str.startswith(("28", "58"))
+
+    ma5_vs_ma10 = (ma5 / ma10.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+    ma10_vs_ma20 = (ma10 / ma20.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+    ma20_vs_ma60 = (ma20 / ma60.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+    close_ma20_gap = (close / ma20.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+    close_to_high20 = (close / high20.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
+    close_to_high60 = (close / high60.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
+    candle_power = ((close - open_) / open_.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
+
+    # 真正要抓的是「準備攻擊」，不是單純大成交量。
+    attack_score = pd.Series(0.0, index=d.index)
+
+    # 1) 價格動能：短中期要有往上意圖
+    attack_score += (mom3 > 0).astype(int) * 6
+    attack_score += (mom5 > 0.008).astype(int) * 10
+    attack_score += (mom10 > 0.015).astype(int) * 14
+    attack_score += ((mom20 > 0.025) & (mom20 <= 0.32)).astype(int) * 16
+
+    # 2) 均線攻擊結構：不能只是橫盤貼線
+    attack_score += (ma5_vs_ma10 > 0).astype(int) * 12
+    attack_score += (ma10_vs_ma20 > -0.005).astype(int) * 10
+    attack_score += (ma20_slope > 0).astype(int) * 10
+    attack_score += (ma20_vs_ma60 > -0.035).astype(int) * 8
+
+    # 3) 位置：接近突破區，但不要過熱
+    attack_score += (close_to_high20 >= 0.94).astype(int) * 12
+    attack_score += (close_to_high60 >= 0.88).astype(int) * 8
+    attack_score += (close_ma20_gap.between(-0.015, 0.14)).astype(int) * 8
+
+    # 4) 量價同步：突然啟動，不是本來就大
+    attack_score += (vol_ratio.between(1.15, 3.80)).astype(int) * 18
+    attack_score += ((vol_ratio >= 1.35) & (mom5 > 0)).astype(int) * 12
+    attack_score += ((volume >= 1000) | (turnover >= 30_000_000)).astype(int) * 6
+
+    # 5) 吸籌/撐盤：跌不下去才有發動前味道
+    attack_score += (low_hold >= 3).astype(int) * 10
+    attack_score += (obv > 0).astype(int) * 10
+    attack_score += (obv_up5 >= 2).astype(int) * 6
+    attack_score += (candle_power > 0).astype(int) * 4
+
+    # 橫盤牛皮懲罰：你目前最在意的錯誤來源
+    flat_dead = (
+        (range20 < 0.075) &
+        (mom10.abs() < 0.018) &
+        (mom20.abs() < 0.035) &
+        (vol_ratio < 1.30)
+    )
+    weak_attack = (
+        (mom5 <= 0) &
+        (mom10 <= 0.01) &
+        (ma5_vs_ma10 <= 0) &
+        (vol_ratio < 1.20)
+    )
+    overheat_or_fake = (
+        (mom20 > 0.45) |
+        (close_ma20_gap > 0.24) |
+        ((high - close) / high.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0).gt(0.06) & (vol_ratio > 1.7)
+    )
+
+    attack_score -= flat_dead.astype(int) * 42
+    attack_score -= weak_attack.astype(int) * 28
+    attack_score -= overheat_or_fake.astype(int) * 18
+    attack_score -= finance_like.astype(int) * 60
+
+    # 流動性只作為輔助，不再當主排序核心。
+    attack_score += (liq_score >= 75).astype(int) * 4
+
+    d["attack_score_v3072"] = attack_score.round(2)
+    d["flat_dead_v3072"] = flat_dead.astype(int)
+    d["weak_attack_v3072"] = weak_attack.astype(int)
+    d["attack_ok_v3072"] = (
+        (attack_score >= 48) &
+        ~flat_dead &
+        ~weak_attack &
+        ~finance_like
+    ).astype(int)
+
+    if "entry_score" not in d.columns:
+        d["entry_score"] = 0
+    d["entry_score"] = pd.to_numeric(d["entry_score"], errors="coerce").fillna(0)
+    d["final_sort_score_v3072"] = (d["entry_score"] * 0.45 + d["attack_score_v3072"] * 0.55).round(2)
+
+    # 明顯橫盤/弱攻擊的 TEST 不應該留在試單，降回 WATCH。
+    if "action" in d.columns:
+        action = d["action"].astype(str).str.upper()
+        downgrade = action.eq("TEST") & (d["attack_ok_v3072"].eq(0)) & (d["attack_score_v3072"] < 42)
+        d.loc[downgrade, "action"] = "WATCH"
+        d.loc[downgrade, "action_label"] = "觀察"
+        d.loc[downgrade, "action_sub"] = "攻擊結構不足，降回觀察"
+
+    # 重新產生 TOP1~TOP5：改用真正的攻擊結構分數，而不是只看流動性/穩定。
+    for c in ["top_opportunity", "section_top_opportunity", "opportunity_rank", "top_reason"]:
+        if c not in d.columns:
+            d[c] = ""
+    d["top_opportunity"] = ""
+    d["section_top_opportunity"] = ""
+    d["opportunity_rank"] = ""
+    d["top_reason"] = ""
+    d["top_rank_v3066"] = 9999
+    d["is_top_v3066"] = 0
+
+    action = d["action"].astype(str).str.upper() if "action" in d.columns else pd.Series("", index=d.index)
+    for label, mask in [
+        ("TEST", action.isin(["BUY", "TEST"])),
+        ("WATCH", action.eq("WATCH")),
+    ]:
+        qualified = mask & (d["attack_score_v3072"] >= 42) & ~finance_like
+        idx = (
+            d.loc[qualified]
+            .sort_values(
+                ["attack_score_v3072", "final_sort_score_v3072", "entry_score", "mom20", "stock_id"],
+                ascending=[False, False, False, False, True]
+            )
+            .head(5)
+            .index
+        )
+        if len(idx):
+            d.loc[idx, "top_opportunity"] = [f"🔥TOP{i}" for i in range(1, len(idx) + 1)]
+            d.loc[idx, "section_top_opportunity"] = [f"TOP{i}_{label}" for i in range(1, len(idx) + 1)]
+            d.loc[idx, "opportunity_rank"] = [str(i) for i in range(1, len(idx) + 1)]
+            d.loc[idx, "top_rank_v3066"] = [i for i in range(1, len(idx) + 1)]
+            d.loc[idx, "is_top_v3066"] = 1
+            d.loc[idx, "top_reason"] = "攻擊結構優先｜量價同步｜均線轉強｜排除橫盤牛皮"
+
+    return d
+
+
 # ===== v306.6 TOP5 HARD ORDER / TOP5 硬排序 =====
 def _top_rank_hard_v3066(row):
     """TOP1~TOP5 must stay above normal candidates. Lower is better."""
@@ -680,7 +872,7 @@ def sort_candidates_top_first_v3066(d):
     if d is None or d.empty:
         return d
     d = _top_sort_columns_v3066(d)
-    cols = ["is_top_v3066", "top_rank_v3066", "entry_score", "main_force_score_v300", "liquidity_score", "mom20", "mom10", "stock_id"]
+    cols = ["is_top_v3066", "top_rank_v3066", "final_sort_score_v3072", "attack_score_v3072", "entry_score", "main_force_score_v300", "mom20", "mom10", "liquidity_score", "stock_id"]
     cols = [c for c in cols if c in d.columns]
     asc = []
     for c in cols:
@@ -689,96 +881,6 @@ def sort_candidates_top_first_v3066(d):
         elif c == "stock_id": asc.append(True)
         else: asc.append(False)
     return d.sort_values(cols, ascending=asc)
-
-
-# ===== v307.1 SAFE ATTACK STRUCTURE PATCH =====
-# 只修 TEST / WATCH 排序品質：
-# - 避免橫盤牛皮股靠流動性擠上來
-# - 強化真正有攻擊意圖的股票
-# - 不動 app.js、不動 UI、不動 TOP5 顯示
-def apply_attack_structure_patch_v3071(d, mode="core"):
-    import numpy as np
-    import pandas as pd
-
-    if d is None or len(d) == 0:
-        return d
-
-    d = d.copy()
-
-    def s(col, default=0):
-        if col in d.columns:
-            return pd.to_numeric(d[col], errors="coerce").fillna(default)
-        return pd.Series(default, index=d.index, dtype="float64")
-
-    close = s("close")
-    high = s("high", close)
-    low = s("low", close)
-    volume = s("volume")
-
-    ma5 = s("ma5", close)
-    ma10 = s("ma10", close)
-    ma20 = s("ma20", close)
-
-    # 若原本沒有 slope 欄位，用現有 MA 結構做安全近似，不會 KeyError。
-    if "ma5_slope" in d.columns:
-        ma5_slope = s("ma5_slope")
-    else:
-        ma5_slope = (ma5 / ma10.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
-
-    if "ma10_slope" in d.columns:
-        ma10_slope = s("ma10_slope")
-    else:
-        ma10_slope = (ma10 / ma20.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
-
-    # 攻擊量能：優先吃 volume_ratio；沒有就用 volume / volume_ma5；再沒有就不加分。
-    if "volume_ratio" in d.columns:
-        vol_ratio = s("volume_ratio", 1)
-    elif "volume_ma5" in d.columns:
-        vol_ratio = (volume / s("volume_ma5", 0).replace(0, np.nan)).replace([np.inf, -np.inf], 1).fillna(1)
-    elif "vol_ma5" in d.columns:
-        vol_ratio = (volume / s("vol_ma5", 0).replace(0, np.nan)).replace([np.inf, -np.inf], 1).fillna(1)
-    else:
-        vol_ratio = pd.Series(1, index=d.index, dtype="float64")
-
-    # 橫盤懲罰：優先吃 high_10/low_10；沒有就用當日 high/low，避免炸掉。
-    if "high_10" in d.columns and "low_10" in d.columns:
-        range_10 = ((s("high_10") - s("low_10")) / s("low_10").replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
-    else:
-        range_10 = ((high - low) / low.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
-
-    sid = d["stock_id"].astype(str) if "stock_id" in d.columns else pd.Series("", index=d.index)
-    finance_like = sid.str.startswith(("28", "58"))
-
-    # 防呆：沒有 entry_score 就建立，不讓流程炸掉
-    if "entry_score" not in d.columns:
-        d["entry_score"] = 0
-    d["entry_score"] = pd.to_numeric(d["entry_score"], errors="coerce").fillna(0)
-
-    # CORE / ALPHA 權重略有差異，但都不會炸欄位
-    if mode == "alpha":
-        d["entry_score"] += (ma5_slope > 0).astype(int) * 12
-        d["entry_score"] += (ma10_slope > 0).astype(int) * 8
-        d["entry_score"] += (vol_ratio >= 1.8).astype(int) * 18
-        d["entry_score"] -= (range_10 < 0.08).astype(int) * 20
-        d["entry_score"] -= finance_like.astype(int) * 50
-    else:
-        d["entry_score"] += (ma5_slope > 0).astype(int) * 15
-        d["entry_score"] += (ma10_slope > 0).astype(int) * 10
-        d["entry_score"] += (vol_ratio >= 1.8).astype(int) * 20
-        d["entry_score"] -= (range_10 < 0.08).astype(int) * 25
-        d["entry_score"] -= finance_like.astype(int) * 40
-
-    # 給 debug 用，不影響前端
-    d["attack_structure_score_v3071"] = (
-        (ma5_slope > 0).astype(int) * 30
-        + (ma10_slope > 0).astype(int) * 25
-        + (vol_ratio >= 1.8).astype(int) * 30
-        - (range_10 < 0.08).astype(int) * 25
-        - finance_like.astype(int) * 40
-    )
-
-    return d
-
 
 def core_engine(x):
     """
@@ -848,6 +950,9 @@ def core_engine(x):
 
     set_action(d, buy, test, watch, "早期卡位", "低量試單", "早期觀察")
 
+    # v307.2：最後輸出前，用攻擊結構重排 TEST / WATCH，並降級明顯橫盤牛皮股
+    d = apply_final_attack_sort_v3072(d, mode="CORE")
+
     d["note"] = (
         "CORE早期卡位｜剛轉強｜靠近MA20｜量能回溫｜"
         + d["liquidity_tag"].astype(str)
@@ -885,9 +990,6 @@ def alpha_engine(x):
     d["entry_score"] += (d["close"] > d["ma20"]).astype(int) * 8
     d["entry_score"] += (d["ma20"] > d["ma60"]).astype(int) * 8
     d["entry_score"] += (d["ma20_slope"] > 0).astype(int) * 6
-
-    # v307.1：安全攻擊結構修正，避免牛皮橫盤股靠流動性上來
-    d = apply_attack_structure_patch_v3071(d, mode="alpha")
 
     # 突破/接近高點
     d["entry_score"] += (d["close"] >= d["high_20"] * 0.995).astype(int) * 10
@@ -984,9 +1086,15 @@ def build_trade_plan(core, alpha, regime, signal_date):
     sort_cols = ["action", "is_top_v3066", "top_rank_v3066", "priority", "entry_score", "liquidity_score"]
     action_order = {"BUY": 1, "TEST": 2, "WATCH": 3, "BLOCK": 4}
     s["action_order_v3066"] = s["action"].astype(str).str.upper().map(action_order).fillna(9)
+    for c in ["final_sort_score_v3072", "attack_score_v3072"]:
+        if c not in s.columns:
+            s[c] = pd.to_numeric(s.get("entry_score", 0), errors="coerce").fillna(0)
+
     s = (
-        s.sort_values(["action_order_v3066", "is_top_v3066", "top_rank_v3066", "priority", "entry_score", "liquidity_score"],
-                      ascending=[True, False, True, True, False, False])
+        s.sort_values(
+            ["action_order_v3066", "is_top_v3066", "top_rank_v3066", "priority", "final_sort_score_v3072", "attack_score_v3072", "entry_score", "liquidity_score"],
+            ascending=[True, False, True, True, False, False, False, False]
+        )
         .drop_duplicates("stock_id")
         .head(36)
     )
