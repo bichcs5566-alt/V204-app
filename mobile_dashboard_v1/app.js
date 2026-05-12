@@ -2883,7 +2883,7 @@ async function loadTechMapV26637() {
 
 
 
-// ===== v306.1 Industry Tag Safe Patch / 產業標籤安全補丁 =====
+// ===== v306.2 Industry Tag Compact Patch / 產業標籤壓縮排版 =====
 // 只做 UI 標記，不影響策略、排序、股價、持倉、Actions。
 function industryTagV306(row) {
   row = row || {};
@@ -2898,10 +2898,10 @@ function industryTagV306(row) {
 
   const exact = {
     "2330": "半導體", "2303": "半導體", "2344": "半導體",
-    "3034": "IC設計", "3443": "IC設計", "2379": "IC設計",
-    "2317": "AI伺服器", "2382": "AI伺服器", "3231": "AI伺服器", "6669": "AI伺服器",
+    "3034": "IC", "3443": "IC", "2379": "IC",
+    "2317": "AI", "2382": "AI", "3231": "AI", "6669": "AI",
     "2603": "航運", "2609": "航運", "2615": "航運", "2636": "航運", "2610": "航空",
-    "6179": "通訊", "6189": "電子零組件",
+    "6179": "通訊", "6189": "零組件",
     "5876": "金融", "2820": "金融", "2852": "金融",
     "2890": "金融", "2891": "金融",
     "2880": "金融", "2881": "金融", "2882": "金融", "2883": "金融",
@@ -2909,14 +2909,14 @@ function industryTagV306(row) {
     "2888": "金融", "2889": "金融",
     "6585": "重電", "1513": "重電", "1514": "重電", "1605": "電纜",
     "2368": "PCB", "2367": "PCB", "3037": "PCB", "8046": "PCB",
-    "2498": "電子", "2753": "觀光餐飲"
+    "2498": "電子", "2753": "觀光"
   };
 
   if (exact[sid]) return exact[sid];
 
   if (/^28/.test(sid) || /^58/.test(sid)) return "金融";
   if (/^26/.test(sid)) return "航運";
-  if (/^15/.test(sid) || /^16/.test(sid)) return "電機電纜";
+  if (/^15/.test(sid) || /^16/.test(sid)) return "機電";
   if (/^23/.test(sid) || /^24/.test(sid) || /^30/.test(sid) || /^34/.test(sid) || /^61/.test(sid) || /^62/.test(sid) || /^65/.test(sid)) return "電子";
   if (/^27/.test(sid)) return "觀光";
   return "其他";
@@ -2927,22 +2927,42 @@ function injectIndustryStyleV306() {
   const style = document.createElement("style");
   style.id = "industry-style-v306";
   style.textContent = `
+    .scan-main.scan-main-live {
+      grid-template-columns: 82px minmax(58px, .9fr) minmax(68px, .8fr) 0px minmax(96px, 1.1fr) minmax(92px, 1.05fr) minmax(54px, .7fr) !important;
+      column-gap: 8px !important;
+      align-items: center !important;
+    }
+    .scan-main.scan-main-live .scan-top {
+      display: none !important;
+    }
+    .scan-main.scan-main-live .scan-score {
+      text-align: center !important;
+      font-variant-numeric: tabular-nums !important;
+    }
+    .scan-main.scan-main-live .scan-liq {
+      min-width: 88px !important;
+      padding-left: 10px !important;
+      padding-right: 10px !important;
+      white-space: nowrap !important;
+    }
     .scan-close.industry-tag-v306 {
       display: inline-flex !important;
       align-items: center !important;
       justify-content: center !important;
-      min-width: 72px !important;
-      max-width: 96px !important;
-      padding: 6px 10px !important;
+      width: 54px !important;
+      max-width: 54px !important;
+      min-width: 54px !important;
+      padding: 5px 6px !important;
       border-radius: 999px !important;
       background: #f8fafc !important;
       border: 1px solid #e5e7eb !important;
       color: #334155 !important;
-      font-size: 13px !important;
+      font-size: 12px !important;
       font-weight: 900 !important;
+      line-height: 1.2 !important;
       white-space: nowrap !important;
       overflow: hidden !important;
-      text-overflow: ellipsis !important;
+      text-overflow: clip !important;
     }
   `;
   document.head.appendChild(style);
@@ -5123,4 +5143,3 @@ document.addEventListener("DOMContentLoaded", function() {
   setTimeout(v281RefreshBlankStockNameCells, 2600);
 });
 /* ===== end v281 Final Action UI Patch ===== */
-
