@@ -2883,52 +2883,43 @@ async function loadTechMapV26637() {
 
 
 
-// ===== v306 產業標記顯示 / Industry Tag UI =====
-// 目的：在清單右側空白處顯示產業，不動排序、不動股價、不動展開邏輯。
-function industryFallbackV306(stockId) {
-  const sid = String(stockId || "").trim().replace(/\.0$/, "").padStart(4, "0");
-  const specific = {
-    "6179": "🔌 光通訊",
-    "2820": "🏦 金融保險",
-    "5876": "🏦 金融保險",
-    "2498": "💻 其他電子",
-    "2753": "🍽️ 觀光餐飲",
-    "2636": "✈️ 航運業",
-    "6585": "🧬 生技醫療",
-    "6189": "🧩 電子零組件",
-    "2618": "✈️ 航運業",
-    "2603": "🚢 航運業",
-    "2852": "🏦 金融保險",
-    "3164": "🔬 半導體"
-  };
-  if (specific[sid]) return specific[sid];
-  if (/^(28|58)/.test(sid)) return "🏦 金融保險";
-  if (/^23/.test(sid)) return "🔬 半導體/電子";
-  if (/^24/.test(sid)) return "🧩 電子零組件";
-  if (/^25/.test(sid)) return "🏗️ 營建資產";
-  if (/^26/.test(sid)) return "🚢 航運運輸";
-  if (/^27/.test(sid)) return "🍽️ 觀光餐飲";
-  if (/^(30|31|32|33|34|35|36)/.test(sid)) return "💻 電子科技";
-  if (/^(37|49|52|53|54|61|62|64|65|66|67|68|69)/.test(sid)) return "⚙️ 科技製造";
-  if (/^17/.test(sid)) return "🧪 化學/生技";
-  if (/^14/.test(sid)) return "🧵 紡織";
-  if (/^15/.test(sid)) return "⚙️ 電機機械";
-  if (/^16/.test(sid)) return "🔌 電器電纜";
-  if (/^20/.test(sid)) return "🏭 鋼鐵";
-  if (/^21/.test(sid)) return "🛞 橡膠";
-  if (/^22/.test(sid)) return "🚗 汽車";
-  if (/^12/.test(sid)) return "🍱 食品";
-  return "🏷️ 其他";
-}
-
-function industryTagV306(row, stockId) {
+// ===== v306.1 Industry Tag Safe Patch / 產業標籤安全補丁 =====
+// 只做 UI 標記，不影響策略、排序、股價、持倉、Actions。
+function industryTagV306(row) {
   row = row || {};
-  const direct = safeText(row.industry_tag || "", "").trim();
+  const direct = safeText(
+    row.industry_tag || row.industry || row.industry_name || row.sector || row.theme || row.group || "",
+    ""
+  ).trim();
+
   if (direct && direct !== "--") return direct;
-  const industry = safeText(row.industry || row.industry_name || row.sector || row.group || "", "").trim();
-  const icon = safeText(row.industry_icon || "", "").trim();
-  if (industry && industry !== "--") return `${icon ? icon + " " : ""}${industry}`;
-  return industryFallbackV306(stockId || row.stock_id);
+
+  const sid = String(row.stock_id || row.code || row.symbol || "").trim().slice(0, 4);
+
+  const exact = {
+    "2330": "半導體", "2303": "半導體", "2344": "半導體",
+    "3034": "IC設計", "3443": "IC設計", "2379": "IC設計",
+    "2317": "AI伺服器", "2382": "AI伺服器", "3231": "AI伺服器", "6669": "AI伺服器",
+    "2603": "航運", "2609": "航運", "2615": "航運", "2636": "航運", "2610": "航空",
+    "6179": "通訊", "6189": "電子零組件",
+    "5876": "金融", "2820": "金融", "2852": "金融",
+    "2890": "金融", "2891": "金融",
+    "2880": "金融", "2881": "金融", "2882": "金融", "2883": "金融",
+    "2884": "金融", "2885": "金融", "2886": "金融", "2887": "金融",
+    "2888": "金融", "2889": "金融",
+    "6585": "重電", "1513": "重電", "1514": "重電", "1605": "電纜",
+    "2368": "PCB", "2367": "PCB", "3037": "PCB", "8046": "PCB",
+    "2498": "電子", "2753": "觀光餐飲"
+  };
+
+  if (exact[sid]) return exact[sid];
+
+  if (/^28/.test(sid) || /^58/.test(sid)) return "金融";
+  if (/^26/.test(sid)) return "航運";
+  if (/^15/.test(sid) || /^16/.test(sid)) return "電機電纜";
+  if (/^23/.test(sid) || /^24/.test(sid) || /^30/.test(sid) || /^34/.test(sid) || /^61/.test(sid) || /^62/.test(sid) || /^65/.test(sid)) return "電子";
+  if (/^27/.test(sid)) return "觀光";
+  return "其他";
 }
 
 function injectIndustryStyleV306() {
@@ -2936,30 +2927,33 @@ function injectIndustryStyleV306() {
   const style = document.createElement("style");
   style.id = "industry-style-v306";
   style.textContent = `
-    .scan-industry-v306 {
+    .scan-close.industry-tag-v306 {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
       min-width: 72px !important;
-      max-width: 108px !important;
+      max-width: 96px !important;
+      padding: 6px 10px !important;
+      border-radius: 999px !important;
+      background: #f8fafc !important;
+      border: 1px solid #e5e7eb !important;
+      color: #334155 !important;
+      font-size: 13px !important;
+      font-weight: 900 !important;
       white-space: nowrap !important;
       overflow: hidden !important;
       text-overflow: ellipsis !important;
-      font-size: 0.72em !important;
-      font-weight: 900 !important;
-      color: #334155 !important;
-      text-align: right !important;
-    }
-    @media (max-width: 430px) {
-      .scan-industry-v306 {
-        min-width: 58px !important;
-        max-width: 82px !important;
-        font-size: 0.66em !important;
-      }
     }
   `;
   document.head.appendChild(style);
 }
+try { injectIndustryStyleV306(); } catch(e) {}
+document.addEventListener("DOMContentLoaded", function() {
+  try { injectIndustryStyleV306(); } catch(e) {}
+});
+
 
 function renderScanRow(row, key) {
-  injectIndustryStyleV306();
   const action = normalizeAction(row.final_action || row.action);
   const cls = ACTION_CLASS[action] || "watch";
   const label = ACTION_LABEL[action] || action;
@@ -2976,13 +2970,13 @@ function renderScanRow(row, key) {
   const bucket = zhStrategy(row.bucket || row.strategy_type);
   const entry = zhEntry(row.entry_type || row.action_sub);
   const close = num(row.close || row.ref_price);
+  const industryTag = industryTagV306(row);
   const amount = row.suggested_amount ? money(row.suggested_amount) : "--";
   const weight = row.target_weight ? pct(row.target_weight) : "--";
   const volume = formatVolume(row.volume);
   const turnover = formatTurnover(row.turnover);
   const liqLabel = liquidityLabel(row.liquidity_level || row.liquidity_tag);
   const liqCls = liquidityClass(row.liquidity_level || row.liquidity_tag);
-  const industryTag = industryTagV306(row, stock);
   const liqScore = row.liquidity_score ? num(row.liquidity_score) : "--";
   const strat = zhStrategy(strategyDisplay(row));
   const reason = safeText(row.reason || row.note, "無");
@@ -3007,7 +3001,6 @@ function renderScanRow(row, key) {
           ${detailCell("建議金額", amount)}
           ${detailCell("目標權重", weight)}
           ${detailCell("流動性", liqLabel, liqCls)}
-          ${detailCell("產業類別", industryTag)}
           ${detailCell("成交量", formatLotsFromShares(row.volume))}
           ${detailCell("成交金額", formatTurnoverTW(row.turnover))}
           ${detailCell("風險等級", exitRisk)}
@@ -3023,7 +3016,6 @@ function renderScanRow(row, key) {
           ${detailCell("建議金額", amount)}
           ${detailCell("目標權重", weight)}
           ${detailCell("流動性", liqLabel, liqCls)}
-          ${detailCell("產業類別", industryTag)}
           ${detailCell("成交量", formatLotsFromShares(row.volume))}
           ${detailCell("成交金額", formatTurnoverTW(row.turnover))}
           ${detailCell("流動性分數", liqScore)}
@@ -3061,7 +3053,7 @@ function renderScanRow(row, key) {
         <div class="scan-top">${top}</div>
         <div class="scan-entry">${isExit ? label : entry}</div>
         <div class="scan-liq ${liqCls}">${liqLabel}</div>
-        <div class="scan-close scan-industry-v306" title="${industryTag}">${industryTag}</div>
+        <div class="scan-close industry-tag-v306">${industryTag}</div>
       </div>
 
       <div class="scan-detail" id="${key}">
@@ -4889,3 +4881,246 @@ function v273InjectScoreStyle() {
         column-gap: 8px !important;
       }
     }
+  `;
+  document.head.appendChild(style);
+}
+
+// 覆寫 rowScore：排序直接吃真實連續分數。
+const __rowScoreBeforeV273 = typeof rowScoreV26630 === "function" ? rowScoreV26630 : null;
+rowScoreV26630 = function(row) {
+  const n = v273PickRealScore(row);
+  if (n !== null) return n;
+  return __rowScoreBeforeV273 ? __rowScoreBeforeV273(row) : 0;
+};
+
+// 覆寫 render：只把 row.score 換成真實分數，不動原本卡片 HTML / 展開 / 持倉 / workflow。
+const __renderScanRowBeforeV273 = typeof renderScanRow === "function" ? renderScanRow : null;
+renderScanRow = function(row, key) {
+  v273InjectScoreStyle();
+  const patchedRow = v273NormalizeRowScore(row);
+  return __renderScanRowBeforeV273 ? __renderScanRowBeforeV273(patchedRow, key) : "";
+};
+
+// 覆寫 splitRows：分組後再以真實分數排序，避免 TEST / WATCH 仍沿用模板順序。
+const __splitRowsBeforeV273 = typeof splitRows === "function" ? splitRows : null;
+splitRows = function(rows) {
+  const patched = (rows || []).map(v273NormalizeRowScore);
+  const groups = __splitRowsBeforeV273 ? __splitRowsBeforeV273(patched) : { main: [], test: [], watch: [], block: [] };
+  ["main", "test", "watch", "block"].forEach(k => {
+    groups[k] = (groups[k] || []).slice().sort((a, b) => {
+      const pa = ACTION_PRIORITY?.[normalizeAction(a.final_action || a.action)] || 99;
+      const pb = ACTION_PRIORITY?.[normalizeAction(b.final_action || b.action)] || 99;
+      if (pa !== pb) return pa - pb;
+      const sb = v273PickRealScore(b) ?? 0;
+      const sa = v273PickRealScore(a) ?? 0;
+      if (sb !== sa) return sb - sa;
+      return String(a.stock_id || "").localeCompare(String(b.stock_id || ""));
+    });
+  });
+  return groups;
+};
+
+try { v273InjectScoreStyle(); } catch(e) {}
+document.addEventListener("DOMContentLoaded", function() {
+  try { v273InjectScoreStyle(); } catch(e) {}
+});
+/* ===== end v273 FINAL UI SCORE PATCH ===== */
+
+
+/* =========================================================
+   v281 Final Action UI Patch / 最終操作顯示修補
+   目的：
+   1. 只修前端顯示，不動 pipeline / strategy / 持倉 / macro / workflow
+   2. 最終操作股票名稱空白時，從 stock_name_map / techMap / overlay 自動補名
+   3. 最終操作區塊改成和 TEST / WATCH 一樣可收合
+   ========================================================= */
+const V281_FINAL_ACTION_UI_PATCH = "v281_final_action_name_and_collapse_patch";
+
+function v281ValidText(v) {
+  if (v === undefined || v === null) return false;
+  const s = String(v).trim();
+  return !!s && !["--", "-", "nan", "NaN", "undefined", "null", "None"].includes(s);
+}
+
+function v281StockId(row) {
+  const raw = row?.stock_id || row?.stockId || row?.symbol || row?.code || "";
+  if (typeof stockKeyV26630H === "function") return stockKeyV26630H(raw);
+  const m = String(raw || "").match(/\d{4}/);
+  return m ? m[0] : String(raw || "").trim();
+}
+
+function v281ResolveStockName(row) {
+  row = row || {};
+  const sid = v281StockId(row);
+
+  const directFields = [
+    row.stock_name,
+    row.stockName,
+    row.name,
+    row.Name,
+    row["股票名稱"],
+    row["證券名稱"],
+    row["證券簡稱"],
+    row["公司簡稱"],
+    row["公司名稱"]
+  ];
+
+  for (const v of directFields) {
+    if (v281ValidText(v)) return String(v).trim();
+  }
+
+  const maps = [
+    window.__stockNameMapV26630,
+    window.__stockNameMap,
+    window.stockNameMap,
+  ];
+
+  for (const mp of maps) {
+    if (!mp || !sid) continue;
+    const v = mp[sid] || mp[String(sid)] || mp[Number(sid)];
+    if (v281ValidText(v)) return String(v).trim();
+  }
+
+  const tech = sid && window.__techMapV26637 ? window.__techMapV26637[sid] : null;
+  if (tech) {
+    const v = tech.stock_name || tech.stockName || tech.name || tech["股票名稱"] || tech["證券名稱"] || tech["公司簡稱"];
+    if (v281ValidText(v)) return String(v).trim();
+  }
+
+  const overlay = sid && window.__positionOverlayMapV26630 ? window.__positionOverlayMapV26630[sid] : null;
+  if (overlay) {
+    const v = overlay.stock_name || overlay.stockName || overlay.name || overlay["股票名稱"] || overlay["證券名稱"] || overlay["公司簡稱"];
+    if (v281ValidText(v)) return String(v).trim();
+  }
+
+  return "";
+}
+
+function v281PatchRowStockName(row) {
+  const out = { ...(row || {}) };
+  const name = v281ResolveStockName(out);
+  if (v281ValidText(name)) out.stock_name = name;
+  return out;
+}
+
+function v281PatchRowsStockName(rows) {
+  return (rows || []).map(v281PatchRowStockName);
+}
+
+function v281MakeFinalActionCollapsible() {
+  const list = document.getElementById("finalActionList");
+  if (!list) return;
+
+  const section = list.closest("section.card");
+  if (!section || section.dataset.v281FinalCollapsible === "1") return;
+
+  const oldHtml = list.innerHTML || "";
+  section.dataset.v281FinalCollapsible = "1";
+  section.classList.add("compact-card", "final-action-collapsible-v281");
+
+  section.innerHTML = `
+    <details open>
+      <summary>🔥 最終操作</summary>
+      <div class="hint">點擊股票可展開詳情</div>
+      <div id="finalActionList">${oldHtml}</div>
+    </details>
+  `;
+}
+
+function v281InjectFinalActionStyle() {
+  if (document.getElementById("v281-final-action-style")) return;
+  const style = document.createElement("style");
+  style.id = "v281-final-action-style";
+  style.textContent = `
+    .final-action-collapsible-v281 summary {
+      cursor: pointer;
+      user-select: none;
+    }
+    .final-action-collapsible-v281 .hint {
+      margin: 8px 0 14px 0;
+      color: #64748b;
+      font-weight: 800;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+// 1) renderAppShell 後立刻把「最終操作」區塊改成 details，可收合。
+const __renderAppShellBeforeV281 = typeof renderAppShell === "function" ? renderAppShell : null;
+if (__renderAppShellBeforeV281) {
+  renderAppShell = function() {
+    const ret = __renderAppShellBeforeV281.apply(this, arguments);
+    try {
+      v281InjectFinalActionStyle();
+      v281MakeFinalActionCollapsible();
+    } catch (e) {
+      console.warn("v281 final collapsible patch failed", e);
+    }
+    return ret;
+  };
+}
+
+// 2) renderFinalActions 前補股票名稱，並確保區塊保持可收合。
+const __renderFinalActionsBeforeV281 = typeof renderFinalActions === "function" ? renderFinalActions : null;
+if (__renderFinalActionsBeforeV281) {
+  renderFinalActions = function(rows) {
+    try {
+      v281InjectFinalActionStyle();
+      v281MakeFinalActionCollapsible();
+      return __renderFinalActionsBeforeV281.call(this, v281PatchRowsStockName(rows || []));
+    } finally {
+      try {
+        v281MakeFinalActionCollapsible();
+        if (typeof bindToggle === "function") bindToggle();
+      } catch (e) {}
+    }
+  };
+}
+
+// 3) renderScanRow 前補股票名稱，保護所有區塊的詳細欄位。
+const __renderScanRowBeforeV281 = typeof renderScanRow === "function" ? renderScanRow : null;
+if (__renderScanRowBeforeV281) {
+  renderScanRow = function(row, key) {
+    return __renderScanRowBeforeV281.call(this, v281PatchRowStockName(row), key);
+  };
+}
+
+// 4) 若 stock map 載入後才完成，補一次重新渲染頁面上已存在的名稱欄位。
+function v281RefreshBlankStockNameCells() {
+  try {
+    document.querySelectorAll(".detail-grid div").forEach(cell => {
+      const label = cell.querySelector("span")?.textContent?.trim();
+      const value = cell.querySelector("b");
+      if (label !== "股票名稱" || !value) return;
+      const old = String(value.textContent || "").trim();
+      if (v281ValidText(old)) return;
+
+      const article = cell.closest(".scan-item");
+      const stock = article?.querySelector(".scan-stock")?.textContent?.trim();
+      if (!stock) return;
+
+      const sid = v281StockId({ stock_id: stock });
+      const name = v281ResolveStockName({ stock_id: sid });
+      if (v281ValidText(name)) value.textContent = name;
+    });
+  } catch (e) {}
+}
+
+try {
+  v281InjectFinalActionStyle();
+} catch (e) {}
+
+document.addEventListener("DOMContentLoaded", function() {
+  setTimeout(function() {
+    try {
+      v281InjectFinalActionStyle();
+      v281MakeFinalActionCollapsible();
+      v281RefreshBlankStockNameCells();
+    } catch (e) {}
+  }, 300);
+
+  setTimeout(v281RefreshBlankStockNameCells, 1200);
+  setTimeout(v281RefreshBlankStockNameCells, 2600);
+});
+/* ===== end v281 Final Action UI Patch ===== */
+
