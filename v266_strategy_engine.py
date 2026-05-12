@@ -34,6 +34,15 @@ ROOT = Path(".")
 DATA_DIR = ROOT / "mobile_dashboard_v1" / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+
+# ===== v306.9 IGNITION RELAX PATCH =====
+# 只放寬 ignition / evolution 前夕條件：
+# - 放寬均線收斂
+# - 放寬波動壓縮
+# - 放寬第一次放量
+# - 放寬 mom20 區間
+# 不重寫策略，不動 TOP5，不動 app.js，不動排序。
+
 INITIAL_CAPITAL = 1_000_000
 
 # ===== v306.2 Finance Exclude + Industry Tag Safe Patch =====
@@ -267,18 +276,18 @@ def apply_final_ignition_filter_v26669(d):
 
     # 1) 波動率壓縮 / 平台收斂
     compression = pd.Series(0.0, index=d.index)
-    compression += (ma_conv <= 0.08).astype(int) * 16
-    compression += ((ma_conv > 0.08) & (ma_conv <= 0.12)).astype(int) * 8
-    compression += (range20 <= 0.18).astype(int) * 12
-    compression += ((range20 > 0.18) & (range20 <= 0.24)).astype(int) * 6
+    compression += (ma_conv <= 0.12).astype(int) * 16
+    compression += ((ma_conv > 0.12) & (ma_conv <= 0.18)).astype(int) * 8
+    compression += (range20 <= 0.24).astype(int) * 12
+    compression += ((range20 > 0.24) & (range20 <= 0.32)).astype(int) * 6
     compression += (low_hold >= 3).astype(int) * 10
     compression += ((ma20 > 0) & close.between(ma20 * 0.97, ma20 * 1.06)).astype(int) * 12
     compression += ((vol_ratio >= 0.65) & (vol_ratio <= 1.25)).astype(int) * 6
 
     # 2) 低檔量縮後第一次溫和放量
     first_volume = pd.Series(0.0, index=d.index)
-    first_volume += vol_ratio.between(1.20, 1.85).astype(int) * 22
-    first_volume += vol_ratio.between(1.86, 2.50).astype(int) * 10
+    first_volume += vol_ratio.between(1.05, 2.10).astype(int) * 22
+    first_volume += vol_ratio.between(2.11, 3.00).astype(int) * 10
     first_volume += ((vol_dry <= 0.95) & vol_ratio.between(1.15, 2.30)).astype(int) * 8
     first_volume -= (vol_ratio > 2.80).astype(int) * 10
     first_volume -= (vol_ratio > 4.00).astype(int) * 20
@@ -290,7 +299,7 @@ def apply_final_ignition_filter_v26669(d):
     accumulation += (low_hold >= 3).astype(int) * 8
     accumulation += ((ma5 >= ma20 * 0.995) & (ma20 > 0)).astype(int) * 8
     accumulation += ((ma20 >= ma60 * 0.98) & (ma60 > 0)).astype(int) * 6
-    accumulation += ((mom20 >= -0.03) & (mom20 <= 0.18)).astype(int) * 8
+    accumulation += ((mom20 >= -0.08) & (mom20 <= 0.45)).astype(int) * 8
 
     # 若後續資料已有真正籌碼欄位，直接吃進來；沒有也不會炸。
     chip_candidates = [
@@ -311,10 +320,10 @@ def apply_final_ignition_filter_v26669(d):
         (close > ma5)
         & (ma5 >= ma10 * 0.995)
         & (ma10 >= ma20 * 0.985)
-        & (close <= ma20 * 1.08)
-        & vol_ratio.between(1.15, 2.60)
+        & (close <= ma20 * 1.12)
+        & vol_ratio.between(1.00, 3.20)
         & (mom5 > 0)
-        & (mom20 <= 0.30)
+        & (mom20 <= 0.45)
     )
 
     # 5) 假突破 / 追高風險
