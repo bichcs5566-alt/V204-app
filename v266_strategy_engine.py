@@ -1,8 +1,3 @@
-# ===== 金融股排除（避免低波金融股污染 TEST / TOP）=====
-    sid_str = str(stock_id).strip()
-    if sid_str.startswith(("28", "58")):
-        continue
-
 """
 v266_strategy_engine.py
 雙策略版：CORE 早期卡位 + ALPHA 高流動性強勢延續
@@ -40,6 +35,13 @@ DATA_DIR = ROOT / "mobile_dashboard_v1" / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 INITIAL_CAPITAL = 1_000_000
+
+# ===== v305 金融股排除 / 避免低波金融股污染 TEST / TOP =====
+FINANCE_PREFIXES_V305 = ("28", "58")
+
+def is_finance_stock_v305(stock_id):
+    sid = str(stock_id).strip()
+    return sid.startswith(FINANCE_PREFIXES_V305)
 
 
 def price_tier(p):
@@ -114,6 +116,10 @@ def latest_valid(df):
 
     x = x.dropna(subset=["close", "volume", "mom20", "ma20", "ma60"])
     x = x[(x["close"] > 0) & (x["volume"] > 0)].copy()
+
+    # v305：金融股排除，只在策略候選池源頭排除 28xx / 58xx。
+    # 目的：避免低波金融股靠高流動性擠進 TEST / TOP，不動後面 pipeline / UI。
+    x = x[~x["stock_id"].astype(str).apply(is_finance_stock_v305)].copy()
 
     return latest_date, add_liquidity_fields(x)
 
