@@ -5172,31 +5172,41 @@ document.addEventListener("DOMContentLoaded", function() {
 
 
 /* =========================================================
-   v306.7 TOP5 FINAL HARD ORDER LOCK / TOP5 最終硬排序鎖
-   只做一件事：
-   同一清單內 TOP1~TOP5 永遠排最上方。
-   不讓 liquidity / score / turnRank / turnScore 把 TOP5 刷下去。
-   放在 app.js 最底部，蓋過前面所有排序補丁。
+   v306.8 TOP5 HARD ORDER + WATCH FALLBACK FIX
+   修正範圍只限 app.js 分組與排序：
+   1. 同一清單內 TOP1~TOP5 永遠在最上方。
+   2. WATCH 不再只吃 action=WATCH。
+      非 SELL / REDUCE / BUY / TEST / BLOCK 的剩餘候選，全部回到 WATCH。
+   3. 不動 renderScanRow、不動產業欄、不動轉折顯示、不動持倉、不動 GitHub Actions。
    ========================================================= */
-(function top5FinalHardOrderLockV3067() {
-  function actionKeyV3067(row) {
+(function top5HardOrderWatchFallbackFixV3068() {
+  function normalizeActionSafeV3068(row) {
     try {
-      return normalizeAction(row?.final_action || row?.action || row?.status || "");
+      return normalizeAction(row?.final_action || row?.action || row?.status || row?.decision || "");
     } catch (e) {
-      return String(row?.final_action || row?.action || row?.status || "WATCH").toUpperCase();
+      const s = String(row?.final_action || row?.action || row?.status || row?.decision || "").trim().toUpperCase();
+      if (["SELL", "REDUCE", "BUY", "TEST", "WATCH", "BLOCK"].includes(s)) return s;
+      if (s === "賣出") return "SELL";
+      if (s === "減碼") return "REDUCE";
+      if (s === "買進") return "BUY";
+      if (s === "試單") return "TEST";
+      if (s === "觀察") return "WATCH";
+      if (s === "禁止") return "BLOCK";
+      return s || "WATCH";
     }
   }
 
-  function actionPriorityV3067(row) {
-    const a = actionKeyV3067(row);
-    if (typeof ACTION_PRIORITY === "object" && ACTION_PRIORITY && ACTION_PRIORITY[a]) {
-      return ACTION_PRIORITY[a];
-    }
+  function actionPriorityV3068(row) {
+    const a = normalizeActionSafeV3068(row);
     const fallback = { SELL: 1, REDUCE: 2, BUY: 3, TEST: 4, WATCH: 5, BLOCK: 6 };
-    return fallback[a] || 99;
+    try {
+      return ACTION_PRIORITY?.[a] || fallback[a] || 5;
+    } catch (e) {
+      return fallback[a] || 5;
+    }
   }
 
-  function hardTopRankV3067(row) {
+  function hardTopRankV3068(row) {
     row = row || {};
     const fields = [
       row.top_rank,
@@ -5216,18 +5226,17 @@ document.addEventListener("DOMContentLoaded", function() {
       const s = String(v ?? "").trim();
       if (!s || s === "--") continue;
 
-      let m = s.match(/TOP\s*[_-]?\s*([1-5])\b/i);
+      const m = s.match(/TOP\s*[_-]?\s*([1-5])\b/i);
       if (m) return Number(m[1]);
 
       if (/^[1-5]$/.test(s)) return Number(s);
     }
 
     if (String(row.execution_flag || "").trim().toUpperCase() === "TOP") return 6;
-
     return 9999;
   }
 
-  function scoreV3067(row) {
+  function scoreV3068(row) {
     row = row || {};
     const fields = [
       row.score,
@@ -5248,7 +5257,7 @@ document.addEventListener("DOMContentLoaded", function() {
     return 0;
   }
 
-  function liqRankV3067(row) {
+  function liqRankV3068(row) {
     try {
       return typeof liquiditySortRank === "function" ? liquiditySortRank(row) : 0;
     } catch (e) {
@@ -5256,68 +5265,89 @@ document.addEventListener("DOMContentLoaded", function() {
     }
   }
 
-  function stableStockIdV3067(row) {
+  function stockIdV3068(row) {
     return String(row?.stock_id || row?.code || row?.symbol || "");
   }
 
-  function top5HardSortV3067(rows) {
+  function top5HardSortV3068(rows) {
     return (rows || []).slice().sort((a, b) => {
-      const pa = actionPriorityV3067(a);
-      const pb = actionPriorityV3067(b);
+      const pa = actionPriorityV3068(a);
+      const pb = actionPriorityV3068(b);
       if (pa !== pb) return pa - pb;
 
-      const ta = hardTopRankV3067(a);
-      const tb = hardTopRankV3067(b);
+      const ta = hardTopRankV3068(a);
+      const tb = hardTopRankV3068(b);
       if (ta !== tb) return ta - tb;
 
-      const sb = scoreV3067(b);
-      const sa = scoreV3067(a);
+      const sb = scoreV3068(b);
+      const sa = scoreV3068(a);
       if (sb !== sa) return sb - sa;
 
-      const lb = liqRankV3067(b);
-      const la = liqRankV3067(a);
+      const lb = liqRankV3068(b);
+      const la = liqRankV3068(a);
       if (lb !== la) return lb - la;
 
       const vb = Number(String(b?.volume || 0).replace(/,/g, ""));
       const va = Number(String(a?.volume || 0).replace(/,/g, ""));
       if (Number.isFinite(vb) && Number.isFinite(va) && vb !== va) return vb - va;
 
-      return stableStockIdV3067(a).localeCompare(stableStockIdV3067(b));
+      return stockIdV3068(a).localeCompare(stockIdV3068(b));
     });
   }
 
+  function dedupeV3068(arr) {
+    try {
+      return typeof dedupeByStockV26630 === "function" ? dedupeByStockV26630(arr) : arr;
+    } catch (e) {
+      return arr;
+    }
+  }
+
   sortRows = function(rows) {
-    return top5HardSortV3067(rows || []);
+    return top5HardSortV3068(rows || []);
   };
 
   splitRows = function(rows) {
-    const sorted = top5HardSortV3067(rows || []);
-    const byAction = (actions) => sorted.filter(r => actions.includes(actionKeyV3067(r)));
+    const sorted = top5HardSortV3068(rows || []);
 
-    const dedupe = (arr) => {
-      try {
-        return typeof dedupeByStockV26630 === "function" ? dedupeByStockV26630(arr) : arr;
-      } catch (e) {
-        return arr;
+    const main = [];
+    const test = [];
+    const block = [];
+    const watch = [];
+
+    sorted.forEach(row => {
+      const a = normalizeActionSafeV3068(row);
+
+      if (["SELL", "REDUCE", "BUY"].includes(a)) {
+        main.push(row);
+      } else if (a === "TEST") {
+        test.push(row);
+      } else if (a === "BLOCK") {
+        block.push(row);
+      } else {
+        // 重要修正：
+        // 後端大量候選如果是 HOLD / WAIT / OBSERVE / NEUTRAL / 空值 / 其他標籤，
+        // 一律回到 WATCH，不再被前端丟掉。
+        watch.push({ ...row, final_action: "WATCH" });
       }
-    };
+    });
 
     return {
-      main: dedupe(byAction(["SELL", "REDUCE", "BUY"])),
-      test: dedupe(byAction(["TEST"])),
-      watch: dedupe(byAction(["WATCH"])),
-      block: dedupe(byAction(["BLOCK"]))
+      main: dedupeV3068(top5HardSortV3068(main)),
+      test: dedupeV3068(top5HardSortV3068(test)),
+      watch: dedupeV3068(top5HardSortV3068(watch)),
+      block: dedupeV3068(top5HardSortV3068(block))
     };
   };
 
-  const oldGetTopBadgeV3067 = typeof getTopBadge === "function" ? getTopBadge : null;
+  const oldGetTopBadgeV3068 = typeof getTopBadge === "function" ? getTopBadge : null;
   getTopBadge = function(row) {
-    const r = hardTopRankV3067(row);
+    const r = hardTopRankV3068(row);
     if (r >= 1 && r <= 5) return `🔥 TOP${r}`;
-    if (oldGetTopBadgeV3067) return oldGetTopBadgeV3067(row);
+    if (oldGetTopBadgeV3068) return oldGetTopBadgeV3068(row);
     return "";
   };
 
-  window.__TOP5_FINAL_HARD_ORDER_LOCK_V3067__ = true;
+  window.__TOP5_WATCH_FALLBACK_FIX_V3068__ = true;
 })();
-/* ===== end v306.7 TOP5 FINAL HARD ORDER LOCK ===== */
+/* ===== end v306.8 TOP5 HARD ORDER + WATCH FALLBACK FIX ===== */
