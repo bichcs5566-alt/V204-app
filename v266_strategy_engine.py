@@ -197,6 +197,16 @@ def set_action(df, buy, test, watch, buy_sub, test_sub, watch_sub):
 # 目的：不是 UI 修正；這段只處理策略名單生成與排序。
 # 核心：TEST / BUY / TOP 候選必須先有攻擊結構，避免高流動、均線貼近、金融、箱型牛皮股排前面。
 def apply_attack_first_v309(d, mode="CORE"):
+    """
+    v310 STRICT ATTACK ENTRY CORE
+
+    這版只修 v266_strategy_engine.py 的 TEST / WATCH 核心：
+    - TEST 不再收「可能會動」或「底部修復」。
+    - TEST 只收「攻擊斜率 + 量價同步 + 箱體脫離 + 籌碼確認」。
+    - WATCH 收「有準備，但還沒達試單」。
+    - 金融、防守、底部橫盤、短線轉弱、低信心籌碼，不得進 TEST / TOP。
+    - 不動 app.js、不動 final_decision_engine.py、不動 UI。
+    """
     import numpy as np
     import pandas as pd
 
@@ -227,7 +237,6 @@ def apply_attack_first_v309(d, mode="CORE"):
     mom5 = n("mom5")
     mom10 = n("mom10")
     mom20 = n("mom20")
-    mom60 = n("mom60")
 
     ma5 = n("ma5", close)
     ma10 = n("ma10", close)
@@ -238,120 +247,221 @@ def apply_attack_first_v309(d, mode="CORE"):
     high20 = n("high_20", high)
     low20 = n("low_20", low)
     high60 = n("high_60", high)
-    low60 = n("low_60", low)
 
     ma_conv = n("ma_converge_pct", 999)
     vol_ratio = n("volume_ratio", 1)
     liq_score = n("liquidity_score")
+    main_force = n("main_force_score_v300")
+    chip_score = n("chip_score")
     obv = n("obv_mom5")
     obv_up5 = n("obv_up_count_5")
     low_hold = n("low_non_down_count_5")
 
     sid = s("stock_id")
-    finance_like = sid.str.startswith(("28", "58"))
+    industry = s("industry")
+    finance_like = sid.str.startswith(("28", "58")) | industry.str.contains("金融|保險|金控|銀行|證券", na=False)
+    defensive_like = industry.str.contains("航運|觀光|百貨|食品|水泥|塑膠|鋼鐵|紡織|金融|保險", na=False)
 
     ma5_vs_ma10 = (ma5 / ma10.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
     ma10_vs_ma20 = (ma10 / ma20.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
     ma20_vs_ma60 = (ma20 / ma60.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
-    close_ma5_gap = (close / ma5.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
     close_ma20_gap = (close / ma20.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
     close_to_high20 = (close / high20.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
     close_to_high60 = (close / high60.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
     range20 = ((high20 - low20) / low20.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
+    box_pos20 = ((close - low20) / (high20 - low20).replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
+
     candle_power = ((close - open_) / open_.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
     upper_shadow = ((high - close) / high.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
 
-    near_breakout = (close_to_high20 >= 0.965) | (close_to_high60 >= 0.915)
-    vol_attack = vol_ratio.between(1.25, 4.20)
+    # ===== v310 硬條件：TEST 要像「快發動」，不是「可能修復」 =====
+    trend_ok = (
+        (ma5_vs_ma10 > 0.0015) &
+        (ma10_vs_ma20 > -0.003) &
+        (close >= ma5 * 0.995) &
+        (close >= ma20 * 0.985)
+    )
 
-    attack = pd.Series(0.0, index=d.index)
-    attack += (mom3 > 0.003).astype(int) * 6
-    attack += (mom5 > 0.012).astype(int) * 12
-    attack += (mom10 > 0.025).astype(int) * 16
-    attack += ((mom20 > 0.045) & (mom20 <= 0.35)).astype(int) * 18
-    attack += (ma5_vs_ma10 > 0.002).astype(int) * 12
-    attack += (ma10_vs_ma20 > 0.000).astype(int) * 12
-    attack += (ma20_slope > 0).astype(int) * 8
-    attack += (ma20_vs_ma60 > -0.020).astype(int) * 6
-    attack += near_breakout.astype(int) * 18
-    attack += (close_to_high20 >= 0.985).astype(int) * 12
-    attack += (close_ma20_gap.between(0.000, 0.18)).astype(int) * 10
-    attack += vol_attack.astype(int) * 22
-    attack += ((vol_ratio >= 1.45) & (mom5 > 0.006)).astype(int) * 14
-    attack += ((volume >= 1000) | (turnover >= 30_000_000)).astype(int) * 5
-    attack += (low_hold >= 3).astype(int) * 8
-    attack += (obv > 0).astype(int) * 8
-    attack += (obv_up5 >= 2).astype(int) * 5
-    attack += (candle_power > 0.003).astype(int) * 6
+    momentum_ok = (
+        (mom5 > 0.010) &
+        (mom10 > 0.022) &
+        (mom20 > 0.020) &
+        (mom20 <= 0.36)
+    )
+
+    breakout_ok = (
+        (close_to_high20 >= 0.965) |
+        ((box_pos20 >= 0.72) & (close_to_high20 >= 0.945)) |
+        ((close_ma20_gap >= 0.025) & (mom10 > 0.035))
+    )
+
+    volume_ok = (
+        (vol_ratio >= 1.25) |
+        ((vol_ratio >= 1.10) & (main_force >= 65) & (mom10 > 0.030))
+    )
+
+    chip_ok = (
+        (main_force >= 55) |
+        (chip_score >= 65) |
+        (obv > 0) |
+        (obv_up5 >= 3)
+    )
 
     short_turn_weak = (
-        (close < ma5) &
-        (mom3 <= 0) &
-        (mom5 <= 0.006) &
-        (candle_power <= 0)
+        ((close < ma5) & (mom3 <= 0) & (candle_power <= 0)) |
+        ((mom5 <= 0) & (ma5_vs_ma10 <= 0))
     )
+
+    bottom_repair_only = (
+        (close_to_high20 < 0.940) &
+        (box_pos20 < 0.70) &
+        (mom10 < 0.030) &
+        (vol_ratio < 1.45)
+    )
+
     ma_sticky_no_attack = (
-        (ma_conv <= 0.13) &
-        (range20 < 0.115) &
-        (mom10 < 0.025) &
-        (mom20 < 0.055) &
+        (ma_conv <= 0.16) &
+        (range20 < 0.125) &
+        (mom10 < 0.030) &
+        (mom20 < 0.070) &
         (vol_ratio < 1.55) &
-        (~near_breakout)
+        (box_pos20 < 0.78)
     )
+
     box_middle = (
+        (box_pos20 < 0.72) &
         (close_to_high20 < 0.955) &
-        (close_ma20_gap.between(-0.025, 0.065)) &
-        (mom10 < 0.025) &
+        (close_ma20_gap.between(-0.030, 0.070)) &
         (vol_ratio < 1.60)
     )
+
     liquidity_only = (
         (liq_score >= 55) &
-        (mom5 <= 0.010) &
-        (mom10 <= 0.020) &
-        (vol_ratio < 1.35)
+        (mom5 <= 0.012) &
+        (mom10 <= 0.025) &
+        (vol_ratio < 1.35) &
+        (main_force < 60) &
+        (box_pos20 < 0.80)
     )
+
     fake_breakout = (
         ((upper_shadow > 0.055) & (vol_ratio > 1.35)) |
         (mom20 > 0.45) |
         (close_ma20_gap > 0.26)
     )
 
-    hard_reject = finance_like | short_turn_weak | ma_sticky_no_attack | box_middle | liquidity_only | fake_breakout
+    low_confidence = (
+        (main_force < 50) &
+        (chip_score < 55) &
+        (obv <= 0) &
+        (obv_up5 < 2)
+    )
 
-    attack -= finance_like.astype(int) * 90
-    attack -= short_turn_weak.astype(int) * 55
-    attack -= ma_sticky_no_attack.astype(int) * 50
-    attack -= box_middle.astype(int) * 42
-    attack -= liquidity_only.astype(int) * 35
-    attack -= fake_breakout.astype(int) * 32
-    attack += (liq_score >= 75).astype(int) * 3
+    hard_reject = (
+        finance_like |
+        defensive_like |
+        short_turn_weak |
+        bottom_repair_only |
+        ma_sticky_no_attack |
+        box_middle |
+        liquidity_only |
+        fake_breakout |
+        low_confidence
+    )
+
+    attack = pd.Series(0.0, index=d.index)
+    attack += trend_ok.astype(int) * 22
+    attack += momentum_ok.astype(int) * 24
+    attack += breakout_ok.astype(int) * 24
+    attack += volume_ok.astype(int) * 20
+    attack += chip_ok.astype(int) * 14
+
+    attack += (mom3 > 0.003).astype(int) * 4
+    attack += (mom5 > 0.018).astype(int) * 8
+    attack += (mom10 > 0.040).astype(int) * 10
+    attack += (close_to_high20 >= 0.985).astype(int) * 10
+    attack += (vol_ratio.between(1.45, 4.20)).astype(int) * 10
+    attack += (candle_power > 0.004).astype(int) * 5
+    attack += (main_force >= 70).astype(int) * 8
+    attack += (chip_score >= 75).astype(int) * 6
+
+    attack -= finance_like.astype(int) * 120
+    attack -= defensive_like.astype(int) * 45
+    attack -= short_turn_weak.astype(int) * 70
+    attack -= bottom_repair_only.astype(int) * 65
+    attack -= ma_sticky_no_attack.astype(int) * 60
+    attack -= box_middle.astype(int) * 55
+    attack -= liquidity_only.astype(int) * 45
+    attack -= fake_breakout.astype(int) * 42
+    attack -= low_confidence.astype(int) * 35
+    attack += (liq_score >= 75).astype(int) * 2
+
+    strict_test_ok = (
+        trend_ok &
+        momentum_ok &
+        breakout_ok &
+        volume_ok &
+        chip_ok &
+        (~hard_reject) &
+        (attack >= 74)
+    )
+
+    watch_ok = (
+        (~hard_reject) &
+        (attack >= 54) &
+        (
+            (trend_ok & breakout_ok) |
+            (momentum_ok & volume_ok) |
+            (breakout_ok & chip_ok)
+        )
+    )
 
     d["attack_score_v309"] = attack.round(2)
-    d["final_attack_score_v309"] = d["attack_score_v309"]
+    d["attack_score_v310"] = attack.round(2)
+    d["final_attack_score_v309"] = attack.round(2)
+    d["final_attack_score_v310"] = attack.round(2)
+
+    d["trend_ok_v310"] = trend_ok.astype(int)
+    d["momentum_ok_v310"] = momentum_ok.astype(int)
+    d["breakout_ok_v310"] = breakout_ok.astype(int)
+    d["volume_ok_v310"] = volume_ok.astype(int)
+    d["chip_ok_v310"] = chip_ok.astype(int)
+    d["strict_test_ok_v310"] = strict_test_ok.astype(int)
+    d["watch_ok_v310"] = watch_ok.astype(int)
+
     d["hard_reject_v309"] = hard_reject.astype(int)
+    d["hard_reject_v310"] = hard_reject.astype(int)
     d["short_turn_weak_v309"] = short_turn_weak.astype(int)
     d["ma_sticky_no_attack_v309"] = ma_sticky_no_attack.astype(int)
     d["box_middle_v309"] = box_middle.astype(int)
     d["liquidity_only_v309"] = liquidity_only.astype(int)
+    d["bottom_repair_only_v310"] = bottom_repair_only.astype(int)
 
     if "entry_score" not in d.columns:
         d["entry_score"] = 0
     d["entry_score"] = pd.to_numeric(d["entry_score"], errors="coerce").fillna(0)
-    d["final_sort_score_v309"] = (d["entry_score"] * 0.25 + d["attack_score_v309"] * 0.75).round(2)
+    d["final_sort_score_v309"] = (d["entry_score"] * 0.15 + attack * 0.85).round(2)
+    d["final_sort_score_v310"] = d["final_sort_score_v309"]
 
     if "action" in d.columns:
         action = d["action"].astype(str).str.upper()
-        bad_test = action.eq("TEST") & (hard_reject | (d["attack_score_v309"] < 58) | ((~near_breakout) & (vol_ratio < 1.45)))
-        bad_buy = action.eq("BUY") & (hard_reject | (d["attack_score_v309"] < 66))
 
-        d.loc[bad_test, "action"] = "WATCH"
-        d.loc[bad_test, "action_label"] = "觀察"
-        d.loc[bad_test, "action_sub"] = "攻擊結構不足，降回觀察"
-        d.loc[bad_buy, "action"] = "TEST"
-        d.loc[bad_buy, "action_label"] = "試單"
-        d.loc[bad_buy, "action_sub"] = "買進條件不足，降為試單"
+        d.loc[action.isin(["BUY", "TEST"]) & (~strict_test_ok) & watch_ok, "action"] = "WATCH"
+        d.loc[action.isin(["BUY", "TEST"]) & (~strict_test_ok) & (~watch_ok), "action"] = "BLOCK"
+        d.loc[watch_ok & (~strict_test_ok) & (~d["action"].astype(str).str.upper().eq("BLOCK")), "action"] = "WATCH"
+        d.loc[strict_test_ok, "action"] = "TEST"
 
-    return d.sort_values(["final_sort_score_v309", "attack_score_v309", "entry_score", "stock_id"], ascending=[False, False, False, True])
+        d.loc[d["action"].astype(str).str.upper().eq("TEST"), "action_label"] = "試單"
+        d.loc[d["action"].astype(str).str.upper().eq("WATCH"), "action_label"] = "觀察"
+        d.loc[d["action"].astype(str).str.upper().eq("BLOCK"), "action_label"] = "禁止"
+
+        d.loc[d["action"].astype(str).str.upper().eq("TEST"), "action_sub"] = "攻擊結構達標，最大機會試單"
+        d.loc[d["action"].astype(str).str.upper().eq("WATCH"), "action_sub"] = "攻擊條件未滿，優先觀察"
+        d.loc[d["action"].astype(str).str.upper().eq("BLOCK"), "action_sub"] = "非攻擊型或低信心，禁止"
+
+    return d.sort_values(["final_sort_score_v310", "attack_score_v310", "entry_score", "stock_id"], ascending=[False, False, False, True])
+
+
 
 def core_engine(x):
     """
