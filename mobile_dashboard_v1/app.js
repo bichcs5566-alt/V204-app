@@ -5171,113 +5171,153 @@ document.addEventListener("DOMContentLoaded", function() {
 /* ===== end v306.5 ===== */
 
 
-/* ===== v306.6 TOP5 HARD ORDER FINAL PATCH / TOP5 硬排序最終鎖 =====
-   目的：
-   1) TOP1~TOP5 永遠排在同區塊最上面。
-   2) 不再讓 liquidity / score / turn rank 把 TOP5 刷下去。
-   3) 不改主列排版、不改股價、不改持倉、不改 GitHub Actions。
-*/
-(function top5HardOrderFinalV3066(){
-  function cleanNumV3066(v, fallback){
-    const m = String(v ?? "").match(/\d+/);
-    if (!m) return fallback;
-    const n = Number(m[0]);
-    return Number.isFinite(n) ? n : fallback;
+/* =========================================================
+   v306.7 TOP5 FINAL HARD ORDER LOCK / TOP5 最終硬排序鎖
+   只做一件事：
+   同一清單內 TOP1~TOP5 永遠排最上方。
+   不讓 liquidity / score / turnRank / turnScore 把 TOP5 刷下去。
+   放在 app.js 最底部，蓋過前面所有排序補丁。
+   ========================================================= */
+(function top5FinalHardOrderLockV3067() {
+  function actionKeyV3067(row) {
+    try {
+      return normalizeAction(row?.final_action || row?.action || row?.status || "");
+    } catch (e) {
+      return String(row?.final_action || row?.action || row?.status || "WATCH").toUpperCase();
+    }
   }
 
-  window.getTopRankV3066 = function(row){
+  function actionPriorityV3067(row) {
+    const a = actionKeyV3067(row);
+    if (typeof ACTION_PRIORITY === "object" && ACTION_PRIORITY && ACTION_PRIORITY[a]) {
+      return ACTION_PRIORITY[a];
+    }
+    const fallback = { SELL: 1, REDUCE: 2, BUY: 3, TEST: 4, WATCH: 5, BLOCK: 6 };
+    return fallback[a] || 99;
+  }
+
+  function hardTopRankV3067(row) {
     row = row || {};
-    const directFields = [
-      row.top_rank_v3066,
+    const fields = [
+      row.top_rank,
+      row.hard_top_rank,
+      row.section_top_rank,
       row.section_opportunity_rank,
       row.opportunity_rank,
-      row.top_rank
-    ];
-    for (const v of directFields) {
-      const n = cleanNumV3066(v, null);
-      if (n !== null && n > 0) return n;
-    }
-
-    const text = [
-      row.top_opportunity,
       row.section_top_opportunity,
+      row.top_opportunity,
       row.execution_flag,
       row.system_note,
       row.note,
       row.reason
-    ].map(v => String(v || "")).join(" ");
+    ];
 
-    const m = text.match(/TOP\s*([1-9]\d*)/i);
-    if (m) return Number(m[1]);
-    if (text.toUpperCase().includes("TOP")) return 99;
+    for (const v of fields) {
+      const s = String(v ?? "").trim();
+      if (!s || s === "--") continue;
+
+      let m = s.match(/TOP\s*[_-]?\s*([1-5])\b/i);
+      if (m) return Number(m[1]);
+
+      if (/^[1-5]$/.test(s)) return Number(s);
+    }
+
+    if (String(row.execution_flag || "").trim().toUpperCase() === "TOP") return 6;
+
     return 9999;
-  };
+  }
 
-  window.isTopRowV3066 = function(row){
-    return getTopRankV3066(row) < 9999 || String(row?.top_opportunity || row?.section_top_opportunity || row?.execution_flag || "").toUpperCase().includes("TOP");
-  };
-
-  function scoreV3066(row){
-    const keys = ["entry_score", "score", "opportunity_score", "main_force_score_v300", "liquidity_score"];
-    for (const k of keys) {
-      const n = Number(String(row?.[k] ?? "").replace(/,/g, ""));
+  function scoreV3067(row) {
+    row = row || {};
+    const fields = [
+      row.score,
+      row.opportunity_score,
+      row.entry_score,
+      row.rank_score,
+      row.turn_adjusted_score_v26664,
+      row.turn_event_score_v26664_1,
+      row.turn_event_score_v26664,
+      row.first_trigger_score_v26663,
+      row.trigger_event_score_v26662,
+      row.liquidity_score
+    ];
+    for (const v of fields) {
+      const n = Number(String(v ?? "").replace(/,/g, ""));
       if (Number.isFinite(n)) return n;
     }
     return 0;
   }
 
-  function actionOrderV3066(row){
-    const a = typeof normalizeAction === "function" ? normalizeAction(row?.final_action || row?.action) : String(row?.final_action || row?.action || "WATCH").toUpperCase();
-    const map = { SELL: 1, REDUCE: 2, BUY: 3, TEST: 4, WATCH: 5, BLOCK: 6 };
-    return map[a] || 99;
+  function liqRankV3067(row) {
+    try {
+      return typeof liquiditySortRank === "function" ? liquiditySortRank(row) : 0;
+    } catch (e) {
+      return 0;
+    }
   }
 
-  function hardSortV3066(rows){
-    return (rows || []).slice().sort((a,b) => {
-      const ao = actionOrderV3066(a);
-      const bo = actionOrderV3066(b);
-      if (ao !== bo) return ao - bo;
+  function stableStockIdV3067(row) {
+    return String(row?.stock_id || row?.code || row?.symbol || "");
+  }
 
-      const at = isTopRowV3066(a) ? 0 : 1;
-      const bt = isTopRowV3066(b) ? 0 : 1;
-      if (at !== bt) return at - bt;
+  function top5HardSortV3067(rows) {
+    return (rows || []).slice().sort((a, b) => {
+      const pa = actionPriorityV3067(a);
+      const pb = actionPriorityV3067(b);
+      if (pa !== pb) return pa - pb;
 
-      const ar = getTopRankV3066(a);
-      const br = getTopRankV3066(b);
-      if (ar !== br) return ar - br;
+      const ta = hardTopRankV3067(a);
+      const tb = hardTopRankV3067(b);
+      if (ta !== tb) return ta - tb;
 
-      const as = scoreV3066(a);
-      const bs = scoreV3066(b);
-      if (as !== bs) return bs - as;
+      const sb = scoreV3067(b);
+      const sa = scoreV3067(a);
+      if (sb !== sa) return sb - sa;
 
-      const al = typeof liquiditySortRank === "function" ? liquiditySortRank(a) : 0;
-      const bl = typeof liquiditySortRank === "function" ? liquiditySortRank(b) : 0;
-      if (al !== bl) return bl - al;
+      const lb = liqRankV3067(b);
+      const la = liqRankV3067(a);
+      if (lb !== la) return lb - la;
 
-      const av = Number(a?.volume || 0);
-      const bv = Number(b?.volume || 0);
-      if (av !== bv) return bv - av;
+      const vb = Number(String(b?.volume || 0).replace(/,/g, ""));
+      const va = Number(String(a?.volume || 0).replace(/,/g, ""));
+      if (Number.isFinite(vb) && Number.isFinite(va) && vb !== va) return vb - va;
 
-      return String(a?.stock_id || "").localeCompare(String(b?.stock_id || ""));
+      return stableStockIdV3067(a).localeCompare(stableStockIdV3067(b));
     });
   }
 
-  sortRows = function(rows){
-    return hardSortV3066(rows);
+  sortRows = function(rows) {
+    return top5HardSortV3067(rows || []);
   };
 
-  splitRows = function(rows){
-    const sorted = hardSortV3066((rows || []).map(r => {
-      try { return typeof v273NormalizeRowScore === "function" ? v273NormalizeRowScore(r) : r; }
-      catch(e) { return r; }
-    }));
-    const byAction = (actions) => sorted.filter(r => actions.includes(normalizeAction(r.final_action || r.action)));
+  splitRows = function(rows) {
+    const sorted = top5HardSortV3067(rows || []);
+    const byAction = (actions) => sorted.filter(r => actions.includes(actionKeyV3067(r)));
+
+    const dedupe = (arr) => {
+      try {
+        return typeof dedupeByStockV26630 === "function" ? dedupeByStockV26630(arr) : arr;
+      } catch (e) {
+        return arr;
+      }
+    };
+
     return {
-      main: typeof dedupeByStockV26630 === "function" ? dedupeByStockV26630(byAction(["SELL","REDUCE","BUY"])) : byAction(["SELL","REDUCE","BUY"]),
-      test: typeof dedupeByStockV26630 === "function" ? dedupeByStockV26630(byAction(["TEST"])) : byAction(["TEST"]),
-      watch: typeof dedupeByStockV26630 === "function" ? dedupeByStockV26630(byAction(["WATCH"])) : byAction(["WATCH"]),
-      block: typeof dedupeByStockV26630 === "function" ? dedupeByStockV26630(byAction(["BLOCK"])) : byAction(["BLOCK"])
+      main: dedupe(byAction(["SELL", "REDUCE", "BUY"])),
+      test: dedupe(byAction(["TEST"])),
+      watch: dedupe(byAction(["WATCH"])),
+      block: dedupe(byAction(["BLOCK"]))
     };
   };
+
+  const oldGetTopBadgeV3067 = typeof getTopBadge === "function" ? getTopBadge : null;
+  getTopBadge = function(row) {
+    const r = hardTopRankV3067(row);
+    if (r >= 1 && r <= 5) return `🔥 TOP${r}`;
+    if (oldGetTopBadgeV3067) return oldGetTopBadgeV3067(row);
+    return "";
+  };
+
+  window.__TOP5_FINAL_HARD_ORDER_LOCK_V3067__ = true;
 })();
-/* ===== end v306.6 ===== */
+/* ===== end v306.7 TOP5 FINAL HARD ORDER LOCK ===== */
