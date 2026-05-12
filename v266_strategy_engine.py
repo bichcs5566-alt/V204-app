@@ -607,6 +607,8 @@ def apply_main_force_gate_v300(d, mode="ALPHA"):
     d["section_top_opportunity"] = ""
     d["opportunity_rank"] = ""
     d["top_reason"] = ""
+    d["top_rank_v3066"] = 9999
+    d["is_top_v3066"] = 0
 
     action = d["action"].astype(str).str.upper() if "action" in d.columns else pd.Series("", index=d.index)
 
@@ -621,12 +623,63 @@ def apply_main_force_gate_v300(d, mode="ALPHA"):
             .index
         )
         if len(idx):
-            d.loc[idx, "top_opportunity"] = "🔥TOP"
-            d.loc[idx, "section_top_opportunity"] = label
-            d.loc[idx, "opportunity_rank"] = [str(i) for i in range(1, len(idx) + 1)]
+            ranks = [str(i) for i in range(1, len(idx) + 1)]
+            d.loc[idx, "top_opportunity"] = [f"🔥TOP{i}" for i in range(1, len(idx) + 1)]
+            d.loc[idx, "section_top_opportunity"] = [f"TOP{i}_" + label.split("_", 1)[-1] for i in range(1, len(idx) + 1)]
+            d.loc[idx, "opportunity_rank"] = ranks
+            d.loc[idx, "top_rank_v3066"] = [i for i in range(1, len(idx) + 1)]
+            d.loc[idx, "is_top_v3066"] = 1
             d.loc[idx, "top_reason"] = "主力痕跡｜籌碼/OBV開始集中｜剛轉強｜量能啟動｜未過熱"
 
     return d
+
+
+# ===== v306.6 TOP5 HARD ORDER / TOP5 硬排序 =====
+def _top_rank_hard_v3066(row):
+    """TOP1~TOP5 must stay above normal candidates. Lower is better."""
+    try:
+        if isinstance(row, pd.Series):
+            vals = row.to_dict()
+        else:
+            vals = row if isinstance(row, dict) else {}
+        for key in ["opportunity_rank", "section_opportunity_rank", "top_rank", "top_rank_v3066"]:
+            v = vals.get(key, "")
+            s = str(v).strip()
+            if s and s not in ["--", "nan", "NaN", "None"]:
+                m = re.search(r"(\d+)", s)
+                if m:
+                    return int(m.group(1))
+        txt = " ".join(str(vals.get(k, "")) for k in [
+            "section_top_opportunity", "top_opportunity", "execution_flag", "system_note", "note", "reason"
+        ])
+        m = re.search(r"TOP\s*([1-9]\d*)", txt, re.I)
+        if m:
+            return int(m.group(1))
+        if "TOP" in txt.upper():
+            return 99
+    except Exception:
+        pass
+    return 9999
+
+def _top_sort_columns_v3066(d):
+    d = d.copy()
+    d["top_rank_v3066"] = d.apply(_top_rank_hard_v3066, axis=1)
+    d["is_top_v3066"] = (d["top_rank_v3066"] < 9999).astype(int)
+    return d
+
+def sort_candidates_top_first_v3066(d):
+    if d is None or d.empty:
+        return d
+    d = _top_sort_columns_v3066(d)
+    cols = ["is_top_v3066", "top_rank_v3066", "entry_score", "main_force_score_v300", "liquidity_score", "mom20", "mom10", "stock_id"]
+    cols = [c for c in cols if c in d.columns]
+    asc = []
+    for c in cols:
+        if c == "is_top_v3066": asc.append(False)
+        elif c == "top_rank_v3066": asc.append(True)
+        elif c == "stock_id": asc.append(True)
+        else: asc.append(False)
+    return d.sort_values(cols, ascending=asc)
 
 def core_engine(x):
     """
@@ -702,7 +755,7 @@ def core_engine(x):
         + "｜" + d.get("ignition_note_v26669", "").astype(str)
     )
 
-    return d.sort_values(["top_opportunity", "entry_score", "main_force_score_v300", "mom20", "mom10"], ascending=[False, False, False, False, False])
+    return sort_candidates_top_first_v3066(d)
 
 
 def alpha_engine(x):
@@ -782,7 +835,7 @@ def alpha_engine(x):
         + "｜" + d.get("ignition_note_v26669", "").astype(str)
     )
 
-    return d.sort_values(["top_opportunity", "entry_score", "main_force_score_v300", "liquidity_score", "mom20"], ascending=[False, False, False, False, False])
+    return sort_candidates_top_first_v3066(d)
 
 
 def build_trade_plan(core, alpha, regime, signal_date):
@@ -823,10 +876,15 @@ def build_trade_plan(core, alpha, regime, signal_date):
         s["action_label"] = "觀察"
         s["action_sub"] = "低分觀察，不進場"
 
-    # ALPHA 優先，CORE 次之；同層比分數與流動性。
+    # v306.6：TOP1~TOP5 是硬規則；同 action 內 TOP 永遠排最上面，再比策略/分數/流動性。
+    s = _top_sort_columns_v3066(s)
     s["priority"] = np.where(s["strategy_type"] == "ALPHA", 1, 2)
+    sort_cols = ["action", "is_top_v3066", "top_rank_v3066", "priority", "entry_score", "liquidity_score"]
+    action_order = {"BUY": 1, "TEST": 2, "WATCH": 3, "BLOCK": 4}
+    s["action_order_v3066"] = s["action"].astype(str).str.upper().map(action_order).fillna(9)
     s = (
-        s.sort_values(["priority", "entry_score", "liquidity_score"], ascending=[True, False, False])
+        s.sort_values(["action_order_v3066", "is_top_v3066", "top_rank_v3066", "priority", "entry_score", "liquidity_score"],
+                      ascending=[True, False, True, True, False, False])
         .drop_duplicates("stock_id")
         .head(36)
     )
@@ -894,6 +952,8 @@ def build_trade_plan(core, alpha, regime, signal_date):
             "section_top_opportunity": r.get("section_top_opportunity", ""),
             "opportunity_rank": r.get("opportunity_rank", ""),
             "top_reason": r.get("top_reason", ""),
+            "top_rank_v3066": r.get("top_rank_v3066", ""),
+            "is_top_v3066": r.get("is_top_v3066", ""),
             "main_force_gate_v300": r.get("main_force_gate_v300", ""),
             "main_force_score_v300": r.get("main_force_score_v300", ""),
             "chip_buy_v300": r.get("chip_buy_v300", ""),
