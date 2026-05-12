@@ -2882,97 +2882,6 @@ async function loadTechMapV26637() {
 }
 
 
-
-// ===== v306.2 Industry Tag Compact Patch / 產業標籤壓縮排版 =====
-// 只做 UI 標記，不影響策略、排序、股價、持倉、Actions。
-function industryTagV306(row) {
-  row = row || {};
-  const direct = safeText(
-    row.industry_tag || row.industry || row.industry_name || row.sector || row.theme || row.group || "",
-    ""
-  ).trim();
-
-  if (direct && direct !== "--") return direct;
-
-  const sid = String(row.stock_id || row.code || row.symbol || "").trim().slice(0, 4);
-
-  const exact = {
-    "2330": "半導體", "2303": "半導體", "2344": "半導體",
-    "3034": "IC", "3443": "IC", "2379": "IC",
-    "2317": "AI", "2382": "AI", "3231": "AI", "6669": "AI",
-    "2603": "航運", "2609": "航運", "2615": "航運", "2636": "航運", "2610": "航空",
-    "6179": "通訊", "6189": "零組件",
-    "5876": "金融", "2820": "金融", "2852": "金融",
-    "2890": "金融", "2891": "金融",
-    "2880": "金融", "2881": "金融", "2882": "金融", "2883": "金融",
-    "2884": "金融", "2885": "金融", "2886": "金融", "2887": "金融",
-    "2888": "金融", "2889": "金融",
-    "6585": "重電", "1513": "重電", "1514": "重電", "1605": "電纜",
-    "2368": "PCB", "2367": "PCB", "3037": "PCB", "8046": "PCB",
-    "2498": "電子", "2753": "觀光"
-  };
-
-  if (exact[sid]) return exact[sid];
-
-  if (/^28/.test(sid) || /^58/.test(sid)) return "金融";
-  if (/^26/.test(sid)) return "航運";
-  if (/^15/.test(sid) || /^16/.test(sid)) return "機電";
-  if (/^23/.test(sid) || /^24/.test(sid) || /^30/.test(sid) || /^34/.test(sid) || /^61/.test(sid) || /^62/.test(sid) || /^65/.test(sid)) return "電子";
-  if (/^27/.test(sid)) return "觀光";
-  return "其他";
-}
-
-function injectIndustryStyleV306() {
-  if (document.getElementById("industry-style-v306")) return;
-  const style = document.createElement("style");
-  style.id = "industry-style-v306";
-  style.textContent = `
-    .scan-main.scan-main-live {
-      grid-template-columns: 82px minmax(58px, .9fr) minmax(68px, .8fr) 0px minmax(96px, 1.1fr) minmax(92px, 1.05fr) minmax(54px, .7fr) !important;
-      column-gap: 8px !important;
-      align-items: center !important;
-    }
-    .scan-main.scan-main-live .scan-top {
-      display: none !important;
-    }
-    .scan-main.scan-main-live .scan-score {
-      text-align: center !important;
-      font-variant-numeric: tabular-nums !important;
-    }
-    .scan-main.scan-main-live .scan-liq {
-      min-width: 88px !important;
-      padding-left: 10px !important;
-      padding-right: 10px !important;
-      white-space: nowrap !important;
-    }
-    .scan-close.industry-tag-v306 {
-      display: inline-flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      width: 54px !important;
-      max-width: 54px !important;
-      min-width: 54px !important;
-      padding: 5px 6px !important;
-      border-radius: 999px !important;
-      background: #f8fafc !important;
-      border: 1px solid #e5e7eb !important;
-      color: #334155 !important;
-      font-size: 12px !important;
-      font-weight: 900 !important;
-      line-height: 1.2 !important;
-      white-space: nowrap !important;
-      overflow: hidden !important;
-      text-overflow: clip !important;
-    }
-  `;
-  document.head.appendChild(style);
-}
-try { injectIndustryStyleV306(); } catch(e) {}
-document.addEventListener("DOMContentLoaded", function() {
-  try { injectIndustryStyleV306(); } catch(e) {}
-});
-
-
 function renderScanRow(row, key) {
   const action = normalizeAction(row.final_action || row.action);
   const cls = ACTION_CLASS[action] || "watch";
@@ -2990,7 +2899,6 @@ function renderScanRow(row, key) {
   const bucket = zhStrategy(row.bucket || row.strategy_type);
   const entry = zhEntry(row.entry_type || row.action_sub);
   const close = num(row.close || row.ref_price);
-  const industryTag = industryTagV306(row);
   const amount = row.suggested_amount ? money(row.suggested_amount) : "--";
   const weight = row.target_weight ? pct(row.target_weight) : "--";
   const volume = formatVolume(row.volume);
@@ -3073,7 +2981,7 @@ function renderScanRow(row, key) {
         <div class="scan-top">${top}</div>
         <div class="scan-entry">${isExit ? label : entry}</div>
         <div class="scan-liq ${liqCls}">${liqLabel}</div>
-        <div class="scan-close industry-tag-v306">${industryTag}</div>
+        <div class="scan-close">${close}</div>
       </div>
 
       <div class="scan-detail" id="${key}">
@@ -5143,3 +5051,34 @@ document.addEventListener("DOMContentLoaded", function() {
   setTimeout(v281RefreshBlankStockNameCells, 2600);
 });
 /* ===== end v281 Final Action UI Patch ===== */
+
+// ===== v306.3 Detail Industry Field Patch =====
+function industryTagV3063(row) {
+  row = row || {};
+  const sid = String(row.stock_id || row.code || "").trim().slice(0,4);
+
+  const map = {
+    "3231":"AI伺服器",
+    "1402":"紡織",
+    "6179":"通訊",
+    "2618":"航運",
+    "3706":"神達集團",
+    "2852":"金融",
+    "3360":"車用電子",
+    "8936":"國防",
+    "2009":"鋼鐵",
+    "5484":"IC設計",
+    "9935":"航運"
+  };
+
+  if (map[sid]) return map[sid];
+
+  if (/^28/.test(sid) || /^58/.test(sid)) return "金融";
+  if (/^26/.test(sid)) return "航運";
+  if (/^23|24|30|34|61|62|65/.test(sid)) return "電子";
+  if (/^14/.test(sid)) return "紡織";
+  if (/^20/.test(sid)) return "鋼鐵";
+  return "其他";
+}
+
+
