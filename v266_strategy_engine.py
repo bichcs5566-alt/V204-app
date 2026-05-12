@@ -719,6 +719,27 @@ def core_engine(x):
     d["entry_score"] += (d["ma_converge_pct"] <= 0.12).astype(int) * 6
     d["entry_score"] += (d["low_non_down_count_5"] >= 3).astype(int) * 5
 
+    # ===== v307 ATTACK STRUCTURE PATCH =====
+    # 修正：
+    # 1. 牛皮金融股一直卡進 TEST
+    # 2. 橫盤股排序過高
+    # 3. 缺乏「準備發動」判斷
+
+    # 趨勢斜率（不是只看站上均線）
+    d["entry_score"] += (d["ma5_slope"] > 0).astype(int) * 15
+    d["entry_score"] += (d["ma10_slope"] > 0).astype(int) * 10
+
+    # 攻擊量能（突然放量）
+    d["entry_score"] += (d["volume_ratio"] >= 1.8).astype(int) * 20
+
+    # 橫盤懲罰
+    range_10 = ((d["high_10"] - d["low_10"]) / d["low_10"]).replace([float("inf"), -float("inf")], 0).fillna(0)
+    d["entry_score"] -= (range_10 < 0.08).astype(int) * 25
+
+    # 金融牛皮懲罰
+    finance_like = d["stock_id"].astype(str).str.startswith(("28", "58"))
+    d["entry_score"] -= finance_like.astype(int) * 40
+
     # 風險扣分
     d["entry_score"] -= (d["close"] < 10).astype(int) * 16
     d["entry_score"] -= (d["close"] < 20).astype(int) * 8
@@ -795,6 +816,23 @@ def alpha_engine(x):
     d["entry_score"] += (d["close"] > d["ma20"]).astype(int) * 8
     d["entry_score"] += (d["ma20"] > d["ma60"]).astype(int) * 8
     d["entry_score"] += (d["ma20_slope"] > 0).astype(int) * 6
+
+    # ===== v307 ATTACK STRUCTURE PATCH =====
+    # 強化真正準備發動的股票
+
+    d["entry_score"] += (d["ma5_slope"] > 0).astype(int) * 12
+    d["entry_score"] += (d["ma10_slope"] > 0).astype(int) * 8
+
+    # 量能突然啟動
+    d["entry_score"] += (d["volume_ratio"] >= 1.8).astype(int) * 18
+
+    # 橫盤股懲罰
+    range_10 = ((d["high_10"] - d["low_10"]) / d["low_10"]).replace([float("inf"), -float("inf")], 0).fillna(0)
+    d["entry_score"] -= (range_10 < 0.08).astype(int) * 20
+
+    # 金融股硬限制
+    finance_like = d["stock_id"].astype(str).str.startswith(("28", "58"))
+    d["entry_score"] -= finance_like.astype(int) * 50
 
     # 突破/接近高點
     d["entry_score"] += (d["close"] >= d["high_20"] * 0.995).astype(int) * 10
