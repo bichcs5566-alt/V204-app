@@ -1,3 +1,8 @@
+# ===== 金融股排除（避免低波金融股污染 TEST / TOP）=====
+    sid_str = str(stock_id).strip()
+    if sid_str.startswith(("28", "58")):
+        continue
+
 """
 v266_strategy_engine.py
 雙策略版：CORE 早期卡位 + ALPHA 高流動性強勢延續
