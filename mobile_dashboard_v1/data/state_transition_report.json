@@ -4,16 +4,16 @@
   "changed_strategy_logic": false,
   "changed_action": false,
   "changed_position": false,
-  "updated_at": "2026-05-13 00:09:46",
+  "updated_at": "2026-05-13 07:38:32",
   "files": {
     "trade_plan.csv": {
       "trade_plan.csv": {
         "status": "updated",
-        "rows": 14
+        "rows": 11
       },
       "mobile_dashboard_v1/data/trade_plan.csv": {
         "status": "updated",
-        "rows": 14
+        "rows": 11
       }
     },
     "watchlist_monitor.csv": {
@@ -29,11 +29,11 @@
     "final_action_plan.csv": {
       "final_action_plan.csv": {
         "status": "updated",
-        "rows": 485
+        "rows": 529
       },
       "mobile_dashboard_v1/data/final_action_plan.csv": {
         "status": "updated",
-        "rows": 485
+        "rows": 529
       }
     },
     "candidates.csv": {
@@ -69,43 +69,43 @@
     "pre_move_candidates.csv": {
       "pre_move_candidates.csv": {
         "status": "updated",
-        "rows": 410
+        "rows": 456
       },
       "mobile_dashboard_v1/data/pre_move_candidates.csv": {
         "status": "updated",
-        "rows": 410
+        "rows": 456
       }
     },
     "top_opportunities.csv": {
       "top_opportunities.csv": {
         "status": "updated",
-        "rows": 5
+        "rows": 6
       },
       "mobile_dashboard_v1/data/top_opportunities.csv": {
         "status": "updated",
-        "rows": 5
+        "rows": 6
       }
     }
   },
-  "memory_rows": 485,
+  "memory_rows": 529,
   "states": {
-    "觀察": 176,
-    "突破中": 152,
-    "出貨疑慮": 116,
-    "吸籌中": 25,
-    "試盤中": 11,
-    "發動中": 5
+    "觀察": 216,
+    "突破中": 164,
+    "出貨疑慮": 113,
+    "吸籌中": 22,
+    "發動中": 7,
+    "試盤中": 7
   },
   "transition_labels": {
-    "持續觀察": 206,
-    "準IGNITION": 152,
-    "降級風險": 116,
-    "升級觀察": 11
+    "持續觀察": 244,
+    "準IGNITION": 165,
+    "降級風險": 113,
+    "升級觀察": 7
   },
   "ignition_flags": {
-    "NO": 206,
-    "READY": 152,
-    "RISK": 116,
-    "WATCH_UP": 11
+    "NO": 244,
+    "READY": 165,
+    "RISK": 113,
+    "WATCH_UP": 7
   }
 }
