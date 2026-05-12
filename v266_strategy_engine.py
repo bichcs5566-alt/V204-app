@@ -44,6 +44,64 @@ def is_finance_stock_v305(stock_id):
     return sid.startswith(FINANCE_PREFIXES_V305)
 
 
+
+# ===== v306 產業標記 / Industry Tag =====
+# 目的：輸出 industry / industry_icon / industry_tag 欄位，供手機清單右側顯示。
+# 原則：不改排序、不改策略分數、不改資金配置；只補標籤。
+INDUSTRY_SPECIFIC_V306 = {
+    "6179": ("光通訊", "🔌"),
+    "2820": ("金融保險", "🏦"),
+    "5876": ("金融保險", "🏦"),
+    "2498": ("其他電子", "💻"),
+    "2753": ("觀光餐飲", "🍽️"),
+    "2636": ("航運業", "✈️"),
+    "6585": ("生技醫療", "🧬"),
+    "6189": ("電子零組件", "🧩"),
+    "2618": ("航運業", "✈️"),
+    "2603": ("航運業", "🚢"),
+    "2852": ("金融保險", "🏦"),
+    "3164": ("半導體", "🔬"),
+}
+
+INDUSTRY_PREFIX_V306 = [
+    (("28", "58"), ("金融保險", "🏦")),
+    (("23",), ("半導體/電子", "🔬")),
+    (("24",), ("電子零組件", "🧩")),
+    (("25",), ("營建資產", "🏗️")),
+    (("26",), ("航運運輸", "🚢")),
+    (("27",), ("觀光餐飲", "🍽️")),
+    (("30", "31", "32", "33", "34", "35", "36"), ("電子科技", "💻")),
+    (("37", "49", "52", "53", "54", "61", "62", "64", "65", "66", "67", "68", "69"), ("科技製造", "⚙️")),
+    (("17",), ("化學/生技", "🧪")),
+    (("14",), ("紡織", "🧵")),
+    (("15",), ("電機機械", "⚙️")),
+    (("16",), ("電器電纜", "🔌")),
+    (("20",), ("鋼鐵", "🏭")),
+    (("21",), ("橡膠", "🛞")),
+    (("22",), ("汽車", "🚗")),
+    (("12",), ("食品", "🍱")),
+]
+
+def industry_info_v306(stock_id):
+    sid = str(stock_id).strip().replace(".0", "").zfill(4)
+    if sid in INDUSTRY_SPECIFIC_V306:
+        return INDUSTRY_SPECIFIC_V306[sid]
+    for prefixes, info in INDUSTRY_PREFIX_V306:
+        if sid.startswith(prefixes):
+            return info
+    return ("其他", "🏷️")
+
+def add_industry_fields_v306(df):
+    df = df.copy()
+    if "stock_id" not in df.columns:
+        return df
+    info = df["stock_id"].astype(str).map(industry_info_v306)
+    df["industry"] = info.map(lambda x: x[0])
+    df["industry_icon"] = info.map(lambda x: x[1])
+    df["industry_tag"] = df["industry_icon"].astype(str) + " " + df["industry"].astype(str)
+    return df
+
+
 def price_tier(p):
     p = float(p)
     if p < 50:
@@ -121,7 +179,9 @@ def latest_valid(df):
     # 目的：避免低波金融股靠高流動性擠進 TEST / TOP，不動後面 pipeline / UI。
     x = x[~x["stock_id"].astype(str).apply(is_finance_stock_v305)].copy()
 
-    return latest_date, add_liquidity_fields(x)
+    x = add_liquidity_fields(x)
+    x = add_industry_fields_v306(x)
+    return latest_date, x
 
 
 def add_liquidity_fields(d):
@@ -802,6 +862,9 @@ def build_trade_plan(core, alpha, regime, signal_date):
             "action_sub": r["action_sub"],
             "stock_id": r["stock_id"],
             "price_tier": price_tier(px),
+            "industry": r.get("industry", industry_info_v306(r["stock_id"])[0]),
+            "industry_icon": r.get("industry_icon", industry_info_v306(r["stock_id"])[1]),
+            "industry_tag": r.get("industry_tag", industry_info_v306(r["stock_id"])[1] + " " + industry_info_v306(r["stock_id"])[0]),
             "ref_price": round(px, 2),
             "target_weight": round(w, 4),
             "suggested_amount": round(amount, 0),
