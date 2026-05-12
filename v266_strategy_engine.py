@@ -36,70 +36,75 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 INITIAL_CAPITAL = 1_000_000
 
+# ===== v306.2 Finance Exclude + Industry Tag Safe Patch =====
+# 只做兩件事：
+# 1. 從候選池源頭排除金融股 28xx / 58xx，避免金融股進 TEST TOP。
+# 2. 輸出 industry / industry_tag 欄位供 app.js 顯示。
+FINANCE_PREFIXES_V306 = ("28", "58")
+
+INDUSTRY_EXACT_V306 = {
+    "2330": "半導體", "2303": "半導體", "2344": "半導體",
+    "3034": "IC", "3443": "IC", "2379": "IC",
+    "2317": "AI", "2382": "AI", "3231": "AI", "6669": "AI",
+    "2603": "航運", "2609": "航運", "2615": "航運", "2636": "航運", "2610": "航空",
+    "6179": "通訊", "6189": "零組件",
+    "5876": "金融", "2820": "金融", "2852": "金融",
+    "2890": "金融", "2891": "金融",
+    "2880": "金融", "2881": "金融", "2882": "金融", "2883": "金融",
+    "2884": "金融", "2885": "金融", "2886": "金融", "2887": "金融",
+    "2888": "金融", "2889": "金融",
+    "6585": "重電", "1513": "重電", "1514": "重電", "1605": "電纜",
+    "2368": "PCB", "2367": "PCB", "3037": "PCB", "8046": "PCB",
+    "2498": "電子", "2753": "觀光",
+}
+
+def is_finance_stock_v306(stock_id):
+    sid = str(stock_id).strip()[:4]
+    return sid.startswith(FINANCE_PREFIXES_V306)
+
+def industry_tag_v306(stock_id):
+    sid = str(stock_id).strip()[:4]
+    if sid in INDUSTRY_EXACT_V306:
+        return INDUSTRY_EXACT_V306[sid]
+    if sid.startswith(("28", "58")):
+        return "金融"
+    if sid.startswith("26"):
+        return "航運"
+    if sid.startswith(("15", "16")):
+        return "機電"
+    if sid.startswith(("23", "24", "30", "34", "61", "62", "65")):
+        return "電子"
+    if sid.startswith("27"):
+        return "觀光"
+    return "其他"
+
+def apply_industry_tag_v306(df):
+    try:
+        if df is None or df.empty or "stock_id" not in df.columns:
+            return df
+        df = df.copy()
+        df["industry"] = df["stock_id"].astype(str).map(industry_tag_v306)
+        df["industry_tag"] = df["industry"]
+        return df
+    except Exception:
+        return df
+
+def exclude_finance_candidates_v306(df):
+    try:
+        if df is None or df.empty or "stock_id" not in df.columns:
+            return df
+        df = df.copy()
+        return df[~df["stock_id"].astype(str).str.slice(0, 4).apply(is_finance_stock_v306)].copy()
+    except Exception:
+        return df
+
+
 # ===== v305 金融股排除 / 避免低波金融股污染 TEST / TOP =====
 FINANCE_PREFIXES_V305 = ("28", "58")
 
 def is_finance_stock_v305(stock_id):
     sid = str(stock_id).strip()
     return sid.startswith(FINANCE_PREFIXES_V305)
-
-
-
-# ===== v306 產業標記 / Industry Tag =====
-# 目的：輸出 industry / industry_icon / industry_tag 欄位，供手機清單右側顯示。
-# 原則：不改排序、不改策略分數、不改資金配置；只補標籤。
-INDUSTRY_SPECIFIC_V306 = {
-    "6179": ("光通訊", "🔌"),
-    "2820": ("金融保險", "🏦"),
-    "5876": ("金融保險", "🏦"),
-    "2498": ("其他電子", "💻"),
-    "2753": ("觀光餐飲", "🍽️"),
-    "2636": ("航運業", "✈️"),
-    "6585": ("生技醫療", "🧬"),
-    "6189": ("電子零組件", "🧩"),
-    "2618": ("航運業", "✈️"),
-    "2603": ("航運業", "🚢"),
-    "2852": ("金融保險", "🏦"),
-    "3164": ("半導體", "🔬"),
-}
-
-INDUSTRY_PREFIX_V306 = [
-    (("28", "58"), ("金融保險", "🏦")),
-    (("23",), ("半導體/電子", "🔬")),
-    (("24",), ("電子零組件", "🧩")),
-    (("25",), ("營建資產", "🏗️")),
-    (("26",), ("航運運輸", "🚢")),
-    (("27",), ("觀光餐飲", "🍽️")),
-    (("30", "31", "32", "33", "34", "35", "36"), ("電子科技", "💻")),
-    (("37", "49", "52", "53", "54", "61", "62", "64", "65", "66", "67", "68", "69"), ("科技製造", "⚙️")),
-    (("17",), ("化學/生技", "🧪")),
-    (("14",), ("紡織", "🧵")),
-    (("15",), ("電機機械", "⚙️")),
-    (("16",), ("電器電纜", "🔌")),
-    (("20",), ("鋼鐵", "🏭")),
-    (("21",), ("橡膠", "🛞")),
-    (("22",), ("汽車", "🚗")),
-    (("12",), ("食品", "🍱")),
-]
-
-def industry_info_v306(stock_id):
-    sid = str(stock_id).strip().replace(".0", "").zfill(4)
-    if sid in INDUSTRY_SPECIFIC_V306:
-        return INDUSTRY_SPECIFIC_V306[sid]
-    for prefixes, info in INDUSTRY_PREFIX_V306:
-        if sid.startswith(prefixes):
-            return info
-    return ("其他", "🏷️")
-
-def add_industry_fields_v306(df):
-    df = df.copy()
-    if "stock_id" not in df.columns:
-        return df
-    info = df["stock_id"].astype(str).map(industry_info_v306)
-    df["industry"] = info.map(lambda x: x[0])
-    df["industry_icon"] = info.map(lambda x: x[1])
-    df["industry_tag"] = df["industry_icon"].astype(str) + " " + df["industry"].astype(str)
-    return df
 
 
 def price_tier(p):
@@ -127,6 +132,8 @@ def next_trade_date(signal_date):
 
 
 def write_both(df, name):
+    df = exclude_finance_candidates_v306(df)
+    df = apply_industry_tag_v306(df)
     df.to_csv(ROOT / name, index=False, encoding="utf-8-sig")
     df.to_csv(DATA_DIR / name, index=False, encoding="utf-8-sig")
 
@@ -179,9 +186,7 @@ def latest_valid(df):
     # 目的：避免低波金融股靠高流動性擠進 TEST / TOP，不動後面 pipeline / UI。
     x = x[~x["stock_id"].astype(str).apply(is_finance_stock_v305)].copy()
 
-    x = add_liquidity_fields(x)
-    x = add_industry_fields_v306(x)
-    return latest_date, x
+    return latest_date, add_liquidity_fields(x)
 
 
 def add_liquidity_fields(d):
@@ -862,9 +867,6 @@ def build_trade_plan(core, alpha, regime, signal_date):
             "action_sub": r["action_sub"],
             "stock_id": r["stock_id"],
             "price_tier": price_tier(px),
-            "industry": r.get("industry", industry_info_v306(r["stock_id"])[0]),
-            "industry_icon": r.get("industry_icon", industry_info_v306(r["stock_id"])[1]),
-            "industry_tag": r.get("industry_tag", industry_info_v306(r["stock_id"])[1] + " " + industry_info_v306(r["stock_id"])[0]),
             "ref_price": round(px, 2),
             "target_weight": round(w, 4),
             "suggested_amount": round(amount, 0),
