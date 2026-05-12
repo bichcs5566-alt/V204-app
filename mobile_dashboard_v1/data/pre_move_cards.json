@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-11 18:18:08",
+  "generated_at": "2026-05-12 04:40:33",
   "count": 30,
   "cards": [
     {
@@ -367,12 +367,12 @@
       "color": "green"
     },
     {
-      "stock_id": "6170",
+      "stock_id": "6179",
       "action": "BUY",
       "label": "小倉試單",
       "score": 86.0,
-      "close": 51.0,
-      "price_tier": "50-100",
+      "close": 24.7,
+      "price_tier": "50以下",
       "target_weight": 0.01,
       "suggested_amount": 10000,
       "setup_type": "主力佈局完成",
