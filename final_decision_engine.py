@@ -1416,6 +1416,192 @@ def apply_top_opportunities_v26614(out):
 
 
 
+
+# ===== v307.4 FINAL DECISION ATTACK SORT PATCH =====
+# 最終決策層修正：
+# 1. TEST / WATCH 排序改用「攻擊結構」而不是單純 liquidity / opportunity_score。
+# 2. 橫盤、牛皮、金融、弱攻擊 TEST 降回 WATCH。
+# 3. TOP5 重新用攻擊結構產生。
+# 4. 不動 app.js、不動 UI、不動持倉、不動 workflow。
+def apply_final_attack_sort_v3074(out):
+    import numpy as np
+    import pandas as pd
+
+    if out is None or out.empty:
+        return out, pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+    d = out.copy()
+
+    def _num(col, default=0.0):
+        if col in d.columns:
+            return pd.to_numeric(d[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
+        return pd.Series(default, index=d.index, dtype="float64")
+
+    def _text(col, default=""):
+        if col in d.columns:
+            return d[col].astype(str).fillna(default)
+        return pd.Series(default, index=d.index, dtype="object")
+
+    sid = _text("stock_id")
+    finance = sid.str.startswith(("28", "58"))
+
+    base = _num("opportunity_score")
+    if float(base.abs().sum()) == 0:
+        base = _num("score")
+
+    liq = _num("liquidity_score")
+    chip = _num("chip_score")
+    main_force = _num("main_force_score_v302")
+    ignition_old = _num("ignition_score_v303")
+    evolution_old = _num("evolution_score_v303")
+    test_rank_old = _num("test_rank_score_v304")
+    volume = _num("volume")
+    turnover = _num("turnover")
+    close = _num("close")
+
+    # 從現有 final_decision 可用欄位重建攻擊分數。
+    # 注意：這裡不能依賴 ma5_slope/mom20，因為 final_decision 輸出欄位原本沒有帶那些細欄位。
+    attack = pd.Series(0.0, index=d.index)
+
+    # 主要攻擊訊號來源：v302/v303/v304 已經存在的結構欄位
+    attack += main_force * 0.38
+    attack += ignition_old * 0.32
+    attack += evolution_old * 0.42
+    attack += test_rank_old * 0.28
+    attack += base * 0.22
+
+    # 輔助：籌碼與流動性只能輔助，不可主導
+    attack += (chip >= 60).astype(int) * 6
+    attack += (chip >= 80).astype(int) * 8
+    attack += (liq >= 70).astype(int) * 3
+
+    # 成交量/成交金額基本門檻：太冷不能上前排
+    attack += ((volume >= 1000) | (turnover >= 30_000_000)).astype(int) * 5
+
+    # 文字結構判斷：利用已有 reason / system_note / entry_type
+    txt = (
+        _text("reason") + " " +
+        _text("system_note") + " " +
+        _text("entry_type") + " " +
+        _text("bucket") + " " +
+        _text("strategy_type")
+    )
+
+    strong_words = txt.str.contains("發動|起漲|點火|突破|強勢|主力|攻擊|轉強|放量|吸籌|卡位", regex=True, na=False)
+    flat_words = txt.str.contains("橫盤|牛皮|整理過久|無方向|量縮無攻擊|攻擊不足|弱攻擊", regex=True, na=False)
+    risky_words = txt.str.contains("過熱|追高|假突破|上影|誘多|轉弱", regex=True, na=False)
+
+    attack += strong_words.astype(int) * 14
+    attack -= flat_words.astype(int) * 26
+    attack -= risky_words.astype(int) * 16
+
+    # 金融直接重扣，避免金融牛皮靠穩定/流動性上前排
+    attack -= finance.astype(int) * 70
+
+    # 高流動但沒有主力/起漲/進化分數，不應該在 TEST 前排
+    liquidity_only = (
+        (liq >= 70) &
+        (main_force < 45) &
+        (ignition_old < 35) &
+        (evolution_old < 35) &
+        (test_rank_old < 35) &
+        (~strong_words)
+    )
+    attack -= liquidity_only.astype(int) * 35
+
+    d["final_attack_score_v3074"] = attack.round(2)
+    d["final_sort_score_v3074"] = (attack * 0.70 + base * 0.30).round(2)
+    d["liquidity_only_penalty_v3074"] = liquidity_only.astype(int)
+
+    action = _text("final_action").str.upper()
+
+    # TEST 若只是高流動、金融、或攻擊分數不足，降回 WATCH
+    downgrade = action.eq("TEST") & (
+        finance |
+        liquidity_only |
+        (d["final_attack_score_v3074"] < 42)
+    )
+
+    d.loc[downgrade, "final_action"] = "WATCH"
+    d.loc[downgrade, "entry_type"] = "攻擊結構不足，降回觀察"
+    d.loc[downgrade, "system_note"] = d.loc[downgrade, "system_note"].astype(str) + "｜v307.4：非攻擊型 TEST，降回 WATCH"
+
+    # 清掉舊 TOP，避免舊 opportunity_score / liquidity TOP 污染
+    for c in ["opportunity_rank", "top_opportunity", "section_opportunity_rank", "section_top_opportunity", "execution_flag"]:
+        if c not in d.columns:
+            d[c] = ""
+        d[c] = ""
+
+    # 重新給 TOP5：同區內用 final_attack_score 排
+    action = d["final_action"].astype(str).str.upper()
+    for action_name, label in [("BUY", "買進"), ("TEST", "試單"), ("WATCH", "觀察")]:
+        part_mask = action.eq(action_name) & (~finance)
+        # TEST/BUY 要求攻擊分數更高；WATCH 可較低但仍不能是金融
+        min_score = 42 if action_name in ["BUY", "TEST"] else 35
+        idx = (
+            d.loc[part_mask & (d["final_attack_score_v3074"] >= min_score)]
+            .sort_values(
+                ["final_attack_score_v3074", "final_sort_score_v3074", "score", "stock_id"],
+                ascending=[False, False, False, True]
+            )
+            .head(5)
+            .index
+        )
+
+        for rank, ridx in enumerate(idx, start=1):
+            d.loc[ridx, "execution_flag"] = "TOP"
+            d.loc[ridx, "opportunity_rank"] = str(rank)
+            d.loc[ridx, "top_opportunity"] = f"TOP{rank}"
+            d.loc[ridx, "section_opportunity_rank"] = str(rank)
+            d.loc[ridx, "section_top_opportunity"] = f"{label}TOP{rank}"
+            d.loc[ridx, "system_note"] = str(d.loc[ridx, "system_note"]) + f"｜v307.4：攻擊結構{label}TOP{rank}"
+
+    # IGNITION / EVOLUTION 升級清單：不改 final_action，只產生 signal_stage / signal df
+    if "signal_stage_v303" not in d.columns:
+        d["signal_stage_v303"] = ""
+
+    ignition_mask = (
+        d["final_action"].astype(str).str.upper().isin(["TEST", "WATCH", "BUY"]) &
+        (d["final_attack_score_v3074"] >= 58) &
+        (~finance) &
+        (~liquidity_only)
+    )
+    evolution_mask = (
+        d["final_action"].astype(str).str.upper().isin(["TEST", "BUY"]) &
+        (d["final_attack_score_v3074"] >= 72) &
+        (~finance) &
+        (~liquidity_only)
+    )
+
+    d.loc[ignition_mask, "signal_stage_v303"] = "IGNITION"
+    d.loc[evolution_mask, "signal_stage_v303"] = "EVOLUTION"
+
+    if "stage_reason_v303" in d.columns:
+        d.loc[ignition_mask, "stage_reason_v303"] = "v307.4：攻擊結構達 IGNITION"
+        d.loc[evolution_mask, "stage_reason_v303"] = "v307.4：攻擊結構達 EVOLUTION"
+
+    # 最終排序：priority → TOP rank → attack
+    priority = pd.to_numeric(d.get("priority", 9), errors="coerce").fillna(9)
+    top_rank = pd.to_numeric(d["section_opportunity_rank"], errors="coerce").fillna(999)
+    d["_priority_v3074"] = priority
+    d["_top_rank_v3074"] = top_rank
+
+    d = d.sort_values(
+        ["_priority_v3074", "_top_rank_v3074", "final_attack_score_v3074", "final_sort_score_v3074", "stock_id"],
+        ascending=[True, True, False, False, True]
+    ).drop(columns=["_priority_v3074", "_top_rank_v3074"], errors="ignore")
+
+    top_df = d[
+        (d["top_opportunity"].astype(str).str.strip() != "") |
+        (d["section_top_opportunity"].astype(str).str.strip() != "")
+    ].copy()
+
+    ignition_df = d[d["signal_stage_v303"].astype(str).str.upper().eq("IGNITION")].copy()
+    evolution_df = d[d["signal_stage_v303"].astype(str).str.upper().eq("EVOLUTION")].copy()
+
+    return d, top_df, ignition_df, evolution_df
+
+
 def main():
     generated_at = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
     lookup = make_lookup()
@@ -1733,7 +1919,7 @@ def main():
 
     summary = {
         "generated_at": generated_at,
-        "source": "final_decision_engine_v304_test_internal_rank_top5",
+        "source": "final_decision_engine_v3074_final_attack_sort",
         "signal_date": str(out["signal_date"].iloc[0]) if not out.empty and "signal_date" in out.columns else "",
         "trade_date": str(out["trade_date"].iloc[0]) if not out.empty and "trade_date" in out.columns else "",
         "rows": int(len(out)),
