@@ -1851,6 +1851,18 @@ async function rerunStrategyWithPositions() {
   }
 }
 
+
+function safeBindClickV3091(id, handler) {
+  try {
+    const el = qs(id);
+    if (el && typeof el.addEventListener === "function") {
+      el.addEventListener("click", handler);
+    }
+  } catch (e) {
+    console.warn("safeBindClickV3091 failed:", id, e);
+  }
+}
+
 function renderAppShell() {
   const gh = loadGithubSettings();
 
@@ -1956,16 +1968,16 @@ function renderAppShell() {
     </main>
   `;
 
-  qs("refreshBtn").addEventListener("click", () => {
+  safeBindClickV3091("refreshBtn", () => {
     const safePath = (location.pathname && location.pathname !== "/") ? location.pathname : "/V204-app/";
     location.href = safePath + "?v=" + Date.now() + location.hash;
   });
-  qs("updateBtn").addEventListener("click", triggerDataPipeline);
-  qs("saveGhBtn").addEventListener("click", saveGithubSettings);
-  qs("clearGhBtn").addEventListener("click", clearGithubSettings);
-  qs("addPositionBtn").addEventListener("click", addOrUpdatePosition);
-  qs("syncPositionBtn").addEventListener("click", syncPositionsToRepo);
-  qs("rerunWithPositionBtn").addEventListener("click", rerunStrategyWithPositions);
+  safeBindClickV3091("updateBtn", triggerDataPipeline);
+  safeBindClickV3091("saveGhBtn", saveGithubSettings);
+  safeBindClickV3091("clearGhBtn", clearGithubSettings);
+  safeBindClickV3091("addPositionBtn", addOrUpdatePosition);
+  safeBindClickV3091("syncPositionBtn", syncPositionsToRepo);
+  safeBindClickV3091("rerunWithPositionBtn", rerunStrategyWithPositions);
   renderPositions();
   refreshPositionStatus("持倉區已同步");
 }
@@ -5184,4 +5196,202 @@ document.addEventListener("DOMContentLoaded", function() {
     try {
       return normalizeAction(row?.final_action || row?.action || row?.status || row?.decision || "");
     } catch (e) {
-      const s = String(row?.final_
+      const s = String(row?.final_action || row?.action || row?.status || row?.decision || "").trim().toUpperCase();
+      if (["SELL", "REDUCE", "BUY", "TEST", "WATCH", "BLOCK"].includes(s)) return s;
+      if (s === "賣出") return "SELL";
+      if (s === "減碼") return "REDUCE";
+      if (s === "買進") return "BUY";
+      if (s === "試單") return "TEST";
+      if (s === "觀察") return "WATCH";
+      if (s === "禁止") return "BLOCK";
+      return s || "WATCH";
+    }
+  }
+
+  function actionPriorityV3068(row) {
+    const a = normalizeActionSafeV3068(row);
+    const fallback = { SELL: 1, REDUCE: 2, BUY: 3, TEST: 4, WATCH: 5, BLOCK: 6 };
+    try {
+      return ACTION_PRIORITY?.[a] || fallback[a] || 5;
+    } catch (e) {
+      return fallback[a] || 5;
+    }
+  }
+
+  function hardTopRankV3068(row) {
+    row = row || {};
+    const fields = [
+      row.top_rank,
+      row.hard_top_rank,
+      row.section_top_rank,
+      row.section_opportunity_rank,
+      row.opportunity_rank,
+      row.section_top_opportunity,
+      row.top_opportunity,
+      row.execution_flag,
+      row.system_note,
+      row.note,
+      row.reason
+    ];
+
+    for (const v of fields) {
+      const s = String(v ?? "").trim();
+      if (!s || s === "--") continue;
+
+      const m = s.match(/TOP\s*[_-]?\s*([1-5])\b/i);
+      if (m) return Number(m[1]);
+
+      if (/^[1-5]$/.test(s)) return Number(s);
+    }
+
+    if (String(row.execution_flag || "").trim().toUpperCase() === "TOP") return 6;
+    return 9999;
+  }
+
+  function scoreV3068(row) {
+    row = row || {};
+    const fields = [
+      row.score,
+      row.opportunity_score,
+      row.entry_score,
+      row.rank_score,
+      row.turn_adjusted_score_v26664,
+      row.turn_event_score_v26664_1,
+      row.turn_event_score_v26664,
+      row.first_trigger_score_v26663,
+      row.trigger_event_score_v26662,
+      row.liquidity_score
+    ];
+    for (const v of fields) {
+      const n = Number(String(v ?? "").replace(/,/g, ""));
+      if (Number.isFinite(n)) return n;
+    }
+    return 0;
+  }
+
+  function liqRankV3068(row) {
+    try {
+      return typeof liquiditySortRank === "function" ? liquiditySortRank(row) : 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  function stockIdV3068(row) {
+    return String(row?.stock_id || row?.code || row?.symbol || "");
+  }
+
+  function top5HardSortV3068(rows) {
+    return (rows || []).slice().sort((a, b) => {
+      const pa = actionPriorityV3068(a);
+      const pb = actionPriorityV3068(b);
+      if (pa !== pb) return pa - pb;
+
+      const ta = hardTopRankV3068(a);
+      const tb = hardTopRankV3068(b);
+      if (ta !== tb) return ta - tb;
+
+      const sb = scoreV3068(b);
+      const sa = scoreV3068(a);
+      if (sb !== sa) return sb - sa;
+
+      const lb = liqRankV3068(b);
+      const la = liqRankV3068(a);
+      if (lb !== la) return lb - la;
+
+      const vb = Number(String(b?.volume || 0).replace(/,/g, ""));
+      const va = Number(String(a?.volume || 0).replace(/,/g, ""));
+      if (Number.isFinite(vb) && Number.isFinite(va) && vb !== va) return vb - va;
+
+      return stockIdV3068(a).localeCompare(stockIdV3068(b));
+    });
+  }
+
+  function dedupeV3068(arr) {
+    try {
+      return typeof dedupeByStockV26630 === "function" ? dedupeByStockV26630(arr) : arr;
+    } catch (e) {
+      return arr;
+    }
+  }
+
+  sortRows = function(rows) {
+    return top5HardSortV3068(rows || []);
+  };
+
+  splitRows = function(rows) {
+    const sorted = top5HardSortV3068(rows || []);
+
+    const main = [];
+    const test = [];
+    const block = [];
+    const watch = [];
+
+    sorted.forEach(row => {
+      const a = normalizeActionSafeV3068(row);
+
+      if (["SELL", "REDUCE", "BUY"].includes(a)) {
+        main.push(row);
+      } else if (a === "TEST") {
+        test.push(row);
+      } else if (a === "BLOCK") {
+        block.push(row);
+      } else {
+        // 重要修正：
+        // 後端大量候選如果是 HOLD / WAIT / OBSERVE / NEUTRAL / 空值 / 其他標籤，
+        // 一律回到 WATCH，不再被前端丟掉。
+        watch.push({ ...row, final_action: "WATCH" });
+      }
+    });
+
+    return {
+      main: dedupeV3068(top5HardSortV3068(main)),
+      test: dedupeV3068(top5HardSortV3068(test)),
+      watch: dedupeV3068(top5HardSortV3068(watch)),
+      block: dedupeV3068(top5HardSortV3068(block))
+    };
+  };
+
+  const oldGetTopBadgeV3068 = typeof getTopBadge === "function" ? getTopBadge : null;
+  getTopBadge = function(row) {
+    const r = hardTopRankV3068(row);
+    if (r >= 1 && r <= 5) return `🔥 TOP${r}`;
+    if (oldGetTopBadgeV3068) return oldGetTopBadgeV3068(row);
+    return "";
+  };
+
+  window.__TOP5_WATCH_FALLBACK_FIX_V3068__ = true;
+})();
+/* ===== end v306.8 TOP5 HARD ORDER + WATCH FALLBACK FIX ===== */
+
+
+/* ===== v309.1 SAFE ROLLBACK: frontend sort lock removed to prevent blank screen. ===== */
+
+
+// ===== v309.1 HARD NO BLANK SCREEN GUARD =====
+(function hardNoBlankGuardV3091(){
+  function showBootErrorV3091(msg) {
+    try {
+      if (!document.body) return;
+      if (document.body.innerHTML && document.body.innerHTML.trim()) return;
+      document.body.innerHTML =
+        '<main style="padding:28px;font-family:-apple-system,BlinkMacSystemFont,Noto Sans TC,sans-serif;color:#111827;background:#f5f0e8;min-height:100vh">' +
+        '<section style="background:#fff;border-radius:24px;padding:22px;box-shadow:0 8px 24px rgba(15,23,42,.08)">' +
+        '<h1 style="font-size:28px;margin:0 0 12px">⚠️ app.js 啟動失敗</h1>' +
+        '<p style="font-size:18px;line-height:1.6;margin:0">原因：' + String(msg || window.__APP_BOOT_ERROR__ || "未知錯誤").replace(/[<>&]/g, "") + '</p>' +
+        '<p style="font-size:16px;color:#6b7280;line-height:1.6">請確認 app.js 已完整覆蓋，並重新整理 GitHub Pages。</p>' +
+        '</section></main>';
+    } catch (_) {}
+  }
+  window.addEventListener("error", function(e){
+    window.__APP_BOOT_ERROR__ = e && e.message ? e.message : String(e || "");
+    setTimeout(function(){ showBootErrorV3091(window.__APP_BOOT_ERROR__); }, 300);
+  });
+  window.addEventListener("unhandledrejection", function(e){
+    window.__APP_BOOT_ERROR__ = e && e.reason ? (e.reason.message || String(e.reason)) : String(e || "");
+    setTimeout(function(){ showBootErrorV3091(window.__APP_BOOT_ERROR__); }, 300);
+  });
+  document.addEventListener("DOMContentLoaded", function(){
+    setTimeout(function(){ showBootErrorV3091(window.__APP_BOOT_ERROR__); }, 1800);
+  });
+})();
