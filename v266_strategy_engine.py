@@ -651,6 +651,15 @@ def apply_main_force_gate_v300(d, mode="ALPHA"):
 # - TOP1~TOP5 重新以攻擊結構分數產生
 # - 不動 app.js、不動 UI、不動持倉、不動輸出欄位名稱
 def apply_final_attack_sort_v3072(d, mode="CORE"):
+    """
+    v308 最終攻擊排序核心（保留舊函式名，避免其他流程斷掉）
+
+    目的：
+    1. TOP / TEST 不再選「穩定、貼線、高流動」。
+    2. 改選「突破意圖、量價同步、趨勢加速、剛脫離整理」。
+    3. 短線轉弱、橫盤牛皮、金融、防守型個股，不得進 TEST TOP。
+    4. ALPHA / CORE 都會套用，避免 ALPHA 高流動性把垃圾推上來。
+    """
     import numpy as np
     import pandas as pd
 
@@ -705,6 +714,7 @@ def apply_final_attack_sort_v3072(d, mode="CORE"):
     obv_up5 = n("obv_up_count_5")
     low_hold = n("low_non_down_count_5")
     liq_score = n("liquidity_score")
+    main_force = n("main_force_score_v300")
 
     sid = txt("stock_id")
     finance_like = sid.str.startswith(("28", "58"))
@@ -712,93 +722,150 @@ def apply_final_attack_sort_v3072(d, mode="CORE"):
     ma5_vs_ma10 = (ma5 / ma10.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
     ma10_vs_ma20 = (ma10 / ma20.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
     ma20_vs_ma60 = (ma20 / ma60.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+    close_ma5_gap = (close / ma5.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
     close_ma20_gap = (close / ma20.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
     close_to_high20 = (close / high20.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
     close_to_high60 = (close / high60.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
-    candle_power = ((close - open_) / open_.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
 
-    # 真正要抓的是「準備攻擊」，不是單純大成交量。
+    candle_power = ((close - open_) / open_.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
+    upper_shadow = ((high - close) / high.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
+    intraday_range = ((high - low) / low.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
+
     attack_score = pd.Series(0.0, index=d.index)
 
-    # 1) 價格動能：短中期要有往上意圖
-    attack_score += (mom3 > 0).astype(int) * 6
-    attack_score += (mom5 > 0.008).astype(int) * 10
-    attack_score += (mom10 > 0.015).astype(int) * 14
-    attack_score += ((mom20 > 0.025) & (mom20 <= 0.32)).astype(int) * 16
+    # A. 真正攻擊動能：短中期必須有加速，不是只貼均線
+    attack_score += (mom3 > 0.003).astype(int) * 6
+    attack_score += (mom5 > 0.012).astype(int) * 12
+    attack_score += (mom10 > 0.025).astype(int) * 16
+    attack_score += ((mom20 > 0.045) & (mom20 <= 0.35)).astype(int) * 18
 
-    # 2) 均線攻擊結構：不能只是橫盤貼線
-    attack_score += (ma5_vs_ma10 > 0).astype(int) * 12
-    attack_score += (ma10_vs_ma20 > -0.005).astype(int) * 10
-    attack_score += (ma20_slope > 0).astype(int) * 10
-    attack_score += (ma20_vs_ma60 > -0.035).astype(int) * 8
+    # B. 均線不是「貼近」就加分；要開始轉強 / 斜率改善
+    attack_score += (ma5_vs_ma10 > 0.002).astype(int) * 12
+    attack_score += (ma10_vs_ma20 > 0.000).astype(int) * 12
+    attack_score += (ma20_slope > 0).astype(int) * 8
+    attack_score += (ma20_vs_ma60 > -0.020).astype(int) * 6
 
-    # 3) 位置：接近突破區，但不要過熱
-    attack_score += (close_to_high20 >= 0.94).astype(int) * 12
-    attack_score += (close_to_high60 >= 0.88).astype(int) * 8
-    attack_score += (close_ma20_gap.between(-0.015, 0.14)).astype(int) * 8
+    # C. 位置：要靠近突破區或剛突破，不是在箱子中間躺平
+    near_breakout = (close_to_high20 >= 0.965) | (close_to_high60 >= 0.915)
+    attack_score += near_breakout.astype(int) * 18
+    attack_score += (close_to_high20 >= 0.985).astype(int) * 12
+    attack_score += (close_ma20_gap.between(0.000, 0.18)).astype(int) * 10
 
-    # 4) 量價同步：突然啟動，不是本來就大
-    attack_score += (vol_ratio.between(1.15, 3.80)).astype(int) * 18
-    attack_score += ((vol_ratio >= 1.35) & (mom5 > 0)).astype(int) * 12
-    attack_score += ((volume >= 1000) | (turnover >= 30_000_000)).astype(int) * 6
+    # D. 量價同步：不是本來成交量大，而是有啟動量
+    vol_attack = vol_ratio.between(1.25, 4.20)
+    attack_score += vol_attack.astype(int) * 22
+    attack_score += ((vol_ratio >= 1.45) & (mom5 > 0.006)).astype(int) * 14
+    attack_score += ((volume >= 1000) | (turnover >= 30_000_000)).astype(int) * 5
 
-    # 5) 吸籌/撐盤：跌不下去才有發動前味道
-    attack_score += (low_hold >= 3).astype(int) * 10
-    attack_score += (obv > 0).astype(int) * 10
-    attack_score += (obv_up5 >= 2).astype(int) * 6
-    attack_score += (candle_power > 0).astype(int) * 4
+    # E. 撐盤 / 吸籌：跌不下去才有發動前味道
+    attack_score += (low_hold >= 3).astype(int) * 8
+    attack_score += (obv > 0).astype(int) * 8
+    attack_score += (obv_up5 >= 2).astype(int) * 5
+    attack_score += (candle_power > 0.003).astype(int) * 6
+    attack_score += (main_force >= 55).astype(int) * 8
 
-    # 橫盤牛皮懲罰：你目前最在意的錯誤來源
-    flat_dead = (
-        (range20 < 0.075) &
-        (mom10.abs() < 0.018) &
-        (mom20.abs() < 0.035) &
-        (vol_ratio < 1.30)
+    # === 硬排除 / 強懲罰 ===
+    # 1) 短線轉弱：這種不得 TOP，即使均線貼近也不行
+    short_turn_weak = (
+        (close < ma5) &
+        (mom3 <= 0) &
+        (mom5 <= 0.006) &
+        (candle_power <= 0)
     )
-    weak_attack = (
-        (mom5 <= 0) &
-        (mom10 <= 0.01) &
-        (ma5_vs_ma10 <= 0) &
-        (vol_ratio < 1.20)
+
+    # 2) 均線貼合但沒攻擊：你目前看到的八方/國統/鋼聯類型
+    ma_sticky_no_attack = (
+        (ma_conv <= 0.13) &
+        (range20 < 0.115) &
+        (mom10 < 0.025) &
+        (mom20 < 0.055) &
+        (vol_ratio < 1.55) &
+        (~near_breakout)
     )
-    overheat_or_fake = (
+
+    # 3) 箱型中段：還沒脫離整理，不該當最大機會
+    box_middle = (
+        (close_to_high20 < 0.955) &
+        (close_ma20_gap.between(-0.025, 0.065)) &
+        (mom10 < 0.025) &
+        (vol_ratio < 1.60)
+    )
+
+    # 4) 高流動但無攻擊：大型牛皮股主要來源
+    liquidity_only = (
+        (liq_score >= 55) &
+        (mom5 <= 0.010) &
+        (mom10 <= 0.020) &
+        (vol_ratio < 1.35) &
+        (main_force < 55)
+    )
+
+    # 5) 誘多 / 長上影 / 過熱
+    fake_breakout = (
+        ((upper_shadow > 0.055) & (vol_ratio > 1.35)) |
         (mom20 > 0.45) |
-        (close_ma20_gap > 0.24) |
-        ((high - close) / high.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0).gt(0.06) & (vol_ratio > 1.7)
+        (close_ma20_gap > 0.26)
     )
 
-    attack_score -= flat_dead.astype(int) * 42
-    attack_score -= weak_attack.astype(int) * 28
-    attack_score -= overheat_or_fake.astype(int) * 18
-    attack_score -= finance_like.astype(int) * 60
+    # 6) 低信心：籌碼或流動性分數太差時，不准 TOP，除非攻擊分非常高
+    low_quality_liq = (liq_score < 45) & (main_force < 65)
 
-    # 流動性只作為輔助，不再當主排序核心。
-    attack_score += (liq_score >= 75).astype(int) * 4
+    hard_reject = finance_like | short_turn_weak | ma_sticky_no_attack | box_middle | liquidity_only | fake_breakout
+
+    attack_score -= finance_like.astype(int) * 90
+    attack_score -= short_turn_weak.astype(int) * 55
+    attack_score -= ma_sticky_no_attack.astype(int) * 50
+    attack_score -= box_middle.astype(int) * 42
+    attack_score -= liquidity_only.astype(int) * 35
+    attack_score -= fake_breakout.astype(int) * 32
+    attack_score -= low_quality_liq.astype(int) * 18
+
+    # 流動性只輔助，最多小加分
+    attack_score += (liq_score >= 75).astype(int) * 3
 
     d["attack_score_v3072"] = attack_score.round(2)
-    d["flat_dead_v3072"] = flat_dead.astype(int)
-    d["weak_attack_v3072"] = weak_attack.astype(int)
-    d["attack_ok_v3072"] = (
-        (attack_score >= 48) &
-        ~flat_dead &
-        ~weak_attack &
-        ~finance_like
-    ).astype(int)
+    d["attack_score_v308"] = attack_score.round(2)
+    d["final_attack_score_v308"] = attack_score.round(2)
+    d["short_turn_weak_v308"] = short_turn_weak.astype(int)
+    d["ma_sticky_no_attack_v308"] = ma_sticky_no_attack.astype(int)
+    d["box_middle_v308"] = box_middle.astype(int)
+    d["liquidity_only_v308"] = liquidity_only.astype(int)
+    d["hard_reject_v308"] = hard_reject.astype(int)
 
     if "entry_score" not in d.columns:
         d["entry_score"] = 0
     d["entry_score"] = pd.to_numeric(d["entry_score"], errors="coerce").fillna(0)
-    d["final_sort_score_v3072"] = (d["entry_score"] * 0.45 + d["attack_score_v3072"] * 0.55).round(2)
 
-    # 明顯橫盤/弱攻擊的 TEST 不應該留在試單，降回 WATCH。
+    # 舊 entry_score 只能當輔助，最終以攻擊分為主
+    d["final_sort_score_v3072"] = (d["entry_score"] * 0.25 + d["attack_score_v3072"] * 0.75).round(2)
+    d["final_sort_score_v308"] = d["final_sort_score_v3072"]
+
+    # TEST 必須有攻擊結構；否則降回 WATCH
     if "action" in d.columns:
         action = d["action"].astype(str).str.upper()
-        downgrade = action.eq("TEST") & (d["attack_ok_v3072"].eq(0)) & (d["attack_score_v3072"] < 42)
-        d.loc[downgrade, "action"] = "WATCH"
-        d.loc[downgrade, "action_label"] = "觀察"
-        d.loc[downgrade, "action_sub"] = "攻擊結構不足，降回觀察"
 
-    # 重新產生 TOP1~TOP5：改用真正的攻擊結構分數，而不是只看流動性/穩定。
+        # TEST 基本門檻：沒有真正攻擊意圖不得留在 TEST
+        downgrade_test = action.eq("TEST") & (
+            hard_reject |
+            (d["attack_score_v3072"] < 58) |
+            ((~near_breakout) & (vol_ratio < 1.45))
+        )
+
+        # BUY 若出現硬拒絕，至少降為 TEST/WATCH，避免垃圾進買進
+        downgrade_buy = action.eq("BUY") & (
+            hard_reject |
+            (d["attack_score_v3072"] < 66)
+        )
+
+        d.loc[downgrade_test, "action"] = "WATCH"
+        d.loc[downgrade_test, "action_label"] = "觀察"
+        d.loc[downgrade_test, "action_sub"] = "攻擊結構不足，降回觀察"
+
+        d.loc[downgrade_buy, "action"] = "TEST"
+        d.loc[downgrade_buy, "action_label"] = "試單"
+        d.loc[downgrade_buy, "action_sub"] = "買進條件不足，降為試單"
+
+    # 重建 TOP：TOP 只能從攻擊結構合格池產生
     for c in ["top_opportunity", "section_top_opportunity", "opportunity_rank", "top_reason"]:
         if c not in d.columns:
             d[c] = ""
@@ -810,29 +877,44 @@ def apply_final_attack_sort_v3072(d, mode="CORE"):
     d["is_top_v3066"] = 0
 
     action = d["action"].astype(str).str.upper() if "action" in d.columns else pd.Series("", index=d.index)
+
+    top_qualified_base = (
+        (d["attack_score_v3072"] >= 68) &
+        (~hard_reject) &
+        (~finance_like) &
+        (near_breakout | vol_attack | (mom10 > 0.035))
+    )
+
     for label, mask in [
         ("TEST", action.isin(["BUY", "TEST"])),
         ("WATCH", action.eq("WATCH")),
     ]:
-        qualified = mask & (d["attack_score_v3072"] >= 42) & ~finance_like
+        qualified = mask & top_qualified_base
+
+        # WATCH 可以稍微寬一點，但仍不得是硬拒絕
+        if label == "WATCH":
+            qualified = mask & (d["attack_score_v3072"] >= 58) & (~hard_reject) & (~finance_like)
+
         idx = (
             d.loc[qualified]
             .sort_values(
-                ["attack_score_v3072", "final_sort_score_v3072", "entry_score", "mom20", "stock_id"],
+                ["attack_score_v3072", "final_sort_score_v3072", "mom20", "mom10", "stock_id"],
                 ascending=[False, False, False, False, True]
             )
             .head(5)
             .index
         )
+
         if len(idx):
             d.loc[idx, "top_opportunity"] = [f"🔥TOP{i}" for i in range(1, len(idx) + 1)]
             d.loc[idx, "section_top_opportunity"] = [f"TOP{i}_{label}" for i in range(1, len(idx) + 1)]
             d.loc[idx, "opportunity_rank"] = [str(i) for i in range(1, len(idx) + 1)]
             d.loc[idx, "top_rank_v3066"] = [i for i in range(1, len(idx) + 1)]
             d.loc[idx, "is_top_v3066"] = 1
-            d.loc[idx, "top_reason"] = "攻擊結構優先｜量價同步｜均線轉強｜排除橫盤牛皮"
+            d.loc[idx, "top_reason"] = "v308攻擊排序｜突破意圖｜量價同步｜排除橫盤牛皮/轉弱"
 
     return d
+
 
 
 # ===== v306.6 TOP5 HARD ORDER / TOP5 硬排序 =====
@@ -1033,6 +1115,9 @@ def alpha_engine(x):
 
     set_action(d, buy, test, watch, "高流動性強勢買進", "強勢試單", "高流動性觀察")
 
+    # v308：ALPHA 也必須套用攻擊排序，避免高流動性橫盤股被推上 TOP
+    d = apply_final_attack_sort_v3072(d, mode="ALPHA")
+
     d["note"] = (
         "ALPHA高流動性強勢延續｜成交量/成交金額優先｜突破/趨勢確認｜"
         + d["liquidity_tag"].astype(str)
@@ -1106,7 +1191,7 @@ def build_trade_plan(core, alpha, regime, signal_date):
         px = float(r["close"]) * 1.001
         action = r["action"]
         st = r["strategy_type"]
-        score = float(r["entry_score"])
+        score = float(r.get("final_sort_score_v308", r.get("final_sort_score_v3072", r.get("entry_score", 0))))
         liq = str(r.get("liquidity_level", ""))
 
         # 資金配置：ALPHA 可承載資金，CORE 控小倉。
@@ -1164,6 +1249,14 @@ def build_trade_plan(core, alpha, regime, signal_date):
             "top_reason": r.get("top_reason", ""),
             "top_rank_v3066": r.get("top_rank_v3066", ""),
             "is_top_v3066": r.get("is_top_v3066", ""),
+            "attack_score_v308": r.get("attack_score_v308", r.get("attack_score_v3072", "")),
+            "final_attack_score_v308": r.get("final_attack_score_v308", ""),
+            "final_sort_score_v308": r.get("final_sort_score_v308", r.get("final_sort_score_v3072", "")),
+            "hard_reject_v308": r.get("hard_reject_v308", ""),
+            "short_turn_weak_v308": r.get("short_turn_weak_v308", ""),
+            "ma_sticky_no_attack_v308": r.get("ma_sticky_no_attack_v308", ""),
+            "box_middle_v308": r.get("box_middle_v308", ""),
+            "liquidity_only_v308": r.get("liquidity_only_v308", ""),
             "main_force_gate_v300": r.get("main_force_gate_v300", ""),
             "main_force_score_v300": r.get("main_force_score_v300", ""),
             "chip_buy_v300": r.get("chip_buy_v300", ""),
@@ -1221,7 +1314,7 @@ def main():
 
     meta = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "source": "v266_9_strategy_engine_stable_v26669_ignition_filter",
+        "source": "v308_attack_first_strategy_engine",
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
         "data_state": "fresh",
