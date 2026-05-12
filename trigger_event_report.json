@@ -4,36 +4,36 @@
   "changed_strategy_logic": false,
   "changed_action": false,
   "changed_position": false,
-  "updated_at": "2026-05-12 18:10:21",
+  "updated_at": "2026-05-12 19:24:07",
   "files": {
     "timing_candidates.csv": {
       "timing_candidates.csv": {
         "status": "updated",
-        "rows": 507
+        "rows": 510
       },
       "mobile_dashboard_v1/data/timing_candidates.csv": {
         "status": "updated",
-        "rows": 507
+        "rows": 510
       }
     },
     "trade_plan.csv": {
       "trade_plan.csv": {
         "status": "updated",
-        "rows": 7
+        "rows": 10
       },
       "mobile_dashboard_v1/data/trade_plan.csv": {
         "status": "updated",
-        "rows": 7
+        "rows": 10
       }
     },
     "final_action_plan.csv": {
       "final_action_plan.csv": {
         "status": "updated",
-        "rows": 517
+        "rows": 516
       },
       "mobile_dashboard_v1/data/final_action_plan.csv": {
         "status": "updated",
-        "rows": 517
+        "rows": 516
       }
     },
     "candidates.csv": {
@@ -90,7 +90,7 @@
   "trigger_labels": {
     "無事件": 240,
     "強點火事件": 195,
-    "準點火事件": 50,
+    "準點火事件": 49,
     "早期轉強事件": 32
   }
 }
