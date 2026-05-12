@@ -34,86 +34,10 @@ ROOT = Path(".")
 DATA_DIR = ROOT / "mobile_dashboard_v1" / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-
-# ===== v306.9 IGNITION RELAX PATCH =====
-# 只放寬 ignition / evolution 前夕條件：
-# - 放寬均線收斂
-# - 放寬波動壓縮
-# - 放寬第一次放量
-# - 放寬 mom20 區間
-# 不重寫策略，不動 TOP5，不動 app.js，不動排序。
-
 INITIAL_CAPITAL = 1_000_000
 
-# ===== v306.2 Finance Exclude + Industry Tag Safe Patch =====
-# 只做兩件事：
-# 1. 從候選池源頭排除金融股 28xx / 58xx，避免金融股進 TEST TOP。
-# 2. 輸出 industry / industry_tag 欄位供 app.js 顯示。
-FINANCE_PREFIXES_V306 = ("28", "58")
-
-INDUSTRY_EXACT_V306 = {
-    "2330": "半導體", "2303": "半導體", "2344": "半導體",
-    "3034": "IC", "3443": "IC", "2379": "IC",
-    "2317": "AI", "2382": "AI", "3231": "AI", "6669": "AI",
-    "2603": "航運", "2609": "航運", "2615": "航運", "2636": "航運", "2610": "航空",
-    "6179": "通訊", "6189": "零組件",
-    "5876": "金融", "2820": "金融", "2852": "金融",
-    "2890": "金融", "2891": "金融",
-    "2880": "金融", "2881": "金融", "2882": "金融", "2883": "金融",
-    "2884": "金融", "2885": "金融", "2886": "金融", "2887": "金融",
-    "2888": "金融", "2889": "金融",
-    "6585": "重電", "1513": "重電", "1514": "重電", "1605": "電纜",
-    "2368": "PCB", "2367": "PCB", "3037": "PCB", "8046": "PCB",
-    "2498": "電子", "2753": "觀光",
-}
-
-def is_finance_stock_v306(stock_id):
-    sid = str(stock_id).strip()[:4]
-    return sid.startswith(FINANCE_PREFIXES_V306)
-
-def industry_tag_v306(stock_id):
-    sid = str(stock_id).strip()[:4]
-    if sid in INDUSTRY_EXACT_V306:
-        return INDUSTRY_EXACT_V306[sid]
-    if sid.startswith(("28", "58")):
-        return "金融"
-    if sid.startswith("26"):
-        return "航運"
-    if sid.startswith(("15", "16")):
-        return "機電"
-    if sid.startswith(("23", "24", "30", "34", "61", "62", "65")):
-        return "電子"
-    if sid.startswith("27"):
-        return "觀光"
-    return "其他"
-
-def apply_industry_tag_v306(df):
-    try:
-        if df is None or df.empty or "stock_id" not in df.columns:
-            return df
-        df = df.copy()
-        df["industry"] = df["stock_id"].astype(str).map(industry_tag_v306)
-        df["industry_tag"] = df["industry"]
-        return df
-    except Exception:
-        return df
-
-def exclude_finance_candidates_v306(df):
-    try:
-        if df is None or df.empty or "stock_id" not in df.columns:
-            return df
-        df = df.copy()
-        return df[~df["stock_id"].astype(str).str.slice(0, 4).apply(is_finance_stock_v306)].copy()
-    except Exception:
-        return df
-
-
-# ===== v305 金融股排除 / 避免低波金融股污染 TEST / TOP =====
-FINANCE_PREFIXES_V305 = ("28", "58")
-
-def is_finance_stock_v305(stock_id):
-    sid = str(stock_id).strip()
-    return sid.startswith(FINANCE_PREFIXES_V305)
+def taipei_now_str():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def price_tier(p):
@@ -141,8 +65,6 @@ def next_trade_date(signal_date):
 
 
 def write_both(df, name):
-    df = exclude_finance_candidates_v306(df)
-    df = apply_industry_tag_v306(df)
     df.to_csv(ROOT / name, index=False, encoding="utf-8-sig")
     df.to_csv(DATA_DIR / name, index=False, encoding="utf-8-sig")
 
@@ -191,10 +113,6 @@ def latest_valid(df):
     x = x.dropna(subset=["close", "volume", "mom20", "ma20", "ma60"])
     x = x[(x["close"] > 0) & (x["volume"] > 0)].copy()
 
-    # v305：金融股排除，只在策略候選池源頭排除 28xx / 58xx。
-    # 目的：避免低波金融股靠高流動性擠進 TEST / TOP，不動後面 pipeline / UI。
-    x = x[~x["stock_id"].astype(str).apply(is_finance_stock_v305)].copy()
-
     return latest_date, add_liquidity_fields(x)
 
 
@@ -221,165 +139,6 @@ def add_liquidity_fields(d):
 
     return d
 
-
-
-# ===== v266.69 主力發動前夕濾網 / Final Ignition Filter =====
-def _clip_series(s, lower=None, upper=None):
-    s = pd.to_numeric(s, errors="coerce").fillna(0)
-    if lower is not None:
-        s = s.clip(lower=lower)
-    if upper is not None:
-        s = s.clip(upper=upper)
-    return s
-
-
-def apply_final_ignition_filter_v26669(d):
-    """
-    只補「主力發動前夕」辨識，不覆蓋原策略。
-
-    目的：
-    - 加分：收斂、低檔量縮後第一次放量、突破前籌碼/OBV轉強、第一根轉強K。
-    - 扣分：爆量追高、離MA20過遠、已經漲太多、長上影假突破。
-
-    產出欄位：
-    - compression_score_v26669
-    - first_volume_trigger_v26669
-    - accumulation_score_v26669
-    - first_power_k_v26669
-    - fake_breakout_risk_v26669
-    - ignition_bonus_v26669
-    - ignition_state_v26669
-    - ignition_note_v26669
-    """
-    d = d.copy()
-
-    close = _clip_series(d.get("close", 0))
-    open_ = _clip_series(d.get("open", close))
-    high = _clip_series(d.get("high", close))
-    low = _clip_series(d.get("low", close))
-    ma5 = _clip_series(d.get("ma5", 0))
-    ma10 = _clip_series(d.get("ma10", 0))
-    ma20 = _clip_series(d.get("ma20", 0))
-    ma60 = _clip_series(d.get("ma60", 0))
-    vol_ratio = _clip_series(d.get("volume_ratio", 1))
-    vol_dry = _clip_series(d.get("vol_dry_ratio", 1))
-    ma_conv = _clip_series(d.get("ma_converge_pct", 1))
-    range20 = _clip_series(d.get("range_20", 1))
-    low_hold = _clip_series(d.get("low_non_down_count_5", 0))
-    obv_mom5 = _clip_series(d.get("obv_mom5", 0))
-    obv_up5 = _clip_series(d.get("obv_up_count_5", 0))
-    mom5 = _clip_series(d.get("mom5", 0))
-    mom10 = _clip_series(d.get("mom10", 0))
-    mom20 = _clip_series(d.get("mom20", 0))
-    high20 = _clip_series(d.get("high_20", close))
-    high60 = _clip_series(d.get("high_60", close))
-
-    # 1) 波動率壓縮 / 平台收斂
-    compression = pd.Series(0.0, index=d.index)
-    compression += (ma_conv <= 0.12).astype(int) * 16
-    compression += ((ma_conv > 0.12) & (ma_conv <= 0.18)).astype(int) * 8
-    compression += (range20 <= 0.24).astype(int) * 12
-    compression += ((range20 > 0.24) & (range20 <= 0.32)).astype(int) * 6
-    compression += (low_hold >= 3).astype(int) * 10
-    compression += ((ma20 > 0) & close.between(ma20 * 0.97, ma20 * 1.06)).astype(int) * 12
-    compression += ((vol_ratio >= 0.65) & (vol_ratio <= 1.25)).astype(int) * 6
-
-    # 2) 低檔量縮後第一次溫和放量
-    first_volume = pd.Series(0.0, index=d.index)
-    first_volume += vol_ratio.between(1.05, 2.10).astype(int) * 22
-    first_volume += vol_ratio.between(2.11, 3.00).astype(int) * 10
-    first_volume += ((vol_dry <= 0.95) & vol_ratio.between(1.15, 2.30)).astype(int) * 8
-    first_volume -= (vol_ratio > 2.80).astype(int) * 10
-    first_volume -= (vol_ratio > 4.00).astype(int) * 20
-
-    # 3) 主力/籌碼潛伏替代指標：OBV、低點不破、均線收斂
-    accumulation = pd.Series(0.0, index=d.index)
-    accumulation += (obv_mom5 > 0).astype(int) * 10
-    accumulation += (obv_up5 >= 3).astype(int) * 8
-    accumulation += (low_hold >= 3).astype(int) * 8
-    accumulation += ((ma5 >= ma20 * 0.995) & (ma20 > 0)).astype(int) * 8
-    accumulation += ((ma20 >= ma60 * 0.98) & (ma60 > 0)).astype(int) * 6
-    accumulation += ((mom20 >= -0.08) & (mom20 <= 0.45)).astype(int) * 8
-
-    # 若後續資料已有真正籌碼欄位，直接吃進來；沒有也不會炸。
-    chip_candidates = [
-        "chip_score", "chip_concentration_score", "chip_concentration",
-        "chip_score_v26658", "chip_adjusted_score_v26658"
-    ]
-    chip = pd.Series(0.0, index=d.index)
-    for c in chip_candidates:
-        if c in d.columns:
-            chip = _clip_series(d.get(c, 0))
-            break
-    accumulation += chip.between(20, 45).astype(int) * 14
-    accumulation += chip.between(46, 60).astype(int) * 8
-    accumulation -= (chip > 75).astype(int) * 12
-
-    # 4) 第一根轉強K：剛站回、還沒離均線太遠、量溫和
-    first_power = (
-        (close > ma5)
-        & (ma5 >= ma10 * 0.995)
-        & (ma10 >= ma20 * 0.985)
-        & (close <= ma20 * 1.12)
-        & vol_ratio.between(1.00, 3.20)
-        & (mom5 > 0)
-        & (mom20 <= 0.45)
-    )
-
-    # 5) 假突破 / 追高風險
-    body = (close - open_).abs().replace(0, np.nan)
-    upper_shadow_ratio = ((high - np.maximum(close, open_)) / body).replace([np.inf, -np.inf], 0).fillna(0)
-    fake_risk = pd.Series(0.0, index=d.index)
-    fake_risk += (upper_shadow_ratio >= 1.6).astype(int) * 18
-    fake_risk += ((ma20 > 0) & (close > ma20 * 1.12)).astype(int) * 18
-    fake_risk += ((ma20 > 0) & (close > ma20 * 1.18)).astype(int) * 28
-    fake_risk += (vol_ratio > 3.5).astype(int) * 14
-    fake_risk += (vol_ratio > 5.0).astype(int) * 24
-    fake_risk += (mom20 > 0.35).astype(int) * 14
-    fake_risk += ((high60 > 0) & (close >= high60 * 0.995) & (mom20 > 0.25)).astype(int) * 10
-    fake_risk += ((high20 > 0) & (close >= high20 * 0.995) & (vol_ratio > 2.8)).astype(int) * 8
-
-    # 綜合 bonus：最大目標不是拉高所有強勢股，而是把「前夜」排出來。
-    raw_bonus = (
-        compression * 0.25
-        + first_volume * 0.28
-        + accumulation * 0.22
-        + first_power.astype(int) * 16
-        - fake_risk * 0.55
-    )
-    ignition_bonus = raw_bonus.clip(lower=-22, upper=24).round(2)
-
-    d["compression_score_v26669"] = compression.round(2)
-    d["first_volume_trigger_v26669"] = first_volume.round(2)
-    d["accumulation_score_v26669"] = accumulation.round(2)
-    d["first_power_k_v26669"] = first_power.astype(int)
-    d["fake_breakout_risk_v26669"] = fake_risk.round(2)
-    d["ignition_bonus_v26669"] = ignition_bonus
-
-    # 僅調整 entry_score，不改原欄位邏輯與輸出結構。
-    d["entry_score"] = (pd.to_numeric(d["entry_score"], errors="coerce").fillna(0) + ignition_bonus).round(2)
-
-    cond_ready = (ignition_bonus >= 16) & (fake_risk <= 18)
-    cond_turning = (ignition_bonus >= 8) & (fake_risk <= 25)
-    cond_risk = fake_risk >= 32
-
-    d["ignition_state_v26669"] = np.select(
-        [cond_ready, cond_turning, cond_risk],
-        ["主力剛準備發動", "主力轉強中", "假突破風險"],
-        default="一般"
-    )
-
-    d["ignition_note_v26669"] = np.select(
-        [cond_ready, cond_turning, cond_risk],
-        [
-            "主力收斂完成｜低檔量縮後轉強｜可優先觀察第一根K",
-            "收斂轉強中｜等待放量確認｜不可追高",
-            "爆量/乖離/上影風險｜避免追價"
-        ],
-        default="條件未到臨界點｜維持原策略判斷"
-    )
-
-    return d
 
 def detect_regime(x):
     pct_ma20 = float((x["close"] >= x["ma20"]).mean())
@@ -433,233 +192,11 @@ def set_action(df, buy, test, watch, buy_sub, test_sub, watch_sub):
 
 
 
-# ===== v300 MAIN-FORCE GATE + CHIP CONFIRM PATCH =====
-# 使用早期乾淨版為基底，只補主力入口，不重寫原策略。
-# 核心：流動性合格 → 籌碼/OBV開始集中 → 剛轉強 → 量能啟動 → 未過熱。
-# 目的：阻擋防禦股、牛皮股、低攻擊性高流動股污染 TEST / WATCH。
 
-def _v300_num(d, col, default=0.0):
-    if col in d.columns:
-        return pd.to_numeric(d[col], errors="coerce").fillna(default)
-    return pd.Series(default, index=d.index, dtype="float64")
-
-
-def _v300_band(x, low, sweet_low, sweet_high, high):
-    x = pd.to_numeric(x, errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0)
-    left = ((x - low) / max(sweet_low - low, 1e-9)).clip(0, 1)
-    right = ((high - x) / max(high - sweet_high, 1e-9)).clip(0, 1)
-    return np.minimum(left, right)
-
-
-def merge_chip_source_v300(d):
-    d = d.copy()
-    if "stock_id" not in d.columns:
-        return d
-
-    chip_paths = [
-        Path("chip_source_twse.csv"),
-        Path("mobile_dashboard_v1/data/chip_source_twse.csv"),
-    ]
-
-    chip = None
-    for p in chip_paths:
-        if p.exists():
-            try:
-                chip = pd.read_csv(p, encoding="utf-8-sig")
-                if not chip.empty:
-                    break
-            except Exception:
-                try:
-                    chip = pd.read_csv(p)
-                    if not chip.empty:
-                        break
-                except Exception:
-                    chip = None
-
-    if chip is None or chip.empty:
-        for c in [
-            "foreign_net_buy", "trust_net_buy", "dealer_net_buy", "inst_net_buy",
-            "inst_buy_days", "inst_valid", "margin_balance_change", "short_balance_change"
-        ]:
-            if c not in d.columns:
-                d[c] = 0
-        d["chip_source_valid_v300"] = 0
-        return d
-
-    chip["stock_id"] = chip["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False)
-    keep = [
-        "stock_id", "foreign_net_buy", "trust_net_buy", "dealer_net_buy", "inst_net_buy",
-        "inst_buy_days", "inst_valid", "margin_balance_change", "short_balance_change"
-    ]
-    keep = [c for c in keep if c in chip.columns]
-    chip = chip[keep].drop_duplicates("stock_id", keep="last")
-
-    d["stock_id"] = d["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False)
-    d = d.merge(chip, on="stock_id", how="left", suffixes=("", "_chip"))
-
-    for c in [
-        "foreign_net_buy", "trust_net_buy", "dealer_net_buy", "inst_net_buy",
-        "inst_buy_days", "inst_valid", "margin_balance_change", "short_balance_change"
-    ]:
-        if c not in d.columns:
-            d[c] = 0
-        d[c] = pd.to_numeric(d[c], errors="coerce").fillna(0)
-
-    d["chip_source_valid_v300"] = (pd.to_numeric(d.get("inst_valid", 0), errors="coerce").fillna(0) >= 1).astype(int)
-    return d
-
-
-def apply_main_force_gate_v300(d, mode="ALPHA"):
-    d = merge_chip_source_v300(d)
-    mode = str(mode or "ALPHA").upper()
-
-    close = _v300_num(d, "close", 0)
-    high = _v300_num(d, "high", close)
-    open_ = _v300_num(d, "open", close)
-    volume = _v300_num(d, "volume", 0)
-    turnover = _v300_num(d, "turnover", close * volume * 1000)
-    volume_ratio = _v300_num(d, "volume_ratio", 1)
-
-    mom5 = _v300_num(d, "mom5", 0)
-    mom10 = _v300_num(d, "mom10", 0)
-    mom20 = _v300_num(d, "mom20", 0)
-
-    ma5 = _v300_num(d, "ma5", close)
-    ma10 = _v300_num(d, "ma10", close)
-    ma20 = _v300_num(d, "ma20", close)
-    ma60 = _v300_num(d, "ma60", close)
-
-    high20 = _v300_num(d, "high_20", close)
-    high60 = _v300_num(d, "high_60", close)
-
-    obv_mom5 = _v300_num(d, "obv_mom5", 0)
-    obv_up5 = _v300_num(d, "obv_up_count_5", 0)
-    low_hold = _v300_num(d, "low_non_down_count_5", 0)
-
-    foreign = _v300_num(d, "foreign_net_buy", 0)
-    trust = _v300_num(d, "trust_net_buy", 0)
-    dealer = _v300_num(d, "dealer_net_buy", 0)
-    inst = _v300_num(d, "inst_net_buy", 0)
-    inst_valid = _v300_num(d, "inst_valid", 0)
-
-    liq_level = d["liquidity_level"].astype(str).str.upper() if "liquidity_level" in d.columns else pd.Series("", index=d.index)
-
-    ma20_gap = ((close / ma20) - 1).replace([np.inf, -np.inf], 0).fillna(0)
-    upper_shadow = ((high - close) / high).replace([np.inf, -np.inf], 0).fillna(0)
-    intraday = ((close - open_) / open_).replace([np.inf, -np.inf], 0).fillna(0)
-
-    # 流動性門票：不要 500 張內，不要成交金額過小。
-    if mode == "ALPHA":
-        liquidity_gate = (volume >= 2000) | (turnover >= 60_000_000) | liq_level.eq("HIGH")
-    else:
-        liquidity_gate = (volume >= 1000) | (turnover >= 30_000_000) | liq_level.isin(["MEDIUM", "HIGH"])
-
-    # 籌碼/主力痕跡：每日法人資料優先；若當天資料缺，才用 OBV/低點墊高做代理。
-    chip_buy = (
-        (inst_valid >= 1) &
-        ((inst > 0) | (foreign > 0) | (trust > 0))
-    )
-
-    obv_accum = (
-        (obv_mom5 > 0) &
-        (obv_up5 >= 2) &
-        (low_hold >= 3)
-    )
-
-    main_force_trace = chip_buy | obv_accum
-
-    # 攻擊結構：防禦股/牛皮股會被擋掉。
-    attack_structure = (
-        (close >= 15) &
-        (close > ma20 * 0.985) &
-        (ma5 >= ma10 * 0.985) &
-        (ma10 >= ma20 * 0.965) &
-        (ma20 >= ma60 * 0.94) &
-        (mom10 > 0) &
-        (mom20 > 0.025) &
-        (close >= high60 * 0.86)
-    )
-
-    # 量能啟動：不追爆量末端。
-    volume_start = volume_ratio.between(1.05, 4.2)
-
-    # 未過熱 / 非出貨。
-    not_overheat = (
-        (mom20 <= 0.42) &
-        (ma20_gap <= 0.24) &
-        (volume_ratio <= 5.2) &
-        ~((upper_shadow > 0.06) & (volume_ratio > 1.6)) &
-        ~((intraday < -0.03) & (volume_ratio > 1.8))
-    )
-
-    main_force_gate = liquidity_gate & main_force_trace & attack_structure & volume_start & not_overheat
-
-    # TOP 分數只用來標示與排序，不覆蓋原 entry_score。
-    chip_score = (
-        chip_buy.astype(int) * 35 +
-        obv_accum.astype(int) * 25 +
-        (trust > 0).astype(int) * 15 +
-        (foreign > 0).astype(int) * 10 +
-        _v300_band(volume_ratio, 1.0, 1.15, 2.8, 4.5) * 15 +
-        _v300_band(mom20, 0.02, 0.05, 0.24, 0.42) * 12
-    )
-
-    d["main_force_gate_v300"] = main_force_gate.astype(int)
-    d["main_force_score_v300"] = pd.Series(chip_score, index=d.index).round(1)
-    d["chip_buy_v300"] = chip_buy.astype(int)
-    d["obv_accum_v300"] = obv_accum.astype(int)
-    d["attack_structure_v300"] = attack_structure.astype(int)
-    d["volume_start_v300"] = volume_start.astype(int)
-    d["not_overheat_v300"] = not_overheat.astype(int)
-
-    d["top_opportunity"] = ""
-    d["section_top_opportunity"] = ""
-    d["opportunity_rank"] = ""
-    d["top_reason"] = ""
-    d["top_rank_v3066"] = 9999
-    d["is_top_v3066"] = 0
-
-    action = d["action"].astype(str).str.upper() if "action" in d.columns else pd.Series("", index=d.index)
-
-    for label, mask in [
-        ("TOP5_TEST", action.isin(["BUY", "TEST"]) & main_force_gate),
-        ("TOP5_WATCH", action.eq("WATCH") & main_force_gate),
-    ]:
-        idx = (
-            d.loc[mask]
-            .sort_values(["main_force_score_v300", "entry_score", "mom20", "stock_id"], ascending=[False, False, False, True])
-            .head(5)
-            .index
-        )
-        if len(idx):
-            ranks = [str(i) for i in range(1, len(idx) + 1)]
-            d.loc[idx, "top_opportunity"] = [f"🔥TOP{i}" for i in range(1, len(idx) + 1)]
-            d.loc[idx, "section_top_opportunity"] = [f"TOP{i}_" + label.split("_", 1)[-1] for i in range(1, len(idx) + 1)]
-            d.loc[idx, "opportunity_rank"] = ranks
-            d.loc[idx, "top_rank_v3066"] = [i for i in range(1, len(idx) + 1)]
-            d.loc[idx, "is_top_v3066"] = 1
-            d.loc[idx, "top_reason"] = "主力痕跡｜籌碼/OBV開始集中｜剛轉強｜量能啟動｜未過熱"
-
-    return d
-
-
-
-# ===== v307.2 FINAL ATTACK SORT CORE =====
-# 只修策略排序核心：
-# - TEST / WATCH 排名改看「攻擊結構」而不是只看高流動性與穩定
-# - 明顯橫盤牛皮股不再靠高流動性擠到前排
-# - TOP1~TOP5 重新以攻擊結構分數產生
-# - 不動 app.js、不動 UI、不動持倉、不動輸出欄位名稱
-def apply_final_attack_sort_v3072(d, mode="CORE"):
-    """
-    v308 最終攻擊排序核心（保留舊函式名，避免其他流程斷掉）
-
-    目的：
-    1. TOP / TEST 不再選「穩定、貼線、高流動」。
-    2. 改選「突破意圖、量價同步、趨勢加速、剛脫離整理」。
-    3. 短線轉弱、橫盤牛皮、金融、防守型個股，不得進 TEST TOP。
-    4. ALPHA / CORE 都會套用，避免 ALPHA 高流動性把垃圾推上來。
-    """
+# ===== v309 ATTACK-FIRST CORE PATCH / 攻擊優先核心修正 =====
+# 目的：不是 UI 修正；這段只處理策略名單生成與排序。
+# 核心：TEST / BUY / TOP 候選必須先有攻擊結構，避免高流動、均線貼近、金融、箱型牛皮股排前面。
+def apply_attack_first_v309(d, mode="CORE"):
     import numpy as np
     import pandas as pd
 
@@ -674,7 +211,7 @@ def apply_final_attack_sort_v3072(d, mode="CORE"):
             return pd.to_numeric(d[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
         return pd.Series(default, index=d.index, dtype="float64")
 
-    def txt(col, default=""):
+    def s(col, default=""):
         if col in d.columns:
             return d[col].astype(str).fillna(default)
         return pd.Series(default, index=d.index, dtype="object")
@@ -696,27 +233,21 @@ def apply_final_attack_sort_v3072(d, mode="CORE"):
     ma10 = n("ma10", close)
     ma20 = n("ma20", close)
     ma60 = n("ma60", close)
+    ma20_slope = n("ma20_slope")
 
     high20 = n("high_20", high)
     low20 = n("low_20", low)
     high60 = n("high_60", high)
     low60 = n("low_60", low)
 
-    range20 = n("range_20")
-    if float(range20.abs().sum()) == 0:
-        range20 = ((high20 - low20) / low20.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
-
-    ma_conv = n("ma_converge_pct")
-    ma20_slope = n("ma20_slope")
+    ma_conv = n("ma_converge_pct", 999)
     vol_ratio = n("volume_ratio", 1)
-    vol_dry = n("vol_dry_ratio", 1)
+    liq_score = n("liquidity_score")
     obv = n("obv_mom5")
     obv_up5 = n("obv_up_count_5")
     low_hold = n("low_non_down_count_5")
-    liq_score = n("liquidity_score")
-    main_force = n("main_force_score_v300")
 
-    sid = txt("stock_id")
+    sid = s("stock_id")
     finance_like = sid.str.startswith(("28", "58"))
 
     ma5_vs_ma10 = (ma5 / ma10.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
@@ -726,54 +257,39 @@ def apply_final_attack_sort_v3072(d, mode="CORE"):
     close_ma20_gap = (close / ma20.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
     close_to_high20 = (close / high20.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
     close_to_high60 = (close / high60.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
-
+    range20 = ((high20 - low20) / low20.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
     candle_power = ((close - open_) / open_.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
     upper_shadow = ((high - close) / high.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
-    intraday_range = ((high - low) / low.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
 
-    attack_score = pd.Series(0.0, index=d.index)
-
-    # A. 真正攻擊動能：短中期必須有加速，不是只貼均線
-    attack_score += (mom3 > 0.003).astype(int) * 6
-    attack_score += (mom5 > 0.012).astype(int) * 12
-    attack_score += (mom10 > 0.025).astype(int) * 16
-    attack_score += ((mom20 > 0.045) & (mom20 <= 0.35)).astype(int) * 18
-
-    # B. 均線不是「貼近」就加分；要開始轉強 / 斜率改善
-    attack_score += (ma5_vs_ma10 > 0.002).astype(int) * 12
-    attack_score += (ma10_vs_ma20 > 0.000).astype(int) * 12
-    attack_score += (ma20_slope > 0).astype(int) * 8
-    attack_score += (ma20_vs_ma60 > -0.020).astype(int) * 6
-
-    # C. 位置：要靠近突破區或剛突破，不是在箱子中間躺平
     near_breakout = (close_to_high20 >= 0.965) | (close_to_high60 >= 0.915)
-    attack_score += near_breakout.astype(int) * 18
-    attack_score += (close_to_high20 >= 0.985).astype(int) * 12
-    attack_score += (close_ma20_gap.between(0.000, 0.18)).astype(int) * 10
-
-    # D. 量價同步：不是本來成交量大，而是有啟動量
     vol_attack = vol_ratio.between(1.25, 4.20)
-    attack_score += vol_attack.astype(int) * 22
-    attack_score += ((vol_ratio >= 1.45) & (mom5 > 0.006)).astype(int) * 14
-    attack_score += ((volume >= 1000) | (turnover >= 30_000_000)).astype(int) * 5
 
-    # E. 撐盤 / 吸籌：跌不下去才有發動前味道
-    attack_score += (low_hold >= 3).astype(int) * 8
-    attack_score += (obv > 0).astype(int) * 8
-    attack_score += (obv_up5 >= 2).astype(int) * 5
-    attack_score += (candle_power > 0.003).astype(int) * 6
-    attack_score += (main_force >= 55).astype(int) * 8
+    attack = pd.Series(0.0, index=d.index)
+    attack += (mom3 > 0.003).astype(int) * 6
+    attack += (mom5 > 0.012).astype(int) * 12
+    attack += (mom10 > 0.025).astype(int) * 16
+    attack += ((mom20 > 0.045) & (mom20 <= 0.35)).astype(int) * 18
+    attack += (ma5_vs_ma10 > 0.002).astype(int) * 12
+    attack += (ma10_vs_ma20 > 0.000).astype(int) * 12
+    attack += (ma20_slope > 0).astype(int) * 8
+    attack += (ma20_vs_ma60 > -0.020).astype(int) * 6
+    attack += near_breakout.astype(int) * 18
+    attack += (close_to_high20 >= 0.985).astype(int) * 12
+    attack += (close_ma20_gap.between(0.000, 0.18)).astype(int) * 10
+    attack += vol_attack.astype(int) * 22
+    attack += ((vol_ratio >= 1.45) & (mom5 > 0.006)).astype(int) * 14
+    attack += ((volume >= 1000) | (turnover >= 30_000_000)).astype(int) * 5
+    attack += (low_hold >= 3).astype(int) * 8
+    attack += (obv > 0).astype(int) * 8
+    attack += (obv_up5 >= 2).astype(int) * 5
+    attack += (candle_power > 0.003).astype(int) * 6
 
-    # === 硬排除 / 強懲罰 ===
-    # 1) 短線轉弱：這種不得 TOP，即使均線貼近也不行
     short_turn_weak = (
         (close < ma5) &
         (mom3 <= 0) &
         (mom5 <= 0.006) &
         (candle_power <= 0)
     )
-
-    # 2) 均線貼合但沒攻擊：你目前看到的八方/國統/鋼聯類型
     ma_sticky_no_attack = (
         (ma_conv <= 0.13) &
         (range20 < 0.115) &
@@ -782,187 +298,60 @@ def apply_final_attack_sort_v3072(d, mode="CORE"):
         (vol_ratio < 1.55) &
         (~near_breakout)
     )
-
-    # 3) 箱型中段：還沒脫離整理，不該當最大機會
     box_middle = (
         (close_to_high20 < 0.955) &
         (close_ma20_gap.between(-0.025, 0.065)) &
         (mom10 < 0.025) &
         (vol_ratio < 1.60)
     )
-
-    # 4) 高流動但無攻擊：大型牛皮股主要來源
     liquidity_only = (
         (liq_score >= 55) &
         (mom5 <= 0.010) &
         (mom10 <= 0.020) &
-        (vol_ratio < 1.35) &
-        (main_force < 55)
+        (vol_ratio < 1.35)
     )
-
-    # 5) 誘多 / 長上影 / 過熱
     fake_breakout = (
         ((upper_shadow > 0.055) & (vol_ratio > 1.35)) |
         (mom20 > 0.45) |
         (close_ma20_gap > 0.26)
     )
 
-    # 6) 低信心：籌碼或流動性分數太差時，不准 TOP，除非攻擊分非常高
-    low_quality_liq = (liq_score < 45) & (main_force < 65)
-
     hard_reject = finance_like | short_turn_weak | ma_sticky_no_attack | box_middle | liquidity_only | fake_breakout
 
-    attack_score -= finance_like.astype(int) * 90
-    attack_score -= short_turn_weak.astype(int) * 55
-    attack_score -= ma_sticky_no_attack.astype(int) * 50
-    attack_score -= box_middle.astype(int) * 42
-    attack_score -= liquidity_only.astype(int) * 35
-    attack_score -= fake_breakout.astype(int) * 32
-    attack_score -= low_quality_liq.astype(int) * 18
+    attack -= finance_like.astype(int) * 90
+    attack -= short_turn_weak.astype(int) * 55
+    attack -= ma_sticky_no_attack.astype(int) * 50
+    attack -= box_middle.astype(int) * 42
+    attack -= liquidity_only.astype(int) * 35
+    attack -= fake_breakout.astype(int) * 32
+    attack += (liq_score >= 75).astype(int) * 3
 
-    # 流動性只輔助，最多小加分
-    attack_score += (liq_score >= 75).astype(int) * 3
-
-    d["attack_score_v3072"] = attack_score.round(2)
-    d["attack_score_v308"] = attack_score.round(2)
-    d["final_attack_score_v308"] = attack_score.round(2)
-    d["short_turn_weak_v308"] = short_turn_weak.astype(int)
-    d["ma_sticky_no_attack_v308"] = ma_sticky_no_attack.astype(int)
-    d["box_middle_v308"] = box_middle.astype(int)
-    d["liquidity_only_v308"] = liquidity_only.astype(int)
-    d["hard_reject_v308"] = hard_reject.astype(int)
+    d["attack_score_v309"] = attack.round(2)
+    d["final_attack_score_v309"] = d["attack_score_v309"]
+    d["hard_reject_v309"] = hard_reject.astype(int)
+    d["short_turn_weak_v309"] = short_turn_weak.astype(int)
+    d["ma_sticky_no_attack_v309"] = ma_sticky_no_attack.astype(int)
+    d["box_middle_v309"] = box_middle.astype(int)
+    d["liquidity_only_v309"] = liquidity_only.astype(int)
 
     if "entry_score" not in d.columns:
         d["entry_score"] = 0
     d["entry_score"] = pd.to_numeric(d["entry_score"], errors="coerce").fillna(0)
+    d["final_sort_score_v309"] = (d["entry_score"] * 0.25 + d["attack_score_v309"] * 0.75).round(2)
 
-    # 舊 entry_score 只能當輔助，最終以攻擊分為主
-    d["final_sort_score_v3072"] = (d["entry_score"] * 0.25 + d["attack_score_v3072"] * 0.75).round(2)
-    d["final_sort_score_v308"] = d["final_sort_score_v3072"]
-
-    # TEST 必須有攻擊結構；否則降回 WATCH
     if "action" in d.columns:
         action = d["action"].astype(str).str.upper()
+        bad_test = action.eq("TEST") & (hard_reject | (d["attack_score_v309"] < 58) | ((~near_breakout) & (vol_ratio < 1.45)))
+        bad_buy = action.eq("BUY") & (hard_reject | (d["attack_score_v309"] < 66))
 
-        # TEST 基本門檻：沒有真正攻擊意圖不得留在 TEST
-        downgrade_test = action.eq("TEST") & (
-            hard_reject |
-            (d["attack_score_v3072"] < 58) |
-            ((~near_breakout) & (vol_ratio < 1.45))
-        )
+        d.loc[bad_test, "action"] = "WATCH"
+        d.loc[bad_test, "action_label"] = "觀察"
+        d.loc[bad_test, "action_sub"] = "攻擊結構不足，降回觀察"
+        d.loc[bad_buy, "action"] = "TEST"
+        d.loc[bad_buy, "action_label"] = "試單"
+        d.loc[bad_buy, "action_sub"] = "買進條件不足，降為試單"
 
-        # BUY 若出現硬拒絕，至少降為 TEST/WATCH，避免垃圾進買進
-        downgrade_buy = action.eq("BUY") & (
-            hard_reject |
-            (d["attack_score_v3072"] < 66)
-        )
-
-        d.loc[downgrade_test, "action"] = "WATCH"
-        d.loc[downgrade_test, "action_label"] = "觀察"
-        d.loc[downgrade_test, "action_sub"] = "攻擊結構不足，降回觀察"
-
-        d.loc[downgrade_buy, "action"] = "TEST"
-        d.loc[downgrade_buy, "action_label"] = "試單"
-        d.loc[downgrade_buy, "action_sub"] = "買進條件不足，降為試單"
-
-    # 重建 TOP：TOP 只能從攻擊結構合格池產生
-    for c in ["top_opportunity", "section_top_opportunity", "opportunity_rank", "top_reason"]:
-        if c not in d.columns:
-            d[c] = ""
-    d["top_opportunity"] = ""
-    d["section_top_opportunity"] = ""
-    d["opportunity_rank"] = ""
-    d["top_reason"] = ""
-    d["top_rank_v3066"] = 9999
-    d["is_top_v3066"] = 0
-
-    action = d["action"].astype(str).str.upper() if "action" in d.columns else pd.Series("", index=d.index)
-
-    top_qualified_base = (
-        (d["attack_score_v3072"] >= 68) &
-        (~hard_reject) &
-        (~finance_like) &
-        (near_breakout | vol_attack | (mom10 > 0.035))
-    )
-
-    for label, mask in [
-        ("TEST", action.isin(["BUY", "TEST"])),
-        ("WATCH", action.eq("WATCH")),
-    ]:
-        qualified = mask & top_qualified_base
-
-        # WATCH 可以稍微寬一點，但仍不得是硬拒絕
-        if label == "WATCH":
-            qualified = mask & (d["attack_score_v3072"] >= 58) & (~hard_reject) & (~finance_like)
-
-        idx = (
-            d.loc[qualified]
-            .sort_values(
-                ["attack_score_v3072", "final_sort_score_v3072", "mom20", "mom10", "stock_id"],
-                ascending=[False, False, False, False, True]
-            )
-            .head(5)
-            .index
-        )
-
-        if len(idx):
-            d.loc[idx, "top_opportunity"] = [f"🔥TOP{i}" for i in range(1, len(idx) + 1)]
-            d.loc[idx, "section_top_opportunity"] = [f"TOP{i}_{label}" for i in range(1, len(idx) + 1)]
-            d.loc[idx, "opportunity_rank"] = [str(i) for i in range(1, len(idx) + 1)]
-            d.loc[idx, "top_rank_v3066"] = [i for i in range(1, len(idx) + 1)]
-            d.loc[idx, "is_top_v3066"] = 1
-            d.loc[idx, "top_reason"] = "v308攻擊排序｜突破意圖｜量價同步｜排除橫盤牛皮/轉弱"
-
-    return d
-
-
-
-# ===== v306.6 TOP5 HARD ORDER / TOP5 硬排序 =====
-def _top_rank_hard_v3066(row):
-    """TOP1~TOP5 must stay above normal candidates. Lower is better."""
-    try:
-        if isinstance(row, pd.Series):
-            vals = row.to_dict()
-        else:
-            vals = row if isinstance(row, dict) else {}
-        for key in ["opportunity_rank", "section_opportunity_rank", "top_rank", "top_rank_v3066"]:
-            v = vals.get(key, "")
-            s = str(v).strip()
-            if s and s not in ["--", "nan", "NaN", "None"]:
-                m = re.search(r"(\d+)", s)
-                if m:
-                    return int(m.group(1))
-        txt = " ".join(str(vals.get(k, "")) for k in [
-            "section_top_opportunity", "top_opportunity", "execution_flag", "system_note", "note", "reason"
-        ])
-        m = re.search(r"TOP\s*([1-9]\d*)", txt, re.I)
-        if m:
-            return int(m.group(1))
-        if "TOP" in txt.upper():
-            return 99
-    except Exception:
-        pass
-    return 9999
-
-def _top_sort_columns_v3066(d):
-    d = d.copy()
-    d["top_rank_v3066"] = d.apply(_top_rank_hard_v3066, axis=1)
-    d["is_top_v3066"] = (d["top_rank_v3066"] < 9999).astype(int)
-    return d
-
-def sort_candidates_top_first_v3066(d):
-    if d is None or d.empty:
-        return d
-    d = _top_sort_columns_v3066(d)
-    cols = ["is_top_v3066", "top_rank_v3066", "final_sort_score_v3072", "attack_score_v3072", "entry_score", "main_force_score_v300", "mom20", "mom10", "liquidity_score", "stock_id"]
-    cols = [c for c in cols if c in d.columns]
-    asc = []
-    for c in cols:
-        if c == "is_top_v3066": asc.append(False)
-        elif c == "top_rank_v3066": asc.append(True)
-        elif c == "stock_id": asc.append(True)
-        else: asc.append(False)
-    return d.sort_values(cols, ascending=asc)
+    return d.sort_values(["final_sort_score_v309", "attack_score_v309", "entry_score", "stock_id"], ascending=[False, False, False, True])
 
 def core_engine(x):
     """
@@ -1000,14 +389,8 @@ def core_engine(x):
     d["entry_score"] -= (d["mom20"] > 0.40).astype(int) * 10
     d["entry_score"] -= (d["volume_ratio"] > 5.5).astype(int) * 8
 
-    # v266.69：只補主力發動前夕濾網，不動其他策略架構
-    d = apply_final_ignition_filter_v26669(d)
-    # v300：只補主力入口 Gate，不重寫原策略分數。
-    d = apply_main_force_gate_v300(d, mode="CORE")
-
     core_liq_ok = (d["volume"] >= 1000) & d["liquidity_level"].isin(["MEDIUM", "HIGH"])
     low_liq = d["liquidity_level"].eq("LOW")
-    main_force_ok = d["main_force_gate_v300"].eq(1)
 
     buy = (
         (d["entry_score"] >= 58)
@@ -1015,7 +398,6 @@ def core_engine(x):
         & (d["close"] > d["ma20"])
         & (d["close"] >= 20)
         & core_liq_ok
-        & main_force_ok
     )
 
     # 低流動性即使分數夠，也只允許試單，避免你資金被卡住。
@@ -1025,23 +407,19 @@ def core_engine(x):
         & (d["mom10"] > 0.01)
         & (d["close"] > d["ma20"] * 0.97)
         & (d["volume"] >= 1000)
-        & main_force_ok
     )
 
-    watch = (d["entry_score"] >= 34) & ~buy & ~test & main_force_ok
+    watch = (d["entry_score"] >= 34) & ~buy & ~test
 
     set_action(d, buy, test, watch, "早期卡位", "低量試單", "早期觀察")
-
-    # v307.2：最後輸出前，用攻擊結構重排 TEST / WATCH，並降級明顯橫盤牛皮股
-    d = apply_final_attack_sort_v3072(d, mode="CORE")
 
     d["note"] = (
         "CORE早期卡位｜剛轉強｜靠近MA20｜量能回溫｜"
         + d["liquidity_tag"].astype(str)
-        + "｜" + d.get("ignition_note_v26669", "").astype(str)
     )
 
-    return sort_candidates_top_first_v3066(d)
+    d = apply_attack_first_v309(d, mode="CORE")
+    return d.sort_values(["final_sort_score_v309", "attack_score_v309", "entry_score", "mom20", "mom10"], ascending=[False, False, False, False, False])
 
 
 def alpha_engine(x):
@@ -1086,12 +464,6 @@ def alpha_engine(x):
     d["entry_score"] -= (d["volume_ratio"] > 8.0).astype(int) * 10
     d["entry_score"] -= (~mid_or_high).astype(int) * 30
 
-    # v266.69：只補主力發動前夕濾網，不動其他策略架構
-    d = apply_final_ignition_filter_v26669(d)
-    # v300：只補主力入口 Gate，不重寫原策略分數。
-    d = apply_main_force_gate_v300(d, mode="ALPHA")
-    main_force_ok = d["main_force_gate_v300"].eq(1)
-
     buy = (
         (d["entry_score"] >= 70)
         & high_liq
@@ -1099,7 +471,6 @@ def alpha_engine(x):
         & (d["ma20"] > d["ma60"])
         & (d["mom10"] > 0.03)
         & (d["volume_ratio"] >= 1.25)
-        & main_force_ok
     )
 
     test = (
@@ -1108,23 +479,19 @@ def alpha_engine(x):
         & mid_or_high
         & (d["close"] > d["ma20"])
         & (d["mom5"] > 0)
-        & main_force_ok
     )
 
-    watch = (d["entry_score"] >= 46) & ~buy & ~test & main_force_ok
+    watch = (d["entry_score"] >= 46) & ~buy & ~test
 
     set_action(d, buy, test, watch, "高流動性強勢買進", "強勢試單", "高流動性觀察")
-
-    # v308：ALPHA 也必須套用攻擊排序，避免高流動性橫盤股被推上 TOP
-    d = apply_final_attack_sort_v3072(d, mode="ALPHA")
 
     d["note"] = (
         "ALPHA高流動性強勢延續｜成交量/成交金額優先｜突破/趨勢確認｜"
         + d["liquidity_tag"].astype(str)
-        + "｜" + d.get("ignition_note_v26669", "").astype(str)
     )
 
-    return sort_candidates_top_first_v3066(d)
+    d = apply_attack_first_v309(d, mode="ALPHA")
+    return d.sort_values(["final_sort_score_v309", "attack_score_v309", "entry_score", "mom20", "liquidity_score"], ascending=[False, False, False, False, False])
 
 
 def build_trade_plan(core, alpha, regime, signal_date):
@@ -1165,21 +532,13 @@ def build_trade_plan(core, alpha, regime, signal_date):
         s["action_label"] = "觀察"
         s["action_sub"] = "低分觀察，不進場"
 
-    # v306.6：TOP1~TOP5 是硬規則；同 action 內 TOP 永遠排最上面，再比策略/分數/流動性。
-    s = _top_sort_columns_v3066(s)
+    # v309：最終輸出前，用攻擊結構排序；ALPHA/CORE 只作輔助，不再讓高流動牛皮股擠上來。
     s["priority"] = np.where(s["strategy_type"] == "ALPHA", 1, 2)
-    sort_cols = ["action", "is_top_v3066", "top_rank_v3066", "priority", "entry_score", "liquidity_score"]
-    action_order = {"BUY": 1, "TEST": 2, "WATCH": 3, "BLOCK": 4}
-    s["action_order_v3066"] = s["action"].astype(str).str.upper().map(action_order).fillna(9)
-    for c in ["final_sort_score_v3072", "attack_score_v3072"]:
-        if c not in s.columns:
-            s[c] = pd.to_numeric(s.get("entry_score", 0), errors="coerce").fillna(0)
-
+    for _c in ["final_sort_score_v309", "attack_score_v309", "hard_reject_v309"]:
+        if _c not in s.columns:
+            s[_c] = 0
     s = (
-        s.sort_values(
-            ["action_order_v3066", "is_top_v3066", "top_rank_v3066", "priority", "final_sort_score_v3072", "attack_score_v3072", "entry_score", "liquidity_score"],
-            ascending=[True, False, True, True, False, False, False, False]
-        )
+        s.sort_values(["hard_reject_v309", "final_sort_score_v309", "attack_score_v309", "entry_score", "liquidity_score"], ascending=[True, False, False, False, False])
         .drop_duplicates("stock_id")
         .head(36)
     )
@@ -1191,7 +550,7 @@ def build_trade_plan(core, alpha, regime, signal_date):
         px = float(r["close"]) * 1.001
         action = r["action"]
         st = r["strategy_type"]
-        score = float(r.get("final_sort_score_v308", r.get("final_sort_score_v3072", r.get("entry_score", 0))))
+        score = float(r.get("final_sort_score_v309", r.get("entry_score", 0)))
         liq = str(r.get("liquidity_level", ""))
 
         # 資金配置：ALPHA 可承載資金，CORE 控小倉。
@@ -1226,14 +585,6 @@ def build_trade_plan(core, alpha, regime, signal_date):
             "suggested_shares": round(shares, 2),
             "estimated_total_cost": round(shares * px * 1.0015, 2),
             "entry_score": round(score, 2),
-            "compression_score_v26669": round(float(r.get("compression_score_v26669", 0)), 2),
-            "first_volume_trigger_v26669": round(float(r.get("first_volume_trigger_v26669", 0)), 2),
-            "accumulation_score_v26669": round(float(r.get("accumulation_score_v26669", 0)), 2),
-            "first_power_k_v26669": int(float(r.get("first_power_k_v26669", 0))),
-            "fake_breakout_risk_v26669": round(float(r.get("fake_breakout_risk_v26669", 0)), 2),
-            "ignition_bonus_v26669": round(float(r.get("ignition_bonus_v26669", 0)), 2),
-            "ignition_state_v26669": r.get("ignition_state_v26669", ""),
-            "ignition_note_v26669": r.get("ignition_note_v26669", ""),
             "liquidity_level": r.get("liquidity_level", ""),
             "liquidity_tag": r.get("liquidity_tag", ""),
             "liquidity_score": round(float(r.get("liquidity_score", 0)), 2),
@@ -1243,27 +594,6 @@ def build_trade_plan(core, alpha, regime, signal_date):
             "reason": r.get("reason", r["note"]),
             "system_note": r.get("system_note", r["note"]),
             "note": r["note"],
-            "top_opportunity": r.get("top_opportunity", ""),
-            "section_top_opportunity": r.get("section_top_opportunity", ""),
-            "opportunity_rank": r.get("opportunity_rank", ""),
-            "top_reason": r.get("top_reason", ""),
-            "top_rank_v3066": r.get("top_rank_v3066", ""),
-            "is_top_v3066": r.get("is_top_v3066", ""),
-            "attack_score_v308": r.get("attack_score_v308", r.get("attack_score_v3072", "")),
-            "final_attack_score_v308": r.get("final_attack_score_v308", ""),
-            "final_sort_score_v308": r.get("final_sort_score_v308", r.get("final_sort_score_v3072", "")),
-            "hard_reject_v308": r.get("hard_reject_v308", ""),
-            "short_turn_weak_v308": r.get("short_turn_weak_v308", ""),
-            "ma_sticky_no_attack_v308": r.get("ma_sticky_no_attack_v308", ""),
-            "box_middle_v308": r.get("box_middle_v308", ""),
-            "liquidity_only_v308": r.get("liquidity_only_v308", ""),
-            "main_force_gate_v300": r.get("main_force_gate_v300", ""),
-            "main_force_score_v300": r.get("main_force_score_v300", ""),
-            "chip_buy_v300": r.get("chip_buy_v300", ""),
-            "obv_accum_v300": r.get("obv_accum_v300", ""),
-            "attack_structure_v300": r.get("attack_structure_v300", ""),
-            "volume_start_v300": r.get("volume_start_v300", ""),
-            "not_overheat_v300": r.get("not_overheat_v300", ""),
         })
 
     return pd.DataFrame(rows)
@@ -1314,7 +644,7 @@ def main():
 
     meta = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "source": "v308_attack_first_strategy_engine",
+        "source": "v266_9_strategy_engine_stable",
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
         "data_state": "fresh",
@@ -1337,5 +667,1096 @@ def main():
     print(json.dumps(meta, ensure_ascii=False, indent=2))
 
 
-if __name__ == "__main__":
+
+
+# ===== v266.57.2 續強提示修補層（append-only，不改原本策略核心） =====
+# 原則：先讓原本 main() 完整跑完，再補欄位到輸出 CSV。
+# 不改 CORE / ALPHA / TEST / WATCH 條件；不改原本 entry_score；不改資金配置；不改出場。
+def _num_v266572(v, default=np.nan):
+    try:
+        return pd.to_numeric(v, errors="coerce")
+    except Exception:
+        return default
+
+
+def _safe_read_csv_v266572(path):
+    p = Path(path)
+    if not p.exists() or p.stat().st_size == 0:
+        return pd.DataFrame()
+    try:
+        return pd.read_csv(p, dtype=str, encoding="utf-8-sig")
+    except Exception:
+        try:
+            return pd.read_csv(p, dtype=str)
+        except Exception:
+            return pd.DataFrame()
+
+
+def _sid_v266572(v):
+    s = str(v or "").strip()
+    import re
+    m = re.search(r"\d{4}", s)
+    return m.group(0) if m else s.zfill(4) if s.isdigit() else s
+
+
+def _latest_feature_history_v266572():
+    """讀 feature_panel_daily.csv，建立每檔股票最近 5~6 根資料的續強判斷表。"""
+    try:
+        df = load_feature()
+    except Exception as e:
+        print("v266.57.2 continuation patch skip: load_feature failed", e)
+        return {}
+
+    if df.empty or "stock_id" not in df.columns or "date" not in df.columns:
+        return {}
+
+    need_cols = ["open", "high", "low", "close", "volume", "ma5", "ma10", "ma20", "mom5", "mom10", "volume_ratio"]
+    for c in need_cols:
+        if c not in df.columns:
+            df[c] = np.nan
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    df = df.copy()
+    df["stock_id"] = df["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False).fillna(df["stock_id"].astype(str))
+    df = df.sort_values(["stock_id", "date"])
+
+    out = {}
+    for sid, g in df.groupby("stock_id"):
+        h = g.tail(6).copy()
+        if len(h) < 5:
+            continue
+
+        last5 = h.tail(5)
+        last = h.iloc[-1]
+        prev = h.iloc[-2] if len(h) >= 2 else last
+
+        highs = last5["high"].astype(float)
+        lows = last5["low"].astype(float)
+        closes = last5["close"].astype(float)
+        vols = last5["volume"].astype(float)
+
+        close = float(last.get("close", np.nan))
+        open_ = float(last.get("open", np.nan))
+        high = float(last.get("high", np.nan))
+        low = float(last.get("low", np.nan))
+        ma5 = float(last.get("ma5", np.nan))
+        ma10 = float(last.get("ma10", np.nan))
+        ma20 = float(last.get("ma20", np.nan))
+        mom5 = float(last.get("mom5", np.nan))
+        mom10 = float(last.get("mom10", np.nan))
+        vol_ratio = float(last.get("volume_ratio", np.nan))
+
+        score = 0
+        reasons = []
+        risks = []
+
+        if highs.iloc[-1] >= highs.max() * 0.995 and highs.iloc[-1] >= highs.iloc[0]:
+            score += 2; reasons.append("5日高點墊高")
+        if lows.iloc[-1] >= lows.iloc[0] * 0.98:
+            score += 2; reasons.append("5日低點未破")
+        if np.isfinite(ma5) and np.isfinite(ma10) and ma5 >= ma10:
+            score += 1; reasons.append("MA5站上MA10")
+        if np.isfinite(ma20) and close >= ma20:
+            score += 1; reasons.append("收盤站上MA20")
+        if np.isfinite(mom5) and mom5 > 0:
+            score += 1; reasons.append("5日動能為正")
+        if np.isfinite(mom10) and mom10 > 0:
+            score += 1; reasons.append("10日動能為正")
+        if len(vols.dropna()) >= 5 and vols.iloc[-1] >= vols.tail(5).median() * 1.05:
+            score += 1; reasons.append("量能高於近期中位")
+
+        # 假突破 / 隔日容易掛風險：只加提示，不直接刪名單。
+        rng = max(high - low, 1e-9) if np.isfinite(high) and np.isfinite(low) else np.nan
+        body = abs(close - open_) if np.isfinite(close) and np.isfinite(open_) else np.nan
+        upper = high - max(open_, close) if np.isfinite(high) and np.isfinite(open_) and np.isfinite(close) else np.nan
+        lower = min(open_, close) - low if np.isfinite(low) and np.isfinite(open_) and np.isfinite(close) else np.nan
+        upper_ratio = upper / rng if np.isfinite(upper) and np.isfinite(rng) and rng > 0 else np.nan
+        body_ratio = body / rng if np.isfinite(body) and np.isfinite(rng) and rng > 0 else np.nan
+
+        risk_points = 0
+        if np.isfinite(vol_ratio) and vol_ratio >= 3.0:
+            risk_points += 2; risks.append("單日爆量過大")
+        if np.isfinite(upper_ratio) and upper_ratio >= 0.45:
+            risk_points += 2; risks.append("長上影壓力")
+        if np.isfinite(body_ratio) and body_ratio <= 0.18:
+            risk_points += 1; risks.append("實體過小猶豫K")
+        if np.isfinite(ma20) and ma20 > 0 and close >= ma20 * 1.18:
+            risk_points += 2; risks.append("乖離MA20過大")
+        if np.isfinite(open_) and np.isfinite(close) and close < open_:
+            risk_points += 1; risks.append("收黑K")
+        if len(closes.dropna()) >= 5 and closes.iloc[-1] < closes.iloc[-2] and highs.iloc[-1] >= highs.max() * 0.995:
+            risk_points += 2; risks.append("創高後收弱")
+
+        final_score = max(0, min(10, score - min(risk_points, 4)))
+
+        if risk_points >= 4:
+            fake_level = "高"
+        elif risk_points >= 2:
+            fake_level = "中"
+        else:
+            fake_level = "低"
+
+        if final_score >= 7 and fake_level == "低":
+            hint = "🟢 續強機率較高：可保留試單／優先觀察是否延續。"
+        elif final_score >= 5 and fake_level != "高":
+            hint = "🟡 有轉強但仍需確認：隔日看量價是否延續，不追高。"
+        elif fake_level == "高":
+            hint = "🔴 假突破風險高：容易今天強、明天弱，建議降級觀察。"
+        else:
+            hint = "⚪ 續強證據不足：只觀察，不急著放大。"
+
+        out[sid] = {
+            "continuation_score": round(float(final_score), 2),
+            "continuation_grade": "強" if final_score >= 7 else "中" if final_score >= 5 else "弱",
+            "continuation_reason": "、".join(reasons) if reasons else "續強條件不足",
+            "fake_breakout_risk": fake_level,
+            "fake_breakout_reason": "、".join(risks) if risks else "未見明顯假突破風險",
+            "next_day_follow_hint": hint,
+            "continuation_patch_version": "v266.57.2",
+        }
+    return out
+
+
+def _enrich_csv_v266572(name, cont_map):
+    """只補欄位，不刪列、不改 action、不改 entry_score。"""
+    for base in [ROOT, DATA_DIR]:
+        p = base / name
+        df = _safe_read_csv_v266572(p)
+        if df.empty or "stock_id" not in df.columns:
+            continue
+        df = df.copy()
+        sids = df["stock_id"].map(_sid_v266572)
+        for col in [
+            "continuation_score",
+            "continuation_grade",
+            "continuation_reason",
+            "fake_breakout_risk",
+            "fake_breakout_reason",
+            "next_day_follow_hint",
+            "continuation_patch_version",
+        ]:
+            df[col] = [cont_map.get(sid, {}).get(col, "") for sid in sids]
+
+        # 只補提示，不覆蓋原本 note/system_note。若前端有讀 reason，也保留原值。
+        if "system_note" in df.columns:
+            df["system_note"] = df.apply(
+                lambda r: str(r.get("system_note", "")) + (
+                    "｜續強提示：" + str(r.get("next_day_follow_hint", ""))
+                    if str(r.get("next_day_follow_hint", "")).strip() else ""
+                ), axis=1
+            )
+
+        df.to_csv(p, index=False, encoding="utf-8-sig")
+        print("v266.57.2 continuation enriched:", p, len(df))
+
+
+def apply_continuation_hint_patch_v266572():
+    cont_map = _latest_feature_history_v266572()
+    if not cont_map:
+        print("v266.57.2 continuation patch: no continuation map, skip")
+        return
+    for name in [
+        "core_candidates.csv",
+        "alpha_candidates.csv",
+        "candidates.csv",
+        "trade_plan.csv",
+        "ignition_candidates.csv",
+        "strategy_evolution.csv",
+    ]:
+        _enrich_csv_v266572(name, cont_map)
+
+    report = {
+        "version": "v266.57.2",
+        "mode": "append_only_continuation_hint",
+        "changed_strategy_logic": False,
+        "changed_actions": False,
+        "changed_position_sizing": False,
+        "enriched_stock_count": len(cont_map),
+        "updated_at": taipei_now_str(),
+        "description": "只補續強分數、假突破風險、隔日續強提示；不改原本選股/排序/資金配置核心。",
+    }
+    for p in [ROOT / "continuation_patch_report.json", DATA_DIR / "continuation_patch_report.json"]:
+        p.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def main_v266572_continuation_patch():
     main()
+    apply_continuation_hint_patch_v266572()
+
+
+# ===== v266.57.5.1 20/40/60 結構欄位寫入修補（append-only） =====
+# 只修補：確保 structure 欄位在原本策略跑完後寫入 CSV。
+# 不改：CORE / ALPHA / entry_score / action / target_weight / allocator / 持倉邏輯。
+def _read_json_v2665751(path):
+    p = Path(path)
+    if not p.exists() or p.stat().st_size == 0:
+        return {}
+    for enc in ["utf-8-sig", "utf-8"]:
+        try:
+            return json.loads(p.read_text(encoding=enc))
+        except Exception:
+            pass
+    return {}
+
+
+def _sf_v2665751(v, default=np.nan):
+    try:
+        x = float(v)
+        return x if np.isfinite(x) else default
+    except Exception:
+        return default
+
+
+def _sid_v2665751(v):
+    s = str(v).strip()
+    m = re.search(r"(\d{4})", s)
+    return m.group(1) if m else s
+
+
+def _vol_mild_v2665751(last_vol, med_vol):
+    last_vol = _sf_v2665751(last_vol)
+    med_vol = _sf_v2665751(med_vol)
+    if not np.isfinite(last_vol) or not np.isfinite(med_vol) or med_vol <= 0:
+        return False
+    r = last_vol / med_vol
+    return 1.05 <= r <= 2.8
+
+
+def _range_pct_v2665751(g, ref):
+    ref = _sf_v2665751(ref)
+    if g.empty or not np.isfinite(ref) or ref <= 0:
+        return np.nan
+    hi = pd.to_numeric(g.get("high"), errors="coerce").max()
+    lo = pd.to_numeric(g.get("low"), errors="coerce").min()
+    if not np.isfinite(hi) or not np.isfinite(lo):
+        return np.nan
+    return (hi - lo) / ref
+
+
+def _market_context_v2665751():
+    meta = {}
+    macro = {}
+    for p in [ROOT / "meta.json", DATA_DIR / "meta.json"]:
+        meta.update(_read_json_v2665751(p))
+    for p in [ROOT / "macro_regime.json", DATA_DIR / "macro_regime.json"]:
+        macro.update(_read_json_v2665751(p))
+
+    mr = str(meta.get("market_regime") or meta.get("regime") or meta.get("market_label") or "")
+    ml = str(macro.get("macro_label") or macro.get("macro_regime") or meta.get("macro_label") or "")
+
+    upper = mr.upper()
+    if "TREND" in upper or "BULL" in upper or "多" in mr:
+        weights = {"20": 0.45, "40": 0.30, "60": 0.25}
+        env_note = "多頭/趨勢盤：偏重20D主升延續"
+    elif "BEAR" in upper or "空" in mr or "弱" in mr:
+        weights = {"20": 0.25, "40": 0.30, "60": 0.45}
+        env_note = "弱勢/空頭盤：偏重60D大結構防守"
+    else:
+        weights = {"20": 0.30, "40": 0.40, "60": 0.30}
+        env_note = "盤整盤：偏重40D平台整理"
+
+    macro_adj = 0.0
+    macro_note = "總經中性或資料不足：不額外加權"
+    if any(k in ml for k in ["偏多", "多頭", "RISK_ON"]):
+        macro_adj = 0.5
+        macro_note = "總經偏多：結構分數小幅加權"
+    elif any(k in ml for k in ["偏空", "空頭", "RISK_OFF"]):
+        macro_adj = -0.8
+        macro_note = "總經偏空：結構分數小幅保守"
+
+    return {
+        "market_regime": mr or "--",
+        "macro_label": ml or "--",
+        "weights": weights,
+        "macro_adj": macro_adj,
+        "env_note": env_note,
+        "macro_note": macro_note,
+    }
+
+
+def _build_structure_map_v2665751():
+    try:
+        df = load_feature()
+    except Exception as e:
+        print("v266.57.5.1 structure skip: load_feature failed:", e)
+        return {}, _market_context_v2665751()
+
+    if df.empty or "stock_id" not in df.columns or "date" not in df.columns:
+        print("v266.57.5.1 structure skip: feature empty or missing stock_id/date")
+        return {}, _market_context_v2665751()
+
+    df = df.copy()
+    df["stock_id"] = df["stock_id"].map(_sid_v2665751)
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df = df.dropna(subset=["date", "stock_id"]).sort_values(["stock_id", "date"])
+
+    for c in ["open", "high", "low", "close", "volume", "ma5", "ma10", "ma20", "ma60", "mom5", "mom10", "mom20", "mom60", "volume_ratio", "ma20_slope"]:
+        if c not in df.columns:
+            df[c] = np.nan
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    ctx = _market_context_v2665751()
+    w = ctx["weights"]
+    macro_adj = float(ctx["macro_adj"])
+
+    result = {}
+    for sid, g in df.groupby("stock_id"):
+        h = g.tail(70).copy()
+        if len(h) < 20:
+            continue
+
+        last = h.iloc[-1]
+        close = _sf_v2665751(last.get("close"))
+        if not np.isfinite(close) or close <= 0:
+            continue
+
+        open_ = _sf_v2665751(last.get("open"))
+        high = _sf_v2665751(last.get("high"))
+        low = _sf_v2665751(last.get("low"))
+        vol = _sf_v2665751(last.get("volume"))
+        ma5 = _sf_v2665751(last.get("ma5"))
+        ma10 = _sf_v2665751(last.get("ma10"))
+        ma20 = _sf_v2665751(last.get("ma20"))
+        ma60 = _sf_v2665751(last.get("ma60"))
+        mom10 = _sf_v2665751(last.get("mom10"))
+        mom20 = _sf_v2665751(last.get("mom20"))
+        mom60 = _sf_v2665751(last.get("mom60"))
+        vol_ratio = _sf_v2665751(last.get("volume_ratio"))
+        ma20_slope = _sf_v2665751(last.get("ma20_slope"))
+
+        g20 = h.tail(20)
+        g40 = h.tail(40) if len(h) >= 40 else h
+        g60 = h.tail(60) if len(h) >= 60 else h
+
+        high20 = pd.to_numeric(g20["high"], errors="coerce").max()
+        high40 = pd.to_numeric(g40["high"], errors="coerce").max()
+        high60 = pd.to_numeric(g60["high"], errors="coerce").max()
+        low60 = pd.to_numeric(g60["low"], errors="coerce").min()
+        vol20 = pd.to_numeric(g20["volume"], errors="coerce").median()
+        vol40 = pd.to_numeric(g40["volume"], errors="coerce").median()
+        vol60 = pd.to_numeric(g60["volume"], errors="coerce").median()
+
+        range40 = _range_pct_v2665751(g40, close)
+        ma_tight = (
+            np.isfinite(ma5) and np.isfinite(ma10) and np.isfinite(ma20)
+            and (max(ma5, ma10, ma20) - min(ma5, ma10, ma20)) / close <= 0.08
+        )
+
+        s20, r20 = 0.0, []
+        if np.isfinite(ma20) and close > ma20:
+            s20 += 2; r20.append("站上MA20")
+        if np.isfinite(ma5) and np.isfinite(ma10) and ma5 >= ma10:
+            s20 += 2; r20.append("MA5>=MA10")
+        if np.isfinite(high20) and close >= high20 * 0.96:
+            s20 += 2; r20.append("接近20日高")
+        if _vol_mild_v2665751(vol, vol20):
+            s20 += 2; r20.append("20D量能溫和回升")
+        if np.isfinite(mom10) and mom10 > 0:
+            s20 += 1; r20.append("10D動能轉正")
+        if np.isfinite(ma20) and ma20 > 0 and close <= ma20 * 1.15:
+            s20 += 1; r20.append("未嚴重乖離MA20")
+
+        s40, r40 = 0.0, []
+        if np.isfinite(range40) and range40 <= 0.35:
+            s40 += 2; r40.append("40D區間收斂")
+        if ma_tight:
+            s40 += 2; r40.append("均線糾結")
+        if np.isfinite(ma20) and close >= ma20 * 0.98:
+            s40 += 2; r40.append("站回平台成本")
+        if len(g40) >= 30:
+            prior_low = pd.to_numeric(g40.iloc[:20]["low"], errors="coerce").min()
+            recent_low = pd.to_numeric(g40.iloc[-20:]["low"], errors="coerce").min()
+            if np.isfinite(prior_low) and np.isfinite(recent_low) and recent_low >= prior_low * 0.96:
+                s40 += 2; r40.append("低點未再破")
+        if _vol_mild_v2665751(vol, vol40):
+            s40 += 1; r40.append("40D量能回溫")
+        if np.isfinite(ma20_slope) and ma20_slope >= 0:
+            s40 += 1; r40.append("MA20走平翻揚")
+
+        s60, r60 = 0.0, []
+        if np.isfinite(ma60) and close >= ma60 * 0.96:
+            s60 += 2; r60.append("接近/站回MA60")
+        if np.isfinite(ma20) and np.isfinite(ma60) and ma20 >= ma60 * 0.95:
+            s60 += 2; r60.append("MA20接近MA60")
+        if np.isfinite(high60) and np.isfinite(low60) and high60 > low60:
+            pos60 = (close - low60) / (high60 - low60)
+            if pos60 >= 0.45:
+                s60 += 2; r60.append("站回60D區間中上")
+        if len(g60) >= 50:
+            prior_low60 = pd.to_numeric(g60.iloc[:30]["low"], errors="coerce").min()
+            recent_low60 = pd.to_numeric(g60.iloc[-30:]["low"], errors="coerce").min()
+            if np.isfinite(prior_low60) and np.isfinite(recent_low60) and recent_low60 >= prior_low60 * 0.95:
+                s60 += 2; r60.append("60D低點守住")
+        if np.isfinite(mom60) and mom60 > -0.05:
+            s60 += 1; r60.append("60D動能不再惡化")
+        if _vol_mild_v2665751(vol, vol60):
+            s60 += 1; r60.append("60D量能溫和回補")
+
+        heat, hr = 0.0, []
+        if np.isfinite(ma20) and ma20 > 0 and close > ma20 * 1.22:
+            heat += 1.5; hr.append("距MA20過遠")
+        if np.isfinite(vol_ratio) and vol_ratio > 5.5:
+            heat += 1.0; hr.append("單日爆量偏高")
+        if np.isfinite(mom20) and mom20 > 0.45:
+            heat += 1.0; hr.append("20D漲幅偏熱")
+        if np.isfinite(open_) and np.isfinite(high) and np.isfinite(low) and np.isfinite(close) and high > low:
+            upper = (high - max(open_, close)) / (high - low)
+            if upper >= 0.45:
+                heat += 1.0; hr.append("長上影壓力")
+
+        s20 = max(0, min(10, s20 - heat))
+        s40 = max(0, min(10, s40 - heat * 0.5))
+        s60 = max(0, min(10, s60 - heat * 0.3))
+
+        composite = max(0, min(10, s20 * w["20"] + s40 * w["40"] + s60 * w["60"] + macro_adj))
+
+        scores = {"20D短線轉強": s20, "40D平台整理": s40, "60D長底翻多": s60}
+        best_type = max(scores, key=scores.get)
+
+        if composite < 4:
+            stype = "結構不足"
+        elif heat >= 2 and s20 >= 6:
+            stype = "過熱延續"
+        else:
+            stype = best_type
+
+        grade = "強" if composite >= 7 else ("中" if composite >= 5 else "弱")
+        reasons = [
+            "20D:" + ("、".join(r20) if r20 else "短線結構不足"),
+            "40D:" + ("、".join(r40) if r40 else "平台結構不足"),
+            "60D:" + ("、".join(r60) if r60 else "長底結構不足"),
+        ]
+        if hr:
+            reasons.append("過熱扣分:" + "、".join(hr))
+
+        if stype == "20D短線轉強":
+            hint = "偏主升初段/延續觀察：搭配原本動能，避免追過熱。"
+        elif stype == "40D平台整理":
+            hint = "偏平台整理後轉強：觀察是否從WATCH/TEST升級。"
+        elif stype == "60D長底翻多":
+            hint = "偏長底翻多：適合CORE早期卡位，小倉觀察放量確認。"
+        elif stype == "過熱延續":
+            hint = "已有動能但乖離偏高：保留原策略判斷，操作上不追高。"
+        else:
+            hint = "結構證據不足：原策略若入選，仍需降低信心。"
+
+        result[sid] = {
+            "structure_20_score": round(float(s20), 2),
+            "structure_40_score": round(float(s40), 2),
+            "structure_60_score": round(float(s60), 2),
+            "structure_score": round(float(composite), 2),
+            "structure_grade": grade,
+            "structure_type": stype,
+            "structure_reason": "｜".join(reasons),
+            "structure_market_fit": ctx["env_note"] + "｜" + ctx["macro_note"],
+            "structure_hint": hint,
+            "structure_patch_version": "v266.57.5.1",
+        }
+
+    return result, ctx
+
+
+def _enrich_one_csv_v2665751(path, structure_map):
+    df = _safe_read_csv_v266572(path)
+    if df.empty or "stock_id" not in df.columns:
+        return False, 0
+
+    df = df.copy()
+    sids = df["stock_id"].map(_sid_v2665751)
+
+    cols = [
+        "structure_20_score",
+        "structure_40_score",
+        "structure_60_score",
+        "structure_score",
+        "structure_grade",
+        "structure_type",
+        "structure_reason",
+        "structure_market_fit",
+        "structure_hint",
+        "structure_patch_version",
+    ]
+
+    for col in cols:
+        df[col] = [structure_map.get(sid, {}).get(col, "") for sid in sids]
+
+    # 不覆蓋原 note；只追加提示。
+    if "system_note" in df.columns:
+        df["system_note"] = df.apply(
+            lambda r: str(r.get("system_note", "")) + (
+                "｜結構提示：" + str(r.get("structure_hint", ""))
+                if str(r.get("structure_hint", "")).strip() else ""
+            ), axis=1
+        )
+    elif "note" in df.columns:
+        df["note"] = df.apply(
+            lambda r: str(r.get("note", "")) + (
+                "｜結構提示：" + str(r.get("structure_hint", ""))
+                if str(r.get("structure_hint", "")).strip() else ""
+            ), axis=1
+        )
+
+    df.to_csv(path, index=False, encoding="utf-8-sig")
+    return True, len(df)
+
+
+def apply_structure_score_patch_v2665751():
+    structure_map, ctx = _build_structure_map_v2665751()
+
+    report = {
+        "version": "v266.57.5.1",
+        "mode": "append_only_20_40_60_structure_score_write_fix",
+        "changed_strategy_logic": False,
+        "changed_actions": False,
+        "changed_entry_score": False,
+        "changed_position_sizing": False,
+        "market_regime": ctx.get("market_regime", "--"),
+        "macro_label": ctx.get("macro_label", "--"),
+        "market_weighting": ctx.get("weights", {}),
+        "macro_adjustment": ctx.get("macro_adj", 0),
+        "enriched_stock_count": len(structure_map),
+        "files": {},
+        "updated_at": taipei_now_str(),
+        "description": "只補20/40/60日結構分數並強制寫入既有CSV，不改原策略核心。",
+    }
+
+    targets = [
+        "core_candidates.csv",
+        "alpha_candidates.csv",
+        "candidates.csv",
+        "trade_plan.csv",
+        "ignition_candidates.csv",
+        "strategy_evolution.csv",
+        "final_action_plan.csv",
+        "top_opportunities.csv",
+    ]
+
+    for name in targets:
+        for base in [ROOT, DATA_DIR]:
+            p = base / name
+            ok, n = _enrich_one_csv_v2665751(p, structure_map)
+            if ok:
+                report["files"][str(p)] = n
+                print("v266.57.5.1 structure enriched:", p, n)
+
+    for p in [ROOT / "structure_patch_report.json", DATA_DIR / "structure_patch_report.json"]:
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+        except Exception as e:
+            print("write structure report failed:", p, e)
+
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def main_v2665751_structure_write_fix():
+    # 原本策略 + 原本續強提示先跑完，再補結構欄位。
+    main_v266572_continuation_patch()
+    apply_structure_score_patch_v2665751()
+
+
+
+# ===== v266.57.6 structure pre-score candidate weighting（append-only 測試修補） =====
+# 只新增：structure_pre_score / adjusted_signal_score / structure_rank
+# 不覆蓋：entry_score / action / target_weight / 持倉 / 原策略核心
+def _sid_v266576(v):
+    s = str(v).strip()
+    m = re.search(r"(\d{4})", s)
+    return m.group(1) if m else s
+
+def _sf_v266576(v, default=np.nan):
+    try:
+        x = float(v)
+        return x if np.isfinite(x) else default
+    except Exception:
+        return default
+
+def _read_csv_v266576(path):
+    p = Path(path)
+    if not p.exists() or p.stat().st_size == 0:
+        return pd.DataFrame()
+    for enc in ["utf-8-sig", "utf-8"]:
+        try:
+            return pd.read_csv(p, encoding=enc)
+        except Exception:
+            pass
+    return pd.DataFrame()
+
+def _write_csv_v266576(df, path):
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(path, index=False, encoding="utf-8-sig")
+
+def _build_pre_score_map_v266576():
+    try:
+        feat = load_feature()
+    except Exception as e:
+        print("v266.57.6 skip load_feature:", e)
+        return {}
+
+    if feat.empty or "stock_id" not in feat.columns or "date" not in feat.columns:
+        return {}
+
+    df = feat.copy()
+    df["stock_id"] = df["stock_id"].map(_sid_v266576)
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df = df.dropna(subset=["date", "stock_id"]).sort_values(["stock_id", "date"])
+
+    for c in ["open","high","low","close","volume","ma5","ma10","ma20","ma60","mom5","mom10","mom20","volume_ratio"]:
+        if c not in df.columns:
+            df[c] = np.nan
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    out = {}
+    for sid, g in df.groupby("stock_id"):
+        h = g.tail(80).copy()
+        if len(h) < 25:
+            continue
+
+        last = h.iloc[-1]
+        prev3 = h.iloc[-4] if len(h) >= 4 else h.iloc[0]
+        prev10 = h.iloc[-11] if len(h) >= 11 else h.iloc[0]
+
+        close = _sf_v266576(last.get("close"))
+        open_ = _sf_v266576(last.get("open"))
+        high = _sf_v266576(last.get("high"))
+        low = _sf_v266576(last.get("low"))
+        volume = _sf_v266576(last.get("volume"))
+        ma5 = _sf_v266576(last.get("ma5"))
+        ma10 = _sf_v266576(last.get("ma10"))
+        ma20 = _sf_v266576(last.get("ma20"))
+        ma60 = _sf_v266576(last.get("ma60"))
+        ma20_p3 = _sf_v266576(prev3.get("ma20"))
+        ma60_p10 = _sf_v266576(prev10.get("ma60"))
+        mom5 = _sf_v266576(last.get("mom5"))
+        mom10 = _sf_v266576(last.get("mom10"))
+        mom20 = _sf_v266576(last.get("mom20"))
+        vol_ratio = _sf_v266576(last.get("volume_ratio"))
+
+        if not np.isfinite(close) or close <= 0:
+            continue
+
+        g5, g20 = h.tail(5), h.tail(20)
+        g40 = h.tail(40) if len(h) >= 40 else h
+        g60 = h.tail(60) if len(h) >= 60 else h
+
+        vol5 = pd.to_numeric(g5["volume"], errors="coerce").mean()
+        vol20 = pd.to_numeric(g20["volume"], errors="coerce").mean()
+        vol20_med = pd.to_numeric(g20["volume"], errors="coerce").median()
+        high20 = pd.to_numeric(g20["high"], errors="coerce").max()
+        high40 = pd.to_numeric(g40["high"], errors="coerce").max()
+        low40 = pd.to_numeric(g40["low"], errors="coerce").min()
+        high60 = pd.to_numeric(g60["high"], errors="coerce").max()
+        low60 = pd.to_numeric(g60["low"], errors="coerce").min()
+
+        score, reasons, penalties = 0.0, [], []
+
+        # 20D：短線剛翻強
+        if np.isfinite(ma20) and close > ma20:
+            score += 1.0; reasons.append("20D站上MA20")
+        if np.isfinite(ma20) and np.isfinite(ma20_p3) and ma20 >= ma20_p3:
+            score += 1.0; reasons.append("MA20走平翻揚")
+        if np.isfinite(ma5) and np.isfinite(ma10) and ma5 >= ma10:
+            score += 1.0; reasons.append("MA5站上MA10")
+        if np.isfinite(high20) and close >= high20 * 0.96:
+            score += 1.0; reasons.append("接近20日高")
+
+        # 40D：平台壓縮
+        if np.isfinite(high40) and np.isfinite(low40) and close > 0 and (high40-low40)/close <= 0.35:
+            score += 1.5; reasons.append("40D平台收斂")
+        if np.isfinite(ma5) and np.isfinite(ma10) and np.isfinite(ma20):
+            spread = (max(ma5, ma10, ma20) - min(ma5, ma10, ma20)) / close
+            if spread <= 0.08:
+                score += 1.5; reasons.append("短中均線糾結")
+        if len(g40) >= 30:
+            prior_low = pd.to_numeric(g40.iloc[:20]["low"], errors="coerce").min()
+            recent_low = pd.to_numeric(g40.iloc[-20:]["low"], errors="coerce").min()
+            if np.isfinite(prior_low) and np.isfinite(recent_low) and recent_low >= prior_low * 0.96:
+                score += 1.0; reasons.append("40D低點守住")
+
+        # 60D：長底翻多
+        if np.isfinite(ma60) and close >= ma60 * 0.96:
+            score += 1.0; reasons.append("接近/站回MA60")
+        if np.isfinite(ma60) and np.isfinite(ma60_p10) and ma60 >= ma60_p10 * 0.995:
+            score += 1.0; reasons.append("MA60不再下彎")
+        if np.isfinite(high60) and np.isfinite(low60) and high60 > low60 and (close-low60)/(high60-low60) >= 0.45:
+            score += 1.0; reasons.append("站回60D區間中上")
+
+        # 量縮後轉強
+        if np.isfinite(vol5) and np.isfinite(vol20) and vol20 > 0 and vol5 <= vol20 * 0.80:
+            score += 1.0; reasons.append("近5日量縮")
+        if np.isfinite(volume) and np.isfinite(vol20_med) and vol20_med > 0:
+            vr = volume / vol20_med
+            if 1.15 <= vr <= 2.8:
+                score += 2.0; reasons.append("量縮後溫和放量")
+            elif vr > 4.0:
+                score -= 1.5; penalties.append("單日爆量偏高")
+
+        # 動能確認，不取代原動能
+        if np.isfinite(mom5) and mom5 > 0:
+            score += 0.8; reasons.append("5D動能轉正")
+        if np.isfinite(mom10) and mom10 > 0:
+            score += 0.8; reasons.append("10D動能轉正")
+
+        # 過熱/假突破扣分
+        if np.isfinite(ma20) and ma20 > 0 and close > ma20 * 1.22:
+            score -= 2.0; penalties.append("距MA20過遠")
+        if np.isfinite(mom20) and mom20 > 0.45:
+            score -= 1.5; penalties.append("20D漲幅過熱")
+        if np.isfinite(open_) and np.isfinite(high) and np.isfinite(low) and high > low:
+            upper = (high - max(open_, close)) / (high - low)
+            if upper >= 0.45:
+                score -= 2.0; penalties.append("長上影壓力")
+        if np.isfinite(vol_ratio) and vol_ratio >= 5.5:
+            score -= 1.0; penalties.append("成交量異常爆量")
+
+        score = max(-5.0, min(12.0, score))
+        if score >= 8:
+            grade, stype = "A", "起漲結構強"
+        elif score >= 6:
+            grade, stype = "B", "起漲結構中"
+        elif score >= 4:
+            grade, stype = "C", "結構觀察"
+        elif score >= 2:
+            grade, stype = "D", "結構偏弱"
+        else:
+            grade, stype = "E", "結構不足"
+
+        if grade in ["A","B"] and any(("40D" in r or "糾結" in r) for r in reasons):
+            hint = "平台壓縮後轉強，可優先觀察起漲/試單。"
+        elif grade in ["A","B"] and any(("60D" in r or "MA60" in r) for r in reasons):
+            hint = "長底翻多結構，可偏CORE早期卡位。"
+        elif grade in ["A","B"]:
+            hint = "短線轉強結構，可搭配原動能延續。"
+        elif penalties:
+            hint = "有過熱或假突破壓力，避免追高。"
+        else:
+            hint = "結構證據不足，保留原策略但降低信心。"
+
+        out[sid] = {
+            "structure_pre_score": round(float(score), 2),
+            "structure_pre_grade": grade,
+            "structure_pre_type": stype,
+            "structure_pre_reason": "｜".join(reasons + (["扣分:" + "、".join(penalties)] if penalties else [])),
+            "structure_pre_hint": hint,
+            "structure_pre_patch_version": "v266.57.6",
+        }
+    return out
+
+def _pick_base_score_col_v266576(df):
+    for c in ["entry_score","score","total_score","final_score","momentum_score","rank_score","composite_score"]:
+        if c in df.columns:
+            return c
+    return None
+
+def _apply_pre_score_csv_v266576(path, score_map):
+    df = _read_csv_v266576(path)
+    if df.empty or "stock_id" not in df.columns:
+        return False, 0
+    df = df.copy()
+    sids = df["stock_id"].map(_sid_v266576)
+
+    cols = ["structure_pre_score","structure_pre_grade","structure_pre_type","structure_pre_reason","structure_pre_hint","structure_pre_patch_version"]
+    for col in cols:
+        df[col] = [score_map.get(sid, {}).get(col, "") for sid in sids]
+
+    base_col = _pick_base_score_col_v266576(df)
+    if base_col:
+        base = pd.to_numeric(df[base_col], errors="coerce")
+        bonus = pd.to_numeric(df["structure_pre_score"], errors="coerce").fillna(0)
+        df["adjusted_signal_score"] = (base + bonus * 0.35).round(3)
+        df["adjusted_signal_note"] = "原分數欄位:" + base_col + "｜結構前置加權僅供排序觀察，不覆蓋原策略"
+    else:
+        df["adjusted_signal_score"] = pd.to_numeric(df["structure_pre_score"], errors="coerce").fillna(0).round(3)
+        df["adjusted_signal_note"] = "無原分數欄位｜僅顯示結構前置分數"
+
+    if "system_note" in df.columns:
+        df["system_note"] = df.apply(lambda r: str(r.get("system_note","")) + ("｜前置結構：" + str(r.get("structure_pre_hint","")) if str(r.get("structure_pre_hint","")).strip() else ""), axis=1)
+    elif "note" in df.columns:
+        df["note"] = df.apply(lambda r: str(r.get("note","")) + ("｜前置結構：" + str(r.get("structure_pre_hint","")) if str(r.get("structure_pre_hint","")).strip() else ""), axis=1)
+
+    df["structure_rank"] = pd.to_numeric(df["adjusted_signal_score"], errors="coerce").rank(ascending=False, method="min")
+    _write_csv_v266576(df, path)
+    return True, len(df)
+
+def apply_structure_pre_score_patch_v266576():
+    score_map = _build_pre_score_map_v266576()
+    targets = [
+        "candidates.csv","core_candidates.csv","alpha_candidates.csv","trade_plan.csv",
+        "ignition_candidates.csv","strategy_evolution.csv","selection_debug.csv",
+        "pre_move_candidates.csv","top_opportunities.csv","final_action_plan.csv",
+    ]
+    report = {
+        "version": "v266.57.6",
+        "mode": "append_only_structure_pre_score_candidate_weighting",
+        "changed_strategy_logic": False,
+        "changed_original_score": False,
+        "changed_action": False,
+        "changed_position": False,
+        "enriched_stock_count": len(score_map),
+        "files": {},
+        "updated_at": taipei_now_str(),
+        "description": "只新增structure_pre_score與adjusted_signal_score作為排序觀察，不覆蓋原本動能/操作邏輯。",
+    }
+    for name in targets:
+        for base in [ROOT, DATA_DIR]:
+            p = base / name
+            ok, n = _apply_pre_score_csv_v266576(p, score_map)
+            if ok:
+                report["files"][str(p)] = n
+                print("v266.57.6 structure pre-score enriched:", p, n)
+
+    for p in [ROOT / "structure_pre_score_report.json", DATA_DIR / "structure_pre_score_report.json"]:
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+        except Exception as e:
+            print("write structure pre-score report failed:", p, e)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+def main_v266576_structure_pre_score_patch():
+    main_v2665751_structure_write_fix()
+    apply_structure_pre_score_patch_v266576()
+
+
+# ===== v266.57.7 structure weight split + continuation quality（append-only 測試修補） =====
+# 不改原始 entry_score / action / target_weight；只新增測試排序分與續強品質欄位。
+def _sid_v266577(v):
+    s = str(v).strip()
+    m = re.search(r"(\d{4})", s)
+    return m.group(1) if m else s
+
+def _sf_v266577(v, default=np.nan):
+    try:
+        x = float(v)
+        return x if np.isfinite(x) else default
+    except Exception:
+        return default
+
+def _read_csv_v266577(path):
+    p = Path(path)
+    if not p.exists() or p.stat().st_size == 0:
+        return pd.DataFrame()
+    for enc in ["utf-8-sig", "utf-8"]:
+        try:
+            return pd.read_csv(p, encoding=enc)
+        except Exception:
+            pass
+    return pd.DataFrame()
+
+def _write_csv_v266577(df, path):
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(path, index=False, encoding="utf-8-sig")
+
+def _pick_score_col_v266577(df):
+    for c in ["entry_score", "score", "total_score", "final_score", "momentum_score", "rank_score", "composite_score"]:
+        if c in df.columns:
+            return c
+    return None
+
+def _strategy_bucket_v266577(row):
+    txt = " ".join(str(row.get(c, "")) for c in ["strategy_type", "strategy_name", "bucket", "source", "action_sub", "entry_type", "execution_flag"]).upper()
+    if "ALPHA" in txt:
+        return "ALPHA"
+    if "IGNITION" in txt or "起漲" in txt:
+        return "IGNITION"
+    if "EVOLUTION" in txt or "進化" in txt:
+        return "EVOLUTION"
+    if "CORE" in txt:
+        return "CORE"
+    if "TEST" in txt or "試單" in txt:
+        return "TEST"
+    return "GENERIC"
+
+def _structure_weight_v266577(bucket):
+    return {"CORE": 0.95, "IGNITION": 1.05, "EVOLUTION": 0.65, "TEST": 0.80, "ALPHA": 0.35}.get(bucket, 0.55)
+
+def _continuation_weight_v266577(bucket):
+    return {"ALPHA": 0.75, "EVOLUTION": 0.85, "CORE": 0.55, "IGNITION": 0.45, "TEST": 0.50}.get(bucket, 0.50)
+
+def _build_continuation_quality_map_v266577():
+    try:
+        feat = load_feature()
+    except Exception as e:
+        print("v266.57.7 continuation skip load_feature:", e)
+        return {}
+    if feat.empty or "stock_id" not in feat.columns or "date" not in feat.columns:
+        return {}
+
+    df = feat.copy()
+    df["stock_id"] = df["stock_id"].map(_sid_v266577)
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df = df.dropna(subset=["date", "stock_id"]).sort_values(["stock_id", "date"])
+
+    for c in ["open","high","low","close","volume","ma5","ma10","ma20","mom5","mom10","mom20","volume_ratio"]:
+        if c not in df.columns:
+            df[c] = np.nan
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    out = {}
+    for sid, g in df.groupby("stock_id"):
+        h = g.tail(35).copy()
+        if len(h) < 12:
+            continue
+        last = h.iloc[-1]
+        close = _sf_v266577(last.get("close"))
+        open_ = _sf_v266577(last.get("open"))
+        high = _sf_v266577(last.get("high"))
+        low = _sf_v266577(last.get("low"))
+        volume = _sf_v266577(last.get("volume"))
+        ma5 = _sf_v266577(last.get("ma5"))
+        ma10 = _sf_v266577(last.get("ma10"))
+        ma20 = _sf_v266577(last.get("ma20"))
+        mom5 = _sf_v266577(last.get("mom5"))
+        mom10 = _sf_v266577(last.get("mom10"))
+        mom20 = _sf_v266577(last.get("mom20"))
+        vol_ratio = _sf_v266577(last.get("volume_ratio"))
+        if not np.isfinite(close) or close <= 0:
+            continue
+
+        g5 = h.tail(5)
+        g20 = h.tail(20)
+        recent_low5 = pd.to_numeric(g5["low"], errors="coerce").min()
+        prior_low10 = pd.to_numeric(h.iloc[-15:-5]["low"], errors="coerce").min() if len(h) >= 15 else np.nan
+        vol5 = pd.to_numeric(g5["volume"], errors="coerce").mean()
+        vol20 = pd.to_numeric(g20["volume"], errors="coerce").mean()
+        high20 = pd.to_numeric(g20["high"], errors="coerce").max()
+
+        score = 0.0
+        reasons = []
+        penalties = []
+
+        if np.isfinite(recent_low5) and np.isfinite(prior_low10) and recent_low5 >= prior_low10 * 0.97:
+            score += 2.0; reasons.append("回檔不破前低")
+        if np.isfinite(ma5) and close >= ma5 * 0.995:
+            score += 1.5; reasons.append("收盤守MA5")
+        elif np.isfinite(ma10) and close >= ma10 * 0.995:
+            score += 0.8; reasons.append("回測守MA10")
+        else:
+            score -= 1.0; penalties.append("跌破短均")
+        if np.isfinite(vol5) and np.isfinite(vol20) and vol20 > 0:
+            vr5 = vol5 / vol20
+            if 0.55 <= vr5 <= 0.95:
+                score += 1.5; reasons.append("回檔量縮")
+            elif vr5 > 1.8:
+                score -= 1.2; penalties.append("回檔量放大")
+        if np.isfinite(ma5) and np.isfinite(ma10) and ma5 >= ma10:
+            score += 1.2; reasons.append("MA5仍在MA10上")
+        if np.isfinite(ma20) and close >= ma20:
+            score += 1.0; reasons.append("仍站MA20")
+        if np.isfinite(mom10) and mom10 > 0:
+            score += 1.0; reasons.append("10D動能維持")
+        if np.isfinite(mom5) and mom5 < -0.08:
+            score -= 1.2; penalties.append("短線急殺")
+        if np.isfinite(high20) and high20 > 0 and close / high20 >= 0.98 and np.isfinite(mom5) and mom5 > 0.08:
+            score -= 1.0; penalties.append("接近20日高且短線過熱")
+        if np.isfinite(open_) and np.isfinite(high) and np.isfinite(low) and high > low:
+            upper = (high - max(open_, close)) / (high - low)
+            if upper >= 0.45:
+                score -= 1.5; penalties.append("長上影壓力")
+        if np.isfinite(vol_ratio) and vol_ratio >= 5.5:
+            score -= 1.0; penalties.append("異常爆量")
+        if np.isfinite(mom20) and mom20 > 0.45:
+            score -= 1.2; penalties.append("20D漲幅偏熱")
+
+        score = max(-5.0, min(10.0, score))
+        if score >= 7:
+            grade, label = "A", "續強品質強"
+        elif score >= 5:
+            grade, label = "B", "續強品質中"
+        elif score >= 3:
+            grade, label = "C", "續強觀察"
+        elif score >= 1:
+            grade, label = "D", "續強偏弱"
+        else:
+            grade, label = "E", "續強不足"
+
+        hint = "回檔承接尚可，若原策略入選，可優先觀察延續。" if grade in ["A", "B"] else ("續強品質不足或有假突破壓力，避免追高。" if penalties else "尚未看到明確回檔承接，保留觀察。")
+        out[sid] = {
+            "continuation_quality_score": round(float(score), 2),
+            "continuation_quality_grade": grade,
+            "continuation_quality_type": label,
+            "continuation_quality_reason": "｜".join(reasons + (["扣分:" + "、".join(penalties)] if penalties else [])),
+            "continuation_quality_hint": hint,
+            "continuation_quality_patch_version": "v266.57.7",
+        }
+    return out
+
+def _apply_v266577_to_csv(path, quality_map):
+    df = _read_csv_v266577(path)
+    if df.empty or "stock_id" not in df.columns:
+        return False, 0
+    df = df.copy()
+    sids = df["stock_id"].map(_sid_v266577)
+    for c in ["continuation_quality_score","continuation_quality_grade","continuation_quality_type","continuation_quality_reason","continuation_quality_hint","continuation_quality_patch_version"]:
+        df[c] = [quality_map.get(sid, {}).get(c, "") for sid in sids]
+
+    base_col = _pick_score_col_v266577(df)
+    base_score = pd.to_numeric(df[base_col], errors="coerce").fillna(0) if base_col else pd.Series([0] * len(df))
+    structure_pre = pd.to_numeric(df["structure_pre_score"], errors="coerce").fillna(0) if "structure_pre_score" in df.columns else pd.Series([0] * len(df))
+    continuation_q = pd.to_numeric(df["continuation_quality_score"], errors="coerce").fillna(0)
+    buckets = df.apply(_strategy_bucket_v266577, axis=1)
+    s_weights = buckets.map(_structure_weight_v266577).astype(float)
+    c_weights = buckets.map(_continuation_weight_v266577).astype(float)
+
+    df["adjusted_signal_score_v26657_7"] = (base_score + structure_pre * s_weights + continuation_q * c_weights).round(3)
+    df["structure_weight_v26657_7"] = s_weights.round(2)
+    df["continuation_weight_v26657_7"] = c_weights.round(2)
+    df["strategy_bucket_v26657_7"] = buckets
+    df["adjusted_signal_note_v26657_7"] = "測試排序分=原分數+結構前置分*策略權重+續強品質*策略權重；不覆蓋原策略"
+    df["structure_rank_v26657_7"] = pd.to_numeric(df["adjusted_signal_score_v26657_7"], errors="coerce").rank(ascending=False, method="min")
+
+    def _append_note(row):
+        parts = []
+        h1 = str(row.get("structure_pre_hint", "")).strip()
+        h2 = str(row.get("continuation_quality_hint", "")).strip()
+        if h1:
+            parts.append("結構：" + h1)
+        if h2:
+            parts.append("續強：" + h2)
+        return "｜".join(parts)
+
+    if "system_note" in df.columns:
+        df["system_note"] = df.apply(lambda r: str(r.get("system_note", "")) + ("｜v266.57.7：" + _append_note(r) if _append_note(r) else ""), axis=1)
+    elif "note" in df.columns:
+        df["note"] = df.apply(lambda r: str(r.get("note", "")) + ("｜v266.57.7：" + _append_note(r) if _append_note(r) else ""), axis=1)
+
+    _write_csv_v266577(df, path)
+    return True, len(df)
+
+def apply_structure_weight_continuation_patch_v266577():
+    quality_map = _build_continuation_quality_map_v266577()
+    targets = ["candidates.csv","core_candidates.csv","alpha_candidates.csv","trade_plan.csv","ignition_candidates.csv","strategy_evolution.csv","selection_debug.csv","pre_move_candidates.csv","top_opportunities.csv","final_action_plan.csv"]
+    report = {
+        "version": "v266.57.7",
+        "mode": "append_only_structure_weight_split_plus_continuation_quality",
+        "changed_strategy_logic": False,
+        "changed_original_score": False,
+        "changed_action": False,
+        "changed_position": False,
+        "enriched_stock_count": len(quality_map),
+        "files": {},
+        "updated_at": taipei_now_str(),
+        "description": "CORE/IGNITION提高結構權重，ALPHA保留動能延續；新增回檔不破/量縮整理/守短均續強品質分，只作測試排序參考。",
+    }
+    for name in targets:
+        for base in [ROOT, DATA_DIR]:
+            p = base / name
+            ok, n = _apply_v266577_to_csv(p, quality_map)
+            if ok:
+                report["files"][str(p)] = n
+                print("v266.57.7 enriched:", p, n)
+    for p in [ROOT / "structure_weight_continuation_report.json", DATA_DIR / "structure_weight_continuation_report.json"]:
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+        except Exception as e:
+            print("write v266.57.7 report failed:", p, e)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+def main_v266577_structure_weight_continuation_patch():
+    main_v266576_structure_pre_score_patch()
+    apply_structure_weight_continuation_patch_v266577()
+
+if __name__ == "__main__":
+    main_v266577_structure_weight_continuation_patch()
