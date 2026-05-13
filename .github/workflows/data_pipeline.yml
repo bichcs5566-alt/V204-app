@@ -131,12 +131,17 @@ jobs:
           from pathlib import Path
           p = Path("v266_strategy_engine.py")
           s = p.read_text(encoding="utf-8", errors="ignore")
-          marker = "if __name__"
-          if marker in s:
-              s = s[:s.rfind(marker)].rstrip()
-          s = s.rstrip() + '\n\nif __name__ == "__main__":\n    main()\n'
-          p.write_text(s, encoding="utf-8")
-          print("v266.57 repaired __main__ tail")
+
+          # v317 LOCK:
+          # 不再砍掉既有 __main__ 尾端。
+          # 之前這裡會把 v315/v316/v317 的 panel writer 呼叫整段刪掉，
+          # 導致 ignition_candidates.csv / strategy_evolution.csv 永遠沒有真正產出。
+          if 'if __name__ == "__main__"' not in s and "if __name__ == '__main__'" not in s:
+              s = s.rstrip() + '\n\nif __name__ == "__main__":\n    main()\n'
+              p.write_text(s, encoding="utf-8")
+              print("v317 appended missing __main__ tail")
+          else:
+              print("v317 __main__ tail exists; keep original tail untouched")
           PY
 
 
@@ -178,6 +183,45 @@ jobs:
       - name: Run strategy
         run: |
           python v266_strategy_engine.py
+
+      - name: Verify and sync ignition/evolution panel files
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import pandas as pd
+          import shutil
+
+          ROOT = Path(".")
+          DATA = ROOT / "mobile_dashboard_v1" / "data"
+          DATA.mkdir(parents=True, exist_ok=True)
+
+          required = [
+              "ignition_candidates.csv",
+              "strategy_evolution.csv",
+          ]
+
+          for name in required:
+              root_p = ROOT / name
+              data_p = DATA / name
+
+              # 若 root 沒有但 data 有，回補 root；若 data 沒有但 root 有，同步 data。
+              if (not root_p.exists() or root_p.stat().st_size == 0) and data_p.exists() and data_p.stat().st_size > 0:
+                  shutil.copyfile(data_p, root_p)
+              if root_p.exists() and root_p.stat().st_size > 0:
+                  shutil.copyfile(root_p, data_p)
+
+              if not root_p.exists() or root_p.stat().st_size == 0:
+                  raise FileNotFoundError(f"{name} missing after v266_strategy_engine.py")
+
+              df = pd.read_csv(root_p, dtype=str, encoding="utf-8-sig")
+              if df.empty:
+                  raise RuntimeError(f"{name} exists but has 0 rows")
+
+              df.to_csv(root_p, index=False, encoding="utf-8-sig")
+              df.to_csv(data_p, index=False, encoding="utf-8-sig")
+              print("panel file OK:", name, "rows=", len(df))
+          PY
+
 
       - name: Run timing engine
         run: |
@@ -1302,6 +1346,8 @@ jobs:
               "final_action_plan.csv": ["stock_id","stock_name","action","ref_price","reason","updated_at"],
               "trade_plan.csv": ["stock_id","stock_name","action","ref_price","reason","updated_at"],
               "position_overlay.csv": ["stock_id","stock_name","status","ref_price","reason","updated_at"],
+              "ignition_candidates.csv": ["stock_id","stock_name","industry","action","final_action","strategy_type","bucket","strategy_name","entry_score","score","close","ref_price","ignition_phase","entry_type","reason","system_note","source"],
+              "strategy_evolution.csv": ["stock_id","stock_name","industry","action","final_action","strategy_type","bucket","strategy_name","evolution_score","entry_score","score","close","ref_price","evolution_phase","entry_type","reason","system_note","source"],
           }
           for name, cols in csv_headers.items():
               for p in [ROOT / name, DATA / name]:
@@ -1547,10 +1593,13 @@ jobs:
           git add -f mobile_dashboard_v1/data/final_action_plan.csv || true
           
           git add -f trade_plan.csv final_action_plan.csv final_action_summary.json exit_risk_plan.csv || true
+          git add -f ignition_candidates.csv strategy_evolution.csv || true
           git add -f mobile_dashboard_v1/data/trade_plan.csv || true
           git add -f mobile_dashboard_v1/data/final_action_plan.csv || true
           git add -f mobile_dashboard_v1/data/final_action_summary.json || true
           git add -f mobile_dashboard_v1/data/exit_risk_plan.csv || true
+          git add -f mobile_dashboard_v1/data/ignition_candidates.csv || true
+          git add -f mobile_dashboard_v1/data/strategy_evolution.csv || true
 
           
           git add -f structure_post_patch_report.json || true
@@ -1590,6 +1639,14 @@ jobs:
           git reset -- mobile_dashboard_v1/data/price_panel_daily.csv || true
           git reset -- mobile_dashboard_v1/data/feature_panel_daily.csv || true
           git reset -- mobile_dashboard_v1/data/raw_market_daily.csv || true
+
+          echo "==== verify panel files staged/exist ===="
+          test -s ignition_candidates.csv
+          test -s strategy_evolution.csv
+          test -s mobile_dashboard_v1/data/ignition_candidates.csv
+          test -s mobile_dashboard_v1/data/strategy_evolution.csv
+          git add -f ignition_candidates.csv strategy_evolution.csv || true
+          git add -f mobile_dashboard_v1/data/ignition_candidates.csv mobile_dashboard_v1/data/strategy_evolution.csv || true
 
           echo "==== staged files ===="
           git diff --cached --name-only
