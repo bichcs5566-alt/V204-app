@@ -198,14 +198,14 @@ def set_action(df, buy, test, watch, buy_sub, test_sub, watch_sub):
 # 核心：TEST / BUY / TOP 候選必須先有攻擊結構，避免高流動、均線貼近、金融、箱型牛皮股排前面。
 def apply_attack_first_v309(d, mode="CORE"):
     """
-    v310 STRICT ATTACK ENTRY CORE
+    v312 BALANCED ATTACK CORE
 
-    這版只修 v266_strategy_engine.py 的 TEST / WATCH 核心：
-    - TEST 不再收「可能會動」或「底部修復」。
-    - TEST 只收「攻擊斜率 + 量價同步 + 箱體脫離 + 籌碼確認」。
-    - WATCH 收「有準備，但還沒達試單」。
-    - 金融、防守、底部橫盤、短線轉弱、低信心籌碼，不得進 TEST / TOP。
-    - 不動 app.js、不動 final_decision_engine.py、不動 UI。
+    目標：
+    - 不再全擋成 BLOCK。
+    - TEST：真正有攻擊條件的標的。
+    - WATCH：準攻擊 / 轉強中，但還不夠試單。
+    - BLOCK：金融、防守牛皮、底部修復、短線轉弱、低信心。
+    - 不動 UI、不動 app.js、不動持倉、不動 workflow。
     """
     import numpy as np
     import pandas as pd
@@ -259,12 +259,16 @@ def apply_attack_first_v309(d, mode="CORE"):
 
     sid = s("stock_id")
     industry = s("industry")
+
     finance_like = sid.str.startswith(("28", "58")) | industry.str.contains("金融|保險|金控|銀行|證券", na=False)
-    defensive_like = industry.str.contains("航運|觀光|百貨|食品|水泥|塑膠|鋼鐵|紡織|金融|保險", na=False)
+
+    # 防守類不直接全擋；只在沒有攻擊分時降級，避免誤殺真正轉強股。
+    defensive_like = industry.str.contains("航運|觀光|百貨|食品|水泥|塑膠|鋼鐵|紡織", na=False)
 
     ma5_vs_ma10 = (ma5 / ma10.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
     ma10_vs_ma20 = (ma10 / ma20.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
-    ma20_vs_ma60 = (ma20 / ma60.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+    close_ma5_gap = (close / ma5.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
+    close_ma10_gap = (close / ma10.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
     close_ma20_gap = (close / ma20.replace(0, np.nan) - 1).replace([np.inf, -np.inf], 0).fillna(0)
     close_to_high20 = (close / high20.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
     close_to_high60 = (close / high60.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
@@ -274,152 +278,142 @@ def apply_attack_first_v309(d, mode="CORE"):
     candle_power = ((close - open_) / open_.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
     upper_shadow = ((high - close) / high.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
 
-    # ===== v310 硬條件：TEST 要像「快發動」，不是「可能修復」 =====
+    # ===== v312 條件：不再要求全部同時完美，但一定要有方向 =====
     trend_ok = (
-        (ma5_vs_ma10 > 0.0015) &
-        (ma10_vs_ma20 > -0.003) &
-        (close >= ma5 * 0.995) &
-        (close >= ma20 * 0.985)
+        ((close >= ma5 * 0.990) & (ma5_vs_ma10 > -0.004) & (ma10_vs_ma20 > -0.010)) |
+        ((close >= ma20 * 1.005) & (mom10 > 0.018))
     )
 
     momentum_ok = (
-        (mom5 > 0.010) &
-        (mom10 > 0.022) &
-        (mom20 > 0.020) &
-        (mom20 <= 0.36)
-    )
+        ((mom5 > 0.006) & (mom10 > 0.014)) |
+        ((mom10 > 0.026) & (mom20 > 0.012))
+    ) & (mom20 <= 0.42)
 
     breakout_ok = (
-        (close_to_high20 >= 0.965) |
-        ((box_pos20 >= 0.72) & (close_to_high20 >= 0.945)) |
-        ((close_ma20_gap >= 0.025) & (mom10 > 0.035))
+        (close_to_high20 >= 0.945) |
+        ((box_pos20 >= 0.66) & (close_to_high20 >= 0.925)) |
+        ((close_ma20_gap >= 0.015) & (mom10 > 0.022))
     )
 
     volume_ok = (
-        (vol_ratio >= 1.25) |
-        ((vol_ratio >= 1.10) & (main_force >= 65) & (mom10 > 0.030))
+        (vol_ratio >= 1.08) |
+        ((main_force >= 58) & (mom10 > 0.018)) |
+        ((turnover >= 30_000_000) & (mom5 > 0))
     )
 
     chip_ok = (
-        (main_force >= 55) |
-        (chip_score >= 65) |
+        (main_force >= 48) |
+        (chip_score >= 55) |
         (obv > 0) |
-        (obv_up5 >= 3)
+        (obv_up5 >= 2) |
+        (low_hold >= 3)
     )
 
     short_turn_weak = (
-        ((close < ma5) & (mom3 <= 0) & (candle_power <= 0)) |
-        ((mom5 <= 0) & (ma5_vs_ma10 <= 0))
+        ((close < ma5 * 0.985) & (mom3 <= 0) & (mom5 <= 0)) |
+        ((mom5 < -0.012) & (ma5_vs_ma10 < -0.008))
     )
 
     bottom_repair_only = (
-        (close_to_high20 < 0.940) &
-        (box_pos20 < 0.70) &
-        (mom10 < 0.030) &
-        (vol_ratio < 1.45)
+        (close_to_high20 < 0.910) &
+        (box_pos20 < 0.62) &
+        (mom10 < 0.018) &
+        (vol_ratio < 1.30)
     )
 
     ma_sticky_no_attack = (
-        (ma_conv <= 0.16) &
-        (range20 < 0.125) &
-        (mom10 < 0.030) &
-        (mom20 < 0.070) &
-        (vol_ratio < 1.55) &
-        (box_pos20 < 0.78)
+        (ma_conv <= 0.12) &
+        (range20 < 0.095) &
+        (mom10 < 0.018) &
+        (mom20 < 0.050) &
+        (vol_ratio < 1.25) &
+        (box_pos20 < 0.72)
     )
 
     box_middle = (
-        (box_pos20 < 0.72) &
-        (close_to_high20 < 0.955) &
-        (close_ma20_gap.between(-0.030, 0.070)) &
-        (vol_ratio < 1.60)
+        (box_pos20 < 0.58) &
+        (close_to_high20 < 0.920) &
+        (close_ma20_gap.between(-0.030, 0.050)) &
+        (vol_ratio < 1.25)
     )
 
     liquidity_only = (
-        (liq_score >= 55) &
-        (mom5 <= 0.012) &
-        (mom10 <= 0.025) &
-        (vol_ratio < 1.35) &
-        (main_force < 60) &
-        (box_pos20 < 0.80)
+        (liq_score >= 65) &
+        (mom5 <= 0.006) &
+        (mom10 <= 0.014) &
+        (vol_ratio < 1.15) &
+        (main_force < 50) &
+        (box_pos20 < 0.75)
     )
 
     fake_breakout = (
-        ((upper_shadow > 0.055) & (vol_ratio > 1.35)) |
-        (mom20 > 0.45) |
-        (close_ma20_gap > 0.26)
+        ((upper_shadow > 0.075) & (vol_ratio > 1.50)) |
+        (mom20 > 0.52) |
+        (close_ma20_gap > 0.32)
     )
 
     low_confidence = (
-        (main_force < 50) &
-        (chip_score < 55) &
+        (main_force < 35) &
+        (chip_score < 35) &
         (obv <= 0) &
-        (obv_up5 < 2)
+        (obv_up5 < 1)
     )
 
-    hard_reject = (
-        finance_like |
-        defensive_like |
-        short_turn_weak |
-        bottom_repair_only |
-        ma_sticky_no_attack |
-        box_middle |
-        liquidity_only |
-        fake_breakout |
-        low_confidence
-    )
+    hard_reject = finance_like | short_turn_weak | bottom_repair_only | ma_sticky_no_attack | box_middle | liquidity_only | fake_breakout | low_confidence
 
     attack = pd.Series(0.0, index=d.index)
-    attack += trend_ok.astype(int) * 22
-    attack += momentum_ok.astype(int) * 24
-    attack += breakout_ok.astype(int) * 24
-    attack += volume_ok.astype(int) * 20
+    attack += trend_ok.astype(int) * 20
+    attack += momentum_ok.astype(int) * 22
+    attack += breakout_ok.astype(int) * 22
+    attack += volume_ok.astype(int) * 18
     attack += chip_ok.astype(int) * 14
 
-    attack += (mom3 > 0.003).astype(int) * 4
-    attack += (mom5 > 0.018).astype(int) * 8
-    attack += (mom10 > 0.040).astype(int) * 10
-    attack += (close_to_high20 >= 0.985).astype(int) * 10
-    attack += (vol_ratio.between(1.45, 4.20)).astype(int) * 10
-    attack += (candle_power > 0.004).astype(int) * 5
-    attack += (main_force >= 70).astype(int) * 8
-    attack += (chip_score >= 75).astype(int) * 6
+    attack += (mom3 > 0.002).astype(int) * 4
+    attack += (mom5 > 0.014).astype(int) * 7
+    attack += (mom10 > 0.030).astype(int) * 9
+    attack += (close_to_high20 >= 0.975).astype(int) * 9
+    attack += (vol_ratio.between(1.25, 4.50)).astype(int) * 9
+    attack += (candle_power > 0.002).astype(int) * 4
+    attack += (main_force >= 62).astype(int) * 7
+    attack += (chip_score >= 65).astype(int) * 5
+    attack += ((low_hold >= 3) & (mom5 > 0)).astype(int) * 4
 
     attack -= finance_like.astype(int) * 120
-    attack -= defensive_like.astype(int) * 45
-    attack -= short_turn_weak.astype(int) * 70
-    attack -= bottom_repair_only.astype(int) * 65
-    attack -= ma_sticky_no_attack.astype(int) * 60
-    attack -= box_middle.astype(int) * 55
-    attack -= liquidity_only.astype(int) * 45
-    attack -= fake_breakout.astype(int) * 42
-    attack -= low_confidence.astype(int) * 35
-    attack += (liq_score >= 75).astype(int) * 2
+    attack -= defensive_like.astype(int) * 10
+    attack -= short_turn_weak.astype(int) * 60
+    attack -= bottom_repair_only.astype(int) * 52
+    attack -= ma_sticky_no_attack.astype(int) * 48
+    attack -= box_middle.astype(int) * 42
+    attack -= liquidity_only.astype(int) * 38
+    attack -= fake_breakout.astype(int) * 36
+    attack -= low_confidence.astype(int) * 28
+    attack += (liq_score >= 70).astype(int) * 2
+
+    # TEST：三大核心至少二個成立，且不可硬拒絕。
+    core_hits = trend_ok.astype(int) + momentum_ok.astype(int) + breakout_ok.astype(int) + volume_ok.astype(int) + chip_ok.astype(int)
 
     strict_test_ok = (
-        trend_ok &
-        momentum_ok &
-        breakout_ok &
-        volume_ok &
-        chip_ok &
         (~hard_reject) &
-        (attack >= 74)
+        (attack >= 60) &
+        (core_hits >= 4) &
+        (momentum_ok | breakout_ok) &
+        (volume_ok | chip_ok)
     )
 
+    # WATCH：有方向、有準備，但未達 TEST。
     watch_ok = (
         (~hard_reject) &
-        (attack >= 54) &
-        (
-            (trend_ok & breakout_ok) |
-            (momentum_ok & volume_ok) |
-            (breakout_ok & chip_ok)
-        )
+        (attack >= 42) &
+        (core_hits >= 3) &
+        (trend_ok | momentum_ok | breakout_ok)
     )
 
     d["attack_score_v309"] = attack.round(2)
     d["attack_score_v310"] = attack.round(2)
+    d["attack_score_v312"] = attack.round(2)
     d["final_attack_score_v309"] = attack.round(2)
     d["final_attack_score_v310"] = attack.round(2)
+    d["final_attack_score_v312"] = attack.round(2)
 
     d["trend_ok_v310"] = trend_ok.astype(int)
     d["momentum_ok_v310"] = momentum_ok.astype(int)
@@ -431,6 +425,7 @@ def apply_attack_first_v309(d, mode="CORE"):
 
     d["hard_reject_v309"] = hard_reject.astype(int)
     d["hard_reject_v310"] = hard_reject.astype(int)
+    d["hard_reject_v312"] = hard_reject.astype(int)
     d["short_turn_weak_v309"] = short_turn_weak.astype(int)
     d["ma_sticky_no_attack_v309"] = ma_sticky_no_attack.astype(int)
     d["box_middle_v309"] = box_middle.astype(int)
@@ -440,26 +435,26 @@ def apply_attack_first_v309(d, mode="CORE"):
     if "entry_score" not in d.columns:
         d["entry_score"] = 0
     d["entry_score"] = pd.to_numeric(d["entry_score"], errors="coerce").fillna(0)
-    d["final_sort_score_v309"] = (d["entry_score"] * 0.15 + attack * 0.85).round(2)
+    d["final_sort_score_v309"] = (d["entry_score"] * 0.20 + attack * 0.80).round(2)
     d["final_sort_score_v310"] = d["final_sort_score_v309"]
+    d["final_sort_score_v312"] = d["final_sort_score_v309"]
 
+    # 這裡先分類一次；最終仍由 apply_v311_final_action_lock 再鎖一次。
     if "action" in d.columns:
-        action = d["action"].astype(str).str.upper()
-
-        d.loc[action.isin(["BUY", "TEST"]) & (~strict_test_ok) & watch_ok, "action"] = "WATCH"
-        d.loc[action.isin(["BUY", "TEST"]) & (~strict_test_ok) & (~watch_ok), "action"] = "BLOCK"
-        d.loc[watch_ok & (~strict_test_ok) & (~d["action"].astype(str).str.upper().eq("BLOCK")), "action"] = "WATCH"
         d.loc[strict_test_ok, "action"] = "TEST"
+        d.loc[(~strict_test_ok) & watch_ok, "action"] = "WATCH"
+        d.loc[(~strict_test_ok) & (~watch_ok), "action"] = "BLOCK"
 
         d.loc[d["action"].astype(str).str.upper().eq("TEST"), "action_label"] = "試單"
         d.loc[d["action"].astype(str).str.upper().eq("WATCH"), "action_label"] = "觀察"
         d.loc[d["action"].astype(str).str.upper().eq("BLOCK"), "action_label"] = "禁止"
 
-        d.loc[d["action"].astype(str).str.upper().eq("TEST"), "action_sub"] = "攻擊結構達標，最大機會試單"
-        d.loc[d["action"].astype(str).str.upper().eq("WATCH"), "action_sub"] = "攻擊條件未滿，優先觀察"
-        d.loc[d["action"].astype(str).str.upper().eq("BLOCK"), "action_sub"] = "非攻擊型或低信心，禁止"
+        d.loc[d["action"].astype(str).str.upper().eq("TEST"), "action_sub"] = "v312：攻擊條件達標，最大機會試單"
+        d.loc[d["action"].astype(str).str.upper().eq("WATCH"), "action_sub"] = "v312：準攻擊，優先觀察"
+        d.loc[d["action"].astype(str).str.upper().eq("BLOCK"), "action_sub"] = "v312：非攻擊型或風險過高，禁止"
 
-    return d.sort_values(["final_sort_score_v310", "attack_score_v310", "entry_score", "stock_id"], ascending=[False, False, False, True])
+    return d.sort_values(["final_sort_score_v312", "attack_score_v312", "entry_score", "stock_id"], ascending=[False, False, False, True])
+
 
 
 
@@ -609,6 +604,10 @@ def alpha_engine(x):
 # 目的：防止前面 v310 判斷完成後，build_trade_plan / 後段輸出再把 TEST/WATCH/BLOCK 洗掉。
 # 只鎖 action / action_label / action_sub / 排序，不動 UI、不動 app.js、不動持倉。
 def apply_v311_final_action_lock(df):
+    """
+    v312 balanced final action lock.
+    延續 v311 欄位名稱，讓 app.js 不用再改。
+    """
     import numpy as np
     import pandas as pd
 
@@ -630,15 +629,21 @@ def apply_v311_final_action_lock(df):
     sid = _txt("stock_id")
     industry = _txt("industry")
 
-    attack = _num("attack_score_v310")
+    attack = _num("attack_score_v312")
+    if float(attack.abs().sum()) == 0:
+        attack = _num("attack_score_v310")
     if float(attack.abs().sum()) == 0:
         attack = _num("attack_score_v309")
 
-    final_sort = _num("final_sort_score_v310")
+    final_sort = _num("final_sort_score_v312")
+    if float(final_sort.abs().sum()) == 0:
+        final_sort = _num("final_sort_score_v310")
     if float(final_sort.abs().sum()) == 0:
         final_sort = _num("final_sort_score_v309")
 
-    hard_reject = _num("hard_reject_v310")
+    hard_reject = _num("hard_reject_v312")
+    if float(hard_reject.abs().sum()) == 0:
+        hard_reject = _num("hard_reject_v310")
     if float(hard_reject.abs().sum()) == 0:
         hard_reject = _num("hard_reject_v309")
 
@@ -646,14 +651,10 @@ def apply_v311_final_action_lock(df):
     watch_ok = _num("watch_ok_v310")
 
     finance_like = sid.str.startswith(("28", "58")) | industry.str.contains("金融|保險|金控|銀行|證券", na=False)
-    defensive_like = industry.str.contains("航運|觀光|百貨|食品|水泥|塑膠|鋼鐵|紡織|金融|保險", na=False)
 
-    # v311 鎖定規則：
-    # TEST：只能由 strict_test_ok_v310 = 1 產生
-    # WATCH：只能由 watch_ok_v310 = 1 且非硬拒絕產生
-    # BLOCK：其餘全部禁止
-    is_test = (strict_test >= 1) & (hard_reject < 1) & (~finance_like) & (~defensive_like) & (attack >= 74)
-    is_watch = (~is_test) & (watch_ok >= 1) & (hard_reject < 1) & (~finance_like) & (attack >= 54)
+    # 金融維持 BLOCK；其他防守產業不再整批封殺，由 attack / hard_reject 判斷。
+    is_test = (strict_test >= 1) & (hard_reject < 1) & (~finance_like) & (attack >= 60)
+    is_watch = (~is_test) & (watch_ok >= 1) & (hard_reject < 1) & (~finance_like) & (attack >= 42)
 
     d["v311_locked_action"] = np.where(is_test, "TEST", np.where(is_watch, "WATCH", "BLOCK"))
     d["action"] = d["v311_locked_action"]
@@ -663,14 +664,12 @@ def apply_v311_final_action_lock(df):
         np.where(is_watch, "觀察", "禁止")
     )
     d["action_sub"] = np.where(
-        is_test, "v311鎖定：攻擊結構達標，最大機會試單",
-        np.where(is_watch, "v311鎖定：條件未滿，僅觀察", "v311鎖定：非攻擊型或低信心，禁止")
+        is_test, "v312鎖定：攻擊條件達標，最大機會試單",
+        np.where(is_watch, "v312鎖定：準攻擊，優先觀察", "v312鎖定：非攻擊型或風險過高，禁止")
     )
 
-    # BUY 在這個階段不自動給，避免尚未實測成熟前直接買進
     d["priority"] = np.where(d["action"].eq("TEST"), 1, np.where(d["action"].eq("WATCH"), 2, 9))
 
-    # TOP 舊欄位全部清掉，由 v311 重建
     for c in ["top_opportunity", "section_top_opportunity", "opportunity_rank", "top_reason", "top_rank_v3066", "is_top_v3066"]:
         if c not in d.columns:
             d[c] = ""
@@ -682,10 +681,9 @@ def apply_v311_final_action_lock(df):
     d["top_rank_v3066"] = 9999
     d["is_top_v3066"] = 0
 
-    # TEST TOP5：只從 locked TEST 裡產生
     test_idx = (
         d.loc[d["action"].eq("TEST")]
-        .sort_values(["attack_score_v310", "final_sort_score_v310", "entry_score", "stock_id"],
+        .sort_values(["attack_score_v312", "final_sort_score_v312", "entry_score", "stock_id"],
                      ascending=[False, False, False, True])
         .head(5)
         .index
@@ -696,12 +694,11 @@ def apply_v311_final_action_lock(df):
         d.loc[idx, "opportunity_rank"] = str(rank)
         d.loc[idx, "top_rank_v3066"] = rank
         d.loc[idx, "is_top_v3066"] = 1
-        d.loc[idx, "top_reason"] = "v311鎖定TOP｜只吃strict_test_ok_v310｜排除金融/防守/橫盤/低信心"
+        d.loc[idx, "top_reason"] = "v312平衡TOP｜攻擊條件達標｜排除金融/橫盤/低信心"
 
-    # WATCH TOP5：只從 locked WATCH 裡產生
     watch_idx = (
         d.loc[d["action"].eq("WATCH")]
-        .sort_values(["attack_score_v310", "final_sort_score_v310", "entry_score", "stock_id"],
+        .sort_values(["attack_score_v312", "final_sort_score_v312", "entry_score", "stock_id"],
                      ascending=[False, False, False, True])
         .head(5)
         .index
@@ -712,10 +709,10 @@ def apply_v311_final_action_lock(df):
         d.loc[idx, "opportunity_rank"] = str(rank)
         d.loc[idx, "top_rank_v3066"] = rank
         d.loc[idx, "is_top_v3066"] = 1
-        d.loc[idx, "top_reason"] = "v311觀察TOP｜尚未達試單｜僅觀察"
+        d.loc[idx, "top_reason"] = "v312觀察TOP｜準攻擊但未達試單"
 
     d = d.sort_values(
-        ["priority", "top_rank_v3066", "attack_score_v310", "final_sort_score_v310", "entry_score", "stock_id"],
+        ["priority", "top_rank_v3066", "attack_score_v312", "final_sort_score_v312", "entry_score", "stock_id"],
         ascending=[True, True, False, False, False, True]
     )
 
@@ -778,7 +775,7 @@ def build_trade_plan(core, alpha, regime, signal_date):
         px = float(r.get("close", 0)) * 1.001
         action = str(r.get("action", "BLOCK")).upper()
         st = r.get("strategy_type", r.get("engine", ""))
-        score = float(r.get("final_sort_score_v310", r.get("final_sort_score_v309", r.get("entry_score", 0))))
+        score = float(r.get("final_sort_score_v312", r.get("final_sort_score_v310", r.get("final_sort_score_v309", r.get("entry_score", 0)))))
         liq = str(r.get("liquidity_level", ""))
 
         # v311：只有 TEST 給試單資金，WATCH/BLOCK 都 0
@@ -810,9 +807,9 @@ def build_trade_plan(core, alpha, regime, signal_date):
             "entry_type": r.get("entry_type", r.get("action_sub", "")),
             "score": round(score, 2),
             "entry_score": round(float(r.get("entry_score", 0)), 2),
-            "attack_score_v310": round(float(r.get("attack_score_v310", r.get("attack_score_v309", 0))), 2),
-            "final_attack_score_v310": round(float(r.get("final_attack_score_v310", r.get("final_attack_score_v309", 0))), 2),
-            "final_sort_score_v310": round(float(r.get("final_sort_score_v310", r.get("final_sort_score_v309", score))), 2),
+            "attack_score_v310": round(float(r.get("attack_score_v312", r.get("attack_score_v310", r.get("attack_score_v309", 0)))), 2),
+            "final_attack_score_v310": round(float(r.get("final_attack_score_v312", r.get("final_attack_score_v310", r.get("final_attack_score_v309", 0)))), 2),
+            "final_sort_score_v310": round(float(r.get("final_sort_score_v312", r.get("final_sort_score_v310", r.get("final_sort_score_v309", score)))), 2),
             "strict_test_ok_v310": r.get("strict_test_ok_v310", ""),
             "watch_ok_v310": r.get("watch_ok_v310", ""),
             "hard_reject_v310": r.get("hard_reject_v310", r.get("hard_reject_v309", "")),
@@ -837,7 +834,7 @@ def build_trade_plan(core, alpha, regime, signal_date):
             "liquidity_score": round(float(r.get("liquidity_score", 0)), 2),
             "volume": round(float(r.get("volume", 0)), 0),
             "turnover": round(float(r.get("turnover", 0)), 0),
-            "source": "v311_final_action_output_lock",
+            "source": "v312_balanced_attack_final_lock",
             "reason": r.get("reason", r.get("note", "")),
             "system_note": r.get("system_note", r.get("note", "")),
             "note": r.get("note", ""),
@@ -891,7 +888,7 @@ def main():
 
     meta = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "source": "v311_final_action_output_lock",
+        "source": "v312_balanced_attack_final_lock",
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
         "data_state": "fresh",
@@ -2031,11 +2028,11 @@ def apply_v311_csv_final_lock():
                 continue
 
             # 只有含 v310 欄位的檔案才鎖，避免破壞不相關 CSV
-            if "attack_score_v310" not in df.columns and "attack_score_v309" not in df.columns:
+            if "attack_score_v312" not in df.columns and "attack_score_v310" not in df.columns and "attack_score_v309" not in df.columns:
                 continue
 
             locked = apply_v311_final_action_lock(df)
-            locked["source"] = "v311_final_action_output_lock"
+            locked["source"] = "v312_balanced_attack_final_lock"
             locked.to_csv(p, index=False, encoding="utf-8-sig")
             print("v311 final csv locked:", p, len(locked))
 
