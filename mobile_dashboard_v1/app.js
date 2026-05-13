@@ -5395,3 +5395,219 @@ document.addEventListener("DOMContentLoaded", function() {
     setTimeout(function(){ showBootErrorV3091(window.__APP_BOOT_ERROR__); }, 1800);
   });
 })();
+
+
+/* =========================================================
+   v311.2 UI FINAL ACTION LOCK / 前端最終分類鎖
+   - TEST / WATCH / BLOCK 優先讀 v311_locked_action
+   - hard_reject / 0金額0權重 / 金融防守 / 低信心，不再被舊 action 塞回 TEST
+   - append-only，不刪原本功能，避免空白頁
+   ========================================================= */
+const APP_UI_LOCK_VERSION_V3112 = "v311.2_ui_final_action_lock";
+
+function toNumberV3112(v, fallback = 0) {
+  const n = Number(String(v ?? "").replace(/,/g, "").replace("%", ""));
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function textV3112(v) {
+  return String(v ?? "").trim();
+}
+
+function boolFlagV3112(v) {
+  const s = String(v ?? "").trim().toUpperCase();
+  if (["1", "TRUE", "YES", "Y"].includes(s)) return true;
+  const n = Number(s);
+  return Number.isFinite(n) && n >= 1;
+}
+
+function effectiveActionV3112(row) {
+  row = row || {};
+
+  const locked = textV3112(
+    row.v311_locked_action ||
+    row.locked_action_v311 ||
+    row.final_locked_action ||
+    row.final_action_locked ||
+    ""
+  ).toUpperCase();
+
+  if (locked) return normalizeAction(locked);
+
+  let action = normalizeAction(row.final_action || row.action || "WATCH");
+
+  const industry = textV3112(row.industry || row.industry_name || row.sector || row.theme);
+  const sid = textV3112(row.stock_id || row.code || row.symbol).slice(0, 4);
+
+  const isFinance = /金融|保險|金控|銀行|證券/.test(industry) || /^(28|58)/.test(sid);
+  const isDefensive = /航運|觀光|百貨|食品|水泥|塑膠|鋼鐵|紡織|金融|保險/.test(industry);
+
+  const hardReject =
+    boolFlagV3112(row.hard_reject_v310) ||
+    boolFlagV3112(row.hard_reject_v309) ||
+    boolFlagV3112(row.hard_reject_v308);
+
+  const strictTest =
+    boolFlagV3112(row.strict_test_ok_v310) ||
+    boolFlagV3112(row.strict_test_ok_v309);
+
+  const watchOk =
+    boolFlagV3112(row.watch_ok_v310) ||
+    boolFlagV3112(row.watch_ok_v309);
+
+  const targetWeight = toNumberV3112(row.target_weight, 0);
+  const suggestAmount = toNumberV3112(
+    row.suggest_amount ?? row.suggested_amount ?? row.amount ?? row.recommended_amount,
+    0
+  );
+
+  const chipScore = toNumberV3112(row.chip_score || row.chip_concentration_score, 999);
+  const lowConfidence =
+    /低信心|極度分散|分散/.test(textV3112(row.chip_display || row.chip_confidence || row.system_note || row.reason)) ||
+    chipScore <= 35;
+
+  if (hardReject || isFinance || isDefensive || lowConfidence) {
+    if (watchOk && !isFinance && !hardReject) return "WATCH";
+    return "BLOCK";
+  }
+
+  if (action === "TEST" && !strictTest) {
+    if (watchOk) return "WATCH";
+    return "BLOCK";
+  }
+
+  if (action === "TEST" && targetWeight <= 0 && suggestAmount <= 0) {
+    if (watchOk) return "WATCH";
+    return "BLOCK";
+  }
+
+  return action || "WATCH";
+}
+
+function normalizeRowActionV3112(row) {
+  const out = { ...(row || {}) };
+  const eff = effectiveActionV3112(out);
+  out.v311_effective_action = eff;
+  out.final_action = eff;
+  out.action = eff;
+  out.action_label = ACTION_LABEL[eff] || out.action_label || eff;
+  return out;
+}
+
+function normalizeRowsActionV3112(rows) {
+  return (rows || []).map(normalizeRowActionV3112);
+}
+
+const __oldGroupCountsV3112 = typeof groupCounts === "function" ? groupCounts : null;
+groupCounts = function(rows) {
+  const counts = { SELL: 0, REDUCE: 0, BUY: 0, TEST: 0, WATCH: 0, BLOCK: 0 };
+  (rows || []).forEach(r => {
+    const a = effectiveActionV3112(r);
+    if (counts[a] !== undefined) counts[a]++;
+  });
+  return counts;
+};
+
+const __oldRowScoreV3112 = typeof rowScoreV26630 === "function" ? rowScoreV26630 : null;
+rowScoreV26630 = function(row) {
+  const fields = [
+    row?.final_sort_score_v310,
+    row?.attack_score_v310,
+    row?.final_attack_score_v310,
+    row?.final_sort_score_v309,
+    row?.attack_score_v309,
+    row?.score,
+    row?.entry_score,
+    row?.rank_score,
+    row?.liquidity_score
+  ];
+  for (const v of fields) {
+    const n = Number(String(v ?? "").replace(/,/g, ""));
+    if (Number.isFinite(n)) return n;
+  }
+  return __oldRowScoreV3112 ? __oldRowScoreV3112(row) : 0;
+};
+
+sortRows = function(rows) {
+  return (rows || []).slice().sort((a, b) => {
+    const aa = effectiveActionV3112(a);
+    const bb = effectiveActionV3112(b);
+    const pa = ACTION_PRIORITY[aa] || 99;
+    const pb = ACTION_PRIORITY[bb] || 99;
+    if (pa !== pb) return pa - pb;
+
+    const ta = getTopRankV26630(a);
+    const tb = getTopRankV26630(b);
+    if (ta !== tb) return ta - tb;
+
+    const sb = rowScoreV26630(b);
+    const sa = rowScoreV26630(a);
+    if (sb !== sa) return sb - sa;
+
+    const la = liquiditySortRank(a);
+    const lb = liquiditySortRank(b);
+    if (lb !== la) return lb - la;
+
+    const va = Number(a.volume || 0);
+    const vb = Number(b.volume || 0);
+    if (vb !== va) return vb - va;
+
+    return String(a.stock_id || "").localeCompare(String(b.stock_id || ""));
+  });
+};
+
+splitRows = function(rows) {
+  const normalized = normalizeRowsActionV3112(rows || []);
+  const sorted = sortRows(normalized);
+  const byAction = (actions) => sorted.filter(r => actions.includes(effectiveActionV3112(r)));
+  return {
+    main: dedupeByStockV26630(byAction(["SELL", "REDUCE", "BUY"])),
+    test: dedupeByStockV26630(byAction(["TEST"])),
+    watch: dedupeByStockV26630(byAction(["WATCH"])),
+    block: dedupeByStockV26630(byAction(["BLOCK"]))
+  };
+};
+
+const __baseRenderScanRowV3112 = typeof renderScanRow === "function" ? renderScanRow : null;
+renderScanRow = function(row, key) {
+  const fixed = normalizeRowActionV3112(row || {});
+  return __baseRenderScanRowV3112 ? __baseRenderScanRowV3112(fixed, key) : "";
+};
+
+const __oldRenderSectionListV3112 = typeof renderSectionList === "function" ? renderSectionList : null;
+renderSectionList = function(targetId, rows, prefix, limit = 80) {
+  return __oldRenderSectionListV3112
+    ? __oldRenderSectionListV3112(targetId, normalizeRowsActionV3112(rows || []), prefix, limit)
+    : undefined;
+};
+
+const __oldRenderFinalActionsV3112 = typeof renderFinalActions === "function" ? renderFinalActions : null;
+renderFinalActions = function(rows) {
+  return __oldRenderFinalActionsV3112
+    ? __oldRenderFinalActionsV3112(normalizeRowsActionV3112(rows || []))
+    : undefined;
+};
+
+const __oldRenderDecisionV3112 = typeof renderDecision === "function" ? renderDecision : null;
+renderDecision = function(rows) {
+  return __oldRenderDecisionV3112
+    ? __oldRenderDecisionV3112(normalizeRowsActionV3112(rows || []))
+    : undefined;
+};
+
+const __oldRenderStatsV3112 = typeof renderStats === "function" ? renderStats : null;
+renderStats = function(rows, summary) {
+  return __oldRenderStatsV3112
+    ? __oldRenderStatsV3112(normalizeRowsActionV3112(rows || []), summary)
+    : undefined;
+};
+
+const __oldLoadFinalRowsV3112 = typeof loadFinalRows === "function" ? loadFinalRows : null;
+loadFinalRows = async function() {
+  const rows = __oldLoadFinalRowsV3112 ? await __oldLoadFinalRowsV3112() : [];
+  return normalizeRowsActionV3112(rows || []);
+};
+
+window.__APP_UI_LOCK_VERSION_V3112 = APP_UI_LOCK_VERSION_V3112;
+console.log("APP UI LOCK ACTIVE:", APP_UI_LOCK_VERSION_V3112);
+
