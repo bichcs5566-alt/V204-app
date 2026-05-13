@@ -4,16 +4,16 @@
   "changed_strategy_logic": false,
   "changed_action": false,
   "changed_position": false,
-  "updated_at": "2026-05-13 20:24:30",
+  "updated_at": "2026-05-13 21:46:16",
   "files": {
     "timing_candidates.csv": {
       "timing_candidates.csv": {
         "status": "updated",
-        "rows": 445
+        "rows": 581
       },
       "mobile_dashboard_v1/data/timing_candidates.csv": {
         "status": "updated",
-        "rows": 445
+        "rows": 581
       }
     },
     "trade_plan.csv": {
@@ -29,51 +29,51 @@
     "final_action_plan.csv": {
       "final_action_plan.csv": {
         "status": "updated",
-        "rows": 482
+        "rows": 654
       },
       "mobile_dashboard_v1/data/final_action_plan.csv": {
         "status": "updated",
-        "rows": 482
+        "rows": 654
       }
     },
     "candidates.csv": {
       "candidates.csv": {
         "status": "updated",
-        "rows": 120
+        "rows": 480
       },
       "mobile_dashboard_v1/data/candidates.csv": {
         "status": "updated",
-        "rows": 120
+        "rows": 480
       }
     },
     "core_candidates.csv": {
       "core_candidates.csv": {
         "status": "updated",
-        "rows": 60
+        "rows": 240
       },
       "mobile_dashboard_v1/data/core_candidates.csv": {
         "status": "updated",
-        "rows": 60
+        "rows": 240
       }
     },
     "alpha_candidates.csv": {
       "alpha_candidates.csv": {
         "status": "updated",
-        "rows": 60
+        "rows": 240
       },
       "mobile_dashboard_v1/data/alpha_candidates.csv": {
         "status": "updated",
-        "rows": 60
+        "rows": 240
       }
     },
     "pre_move_candidates.csv": {
       "pre_move_candidates.csv": {
         "status": "updated",
-        "rows": 402
+        "rows": 395
       },
       "mobile_dashboard_v1/data/pre_move_candidates.csv": {
         "status": "updated",
-        "rows": 402
+        "rows": 395
       }
     },
     "top_opportunities.csv": {
@@ -88,9 +88,10 @@
     }
   },
   "trigger_labels": {
-    "無事件": 208,
-    "強點火事件": 196,
-    "準點火事件": 40,
-    "早期轉強事件": 38
+    "強點火事件": 333,
+    "無事件": 209,
+    "早期轉強事件": 59,
+    "準點火事件": 52,
+    "過熱/風險事件": 1
   }
 }
