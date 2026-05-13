@@ -615,6 +615,90 @@ def alpha_engine(x):
 # ===== v311 FINAL ACTION OUTPUT LOCK =====
 # 目的：防止前面 v310 判斷完成後，build_trade_plan / 後段輸出再把 TEST/WATCH/BLOCK 洗掉。
 # 只鎖 action / action_label / action_sub / 排序，不動 UI、不動 app.js、不動持倉。
+
+# ===== v314 FIELD MAPPING GUARD =====
+# 目的：一次補齊前端卡片需要的分類欄位，避免有些列只有簡表、沒有詳細卡片。
+def _ensure_v314_strategy_fields(df):
+    import numpy as np
+    import pandas as pd
+
+    if df is None or len(df) == 0:
+        return df
+
+    d = df.copy()
+
+    def _txt_col(col, default=""):
+        if col in d.columns:
+            return d[col].astype(str).replace("nan", "").fillna(default)
+        return pd.Series(default, index=d.index, dtype="object")
+
+    action = _txt_col("v311_locked_action")
+    if (action.str.len().sum() == 0) and ("action" in d.columns):
+        action = _txt_col("action")
+    action = action.str.upper().replace({"": "BLOCK"})
+
+    engine = _txt_col("engine")
+    stype = _txt_col("strategy_type")
+    stype = stype.where(stype.str.len() > 0, engine)
+    stype = stype.str.upper().replace({"": "CORE"})
+
+    # strategy_layer：前端卡片主分類
+    if "strategy_layer" not in d.columns:
+        d["strategy_layer"] = ""
+    d["strategy_layer"] = _txt_col("strategy_layer")
+    d.loc[d["strategy_layer"].str.len() == 0, "strategy_layer"] = np.where(
+        action.eq("TEST"), "主力動能",
+        np.where(action.eq("WATCH"), "預備觀察", "風險封鎖")
+    )
+
+    # strategy_bucket：前端與續強提示常用
+    if "strategy_bucket" not in d.columns:
+        d["strategy_bucket"] = ""
+    d["strategy_bucket"] = _txt_col("strategy_bucket")
+    d.loc[d["strategy_bucket"].str.len() == 0, "strategy_bucket"] = np.where(
+        action.eq("TEST"), "攻擊試單",
+        np.where(action.eq("WATCH"), "等待確認", "禁止交易")
+    )
+
+    # strategy_type / engine：避免 ALPHA / CORE 統計有數字但卡片缺欄
+    d["strategy_type"] = stype
+    d["engine"] = stype
+
+    # entry_type / action_sub / system_note：詳細卡片與提示用
+    if "entry_type" not in d.columns:
+        d["entry_type"] = ""
+    d["entry_type"] = _txt_col("entry_type")
+    d.loc[d["entry_type"].str.len() == 0, "entry_type"] = np.where(
+        action.eq("TEST"), "最大機會試單",
+        np.where(action.eq("WATCH"), "準攻擊觀察", "禁止")
+    )
+
+    if "action_sub" not in d.columns:
+        d["action_sub"] = ""
+    d["action_sub"] = _txt_col("action_sub")
+    d.loc[d["action_sub"].str.len() == 0, "action_sub"] = np.where(
+        action.eq("TEST"), "v314：攻擊條件達標，最大機會試單",
+        np.where(action.eq("WATCH"), "v314：準攻擊，等待確認", "v314：非攻擊型或風險過高，禁止")
+    )
+
+    if "system_note" not in d.columns:
+        d["system_note"] = ""
+    d["system_note"] = _txt_col("system_note")
+    d.loc[d["system_note"].str.len() == 0, "system_note"] = d["action_sub"]
+
+    if "reason" not in d.columns:
+        d["reason"] = ""
+    d["reason"] = _txt_col("reason")
+    d.loc[d["reason"].str.len() == 0, "reason"] = d["action_sub"]
+
+    if "source" not in d.columns:
+        d["source"] = "v314_strategy_field_mapping_lock"
+    else:
+        d["source"] = "v314_strategy_field_mapping_lock"
+
+    return d
+
+
 def apply_v311_final_action_lock(df):
     """
     v313 final action lock.
@@ -746,6 +830,7 @@ def apply_v311_final_action_lock(df):
         ascending=[True, True, False, False, False, True]
     )
 
+    d = _ensure_v314_strategy_fields(d)
     return d
 
 
@@ -777,26 +862,29 @@ def build_trade_plan(core, alpha, regime, signal_date):
     watch_pool = pool[pool["action"].astype(str).str.upper().eq("WATCH")].copy()
     block_pool = pool[pool["action"].astype(str).str.upper().eq("BLOCK")].copy()
 
+    sort_cols = [c for c in ["attack_score_v312", "final_sort_score_v312", "attack_score_v310", "final_sort_score_v310", "entry_score", "stock_id"] if c in pool.columns]
+
     test_pool = test_pool.sort_values(
-        ["attack_score_v312", "final_sort_score_v312", "entry_score", "stock_id"],
-        ascending=[False, False, False, True]
-    ).head(25)
+        [c for c in sort_cols if c in test_pool.columns],
+        ascending=[False] * (len([c for c in sort_cols if c in test_pool.columns]) - 1) + [True]
+    ).head(30) if len(test_pool) else test_pool
 
     watch_pool = watch_pool.sort_values(
-        ["attack_score_v312", "final_sort_score_v312", "entry_score", "stock_id"],
-        ascending=[False, False, False, True]
-    ).head(60)
+        [c for c in sort_cols if c in watch_pool.columns],
+        ascending=[False] * (len([c for c in sort_cols if c in watch_pool.columns]) - 1) + [True]
+    ).head(80) if len(watch_pool) else watch_pool
 
     block_pool = block_pool.sort_values(
-        ["attack_score_v312", "final_sort_score_v312", "entry_score", "stock_id"],
-        ascending=[False, False, False, True]
-    ).head(60)
+        [c for c in sort_cols if c in block_pool.columns],
+        ascending=[False] * (len([c for c in sort_cols if c in block_pool.columns]) - 1) + [True]
+    ).head(80) if len(block_pool) else block_pool
 
     s = pd.concat([test_pool, watch_pool, block_pool], ignore_index=True)
     s = s.drop_duplicates("stock_id")
 
-    # 最後再鎖一次，保證 trade_plan.csv 寫出去前不會被舊 action 混入
+    # 最後再鎖一次，保證 trade_plan.csv 寫出去前不會被舊 action 混入，並補齊前端卡片欄位
     s = apply_v311_final_action_lock(s)
+    s = _ensure_v314_strategy_fields(s)
 
     trade_date = next_trade_date(signal_date)
     rows = []
@@ -808,7 +896,16 @@ def build_trade_plan(core, alpha, regime, signal_date):
         score = float(r.get("final_sort_score_v312", r.get("final_sort_score_v310", r.get("final_sort_score_v309", r.get("entry_score", 0)))))
         liq = str(r.get("liquidity_level", ""))
 
-        # v311：只有 TEST 給試單資金，WATCH/BLOCK 都 0
+        strategy_layer = str(r.get("strategy_layer", "") or "").strip()
+        strategy_bucket = str(r.get("strategy_bucket", "") or "").strip()
+        if not strategy_layer:
+            strategy_layer = "主力動能" if action == "TEST" else ("預備觀察" if action == "WATCH" else "風險封鎖")
+        if not strategy_bucket:
+            strategy_bucket = "攻擊試單" if action == "TEST" else ("等待確認" if action == "WATCH" else "禁止交易")
+        if not st:
+            st = str(r.get("engine", "") or "CORE").upper()
+
+        # v314：只有 TEST 給試單資金，WATCH/BLOCK 都 0
         if action == "TEST" and st == "ALPHA":
             w = 0.010
         elif action == "TEST" and st == "CORE":
@@ -829,6 +926,11 @@ def build_trade_plan(core, alpha, regime, signal_date):
             "action_label": r.get("action_label", action),
             "action_sub": r.get("action_sub", ""),
             "strategy_type": st,
+            "engine": st,
+            "strategy_layer": strategy_layer,
+            "strategy_bucket": strategy_bucket,
+            "layer": strategy_layer,
+            "bucket": strategy_bucket,
             "price": round(px, 2),
             "ref_price": round(float(r.get("close", 0)), 2),
             "target_weight": round(w, 4),
@@ -864,7 +966,7 @@ def build_trade_plan(core, alpha, regime, signal_date):
             "liquidity_score": round(float(r.get("liquidity_score", 0)), 2),
             "volume": round(float(r.get("volume", 0)), 0),
             "turnover": round(float(r.get("turnover", 0)), 0),
-            "source": "v313_watch_layer_final_lock",
+            "source": "v314_strategy_field_mapping_lock",
             "reason": r.get("reason", r.get("note", "")),
             "system_note": r.get("system_note", r.get("note", "")),
             "note": r.get("note", ""),
@@ -878,8 +980,9 @@ def main():
     signal_date, latest = latest_valid(df)
     regime, info = detect_regime(latest)
 
-    core = apply_v311_final_action_lock(core_engine(latest)).head(60)
-    alpha = apply_v311_final_action_lock(alpha_engine(latest)).head(60)
+    # v314：保留足夠候選，避免前 60 名全是 TEST，WATCH 被截掉。
+    core = apply_v311_final_action_lock(core_engine(latest)).head(240)
+    alpha = apply_v311_final_action_lock(alpha_engine(latest)).head(240)
 
     plan = build_trade_plan(core, alpha, regime, signal_date)
 
@@ -910,6 +1013,10 @@ def main():
         alpha.assign(engine="ALPHA"),
     ], ignore_index=True)
 
+    core = _ensure_v314_strategy_fields(core.assign(engine="CORE"))
+    alpha = _ensure_v314_strategy_fields(alpha.assign(engine="ALPHA"))
+    candidates = _ensure_v314_strategy_fields(candidates)
+
     write_both(core, "core_candidates.csv")
     write_both(alpha, "alpha_candidates.csv")
     write_both(candidates, "candidates.csv")
@@ -918,7 +1025,7 @@ def main():
 
     meta = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "source": "v313_watch_layer_final_lock",
+        "source": "v314_strategy_field_mapping_lock",
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
         "data_state": "fresh",
@@ -2064,7 +2171,7 @@ def apply_v311_csv_final_lock():
             locked = apply_v311_final_action_lock(df)
             locked["source"] = "v313_watch_layer_final_lock"
             locked.to_csv(p, index=False, encoding="utf-8-sig")
-            print("v313 final csv locked:", p, len(locked))
+            print("v314 final csv locked:", p, len(locked))
 
 
 if __name__ == "__main__":
