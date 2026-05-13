@@ -1973,6 +1973,100 @@ def _apply_v266577_to_csv(path, quality_map):
     s_weights = buckets.map(_structure_weight_v266577).astype(float)
     c_weights = buckets.map(_continuation_weight_v266577).astype(float)
 
-    df["adjusted_signal_score_v26657_7"] = (base_score + structure_pre * s_weights + continuation_q * c_weights).round(3)
-    df["structure_weight_v26657_7"] = s_weights.round(2)
-    df["continuation_weight_v26657_7"] = 
+    df.loc[:, "adjusted_signal_score_v26657_7"] = (base_score + structure_pre * s_weights + continuation_q * c_weights).round(3)
+    df.loc[:, "structure_weight_v26657_7"] = s_weights.round(2)
+    df.loc[:, "continuation_weight_v26657_7"] = c_weights.round(2)
+    df.loc[:, "strategy_bucket_v26657_7"] = buckets
+    df["adjusted_signal_note_v26657_7"] = "測試排序分=原分數+結構前置分*策略權重+續強品質*策略權重；不覆蓋原策略"
+    df["structure_rank_v26657_7"] = pd.to_numeric(df["adjusted_signal_score_v26657_7"], errors="coerce").rank(ascending=False, method="min")
+
+    def _append_note(row):
+        parts = []
+        h1 = str(row.get("structure_pre_hint", "")).strip()
+        h2 = str(row.get("continuation_quality_hint", "")).strip()
+        if h1:
+            parts.append("結構：" + h1)
+        if h2:
+            parts.append("續強：" + h2)
+        return "｜".join(parts)
+
+    if "system_note" in df.columns:
+        df["system_note"] = df.apply(lambda r: str(r.get("system_note", "")) + ("｜v266.57.7：" + _append_note(r) if _append_note(r) else ""), axis=1)
+    elif "note" in df.columns:
+        df["note"] = df.apply(lambda r: str(r.get("note", "")) + ("｜v266.57.7：" + _append_note(r) if _append_note(r) else ""), axis=1)
+
+    _write_csv_v266577(df, path)
+    return True, len(df)
+
+def apply_structure_weight_continuation_patch_v266577():
+    quality_map = _build_continuation_quality_map_v266577()
+    targets = ["candidates.csv","core_candidates.csv","alpha_candidates.csv","trade_plan.csv","ignition_candidates.csv","strategy_evolution.csv","selection_debug.csv","pre_move_candidates.csv","top_opportunities.csv","final_action_plan.csv"]
+    report = {
+        "version": "v266.57.7",
+        "mode": "append_only_structure_weight_split_plus_continuation_quality",
+        "changed_strategy_logic": False,
+        "changed_original_score": False,
+        "changed_action": False,
+        "changed_position": False,
+        "enriched_stock_count": len(quality_map),
+        "files": {},
+        "updated_at": taipei_now_str(),
+        "description": "CORE/IGNITION提高結構權重，ALPHA保留動能延續；新增回檔不破/量縮整理/守短均續強品質分，只作測試排序參考。",
+    }
+    for name in targets:
+        for base in [ROOT, DATA_DIR]:
+            p = base / name
+            ok, n = _apply_v266577_to_csv(p, quality_map)
+            if ok:
+                report["files"][str(p)] = n
+                print("v266.57.7 enriched:", p, n)
+    for p in [ROOT / "structure_weight_continuation_report.json", DATA_DIR / "structure_weight_continuation_report.json"]:
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+        except Exception as e:
+            print("write v266.57.7 report failed:", p, e)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+def main_v266577_structure_weight_continuation_patch():
+    main_v266576_structure_pre_score_patch()
+    apply_structure_weight_continuation_patch_v266577()
+
+
+# ===== v311.1 CSV FINAL LOCK =====
+# 在所有 v266.57.x append-only 補丁後，重新鎖定 trade_plan / candidates / core / alpha 的 action 與 TOP。
+def apply_v311_csv_final_lock():
+    targets = [
+        "core_candidates.csv",
+        "alpha_candidates.csv",
+        "candidates.csv",
+        "trade_plan.csv",
+    ]
+    for name in targets:
+        for base in [ROOT, DATA_DIR]:
+            p = base / name
+            if not p.exists() or p.stat().st_size == 0:
+                continue
+            try:
+                df = pd.read_csv(p, encoding="utf-8-sig")
+            except Exception:
+                try:
+                    df = pd.read_csv(p, encoding="utf-8")
+                except Exception:
+                    continue
+            if df.empty or "stock_id" not in df.columns:
+                continue
+
+            # 只有含 v310 欄位的檔案才鎖，避免破壞不相關 CSV
+            if "attack_score_v312" not in df.columns and "attack_score_v310" not in df.columns and "attack_score_v309" not in df.columns:
+                continue
+
+            locked = apply_v311_final_action_lock(df)
+            locked["source"] = "v313_watch_layer_final_lock"
+            locked.to_csv(p, index=False, encoding="utf-8-sig")
+            print("v313 final csv locked:", p, len(locked))
+
+
+if __name__ == "__main__":
+    main_v266577_structure_weight_continuation_patch()
+    apply_v311_csv_final_lock()
