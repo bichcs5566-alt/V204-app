@@ -359,7 +359,11 @@ def apply_attack_first_v309(d, mode="CORE"):
         (obv_up5 < 1)
     )
 
-    hard_reject = finance_like | short_turn_weak | bottom_repair_only | ma_sticky_no_attack | box_middle | liquidity_only | fake_breakout | low_confidence
+    # v313：拆成「硬封鎖」與「觀察降級」。
+    # 之前 WATCH=0 的主因，是 bottom_repair / box_middle 被直接 hard_reject，全部掉到 BLOCK。
+    hard_block = finance_like | short_turn_weak | fake_breakout | low_confidence
+    soft_reject = bottom_repair_only | ma_sticky_no_attack | box_middle | liquidity_only
+    hard_reject = hard_block | soft_reject
 
     attack = pd.Series(0.0, index=d.index)
     attack += trend_ok.astype(int) * 20
@@ -389,23 +393,28 @@ def apply_attack_first_v309(d, mode="CORE"):
     attack -= low_confidence.astype(int) * 28
     attack += (liq_score >= 70).astype(int) * 2
 
-    # TEST：三大核心至少二個成立，且不可硬拒絕。
+    # TEST：真正最大機會，必須攻擊條件夠完整。
     core_hits = trend_ok.astype(int) + momentum_ok.astype(int) + breakout_ok.astype(int) + volume_ok.astype(int) + chip_ok.astype(int)
 
     strict_test_ok = (
-        (~hard_reject) &
-        (attack >= 60) &
+        (~hard_block) &
+        (~soft_reject) &
+        (attack >= 62) &
         (core_hits >= 4) &
         (momentum_ok | breakout_ok) &
         (volume_ok | chip_ok)
     )
 
-    # WATCH：有方向、有準備，但未達 TEST。
+    # WATCH：一次定位修正。
+    # 只要不是金融/短線轉弱/假突破/極低信心，
+    # 且已有「趨勢、動能、突破、量、籌碼」其中至少兩個，就進 WATCH。
+    # 這會把「準攻擊、等確認」從 BLOCK 中切出來，不再全部歸零。
     watch_ok = (
-        (~hard_reject) &
-        (attack >= 42) &
-        (core_hits >= 3) &
-        (trend_ok | momentum_ok | breakout_ok)
+        (~strict_test_ok) &
+        (~hard_block) &
+        (attack >= 30) &
+        (core_hits >= 2) &
+        (trend_ok | momentum_ok | breakout_ok | volume_ok)
     )
 
     d["attack_score_v309"] = attack.round(2)
@@ -426,6 +435,9 @@ def apply_attack_first_v309(d, mode="CORE"):
     d["hard_reject_v309"] = hard_reject.astype(int)
     d["hard_reject_v310"] = hard_reject.astype(int)
     d["hard_reject_v312"] = hard_reject.astype(int)
+    d["hard_reject_v313"] = hard_reject.astype(int)
+    d["hard_block_v313"] = hard_block.astype(int)
+    d["soft_reject_v313"] = soft_reject.astype(int)
     d["short_turn_weak_v309"] = short_turn_weak.astype(int)
     d["ma_sticky_no_attack_v309"] = ma_sticky_no_attack.astype(int)
     d["box_middle_v309"] = box_middle.astype(int)
@@ -605,8 +617,12 @@ def alpha_engine(x):
 # 只鎖 action / action_label / action_sub / 排序，不動 UI、不動 app.js、不動持倉。
 def apply_v311_final_action_lock(df):
     """
-    v312 balanced final action lock.
-    延續 v311 欄位名稱，讓 app.js 不用再改。
+    v313 final action lock.
+    欄位名稱仍維持 v311_locked_action，讓 app.js 不需要再改。
+    一次定位：
+    - TEST：strict_test_ok + 高攻擊分
+    - WATCH：準攻擊 / 等確認 / soft_reject 但非垃圾
+    - BLOCK：金融、短線轉弱、假突破、極低信心
     """
     import numpy as np
     import pandas as pd
@@ -641,20 +657,31 @@ def apply_v311_final_action_lock(df):
     if float(final_sort.abs().sum()) == 0:
         final_sort = _num("final_sort_score_v309")
 
-    hard_reject = _num("hard_reject_v312")
-    if float(hard_reject.abs().sum()) == 0:
-        hard_reject = _num("hard_reject_v310")
-    if float(hard_reject.abs().sum()) == 0:
-        hard_reject = _num("hard_reject_v309")
-
     strict_test = _num("strict_test_ok_v310")
     watch_ok = _num("watch_ok_v310")
+    hard_block = _num("hard_block_v313")
+    soft_reject = _num("soft_reject_v313")
 
+    # fallback：舊檔若沒有 hard_block_v313，至少保留金融封鎖
     finance_like = sid.str.startswith(("28", "58")) | industry.str.contains("金融|保險|金控|銀行|證券", na=False)
+    if "hard_block_v313" not in d.columns:
+        hard_block = finance_like.astype(int)
 
-    # 金融維持 BLOCK；其他防守產業不再整批封殺，由 attack / hard_reject 判斷。
-    is_test = (strict_test >= 1) & (hard_reject < 1) & (~finance_like) & (attack >= 60)
-    is_watch = (~is_test) & (watch_ok >= 1) & (hard_reject < 1) & (~finance_like) & (attack >= 42)
+    # v313 分層
+    is_test = (
+        (strict_test >= 1) &
+        (hard_block < 1) &
+        (~finance_like) &
+        (attack >= 62)
+    )
+
+    is_watch = (
+        (~is_test) &
+        (watch_ok >= 1) &
+        (hard_block < 1) &
+        (~finance_like) &
+        (attack >= 30)
+    )
 
     d["v311_locked_action"] = np.where(is_test, "TEST", np.where(is_watch, "WATCH", "BLOCK"))
     d["action"] = d["v311_locked_action"]
@@ -664,8 +691,8 @@ def apply_v311_final_action_lock(df):
         np.where(is_watch, "觀察", "禁止")
     )
     d["action_sub"] = np.where(
-        is_test, "v312鎖定：攻擊條件達標，最大機會試單",
-        np.where(is_watch, "v312鎖定：準攻擊，優先觀察", "v312鎖定：非攻擊型或風險過高，禁止")
+        is_test, "v313鎖定：攻擊條件達標，最大機會試單",
+        np.where(is_watch, "v313鎖定：準攻擊，等待確認", "v313鎖定：非攻擊型或風險過高，禁止")
     )
 
     d["priority"] = np.where(d["action"].eq("TEST"), 1, np.where(d["action"].eq("WATCH"), 2, 9))
@@ -681,9 +708,12 @@ def apply_v311_final_action_lock(df):
     d["top_rank_v3066"] = 9999
     d["is_top_v3066"] = 0
 
+    score_col = "attack_score_v312" if "attack_score_v312" in d.columns else ("attack_score_v310" if "attack_score_v310" in d.columns else "attack_score_v309")
+    sort_col = "final_sort_score_v312" if "final_sort_score_v312" in d.columns else ("final_sort_score_v310" if "final_sort_score_v310" in d.columns else "final_sort_score_v309")
+
     test_idx = (
         d.loc[d["action"].eq("TEST")]
-        .sort_values(["attack_score_v312", "final_sort_score_v312", "entry_score", "stock_id"],
+        .sort_values([score_col, sort_col, "entry_score", "stock_id"],
                      ascending=[False, False, False, True])
         .head(5)
         .index
@@ -694,11 +724,11 @@ def apply_v311_final_action_lock(df):
         d.loc[idx, "opportunity_rank"] = str(rank)
         d.loc[idx, "top_rank_v3066"] = rank
         d.loc[idx, "is_top_v3066"] = 1
-        d.loc[idx, "top_reason"] = "v312平衡TOP｜攻擊條件達標｜排除金融/橫盤/低信心"
+        d.loc[idx, "top_reason"] = "v313試單TOP｜攻擊條件達標"
 
     watch_idx = (
         d.loc[d["action"].eq("WATCH")]
-        .sort_values(["attack_score_v312", "final_sort_score_v312", "entry_score", "stock_id"],
+        .sort_values([score_col, sort_col, "entry_score", "stock_id"],
                      ascending=[False, False, False, True])
         .head(5)
         .index
@@ -709,10 +739,10 @@ def apply_v311_final_action_lock(df):
         d.loc[idx, "opportunity_rank"] = str(rank)
         d.loc[idx, "top_rank_v3066"] = rank
         d.loc[idx, "is_top_v3066"] = 1
-        d.loc[idx, "top_reason"] = "v312觀察TOP｜準攻擊但未達試單"
+        d.loc[idx, "top_reason"] = "v313觀察TOP｜準攻擊但未達試單"
 
     d = d.sort_values(
-        ["priority", "top_rank_v3066", "attack_score_v312", "final_sort_score_v312", "entry_score", "stock_id"],
+        ["priority", "top_rank_v3066", score_col, sort_col, "entry_score", "stock_id"],
         ascending=[True, True, False, False, False, True]
     )
 
@@ -748,19 +778,19 @@ def build_trade_plan(core, alpha, regime, signal_date):
     block_pool = pool[pool["action"].astype(str).str.upper().eq("BLOCK")].copy()
 
     test_pool = test_pool.sort_values(
-        ["attack_score_v310", "final_sort_score_v310", "entry_score", "stock_id"],
+        ["attack_score_v312", "final_sort_score_v312", "entry_score", "stock_id"],
         ascending=[False, False, False, True]
-    ).head(20)
+    ).head(25)
 
     watch_pool = watch_pool.sort_values(
-        ["attack_score_v310", "final_sort_score_v310", "entry_score", "stock_id"],
+        ["attack_score_v312", "final_sort_score_v312", "entry_score", "stock_id"],
         ascending=[False, False, False, True]
-    ).head(20)
+    ).head(60)
 
     block_pool = block_pool.sort_values(
-        ["attack_score_v310", "final_sort_score_v310", "entry_score", "stock_id"],
+        ["attack_score_v312", "final_sort_score_v312", "entry_score", "stock_id"],
         ascending=[False, False, False, True]
-    ).head(40)
+    ).head(60)
 
     s = pd.concat([test_pool, watch_pool, block_pool], ignore_index=True)
     s = s.drop_duplicates("stock_id")
@@ -834,7 +864,7 @@ def build_trade_plan(core, alpha, regime, signal_date):
             "liquidity_score": round(float(r.get("liquidity_score", 0)), 2),
             "volume": round(float(r.get("volume", 0)), 0),
             "turnover": round(float(r.get("turnover", 0)), 0),
-            "source": "v312_balanced_attack_final_lock",
+            "source": "v313_watch_layer_final_lock",
             "reason": r.get("reason", r.get("note", "")),
             "system_note": r.get("system_note", r.get("note", "")),
             "note": r.get("note", ""),
@@ -888,7 +918,7 @@ def main():
 
     meta = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "source": "v312_balanced_attack_final_lock",
+        "source": "v313_watch_layer_final_lock",
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
         "data_state": "fresh",
@@ -1945,98 +1975,4 @@ def _apply_v266577_to_csv(path, quality_map):
 
     df["adjusted_signal_score_v26657_7"] = (base_score + structure_pre * s_weights + continuation_q * c_weights).round(3)
     df["structure_weight_v26657_7"] = s_weights.round(2)
-    df["continuation_weight_v26657_7"] = c_weights.round(2)
-    df["strategy_bucket_v26657_7"] = buckets
-    df["adjusted_signal_note_v26657_7"] = "測試排序分=原分數+結構前置分*策略權重+續強品質*策略權重；不覆蓋原策略"
-    df["structure_rank_v26657_7"] = pd.to_numeric(df["adjusted_signal_score_v26657_7"], errors="coerce").rank(ascending=False, method="min")
-
-    def _append_note(row):
-        parts = []
-        h1 = str(row.get("structure_pre_hint", "")).strip()
-        h2 = str(row.get("continuation_quality_hint", "")).strip()
-        if h1:
-            parts.append("結構：" + h1)
-        if h2:
-            parts.append("續強：" + h2)
-        return "｜".join(parts)
-
-    if "system_note" in df.columns:
-        df["system_note"] = df.apply(lambda r: str(r.get("system_note", "")) + ("｜v266.57.7：" + _append_note(r) if _append_note(r) else ""), axis=1)
-    elif "note" in df.columns:
-        df["note"] = df.apply(lambda r: str(r.get("note", "")) + ("｜v266.57.7：" + _append_note(r) if _append_note(r) else ""), axis=1)
-
-    _write_csv_v266577(df, path)
-    return True, len(df)
-
-def apply_structure_weight_continuation_patch_v266577():
-    quality_map = _build_continuation_quality_map_v266577()
-    targets = ["candidates.csv","core_candidates.csv","alpha_candidates.csv","trade_plan.csv","ignition_candidates.csv","strategy_evolution.csv","selection_debug.csv","pre_move_candidates.csv","top_opportunities.csv","final_action_plan.csv"]
-    report = {
-        "version": "v266.57.7",
-        "mode": "append_only_structure_weight_split_plus_continuation_quality",
-        "changed_strategy_logic": False,
-        "changed_original_score": False,
-        "changed_action": False,
-        "changed_position": False,
-        "enriched_stock_count": len(quality_map),
-        "files": {},
-        "updated_at": taipei_now_str(),
-        "description": "CORE/IGNITION提高結構權重，ALPHA保留動能延續；新增回檔不破/量縮整理/守短均續強品質分，只作測試排序參考。",
-    }
-    for name in targets:
-        for base in [ROOT, DATA_DIR]:
-            p = base / name
-            ok, n = _apply_v266577_to_csv(p, quality_map)
-            if ok:
-                report["files"][str(p)] = n
-                print("v266.57.7 enriched:", p, n)
-    for p in [ROOT / "structure_weight_continuation_report.json", DATA_DIR / "structure_weight_continuation_report.json"]:
-        try:
-            p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8-sig")
-        except Exception as e:
-            print("write v266.57.7 report failed:", p, e)
-    print(json.dumps(report, ensure_ascii=False, indent=2))
-
-def main_v266577_structure_weight_continuation_patch():
-    main_v266576_structure_pre_score_patch()
-    apply_structure_weight_continuation_patch_v266577()
-
-
-# ===== v311.1 CSV FINAL LOCK =====
-# 在所有 v266.57.x append-only 補丁後，重新鎖定 trade_plan / candidates / core / alpha 的 action 與 TOP。
-def apply_v311_csv_final_lock():
-    targets = [
-        "core_candidates.csv",
-        "alpha_candidates.csv",
-        "candidates.csv",
-        "trade_plan.csv",
-    ]
-    for name in targets:
-        for base in [ROOT, DATA_DIR]:
-            p = base / name
-            if not p.exists() or p.stat().st_size == 0:
-                continue
-            try:
-                df = pd.read_csv(p, encoding="utf-8-sig")
-            except Exception:
-                try:
-                    df = pd.read_csv(p, encoding="utf-8")
-                except Exception:
-                    continue
-            if df.empty or "stock_id" not in df.columns:
-                continue
-
-            # 只有含 v310 欄位的檔案才鎖，避免破壞不相關 CSV
-            if "attack_score_v312" not in df.columns and "attack_score_v310" not in df.columns and "attack_score_v309" not in df.columns:
-                continue
-
-            locked = apply_v311_final_action_lock(df)
-            locked["source"] = "v312_balanced_attack_final_lock"
-            locked.to_csv(p, index=False, encoding="utf-8-sig")
-            print("v311 final csv locked:", p, len(locked))
-
-
-if __name__ == "__main__":
-    main_v266577_structure_weight_continuation_patch()
-    apply_v311_csv_final_lock()
+    df["continuation_weight_v26657_7"] = 
