@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-13 02:58:16",
+  "generated_at": "2026-05-13 04:43:28",
   "source": "v266_data_guard",
   "status": "PASS",
   "feature_file": "feature_panel_daily.csv",
@@ -8,7 +8,7 @@
   "latest_count": 881,
   "has_60d_count": 877,
   "zero_mom20_ratio": 0.0011,
-  "above_ma20_ratio": 0.4222,
+  "above_ma20_ratio": 0.4245,
   "valid_mom20_count": 877,
   "reason": "data guard passed"
 }
