@@ -1,3 +1,4 @@
+import re
 """
 v266_strategy_engine.py
 雙策略版：CORE 早期卡位 + ALPHA 高流動性強勢延續
@@ -2877,50 +2878,3 @@ def write_v317_panel_files_hard_guarantee():
         evo = evo[evo_cols].copy()
 
     for base_path in [ROOT, DATA_DIR]:
-        base_path.mkdir(parents=True, exist_ok=True)
-        ign.to_csv(base_path / "ignition_candidates.csv", index=False, encoding="utf-8-sig")
-        evo.to_csv(base_path / "strategy_evolution.csv", index=False, encoding="utf-8-sig")
-        print("v317 wrote:", base_path / "ignition_candidates.csv", len(ign))
-        print("v317 wrote:", base_path / "strategy_evolution.csv", len(evo))
-
-    # 額外確認檔案存在，不存在就直接拋錯讓 GitHub Actions 失敗，不再假成功。
-    required = [
-        DATA_DIR / "ignition_candidates.csv",
-        DATA_DIR / "strategy_evolution.csv",
-        ROOT / "ignition_candidates.csv",
-        ROOT / "strategy_evolution.csv",
-    ]
-    missing = [str(p) for p in required if not p.exists()]
-    if missing:
-        raise RuntimeError("v317 panel files missing: " + ",".join(missing))
-
-    # 更新 meta，讓前端來源不再一直顯示舊字串。
-    for base_path in [ROOT, DATA_DIR]:
-        p = base_path / "meta.json"
-        if p.exists():
-            try:
-                data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v317_panel_file_hard_guarantee"
-                data["ignition_count"] = int(len(ign))
-                data["evolution_count"] = int(len(evo))
-                data["panel_files_required"] = [
-                    "ignition_candidates.csv",
-                    "strategy_evolution.csv"
-                ]
-                p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
-            except Exception:
-                pass
-
-
-if __name__ == "__main__":
-    main_v266577_structure_weight_continuation_patch()
-    apply_v311_csv_final_lock()
-    try:
-        apply_v315_ignition_evolution_outputs()
-    except Exception as e:
-        print("v315 panel output skipped:", repr(e))
-    try:
-        write_v317_panel_file_hard_guarantee()
-    except Exception as e:
-        print("v316 panel output skipped:", repr(e))
-    write_v317_panel_files_hard_guarantee()
