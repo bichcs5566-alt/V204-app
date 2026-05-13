@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-13 13:41:17",
+  "generated_at": "2026-05-13 14:16:09",
   "count": 30,
   "cards": [
     {
@@ -99,6 +99,19 @@
       "label": "小倉試單",
       "score": 86.0,
       "close": 17.0,
+      "price_tier": "50以下",
+      "target_weight": 0.01,
+      "suggested_amount": 10000,
+      "setup_type": "主力佈局完成",
+      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可",
+      "color": "green"
+    },
+    {
+      "stock_id": "2035",
+      "action": "BUY",
+      "label": "小倉試單",
+      "score": 86.0,
+      "close": 27.95,
       "price_tier": "50以下",
       "target_weight": 0.01,
       "suggested_amount": 10000,
@@ -263,19 +276,6 @@
       "color": "green"
     },
     {
-      "stock_id": "6903",
-      "action": "BUY",
-      "label": "小倉試單",
-      "score": 86.0,
-      "close": 427.5,
-      "price_tier": "100-500",
-      "target_weight": 0.01,
-      "suggested_amount": 10000,
-      "setup_type": "主力佈局完成",
-      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可",
-      "color": "green"
-    },
-    {
       "stock_id": "8411",
       "action": "BUY",
       "label": "小倉試單",
@@ -354,19 +354,6 @@
       "color": "green"
     },
     {
-      "stock_id": "4192",
-      "action": "BUY",
-      "label": "小倉試單",
-      "score": 80.0,
-      "close": 20.45,
-      "price_tier": "50以下",
-      "target_weight": 0.01,
-      "suggested_amount": 10000,
-      "setup_type": "主力佈局完成",
-      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破",
-      "color": "green"
-    },
-    {
       "stock_id": "6988",
       "action": "BUY",
       "label": "小倉試單",
@@ -390,6 +377,19 @@
       "suggested_amount": 5000,
       "setup_type": "佈局高機率",
       "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可",
+      "color": "yellow"
+    },
+    {
+      "stock_id": "1707",
+      "action": "TEST",
+      "label": "佈局試單",
+      "score": 72.0,
+      "close": 109.5,
+      "price_tier": "100-500",
+      "target_weight": 0.005,
+      "suggested_amount": 5000,
+      "setup_type": "佈局高機率",
+      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可",
       "color": "yellow"
     }
   ]

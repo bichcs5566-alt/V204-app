@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-13 13:42:29",
+  "generated_at": "2026-05-13 14:17:22",
   "source": "final_trading_system_allocator",
   "capital_assumption": 1000000,
   "regime": "RANGE",
@@ -24,19 +24,19 @@
       "watch": 5
     }
   },
-  "total_rows": 654,
+  "total_rows": 644,
   "top_rows": 5,
   "watch_rows": 12,
-  "block_rows": 637,
+  "block_rows": 627,
   "allowed_rows": 5,
   "entry_counts": {
-    "WAIT": 579,
+    "WAIT": 569,
     "BREAK": 41,
     "PULLBACK": 33,
     "REVERSAL": 1
   },
   "bucket_counts": {
-    "PRE": 395,
+    "PRE": 385,
     "ALPHA": 240,
     "CORE": 19
   },
