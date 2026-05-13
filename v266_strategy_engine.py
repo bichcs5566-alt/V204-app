@@ -966,7 +966,7 @@ def build_trade_plan(core, alpha, regime, signal_date):
             "liquidity_score": round(float(r.get("liquidity_score", 0)), 2),
             "volume": round(float(r.get("volume", 0)), 0),
             "turnover": round(float(r.get("turnover", 0)), 0),
-            "source": "v314_strategy_field_mapping_lock",
+            "source": "v315_ignition_evolution_bridge",
             "reason": r.get("reason", r.get("note", "")),
             "system_note": r.get("system_note", r.get("note", "")),
             "note": r.get("note", ""),
@@ -1025,7 +1025,7 @@ def main():
 
     meta = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "source": "v314_strategy_field_mapping_lock",
+        "source": "v315_ignition_evolution_bridge",
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
         "data_state": "fresh",
@@ -2174,6 +2174,272 @@ def apply_v311_csv_final_lock():
             print("v314 final csv locked:", p, len(locked))
 
 
+
+# ===== v315 IGNITION / EVOLUTION OUTPUT BRIDGE =====
+# 目的：
+# - 產出 app.js 會讀取的 ignition_candidates.csv / strategy_evolution.csv。
+# - 不改 TEST / WATCH / BLOCK 主分類。
+# - IGNITION / EVOLUTION 只是提示面板，不自動加碼、不自動買進。
+def apply_v315_ignition_evolution_outputs():
+    import numpy as np
+    import pandas as pd
+    from pathlib import Path
+    from datetime import datetime
+
+    def _read_any(name):
+        for base in [ROOT, DATA_DIR]:
+            p = base / name
+            if p.exists() and p.stat().st_size > 0:
+                try:
+                    return pd.read_csv(p, encoding="utf-8-sig")
+                except Exception:
+                    try:
+                        return pd.read_csv(p, encoding="utf-8")
+                    except Exception:
+                        pass
+        return pd.DataFrame()
+
+    def _num(df, col, default=0.0):
+        if col in df.columns:
+            return pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
+        return pd.Series(default, index=df.index, dtype="float64")
+
+    def _txt(df, col, default=""):
+        if col in df.columns:
+            return df[col].astype(str).replace("nan", "").fillna(default)
+        return pd.Series(default, index=df.index, dtype="object")
+
+    def _write_both(df, name):
+        df = df.copy()
+        for base in [ROOT, DATA_DIR]:
+            p = base / name
+            p.parent.mkdir(parents=True, exist_ok=True)
+            df.to_csv(p, index=False, encoding="utf-8-sig")
+            print("v315 wrote:", p, len(df))
+
+    # 以 candidates + trade_plan 合併，避免 trade_plan 截斷後 ignition/evolution 沒資料。
+    frames = []
+    for name in ["trade_plan.csv", "candidates.csv", "core_candidates.csv", "alpha_candidates.csv"]:
+        df = _read_any(name)
+        if df is not None and not df.empty:
+            frames.append(df)
+    if not frames:
+        _write_both(pd.DataFrame(), "ignition_candidates.csv")
+        _write_both(pd.DataFrame(), "strategy_evolution.csv")
+        return
+
+    pool = pd.concat(frames, ignore_index=True)
+    if "stock_id" not in pool.columns:
+        _write_both(pd.DataFrame(), "ignition_candidates.csv")
+        _write_both(pd.DataFrame(), "strategy_evolution.csv")
+        return
+
+    pool["stock_id"] = pool["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False).fillna(pool["stock_id"].astype(str).str[:4])
+    pool = pool.dropna(subset=["stock_id"]).drop_duplicates("stock_id", keep="first").copy()
+
+    # 補齊欄位，讓前端卡片不空。
+    try:
+        pool = apply_v311_final_action_lock(pool)
+        pool = _ensure_v314_strategy_fields(pool)
+    except Exception:
+        pass
+
+    action = _txt(pool, "v311_locked_action")
+    action = action.where(action.str.len() > 0, _txt(pool, "action")).str.upper()
+
+    attack = _num(pool, "attack_score_v312")
+    if float(attack.abs().sum()) == 0:
+        attack = _num(pool, "attack_score_v310")
+    if float(attack.abs().sum()) == 0:
+        attack = _num(pool, "entry_score")
+
+    final_sort = _num(pool, "final_sort_score_v312")
+    if float(final_sort.abs().sum()) == 0:
+        final_sort = _num(pool, "final_sort_score_v310")
+    if float(final_sort.abs().sum()) == 0:
+        final_sort = _num(pool, "score")
+
+    trend = _num(pool, "trend_ok_v310")
+    momentum = _num(pool, "momentum_ok_v310")
+    breakout = _num(pool, "breakout_ok_v310")
+    volume_ok = _num(pool, "volume_ok_v310")
+    chip = _num(pool, "chip_ok_v310")
+    hard_block = _num(pool, "hard_block_v313")
+    hard_reject = _num(pool, "hard_reject_v313")
+    if float(hard_reject.abs().sum()) == 0:
+        hard_reject = _num(pool, "hard_reject_v312")
+
+    industry = _txt(pool, "industry")
+    sid = _txt(pool, "stock_id")
+    finance = sid.str.startswith(("28", "58")) | industry.str.contains("金融|保險|金控|銀行|證券", na=False)
+
+    close = _num(pool, "close")
+    if float(close.abs().sum()) == 0:
+        close = _num(pool, "ref_price")
+    if float(close.abs().sum()) == 0:
+        close = _num(pool, "price")
+
+    liq = _num(pool, "liquidity_score")
+
+    # IGNITION：起漲雷達。以 TEST 為主，但排除硬封鎖、金融、假突破。
+    ignition_score = (
+        attack * 0.55 +
+        final_sort * 0.20 +
+        trend * 8 +
+        momentum * 12 +
+        breakout * 14 +
+        volume_ok * 10 +
+        chip * 8 +
+        (liq >= 70).astype(int) * 3 -
+        hard_block * 80 -
+        finance.astype(int) * 100
+    ).round(2)
+
+    ignition_mask = (
+        action.isin(["TEST", "WATCH"]) &
+        (hard_block < 1) &
+        (~finance) &
+        (ignition_score >= 50) &
+        ((momentum >= 1) | (breakout >= 1))
+    )
+
+    ign = pool.loc[ignition_mask].copy()
+    if ign.empty:
+        # 不要讓面板空白：若當天沒有乾淨起漲，給最接近的 TEST 當「觀察」，但仍保留提示文字。
+        ign = pool.loc[
+            action.eq("TEST") & (hard_block < 1) & (~finance)
+        ].copy()
+
+    if not ign.empty:
+        ign["_ignition_score_v315"] = ignition_score.loc[ign.index]
+        ign = ign.sort_values(["_ignition_score_v315", "stock_id"], ascending=[False, True]).head(10).copy()
+        ign["action"] = "WATCH"
+        ign["final_action"] = "WATCH"
+        ign["strategy_type"] = "IGNITION"
+        ign["bucket"] = "IGNITION"
+        ign["strategy_name"] = "IGNITION 起漲啟動"
+        ign["entry_score"] = ign["_ignition_score_v315"].round(2)
+        ign["score"] = ign["_ignition_score_v315"].round(2)
+        ign["close"] = close.loc[ign.index].round(2)
+        ign["ref_price"] = ign["close"]
+        ign["ignition_phase"] = np.where(
+            _num(ign, "breakout_ok_v310") >= 1,
+            "突破確認觀察",
+            "起漲前夕觀察"
+        )
+        ign["entry_type"] = ign["ignition_phase"]
+        ign["section_top_opportunity"] = [f"IGNITION_TOP{i}" for i in range(1, len(ign) + 1)]
+        ign["top_opportunity"] = [f"🧪TOP{i}" for i in range(1, len(ign) + 1)]
+        ign["execution_flag"] = ign["section_top_opportunity"]
+        ign["fake_score"] = np.where(_num(ign, "hard_reject_v313") >= 1, 80, 15)
+        ign["fake_risk_level"] = np.where(_num(ign, "hard_reject_v313") >= 1, "HIGH", "LOW")
+        ign["fake_risk_tag"] = np.where(_num(ign, "hard_reject_v313") >= 1, "假突破風險", "低假突破")
+        ign["fake_flags"] = np.where(_num(ign, "hard_reject_v313") >= 1, "hard_reject", "")
+        ign["fake_reason_zh"] = np.where(
+            _num(ign, "hard_reject_v313") >= 1,
+            "仍有假突破或結構風險，只能觀察。",
+            "量價與均線條件接近起漲，假突破風險低。"
+        )
+        ign["ignition_hint_zh"] = "起漲雷達：觀察隔日是否延續放量、站穩短均、K棒不轉弱。"
+        ign["operation_advice_zh"] = "不自動買進；若隔日延續強勢才考慮小量試單。"
+        ign["reason"] = "v315 起漲訊號：從 TEST/WATCH 中挑選量價、均線、突破較完整者。"
+        ign["system_note"] = "IGNITION：只做防假突破觀察，不自動丟入買進。"
+        ign["source"] = "v315_ignition_evolution_bridge"
+
+    ignition_cols = [
+        "stock_id", "stock_name", "industry", "action", "final_action", "strategy_type", "bucket",
+        "strategy_name", "entry_score", "score", "close", "ref_price", "ignition_phase",
+        "entry_type", "section_top_opportunity", "top_opportunity", "execution_flag",
+        "fake_score", "fake_risk_tag", "fake_risk_level", "fake_flags", "fake_reason_zh",
+        "ignition_hint_zh", "operation_advice_zh", "reason", "system_note", "source",
+        "liquidity_level", "liquidity_score", "volume", "turnover"
+    ]
+    for c in ignition_cols:
+        if c not in ign.columns:
+            ign[c] = ""
+    _write_both(ign[ignition_cols].copy(), "ignition_candidates.csv")
+
+    # EVOLUTION：策略升級提示。從 TEST 優先，其次 WATCH，挑分數最高。
+    evolution_score = (
+        attack * 0.60 +
+        final_sort * 0.25 +
+        trend * 6 +
+        momentum * 8 +
+        breakout * 8 +
+        volume_ok * 6 +
+        chip * 6 -
+        hard_block * 90 -
+        finance.astype(int) * 100
+    ).round(2)
+
+    evo_mask = (
+        action.isin(["TEST", "WATCH"]) &
+        (hard_block < 1) &
+        (~finance) &
+        (evolution_score >= 45)
+    )
+
+    evo = pool.loc[evo_mask].copy()
+    if evo.empty:
+        evo = pool.loc[action.eq("TEST") & (hard_block < 1) & (~finance)].copy()
+
+    if not evo.empty:
+        evo["_evolution_score_v315"] = evolution_score.loc[evo.index]
+        evo = evo.sort_values(["_evolution_score_v315", "stock_id"], ascending=[False, True]).head(10).copy()
+        evo["action"] = "WATCH"
+        evo["final_action"] = "WATCH"
+        evo["strategy_type"] = "EVOLUTION"
+        evo["bucket"] = "EVOLUTION"
+        evo["strategy_name"] = "EVOLUTION 策略進化鏈"
+        evo["evolution_score"] = evo["_evolution_score_v315"].round(2)
+        evo["score"] = evo["_evolution_score_v315"].round(2)
+        evo["entry_score"] = evo["_evolution_score_v315"].round(2)
+        evo["close"] = close.loc[evo.index].round(2)
+        evo["ref_price"] = evo["close"]
+        evo["evolution_phase"] = np.where(
+            action.loc[evo.index].eq("TEST"),
+            "TEST→核心觀察",
+            "WATCH→試單候選"
+        )
+        evo["entry_type"] = evo["evolution_phase"]
+        evo["section_top_opportunity"] = [f"EVOLUTION_TOP{i}" for i in range(1, len(evo) + 1)]
+        evo["top_opportunity"] = [f"🧬TOP{i}" for i in range(1, len(evo) + 1)]
+        evo["execution_flag"] = evo["section_top_opportunity"]
+        evo["reason"] = "v315 策略進化：追蹤可由觀察升級到試單、或由試單升級到核心的標的。"
+        evo["system_note"] = "EVOLUTION：升級提示，不自動加碼；需等隔日延續與風控確認。"
+        evo["source"] = "v315_ignition_evolution_bridge"
+
+    evolution_cols = [
+        "stock_id", "stock_name", "industry", "action", "final_action", "strategy_type", "bucket",
+        "strategy_name", "evolution_score", "entry_score", "score", "close", "ref_price",
+        "evolution_phase", "entry_type", "section_top_opportunity", "top_opportunity",
+        "execution_flag", "reason", "system_note", "source",
+        "liquidity_level", "liquidity_score", "volume", "turnover"
+    ]
+    for c in evolution_cols:
+        if c not in evo.columns:
+            evo[c] = ""
+    _write_both(evo[evolution_cols].copy(), "strategy_evolution.csv")
+
+    # 更新 meta / summary 的提示來源，避免前端仍顯示只有舊 source。
+    for base in [ROOT, DATA_DIR]:
+        for name in ["meta.json", "final_action_summary.json"]:
+            p = base / name
+            if not p.exists():
+                continue
+            try:
+                import json
+                data = json.loads(p.read_text(encoding="utf-8-sig"))
+                data["source"] = "v315_ignition_evolution_bridge"
+                data["ignition_count"] = int(len(ign))
+                data["evolution_count"] = int(len(evo))
+                data["ignition_evolution_note"] = "v315 已由後端產出 ignition_candidates.csv / strategy_evolution.csv"
+                p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+            except Exception:
+                pass
+
+
 if __name__ == "__main__":
     main_v266577_structure_weight_continuation_patch()
     apply_v311_csv_final_lock()
+    apply_v315_ignition_evolution_outputs()
