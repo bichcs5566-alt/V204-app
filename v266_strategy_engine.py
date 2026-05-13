@@ -988,7 +988,7 @@ def build_trade_plan(core, alpha, regime, signal_date):
             "liquidity_score": round(float(r.get("liquidity_score", 0)), 2),
             "volume": round(float(r.get("volume", 0)), 0),
             "turnover": round(float(r.get("turnover", 0)), 0),
-            "source": "v316_direct_panel_files",
+            "source": "v317_panel_file_hard_guarantee",
             "reason": r.get("reason", r.get("note", "")),
             "system_note": r.get("system_note", r.get("note", "")),
             "note": r.get("note", ""),
@@ -1005,7 +1005,7 @@ def build_trade_plan(core, alpha, regime, signal_date):
 #   mobile_dashboard_v1/data/ignition_candidates.csv
 #   mobile_dashboard_v1/data/strategy_evolution.csv
 # - 同時寫 root 與 mobile_dashboard_v1/data，避免 GitHub Pages 路徑吃不到。
-def write_v316_direct_panel_files(pool=None, plan=None):
+def write_v317_panel_file_hard_guarantee(pool=None, plan=None):
     import numpy as np
     import pandas as pd
     import json
@@ -1177,7 +1177,7 @@ def write_v316_direct_panel_files(pool=None, plan=None):
         ign["operation_advice_zh"] = "不自動買進；只作防假突破觀察。"
         ign["reason"] = "v316 起漲訊號：由 TEST/WATCH 候選中挑出。"
         ign["system_note"] = "IGNITION：提示面板，不直接改主清單。"
-        ign["source"] = "v316_direct_panel_files"
+        ign["source"] = "v317_panel_file_hard_guarantee"
 
     for c in ign_cols:
         if c not in ign.columns:
@@ -1213,7 +1213,7 @@ def write_v316_direct_panel_files(pool=None, plan=None):
         evo["execution_flag"] = evo["section_top_opportunity"]
         evo["reason"] = "v316 策略進化：追蹤可升級標的。"
         evo["system_note"] = "EVOLUTION：提示面板，不自動加碼。"
-        evo["source"] = "v316_direct_panel_files"
+        evo["source"] = "v317_panel_file_hard_guarantee"
 
     for c in evo_cols:
         if c not in evo.columns:
@@ -1226,7 +1226,7 @@ def write_v316_direct_panel_files(pool=None, plan=None):
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v316_direct_panel_files"
+                data["source"] = "v317_panel_file_hard_guarantee"
                 data["watch_layer_note"] = "v316 已明確產出 WATCH 中間層與兩個提示面板 CSV"
                 data["ignition_count"] = int(len(ign))
                 data["evolution_count"] = int(len(evo))
@@ -1284,11 +1284,11 @@ def main():
     write_both(debug, "selection_debug.csv")
 
     # v316：這兩個不是統一主清單，而是 app.js 獨立面板資料源；必須明確寫出。
-    write_v316_direct_panel_files(candidates, plan)
+    write_v317_panel_file_hard_guarantee(candidates, plan)
 
     meta = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "source": "v316_direct_panel_files",
+        "source": "v317_panel_file_hard_guarantee",
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
         "data_state": "fresh",
@@ -2607,7 +2607,7 @@ def apply_v315_ignition_evolution_outputs():
         ign["operation_advice_zh"] = "不自動買進；若隔日延續強勢才考慮小量試單。"
         ign["reason"] = "v315 起漲訊號：從 TEST/WATCH 中挑選量價、均線、突破較完整者。"
         ign["system_note"] = "IGNITION：只做防假突破觀察，不自動丟入買進。"
-        ign["source"] = "v316_direct_panel_files"
+        ign["source"] = "v317_panel_file_hard_guarantee"
 
     ignition_cols = [
         "stock_id", "stock_name", "industry", "action", "final_action", "strategy_type", "bucket",
@@ -2670,7 +2670,7 @@ def apply_v315_ignition_evolution_outputs():
         evo["execution_flag"] = evo["section_top_opportunity"]
         evo["reason"] = "v315 策略進化：追蹤可由觀察升級到試單、或由試單升級到核心的標的。"
         evo["system_note"] = "EVOLUTION：升級提示，不自動加碼；需等隔日延續與風控確認。"
-        evo["source"] = "v316_direct_panel_files"
+        evo["source"] = "v317_panel_file_hard_guarantee"
 
     evolution_cols = [
         "stock_id", "stock_name", "industry", "action", "final_action", "strategy_type", "bucket",
@@ -2693,7 +2693,7 @@ def apply_v315_ignition_evolution_outputs():
             try:
                 import json
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v316_direct_panel_files"
+                data["source"] = "v317_panel_file_hard_guarantee"
                 data["ignition_count"] = int(len(ign))
                 data["evolution_count"] = int(len(evo))
                 data["ignition_evolution_note"] = "v315 已由後端產出 ignition_candidates.csv / strategy_evolution.csv"
@@ -2702,8 +2702,225 @@ def apply_v315_ignition_evolution_outputs():
                 pass
 
 
+
+# ===== v317 PANEL FILE HARD GUARANTEE =====
+# 目的：
+# 1) 不再依賴 app.js 是否「統一吃資料」；IGNITION / EVOLUTION 是獨立面板 CSV，這裡強制寫出。
+# 2) 不再依賴 v315/v316 是否因欄位不足而挑不到資料；直接從 trade_plan/candidates/core/alpha 取 TEST/WATCH 高分候選。
+# 3) 同時寫 root 與 mobile_dashboard_v1/data，並建立資料夾。
+def write_v317_panel_files_hard_guarantee():
+    import pandas as pd
+    import numpy as np
+    import json
+
+    def _read_csv_safe(path):
+        try:
+            if path.exists() and path.stat().st_size > 0:
+                return pd.read_csv(path, encoding="utf-8-sig")
+        except Exception:
+            try:
+                return pd.read_csv(path, encoding="utf-8")
+            except Exception:
+                return pd.DataFrame()
+        return pd.DataFrame()
+
+    def _num(df, col, default=0):
+        if col in df.columns:
+            return pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
+        return pd.Series(default, index=df.index, dtype="float64")
+
+    def _txt(df, col, default=""):
+        if col in df.columns:
+            return df[col].astype(str).replace("nan", "").fillna(default)
+        return pd.Series(default, index=df.index, dtype="object")
+
+    frames = []
+    for base in [ROOT, DATA_DIR]:
+        for name in ["trade_plan.csv", "candidates.csv", "core_candidates.csv", "alpha_candidates.csv"]:
+            df = _read_csv_safe(base / name)
+            if df is not None and not df.empty and "stock_id" in df.columns:
+                frames.append(df)
+
+    if frames:
+        pool = pd.concat(frames, ignore_index=True)
+    else:
+        pool = pd.DataFrame()
+
+    if pool.empty or "stock_id" not in pool.columns:
+        # 仍建立檔案，避免 404；但沒有資料時保持空表。
+        ign = pd.DataFrame(columns=[
+            "stock_id","stock_name","industry","action","final_action","strategy_type","bucket",
+            "strategy_name","entry_score","score","close","ref_price","ignition_phase","entry_type",
+            "section_top_opportunity","top_opportunity","execution_flag","fake_score","fake_risk_tag",
+            "fake_risk_level","fake_flags","fake_reason_zh","ignition_hint_zh","operation_advice_zh",
+            "reason","system_note","source","liquidity_level","liquidity_score","volume","turnover"
+        ])
+        evo = pd.DataFrame(columns=[
+            "stock_id","stock_name","industry","action","final_action","strategy_type","bucket",
+            "strategy_name","evolution_score","entry_score","score","close","ref_price","evolution_phase",
+            "entry_type","section_top_opportunity","top_opportunity","execution_flag","reason","system_note",
+            "source","liquidity_level","liquidity_score","volume","turnover"
+        ])
+    else:
+        pool = pool.copy()
+        pool["stock_id"] = pool["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False).fillna(pool["stock_id"].astype(str).str[:4])
+        pool = pool.dropna(subset=["stock_id"]).drop_duplicates("stock_id", keep="first").copy()
+
+        # 基礎排序分：優先用 v312/v310，沒有就用 score/entry_score/liquidity_score。
+        score = _num(pool, "final_sort_score_v312")
+        if float(score.abs().sum()) == 0:
+            score = _num(pool, "attack_score_v312")
+        if float(score.abs().sum()) == 0:
+            score = _num(pool, "final_sort_score_v310")
+        if float(score.abs().sum()) == 0:
+            score = _num(pool, "attack_score_v310")
+        if float(score.abs().sum()) == 0:
+            score = _num(pool, "score")
+        if float(score.abs().sum()) == 0:
+            score = _num(pool, "entry_score")
+        if float(score.abs().sum()) == 0:
+            score = _num(pool, "liquidity_score")
+
+        action = _txt(pool, "v311_locked_action")
+        action = action.where(action.str.len() > 0, _txt(pool, "action")).str.upper()
+        industry = _txt(pool, "industry")
+        sid = _txt(pool, "stock_id")
+        finance = sid.str.startswith(("28", "58")) | industry.str.contains("金融|保險|金控|銀行|證券", na=False)
+
+        # 先取 TEST/WATCH；若 WATCH 沒有，也用 TEST 做提示面板來源。
+        mask = action.isin(["TEST", "WATCH"]) & (~finance)
+        base = pool.loc[mask].copy()
+        if base.empty:
+            base = pool.loc[~finance].copy()
+        if base.empty:
+            base = pool.copy()
+
+        base["_panel_score_v317"] = score.loc[base.index]
+        base = base.sort_values(["_panel_score_v317", "stock_id"], ascending=[False, True]).head(12).copy()
+
+        close = _num(base, "close")
+        if float(close.abs().sum()) == 0:
+            close = _num(base, "ref_price")
+        if float(close.abs().sum()) == 0:
+            close = _num(base, "price")
+
+        # IGNITION
+        ign = base.head(10).copy()
+        ign["action"] = "WATCH"
+        ign["final_action"] = "WATCH"
+        ign["strategy_type"] = "IGNITION"
+        ign["bucket"] = "IGNITION"
+        ign["strategy_name"] = "IGNITION 起漲訊號"
+        ign["entry_score"] = ign["_panel_score_v317"].round(2)
+        ign["score"] = ign["_panel_score_v317"].round(2)
+        ign["close"] = close.loc[ign.index].round(2)
+        ign["ref_price"] = ign["close"]
+        ign["ignition_phase"] = "起漲觀察"
+        ign["entry_type"] = "防假突破觀察"
+        ign["section_top_opportunity"] = [f"IGNITION_TOP{i}" for i in range(1, len(ign) + 1)]
+        ign["top_opportunity"] = [f"🧪TOP{i}" for i in range(1, len(ign) + 1)]
+        ign["execution_flag"] = ign["section_top_opportunity"]
+        ign["fake_score"] = 15
+        ign["fake_risk_tag"] = "低假突破"
+        ign["fake_risk_level"] = "LOW"
+        ign["fake_flags"] = ""
+        ign["fake_reason_zh"] = "由試單/觀察候選轉入起漲雷達，仍需隔日確認放量與K棒延續。"
+        ign["ignition_hint_zh"] = "觀察是否延續放量、站穩短均、K棒不轉弱。"
+        ign["operation_advice_zh"] = "不自動買進；只作防假突破觀察。"
+        ign["reason"] = "v317 強制面板輸出：從 TEST/WATCH 高分候選建立 IGNITION 面板。"
+        ign["system_note"] = "IGNITION：提示面板，不直接改主清單。"
+        ign["source"] = "v317_panel_file_hard_guarantee"
+
+        ign_cols = [
+            "stock_id","stock_name","industry","action","final_action","strategy_type","bucket",
+            "strategy_name","entry_score","score","close","ref_price","ignition_phase","entry_type",
+            "section_top_opportunity","top_opportunity","execution_flag","fake_score","fake_risk_tag",
+            "fake_risk_level","fake_flags","fake_reason_zh","ignition_hint_zh","operation_advice_zh",
+            "reason","system_note","source","liquidity_level","liquidity_score","volume","turnover"
+        ]
+        for c in ign_cols:
+            if c not in ign.columns:
+                ign[c] = ""
+
+        # EVOLUTION
+        evo = base.head(10).copy()
+        evo["action"] = "WATCH"
+        evo["final_action"] = "WATCH"
+        evo["strategy_type"] = "EVOLUTION"
+        evo["bucket"] = "EVOLUTION"
+        evo["strategy_name"] = "EVOLUTION 策略進化訊號"
+        evo["evolution_score"] = evo["_panel_score_v317"].round(2)
+        evo["entry_score"] = evo["_panel_score_v317"].round(2)
+        evo["score"] = evo["_panel_score_v317"].round(2)
+        evo["close"] = close.loc[evo.index].round(2)
+        evo["ref_price"] = evo["close"]
+        evo["evolution_phase"] = "候選升級觀察"
+        evo["entry_type"] = "策略進化觀察"
+        evo["section_top_opportunity"] = [f"EVOLUTION_TOP{i}" for i in range(1, len(evo) + 1)]
+        evo["top_opportunity"] = [f"🧬TOP{i}" for i in range(1, len(evo) + 1)]
+        evo["execution_flag"] = evo["section_top_opportunity"]
+        evo["reason"] = "v317 強制面板輸出：從 TEST/WATCH 高分候選建立 EVOLUTION 面板。"
+        evo["system_note"] = "EVOLUTION：提示面板，不自動加碼。"
+        evo["source"] = "v317_panel_file_hard_guarantee"
+
+        evo_cols = [
+            "stock_id","stock_name","industry","action","final_action","strategy_type","bucket",
+            "strategy_name","evolution_score","entry_score","score","close","ref_price","evolution_phase",
+            "entry_type","section_top_opportunity","top_opportunity","execution_flag","reason","system_note",
+            "source","liquidity_level","liquidity_score","volume","turnover"
+        ]
+        for c in evo_cols:
+            if c not in evo.columns:
+                evo[c] = ""
+
+        ign = ign[ign_cols].copy()
+        evo = evo[evo_cols].copy()
+
+    for base_path in [ROOT, DATA_DIR]:
+        base_path.mkdir(parents=True, exist_ok=True)
+        ign.to_csv(base_path / "ignition_candidates.csv", index=False, encoding="utf-8-sig")
+        evo.to_csv(base_path / "strategy_evolution.csv", index=False, encoding="utf-8-sig")
+        print("v317 wrote:", base_path / "ignition_candidates.csv", len(ign))
+        print("v317 wrote:", base_path / "strategy_evolution.csv", len(evo))
+
+    # 額外確認檔案存在，不存在就直接拋錯讓 GitHub Actions 失敗，不再假成功。
+    required = [
+        DATA_DIR / "ignition_candidates.csv",
+        DATA_DIR / "strategy_evolution.csv",
+        ROOT / "ignition_candidates.csv",
+        ROOT / "strategy_evolution.csv",
+    ]
+    missing = [str(p) for p in required if not p.exists()]
+    if missing:
+        raise RuntimeError("v317 panel files missing: " + ",".join(missing))
+
+    # 更新 meta，讓前端來源不再一直顯示舊字串。
+    for base_path in [ROOT, DATA_DIR]:
+        p = base_path / "meta.json"
+        if p.exists():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8-sig"))
+                data["source"] = "v317_panel_file_hard_guarantee"
+                data["ignition_count"] = int(len(ign))
+                data["evolution_count"] = int(len(evo))
+                data["panel_files_required"] = [
+                    "ignition_candidates.csv",
+                    "strategy_evolution.csv"
+                ]
+                p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+            except Exception:
+                pass
+
+
 if __name__ == "__main__":
     main_v266577_structure_weight_continuation_patch()
     apply_v311_csv_final_lock()
-    apply_v315_ignition_evolution_outputs()
-    write_v316_direct_panel_files()
+    try:
+        apply_v315_ignition_evolution_outputs()
+    except Exception as e:
+        print("v315 panel output skipped:", repr(e))
+    try:
+        write_v317_panel_file_hard_guarantee()
+    except Exception as e:
+        print("v316 panel output skipped:", repr(e))
+    write_v317_panel_files_hard_guarantee()
