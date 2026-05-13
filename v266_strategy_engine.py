@@ -604,71 +604,185 @@ def alpha_engine(x):
     return d.sort_values(["final_sort_score_v309", "attack_score_v309", "entry_score", "mom20", "liquidity_score"], ascending=[False, False, False, False, False])
 
 
+
+# ===== v311 FINAL ACTION OUTPUT LOCK =====
+# 目的：防止前面 v310 判斷完成後，build_trade_plan / 後段輸出再把 TEST/WATCH/BLOCK 洗掉。
+# 只鎖 action / action_label / action_sub / 排序，不動 UI、不動 app.js、不動持倉。
+def apply_v311_final_action_lock(df):
+    import numpy as np
+    import pandas as pd
+
+    if df is None or len(df) == 0:
+        return df
+
+    d = df.copy()
+
+    def _num(col, default=0):
+        if col in d.columns:
+            return pd.to_numeric(d[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
+        return pd.Series(default, index=d.index, dtype="float64")
+
+    def _txt(col, default=""):
+        if col in d.columns:
+            return d[col].astype(str).fillna(default)
+        return pd.Series(default, index=d.index, dtype="object")
+
+    sid = _txt("stock_id")
+    industry = _txt("industry")
+
+    attack = _num("attack_score_v310")
+    if float(attack.abs().sum()) == 0:
+        attack = _num("attack_score_v309")
+
+    final_sort = _num("final_sort_score_v310")
+    if float(final_sort.abs().sum()) == 0:
+        final_sort = _num("final_sort_score_v309")
+
+    hard_reject = _num("hard_reject_v310")
+    if float(hard_reject.abs().sum()) == 0:
+        hard_reject = _num("hard_reject_v309")
+
+    strict_test = _num("strict_test_ok_v310")
+    watch_ok = _num("watch_ok_v310")
+
+    finance_like = sid.str.startswith(("28", "58")) | industry.str.contains("金融|保險|金控|銀行|證券", na=False)
+    defensive_like = industry.str.contains("航運|觀光|百貨|食品|水泥|塑膠|鋼鐵|紡織|金融|保險", na=False)
+
+    # v311 鎖定規則：
+    # TEST：只能由 strict_test_ok_v310 = 1 產生
+    # WATCH：只能由 watch_ok_v310 = 1 且非硬拒絕產生
+    # BLOCK：其餘全部禁止
+    is_test = (strict_test >= 1) & (hard_reject < 1) & (~finance_like) & (~defensive_like) & (attack >= 74)
+    is_watch = (~is_test) & (watch_ok >= 1) & (hard_reject < 1) & (~finance_like) & (attack >= 54)
+
+    d["v311_locked_action"] = np.where(is_test, "TEST", np.where(is_watch, "WATCH", "BLOCK"))
+    d["action"] = d["v311_locked_action"]
+
+    d["action_label"] = np.where(
+        is_test, "試單",
+        np.where(is_watch, "觀察", "禁止")
+    )
+    d["action_sub"] = np.where(
+        is_test, "v311鎖定：攻擊結構達標，最大機會試單",
+        np.where(is_watch, "v311鎖定：條件未滿，僅觀察", "v311鎖定：非攻擊型或低信心，禁止")
+    )
+
+    # BUY 在這個階段不自動給，避免尚未實測成熟前直接買進
+    d["priority"] = np.where(d["action"].eq("TEST"), 1, np.where(d["action"].eq("WATCH"), 2, 9))
+
+    # TOP 舊欄位全部清掉，由 v311 重建
+    for c in ["top_opportunity", "section_top_opportunity", "opportunity_rank", "top_reason", "top_rank_v3066", "is_top_v3066"]:
+        if c not in d.columns:
+            d[c] = ""
+
+    d["top_opportunity"] = ""
+    d["section_top_opportunity"] = ""
+    d["opportunity_rank"] = ""
+    d["top_reason"] = ""
+    d["top_rank_v3066"] = 9999
+    d["is_top_v3066"] = 0
+
+    # TEST TOP5：只從 locked TEST 裡產生
+    test_idx = (
+        d.loc[d["action"].eq("TEST")]
+        .sort_values(["attack_score_v310", "final_sort_score_v310", "entry_score", "stock_id"],
+                     ascending=[False, False, False, True])
+        .head(5)
+        .index
+    )
+    for rank, idx in enumerate(test_idx, start=1):
+        d.loc[idx, "top_opportunity"] = f"🔥TOP{rank}"
+        d.loc[idx, "section_top_opportunity"] = f"TOP{rank}_TEST"
+        d.loc[idx, "opportunity_rank"] = str(rank)
+        d.loc[idx, "top_rank_v3066"] = rank
+        d.loc[idx, "is_top_v3066"] = 1
+        d.loc[idx, "top_reason"] = "v311鎖定TOP｜只吃strict_test_ok_v310｜排除金融/防守/橫盤/低信心"
+
+    # WATCH TOP5：只從 locked WATCH 裡產生
+    watch_idx = (
+        d.loc[d["action"].eq("WATCH")]
+        .sort_values(["attack_score_v310", "final_sort_score_v310", "entry_score", "stock_id"],
+                     ascending=[False, False, False, True])
+        .head(5)
+        .index
+    )
+    for rank, idx in enumerate(watch_idx, start=1):
+        d.loc[idx, "top_opportunity"] = f"觀察TOP{rank}"
+        d.loc[idx, "section_top_opportunity"] = f"TOP{rank}_WATCH"
+        d.loc[idx, "opportunity_rank"] = str(rank)
+        d.loc[idx, "top_rank_v3066"] = rank
+        d.loc[idx, "is_top_v3066"] = 1
+        d.loc[idx, "top_reason"] = "v311觀察TOP｜尚未達試單｜僅觀察"
+
+    d = d.sort_values(
+        ["priority", "top_rank_v3066", "attack_score_v310", "final_sort_score_v310", "entry_score", "stock_id"],
+        ascending=[True, True, False, False, False, True]
+    )
+
+    return d
+
+
 def build_trade_plan(core, alpha, regime, signal_date):
     """
-    雙策略資金邏輯：
-    - ALPHA：主力倉位，流動性高，允許較大資金。
-    - CORE：早期卡位，小倉，低流動性只試單。
+    v311 最終輸出鎖定版：
+    - 不再用舊 parts/head 規則把 TEST 洗回來。
+    - 先套 apply_v311_final_action_lock，再依 locked action 輸出。
+    - TEST 只來自 strict_test_ok_v310。
+    - WATCH 只來自 watch_ok_v310。
+    - 其餘全部 BLOCK，不給試單。
     """
-    if regime == "TREND":
-        parts = [
-            alpha[alpha.action == "BUY"].head(8),
-            alpha[alpha.action == "TEST"].head(5),
-            core[core.action == "BUY"].head(3),
-            core[core.action == "TEST"].head(5),
-            alpha[alpha.action == "WATCH"].head(6),
-        ]
-    elif regime == "BEAR":
-        parts = [
-            alpha[alpha.action == "TEST"].head(5),
-            alpha[alpha.action == "WATCH"].head(8),
-            core[core.action == "TEST"].head(2),
-            core[core.action == "WATCH"].head(6),
-        ]
-    else:
-        parts = [
-            alpha[alpha.action == "BUY"].head(5),
-            alpha[alpha.action == "TEST"].head(6),
-            core[core.action == "BUY"].head(3),
-            core[core.action == "TEST"].head(6),
-            alpha[alpha.action == "WATCH"].head(6),
-        ]
+    core = apply_v311_final_action_lock(core)
+    alpha = apply_v311_final_action_lock(alpha)
 
-    s = pd.concat(parts, ignore_index=True)
+    pool = pd.concat([
+        alpha.assign(engine="ALPHA"),
+        core.assign(engine="CORE"),
+    ], ignore_index=True)
 
-    if s.empty:
-        s = pd.concat([alpha.head(8), core.head(8)], ignore_index=True).head(10)
-        s["action"] = "WATCH"
-        s["action_label"] = "觀察"
-        s["action_sub"] = "低分觀察，不進場"
+    if pool.empty:
+        return pd.DataFrame()
 
-    # v309：最終輸出前，用攻擊結構排序；ALPHA/CORE 只作輔助，不再讓高流動牛皮股擠上來。
-    s["priority"] = np.where(s["strategy_type"] == "ALPHA", 1, 2)
-    for _c in ["final_sort_score_v309", "attack_score_v309", "hard_reject_v309"]:
-        if _c not in s.columns:
-            s[_c] = 0
-    s = (
-        s.sort_values(["hard_reject_v309", "final_sort_score_v309", "attack_score_v309", "entry_score", "liquidity_score"], ascending=[True, False, False, False, False])
-        .drop_duplicates("stock_id")
-        .head(36)
-    )
+    # 再鎖一次，避免 concat 或缺欄後被洗掉
+    pool = apply_v311_final_action_lock(pool)
+
+    # 最終輸出：TEST 優先，其次 WATCH；BLOCK 只輸出部分給前端禁止清單
+    test_pool = pool[pool["action"].astype(str).str.upper().eq("TEST")].copy()
+    watch_pool = pool[pool["action"].astype(str).str.upper().eq("WATCH")].copy()
+    block_pool = pool[pool["action"].astype(str).str.upper().eq("BLOCK")].copy()
+
+    test_pool = test_pool.sort_values(
+        ["attack_score_v310", "final_sort_score_v310", "entry_score", "stock_id"],
+        ascending=[False, False, False, True]
+    ).head(20)
+
+    watch_pool = watch_pool.sort_values(
+        ["attack_score_v310", "final_sort_score_v310", "entry_score", "stock_id"],
+        ascending=[False, False, False, True]
+    ).head(20)
+
+    block_pool = block_pool.sort_values(
+        ["attack_score_v310", "final_sort_score_v310", "entry_score", "stock_id"],
+        ascending=[False, False, False, True]
+    ).head(40)
+
+    s = pd.concat([test_pool, watch_pool, block_pool], ignore_index=True)
+    s = s.drop_duplicates("stock_id")
+
+    # 最後再鎖一次，保證 trade_plan.csv 寫出去前不會被舊 action 混入
+    s = apply_v311_final_action_lock(s)
 
     trade_date = next_trade_date(signal_date)
     rows = []
 
     for _, r in s.iterrows():
-        px = float(r["close"]) * 1.001
-        action = r["action"]
-        st = r["strategy_type"]
-        score = float(r.get("final_sort_score_v309", r.get("entry_score", 0)))
+        px = float(r.get("close", 0)) * 1.001
+        action = str(r.get("action", "BLOCK")).upper()
+        st = r.get("strategy_type", r.get("engine", ""))
+        score = float(r.get("final_sort_score_v310", r.get("final_sort_score_v309", r.get("entry_score", 0))))
         liq = str(r.get("liquidity_level", ""))
 
-        # 資金配置：ALPHA 可承載資金，CORE 控小倉。
-        if action == "BUY" and st == "ALPHA":
-            w = 0.030 if score >= 82 else 0.020
-        elif action == "BUY" and st == "CORE":
-            w = 0.012 if liq == "HIGH" else 0.008
-        elif action == "TEST" and st == "ALPHA":
+        # v311：只有 TEST 給試單資金，WATCH/BLOCK 都 0
+        if action == "TEST" and st == "ALPHA":
             w = 0.010
         elif action == "TEST" and st == "CORE":
             w = 0.005
@@ -681,29 +795,52 @@ def build_trade_plan(core, alpha, regime, signal_date):
         rows.append({
             "signal_date": str(signal_date.date()),
             "trade_date": str(trade_date.date()),
-            "market_regime": regime,
-            "strategy_type": st,
-            "strategy_name": r.get("strategy_name", st),
-            "action": action,
-            "action_label": r["action_label"],
-            "action_sub": r["action_sub"],
             "stock_id": r["stock_id"],
-            "price_tier": price_tier(px),
-            "ref_price": round(px, 2),
+            "stock_name": r.get("stock_name", ""),
+            "industry": r.get("industry", ""),
+            "action": action,
+            "action_label": r.get("action_label", action),
+            "action_sub": r.get("action_sub", ""),
+            "strategy_type": st,
+            "price": round(px, 2),
+            "ref_price": round(float(r.get("close", 0)), 2),
             "target_weight": round(w, 4),
-            "suggested_amount": round(amount, 0),
-            "suggested_shares": round(shares, 2),
-            "estimated_total_cost": round(shares * px * 1.0015, 2),
-            "entry_score": round(score, 2),
-            "liquidity_level": r.get("liquidity_level", ""),
-            "liquidity_tag": r.get("liquidity_tag", ""),
+            "suggest_amount": round(amount, 0),
+            "suggest_shares": round(shares, 0),
+            "entry_type": r.get("entry_type", r.get("action_sub", "")),
+            "score": round(score, 2),
+            "entry_score": round(float(r.get("entry_score", 0)), 2),
+            "attack_score_v310": round(float(r.get("attack_score_v310", r.get("attack_score_v309", 0))), 2),
+            "final_attack_score_v310": round(float(r.get("final_attack_score_v310", r.get("final_attack_score_v309", 0))), 2),
+            "final_sort_score_v310": round(float(r.get("final_sort_score_v310", r.get("final_sort_score_v309", score))), 2),
+            "strict_test_ok_v310": r.get("strict_test_ok_v310", ""),
+            "watch_ok_v310": r.get("watch_ok_v310", ""),
+            "hard_reject_v310": r.get("hard_reject_v310", r.get("hard_reject_v309", "")),
+            "v311_locked_action": r.get("v311_locked_action", action),
+            "trend_ok_v310": r.get("trend_ok_v310", ""),
+            "momentum_ok_v310": r.get("momentum_ok_v310", ""),
+            "breakout_ok_v310": r.get("breakout_ok_v310", ""),
+            "volume_ok_v310": r.get("volume_ok_v310", ""),
+            "chip_ok_v310": r.get("chip_ok_v310", ""),
+            "bottom_repair_only_v310": r.get("bottom_repair_only_v310", ""),
+            "short_turn_weak_v309": r.get("short_turn_weak_v309", ""),
+            "ma_sticky_no_attack_v309": r.get("ma_sticky_no_attack_v309", ""),
+            "box_middle_v309": r.get("box_middle_v309", ""),
+            "liquidity_only_v309": r.get("liquidity_only_v309", ""),
+            "top_opportunity": r.get("top_opportunity", ""),
+            "section_top_opportunity": r.get("section_top_opportunity", ""),
+            "opportunity_rank": r.get("opportunity_rank", ""),
+            "top_rank_v3066": r.get("top_rank_v3066", ""),
+            "is_top_v3066": r.get("is_top_v3066", ""),
+            "top_reason": r.get("top_reason", ""),
+            "liquidity_level": liq,
             "liquidity_score": round(float(r.get("liquidity_score", 0)), 2),
             "volume": round(float(r.get("volume", 0)), 0),
             "turnover": round(float(r.get("turnover", 0)), 0),
-            "source": "V266_DUAL",
-            "reason": r.get("reason", r["note"]),
-            "system_note": r.get("system_note", r["note"]),
-            "note": r["note"],
+            "source": "v311_final_action_output_lock",
+            "reason": r.get("reason", r.get("note", "")),
+            "system_note": r.get("system_note", r.get("note", "")),
+            "note": r.get("note", ""),
         })
 
     return pd.DataFrame(rows)
@@ -714,8 +851,8 @@ def main():
     signal_date, latest = latest_valid(df)
     regime, info = detect_regime(latest)
 
-    core = core_engine(latest).head(60)
-    alpha = alpha_engine(latest).head(60)
+    core = apply_v311_final_action_lock(core_engine(latest)).head(60)
+    alpha = apply_v311_final_action_lock(alpha_engine(latest)).head(60)
 
     plan = build_trade_plan(core, alpha, regime, signal_date)
 
@@ -754,7 +891,7 @@ def main():
 
     meta = {
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "source": "v266_9_strategy_engine_stable",
+        "source": "v311_final_action_output_lock",
         "signal_date": str(signal_date.date()),
         "trade_date": str(next_trade_date(signal_date).date()),
         "data_state": "fresh",
@@ -1868,5 +2005,41 @@ def main_v266577_structure_weight_continuation_patch():
     main_v266576_structure_pre_score_patch()
     apply_structure_weight_continuation_patch_v266577()
 
+
+# ===== v311.1 CSV FINAL LOCK =====
+# 在所有 v266.57.x append-only 補丁後，重新鎖定 trade_plan / candidates / core / alpha 的 action 與 TOP。
+def apply_v311_csv_final_lock():
+    targets = [
+        "core_candidates.csv",
+        "alpha_candidates.csv",
+        "candidates.csv",
+        "trade_plan.csv",
+    ]
+    for name in targets:
+        for base in [ROOT, DATA_DIR]:
+            p = base / name
+            if not p.exists() or p.stat().st_size == 0:
+                continue
+            try:
+                df = pd.read_csv(p, encoding="utf-8-sig")
+            except Exception:
+                try:
+                    df = pd.read_csv(p, encoding="utf-8")
+                except Exception:
+                    continue
+            if df.empty or "stock_id" not in df.columns:
+                continue
+
+            # 只有含 v310 欄位的檔案才鎖，避免破壞不相關 CSV
+            if "attack_score_v310" not in df.columns and "attack_score_v309" not in df.columns:
+                continue
+
+            locked = apply_v311_final_action_lock(df)
+            locked["source"] = "v311_final_action_output_lock"
+            locked.to_csv(p, index=False, encoding="utf-8-sig")
+            print("v311 final csv locked:", p, len(locked))
+
+
 if __name__ == "__main__":
     main_v266577_structure_weight_continuation_patch()
+    apply_v311_csv_final_lock()
