@@ -5,8 +5,224 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>每日操作介面</title>
   <link rel="stylesheet" href="./style.css" />
+
+  <!-- v322 CORE visible marker patch：只補 CORE 視覺標記，不改 app.js / 不改資料結構 / 不新增清單。 -->
+  <style>
+    .v322-core-card {
+      border-color: #8b5cf6 !important;
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, .14), 0 10px 28px rgba(91, 33, 182, .12) !important;
+      background: linear-gradient(180deg, rgba(250,245,255,.92), rgba(255,255,255,.98)) !important;
+    }
+    .v322-core-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .35em;
+      padding: .30em .65em;
+      margin-left: .45em;
+      border-radius: 999px;
+      border: 1px solid rgba(139, 92, 246, .38);
+      background: rgba(139, 92, 246, .13);
+      color: #6d28d9;
+      font-weight: 900;
+      letter-spacing: .02em;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+    .v322-core-text {
+      color: #6d28d9 !important;
+      font-weight: 950 !important;
+    }
+    .v322-core-ribbon {
+      display: block;
+      width: fit-content;
+      margin: .45rem 0 .15rem 0;
+      padding: .42rem .72rem;
+      border-radius: 14px;
+      background: rgba(139, 92, 246, .12);
+      color: #6d28d9;
+      font-weight: 950;
+      border: 1px solid rgba(139, 92, 246, .30);
+    }
+  </style>
 </head>
 <body>
   <script src="./app.js"></script>
+
+  <script>
+  (function () {
+    "use strict";
+
+    const DATA_FILES = [
+      "./data/strategy_evolution.csv",
+      "./data/ignition_candidates.csv",
+      "data/strategy_evolution.csv",
+      "data/ignition_candidates.csv",
+      "./strategy_evolution.csv",
+      "./ignition_candidates.csv"
+    ];
+
+    const coreMap = new Map();
+    let loaded = false;
+
+    function parseCSV(text) {
+      const rows = [];
+      let row = [], cell = "", q = false;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i], nx = text[i + 1];
+        if (q) {
+          if (ch === '"' && nx === '"') { cell += '"'; i++; }
+          else if (ch === '"') q = false;
+          else cell += ch;
+        } else {
+          if (ch === '"') q = true;
+          else if (ch === ",") { row.push(cell); cell = ""; }
+          else if (ch === "\n") { row.push(cell); rows.push(row); row = []; cell = ""; }
+          else if (ch !== "\r") cell += ch;
+        }
+      }
+      if (cell.length || row.length) { row.push(cell); rows.push(row); }
+      if (!rows.length) return [];
+      const header = rows.shift().map(s => String(s || "").trim());
+      return rows
+        .filter(r => r.some(x => String(x || "").trim() !== ""))
+        .map(r => {
+          const o = {};
+          header.forEach((h, i) => o[h] = r[i] == null ? "" : String(r[i]).trim());
+          return o;
+        });
+    }
+
+    function sidOf(row) {
+      const raw = row.stock_id || row.sid || row.code || row.symbol || "";
+      const m = String(raw).match(/\d{4}/);
+      return m ? m[0] : "";
+    }
+
+    function isCore(row) {
+      const joined = [
+        row.lifecycle_stage,
+        row.strategy_bucket,
+        row.strategy_layer,
+        row.strategy_type,
+        row.bucket,
+        row.source,
+        row.system_note,
+        row.reason,
+        row.is_core_v319,
+        row.core_marker
+      ].map(x => String(x || "")).join(" ");
+      return /CORE|核心主升|🟣/.test(joined) || String(row.is_core_v319 || "").trim() === "1";
+    }
+
+    async function loadCoreMap() {
+      const urls = [...new Set(DATA_FILES)];
+      for (const url of urls) {
+        try {
+          const res = await fetch(url + "?v=" + Date.now(), { cache: "no-store" });
+          if (!res.ok) continue;
+          const text = await res.text();
+          const rows = parseCSV(text);
+          rows.forEach(r => {
+            const sid = sidOf(r);
+            if (sid && isCore(r)) coreMap.set(sid, r);
+          });
+        } catch (e) {}
+      }
+      loaded = true;
+      applyCoreMarks();
+    }
+
+    function textOf(el) {
+      return (el && el.textContent ? el.textContent : "").replace(/\s+/g, " ").trim();
+    }
+
+    function looksLikeCard(el) {
+      if (!el || el === document.body || el === document.documentElement) return false;
+      const t = textOf(el);
+      if (!t) return false;
+      return (
+        /股票名稱|策略層|進場型態|參考價|流動性|籌碼集中度/.test(t) &&
+        /\d{4}/.test(t)
+      );
+    }
+
+    function nearestCard(el) {
+      let cur = el;
+      for (let i = 0; cur && i < 8; i++, cur = cur.parentElement) {
+        if (looksLikeCard(cur)) return cur;
+      }
+      return null;
+    }
+
+    function markCard(card, sid, row) {
+      if (!card || card.dataset.v322CoreDone === sid) return;
+      card.dataset.v322CoreDone = sid;
+      card.classList.add("v322-core-card");
+
+      const titleTarget =
+        Array.from(card.querySelectorAll("*")).find(el => textOf(el) === sid) ||
+        card.querySelector("*") ||
+        card;
+
+      if (!card.querySelector(".v322-core-badge")) {
+        const badge = document.createElement("span");
+        badge.className = "v322-core-badge";
+        badge.textContent = "🟣 CORE";
+        titleTarget.insertAdjacentElement("afterend", badge);
+      }
+
+      const all = Array.from(card.querySelectorAll("*"));
+      for (const el of all) {
+        const tx = textOf(el);
+        if (tx === "EVOLUTION" || tx === "IGNITION" || tx === "TEST" || tx === "WATCH") {
+          el.textContent = "🟣 CORE｜核心主升";
+          el.classList.add("v322-core-text");
+        }
+        if (/策略進場/.test(tx) && row && /核心主升|CORE|🟣/.test(Object.values(row).join(" "))) {
+          el.textContent = "核心主升";
+          el.classList.add("v322-core-text");
+        }
+      }
+
+      if (!card.querySelector(".v322-core-ribbon")) {
+        const ribbon = document.createElement("div");
+        ribbon.className = "v322-core-ribbon";
+        ribbon.textContent = "🟣 CORE｜核心主升：由 EVOLUTION 升級，主倉候選";
+        const detailAnchor = all.find(el => /股票名稱|系統評測|策略層/.test(textOf(el))) || card.firstElementChild;
+        if (detailAnchor && detailAnchor.parentElement) {
+          detailAnchor.parentElement.insertBefore(ribbon, detailAnchor);
+        } else {
+          card.prepend(ribbon);
+        }
+      }
+    }
+
+    function applyCoreMarks() {
+      if (!loaded || !coreMap.size) return;
+
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      const textNodes = [];
+      while (walker.nextNode()) textNodes.push(walker.currentNode);
+
+      for (const [sid, row] of coreMap.entries()) {
+        const hit = textNodes.find(n => String(n.nodeValue || "").trim() === sid);
+        if (!hit) continue;
+        const card = nearestCard(hit.parentElement);
+        if (card) markCard(card, sid, row);
+      }
+    }
+
+    loadCoreMap();
+
+    const observer = new MutationObserver(() => {
+      window.requestAnimationFrame(applyCoreMarks);
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+
+    window.addEventListener("focus", applyCoreMarks);
+    document.addEventListener("visibilitychange", applyCoreMarks);
+    setInterval(applyCoreMarks, 2500);
+  })();
+  </script>
 </body>
 </html>
