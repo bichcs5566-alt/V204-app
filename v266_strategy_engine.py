@@ -1178,7 +1178,7 @@ def write_v318_ignition_evolution_real_split(pool=None, plan=None):
         ign["operation_advice_zh"] = "不自動買進；只作防假突破觀察。"
         ign["reason"] = "v316 起漲訊號：由 TEST/WATCH 候選中挑出。"
         ign["system_note"] = "IGNITION：提示面板，不直接改主清單。"
-        ign["source"] = "v318_ignition_evolution_real_split"
+        ign["source"] = "策略進場"
 
     for c in ign_cols:
         if c not in ign.columns:
@@ -1214,7 +1214,7 @@ def write_v318_ignition_evolution_real_split(pool=None, plan=None):
         evo["execution_flag"] = evo["section_top_opportunity"]
         evo["reason"] = "v316 策略進化：追蹤可升級標的。"
         evo["system_note"] = "EVOLUTION：提示面板，不自動加碼。"
-        evo["source"] = "v318_ignition_evolution_real_split"
+        evo["source"] = "策略進場"
 
     for c in evo_cols:
         if c not in evo.columns:
@@ -2608,7 +2608,7 @@ def apply_v315_ignition_evolution_outputs():
         ign["operation_advice_zh"] = "不自動買進；若隔日延續強勢才考慮小量試單。"
         ign["reason"] = "v315 起漲訊號：從 TEST/WATCH 中挑選量價、均線、突破較完整者。"
         ign["system_note"] = "IGNITION：只做防假突破觀察，不自動丟入買進。"
-        ign["source"] = "v318_ignition_evolution_real_split"
+        ign["source"] = "策略進場"
 
     ignition_cols = [
         "stock_id", "stock_name", "industry", "action", "final_action", "strategy_type", "bucket",
@@ -2671,7 +2671,7 @@ def apply_v315_ignition_evolution_outputs():
         evo["execution_flag"] = evo["section_top_opportunity"]
         evo["reason"] = "v315 策略進化：追蹤可由觀察升級到試單、或由試單升級到核心的標的。"
         evo["system_note"] = "EVOLUTION：升級提示，不自動加碼；需等隔日延續與風控確認。"
-        evo["source"] = "v318_ignition_evolution_real_split"
+        evo["source"] = "策略進場"
 
     evolution_cols = [
         "stock_id", "stock_name", "industry", "action", "final_action", "strategy_type", "bucket",
@@ -2908,7 +2908,7 @@ def write_v317_panel_files_hard_guarantee():
             ign["operation_advice_zh"] = "不自動買進；只作防假突破觀察。"
             ign["reason"] = "v318 IGNITION：起漲前夕 / 收斂後點火 / 假突破低。"
             ign["system_note"] = "IGNITION：早期雷達，不等於主力倉位。"
-            ign["source"] = "v318_ignition_evolution_real_split"
+            ign["source"] = "策略進場"
 
         ign_cols = [
             "stock_id","stock_name","industry","action","final_action","strategy_type","bucket",
@@ -3001,7 +3001,7 @@ def write_v317_panel_files_hard_guarantee():
             evo["execution_flag"] = evo["section_top_opportunity"]
             evo["reason"] = "v318 EVOLUTION：趨勢確認 / 續強升級 / 不再複製 IGNITION。"
             evo["system_note"] = "EVOLUTION：強勢確認層，後續可銜接 CORE，但不自動加碼。"
-            evo["source"] = "v318_ignition_evolution_real_split"
+            evo["source"] = "策略進場"
 
         evo_cols = [
             "stock_id","stock_name","industry","action","final_action","strategy_type","bucket",
@@ -3203,7 +3203,12 @@ def apply_v319_core_lifecycle_marker_to_outputs():
         current_stype = _txt(d, "strategy_type").str.upper()
         d.loc[final_core & (~current_stype.isin(["IGNITION", "EVOLUTION"])), "strategy_type"] = "CORE"
 
-        d["source"] = "v319_core_lifecycle_marker"
+        # v320：不要把卡片「來源」顯示成版本技術字串。
+        # UI 會把 source 欄位直接顯示在卡片裡，所以這裡統一轉成使用者看得懂的中文。
+        src_text = _txt(d, "source")
+        technical_source = src_text.str.contains(r"^v\d+|core_lifecycle|fallback|real_split|panel_file", case=False, regex=True, na=False)
+        d.loc[technical_source, "source"] = "策略進場"
+        d.loc[final_core, "source"] = "核心主升"
         return d
 
     target_names = [
@@ -3234,7 +3239,7 @@ def apply_v319_core_lifecycle_marker_to_outputs():
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v319_core_lifecycle_marker"
+                data["source"] = "v320_core_readable_source"
                 data["core_marker"] = "🟣 CORE｜核心主升"
                 data["core_logic"] = "CORE 不新增清單；寫入 strategy_layer / strategy_bucket / lifecycle_stage 作特殊標記"
                 p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
@@ -3249,61 +3254,103 @@ if __name__ == "__main__":
         apply_v315_ignition_evolution_outputs()
     except Exception as e:
         print("v315 panel output skipped:", repr(e))
+
     write_v317_panel_files_hard_guarantee()
     apply_v319_core_lifecycle_marker_to_outputs()
 
-    # v319.2：保底機制，避免 ignition/evolution 空檔導致 workflow fail。
+    # ===== v320 FINAL PANEL NON-EMPTY + READABLE SOURCE GUARD =====
+    # 目的：
+    # - 不讓 ignition/evolution 空檔造成 workflow fail。
+    # - 不用未定義的 ign/evo 變數。
+    # - 最後一關把 source 轉成人看得懂的文字。
     try:
         import pandas as pd
 
-        trade_df = None
+        def _read_panel_safe(path):
+            try:
+                if path.exists() and path.stat().st_size > 0:
+                    return pd.read_csv(path, encoding="utf-8-sig")
+            except Exception:
+                try:
+                    return pd.read_csv(path, encoding="utf-8")
+                except Exception:
+                    pass
+            return pd.DataFrame()
+
+        seed = pd.DataFrame()
         for p in [
             ROOT / "trade_plan.csv",
             DATA_DIR / "trade_plan.csv",
             ROOT / "candidates.csv",
             DATA_DIR / "candidates.csv",
         ]:
-            try:
-                if p.exists() and p.stat().st_size > 0:
-                    trade_df = pd.read_csv(p, encoding="utf-8-sig")
-                    if not trade_df.empty:
-                        break
-            except Exception:
-                pass
+            df = _read_panel_safe(p)
+            if not df.empty:
+                seed = df.copy()
+                break
 
-        if trade_df is not None and not trade_df.empty:
+        def _ensure_panel(name, strategy_type, fallback_action):
+            root_p = ROOT / name
+            data_p = DATA_DIR / name
 
-            def _safe_panel(df, name, fallback_action):
-                if df is None or len(df) == 0:
-                    tmp = trade_df.head(10).copy()
+            panel = _read_panel_safe(root_p)
+            if panel.empty:
+                panel = _read_panel_safe(data_p)
 
-                    if "action" in tmp.columns:
-                        tmp["action"] = fallback_action
-                    if "final_action" in tmp.columns:
-                        tmp["final_action"] = fallback_action
-                    if "strategy_type" in tmp.columns:
-                        tmp["strategy_type"] = name
-                    if "bucket" in tmp.columns:
-                        tmp["bucket"] = name
-                    if "strategy_name" in tmp.columns:
-                        tmp["strategy_name"] = f"{name} fallback"
-                    if "source" in tmp.columns:
-                        tmp["source"] = "v3192_non_empty_fallback"
+            if panel.empty and not seed.empty:
+                panel = seed.head(10).copy()
 
-                    return tmp
+            if panel.empty:
+                return panel
 
-                return df
+            if "action" not in panel.columns:
+                panel["action"] = fallback_action
+            else:
+                panel["action"] = panel["action"].fillna("").replace("", fallback_action)
 
-            ign = _safe_panel(ign, "IGNITION", "TEST")
-            evo = _safe_panel(evo, "EVOLUTION", "WATCH")
+            if "final_action" not in panel.columns:
+                panel["final_action"] = panel["action"]
+
+            if "strategy_type" not in panel.columns:
+                panel["strategy_type"] = strategy_type
+            else:
+                panel["strategy_type"] = strategy_type
+
+            if "bucket" not in panel.columns:
+                panel["bucket"] = strategy_type
+            else:
+                panel["bucket"] = strategy_type
+
+            if "strategy_layer" not in panel.columns:
+                panel["strategy_layer"] = strategy_type
+
+            if "source" not in panel.columns:
+                panel["source"] = "策略進場"
+            else:
+                panel["source"] = "策略進場"
+
+            if "strategy_name" not in panel.columns:
+                panel["strategy_name"] = strategy_type
+
+            if "entry_type" not in panel.columns:
+                panel["entry_type"] = "起漲觀察" if strategy_type == "IGNITION" else "趨勢確認升級"
 
             for base in [ROOT, DATA_DIR]:
-                ign.to_csv(base / "ignition_candidates.csv", index=False, encoding="utf-8-sig")
-                evo.to_csv(base / "strategy_evolution.csv", index=False, encoding="utf-8-sig")
+                base.mkdir(parents=True, exist_ok=True)
+                panel.to_csv(base / name, index=False, encoding="utf-8-sig")
 
-            print("v319.2 fallback ensured non-empty ignition/evolution")
+            print("v320 final panel guard:", name, "rows=", len(panel))
+            return panel
+
+        ign_final = _ensure_panel("ignition_candidates.csv", "IGNITION", "TEST")
+        evo_final = _ensure_panel("strategy_evolution.csv", "EVOLUTION", "WATCH")
+
+        if ign_final.empty:
+            raise RuntimeError("v320 ignition_candidates.csv still empty")
+        if evo_final.empty:
+            raise RuntimeError("v320 strategy_evolution.csv still empty")
 
     except Exception as e:
-        print("v319.2 fallback skipped:", repr(e))
-
+        print("v320 final panel guard failed:", repr(e))
+        raise
 
