@@ -1,38 +1,79 @@
-﻿{
-  "generated_at": "2026-05-14 19:34:03",
-  "source": "v266_57_source_safe_string",
+{
+  "generated_at": "2026-05-14 12:21:22",
+  "source": "v265_3_dual_engine_core",
+  "price_source": "price_panel_daily.csv",
   "signal_date": "2026-05-14",
   "trade_date": "2026-05-15",
   "data_state": "fresh",
   "market_regime": "RANGE",
   "regime_info": {
-    "pct_above_ma20": 0.3916,
-    "pct_above_ma60": 0.4709,
-    "pct_mom20_pos": 0.4302,
-    "pct_strong": 0.1705,
-    "median_mom20": -0.0147,
-    "regime_score": 1
+    "pct_above_ma20": 1.0,
+    "pct_above_ma60": 1.0,
+    "pct_mom20_pos": 0.0,
+    "pct_strong": 0.0,
+    "median_mom20": 0.0,
+    "avg_volume_ratio": 1.0006,
+    "regime_score": 2
   },
-  "trade_plan_count": 71,
+  "trade_plan_count": 13,
   "buy_count": 0,
-  "test_count": 71,
+  "test_count": 13,
   "watch_count": 0,
-  "dual_strategy": {
-    "CORE": "早期卡位 / 1000張以上小倉",
-    "ALPHA": "高流動性強勢延續 / 3000張以上主力倉位"
-  },
-  "ignition_count": 15,
-  "evolution_count": 10,
-  "ignition_evolution_note": "v315 已由後端產出 ignition_candidates.csv / strategy_evolution.csv",
-  "panel_logic": "IGNITION=起漲前夕；EVOLUTION=趨勢確認升級；兩者不再同條件複製",
-  "core_marker": "🟣 CORE｜核心主升",
-  "core_logic": "CORE 不新增清單；寫入 strategy_layer / strategy_bucket / lifecycle_stage 作特殊標記",
-  "version": "v266.57",
-  "latest_date": "2026-05-14",
-  "updated_at": "2026-05-14 19:36:32",
-  "date_lock_source": "feature_panel_daily.csv",
-  "date_state": "locked_from_latest_feature",
-  "last_update": "2026-05-14 19:35:27",
-  "timezone": "Asia/Taipei",
-  "time_source": "github_actions_taipei"
+  "core_trade_count": 6,
+  "alpha_trade_count": 7,
+  "execution_rule": "Market Regime → Core/Alpha Router → T+1人工下單",
+  "bridge_source": "v265_3_dashboard_bridge",
+  "bridge_generated_at": "2026-05-14 12:21:23",
+  "bridge_files": [
+    {
+      "file": "trade_plan.csv",
+      "rows": 13,
+      "state": "ok"
+    },
+    {
+      "file": "core_candidates.csv",
+      "rows": 30,
+      "state": "ok"
+    },
+    {
+      "file": "alpha_candidates.csv",
+      "rows": 30,
+      "state": "ok"
+    },
+    {
+      "file": "candidates.csv",
+      "rows": 60,
+      "state": "ok"
+    },
+    {
+      "file": "selection_debug.csv",
+      "rows": 1,
+      "state": "ok"
+    },
+    {
+      "file": "full_summary.csv",
+      "rows": 1,
+      "state": "ok"
+    },
+    {
+      "file": "daily_nav.csv",
+      "rows": 9,
+      "state": "ok"
+    },
+    {
+      "file": "current_positions.csv",
+      "rows": 3,
+      "state": "ok"
+    },
+    {
+      "file": "position_monitor.csv",
+      "rows": 0,
+      "state": "ok"
+    },
+    {
+      "file": "watchlist_monitor.csv",
+      "rows": 0,
+      "state": "ok"
+    }
+  ]
 }
