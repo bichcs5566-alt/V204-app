@@ -3181,12 +3181,10 @@ def apply_v319_core_lifecycle_marker_to_outputs():
 
         if "lifecycle_stage" not in d.columns:
             d["lifecycle_stage"] = ""
-        if "core_score_v319" not in d.columns:
-            d["core_score_v319"] = ""
-
-        d.loc[:, "core_score_v319"] = core_score
-        d.loc[:, "is_core_v319"] = 0
-        d.loc[final_core, "is_core_v319"] = 1
+        # v319.1：輸出欄位統一寫成字串，避免 pandas StringDtype 欄位被塞數值 Series 後炸掉。
+        d["core_score_v319"] = core_score.round(2).astype(str)
+        d["is_core_v319"] = "0"
+        d.loc[final_core, "is_core_v319"] = "1"
 
         # 不新增 UI，只把既有卡片欄位變成特殊文字標記。
         for c in ["strategy_layer", "strategy_bucket", "strategy_type", "bucket", "entry_type", "system_note", "reason"]:
