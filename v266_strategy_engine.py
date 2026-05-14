@@ -3046,6 +3046,204 @@ def write_v317_panel_files_hard_guarantee():
             except Exception:
                 pass
 
+
+# ===== v319 CORE LIFECYCLE MARKER =====
+# 目的：
+# - 不新增 CORE 清單，不動 UI。
+# - 只在既有卡片欄位顯示「🟣 CORE｜核心主升」。
+# - 讓 CORE 成為 EVOLUTION 之上的生命週期層，而不是單純 engine 標籤。
+def apply_v319_core_lifecycle_marker_to_outputs():
+    import pandas as pd
+    import numpy as np
+    import json
+    from pathlib import Path
+
+    def _read_csv_safe(path):
+        try:
+            if path.exists() and path.stat().st_size > 0:
+                return pd.read_csv(path, encoding="utf-8-sig")
+        except Exception:
+            try:
+                return pd.read_csv(path, encoding="utf-8")
+            except Exception:
+                return pd.DataFrame()
+        return pd.DataFrame()
+
+    def _num(df, col, default=0.0):
+        if col in df.columns:
+            return pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
+        return pd.Series(default, index=df.index, dtype="float64")
+
+    def _txt(df, col, default=""):
+        if col in df.columns:
+            return df[col].astype(str).replace("nan", "").fillna(default)
+        return pd.Series(default, index=df.index, dtype="object")
+
+    def _first_num(df, cols, default=0.0):
+        out = pd.Series(np.nan, index=df.index, dtype="float64")
+        for c in cols:
+            if c in df.columns:
+                v = pd.to_numeric(df[c], errors="coerce").replace([np.inf, -np.inf], np.nan)
+                out = out.where(out.notna(), v)
+        return out.fillna(default)
+
+    def _mark(df):
+        if df is None or df.empty or "stock_id" not in df.columns:
+            return df
+
+        d = df.copy()
+        d["stock_id"] = d["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False).fillna(d["stock_id"].astype(str).str[:4])
+
+        action = _txt(d, "v311_locked_action")
+        action = action.where(action.str.len() > 0, _txt(d, "action")).str.upper()
+
+        industry = _txt(d, "industry")
+        sid = _txt(d, "stock_id")
+        finance = sid.str.startswith(("28", "58")) | industry.str.contains("金融|保險|金控|銀行|證券", na=False)
+
+        close = _first_num(d, ["close", "ref_price", "price"], 0)
+        ma5 = _first_num(d, ["ma5", "MA5"], close)
+        ma10 = _first_num(d, ["ma10", "MA10"], close)
+        ma20 = _first_num(d, ["ma20", "MA20"], close)
+        ma60 = _first_num(d, ["ma60", "MA60"], close)
+
+        mom5 = _first_num(d, ["mom5", "return_5d"], 0)
+        mom10 = _first_num(d, ["mom10", "return_10d"], 0)
+        mom20 = _first_num(d, ["mom20", "return_20d"], 0)
+
+        vol_ratio = _first_num(d, ["volume_ratio", "vol_ratio"], 1)
+        attack = _first_num(d, ["attack_score_v312", "attack_score_v310", "attack_score_v309", "entry_score", "score"], 0)
+        final_sort = _first_num(d, ["final_sort_score_v312", "final_sort_score_v310", "final_sort_score_v309", "score", "entry_score"], 0)
+        main_force = _first_num(d, ["main_force_score_v300", "main_force_score"], 0)
+        chip = _first_num(d, ["chip_score"], 0)
+        liq = _first_num(d, ["liquidity_score"], 0)
+        hard_block = _first_num(d, ["hard_block_v313"], 0)
+        hard_reject = _first_num(d, ["hard_reject_v313", "hard_reject_v312", "hard_reject_v310"], 0)
+
+        # CORE 條件：不追求最多，只標出真正可做主升核心追蹤的標的。
+        close_safe = close.replace(0, np.nan)
+        ma20_safe = ma20.replace(0, np.nan)
+        ma60_safe = ma60.replace(0, np.nan)
+
+        trend_core = (
+            (close >= ma20 * 1.015) &
+            (ma5 >= ma10 * 1.003) &
+            (ma10 >= ma20 * 1.003) &
+            (ma20 >= ma60 * 0.995)
+        )
+
+        momentum_core = (
+            (mom5 > 0.008) &
+            (mom10 > 0.018) &
+            (mom20 > 0.025)
+        )
+
+        capital_core = (
+            (main_force >= 60) |
+            (chip >= 60) |
+            (liq >= 82)
+        )
+
+        risk_ok = (
+            (~finance) &
+            (hard_block < 1) &
+            (hard_reject < 1) &
+            ((close / ma20_safe - 1).replace([np.inf, -np.inf], 0).fillna(0) < 0.38)
+        )
+
+        core_score = (
+            trend_core.astype(int) * 30 +
+            momentum_core.astype(int) * 25 +
+            capital_core.astype(int) * 20 +
+            (vol_ratio.between(0.85, 4.50)).astype(int) * 10 +
+            risk_ok.astype(int) * 10 +
+            (attack / 10).clip(0, 12) +
+            (final_sort / 20).clip(0, 8)
+        ).round(2)
+
+        # 只從 TEST / WATCH / panel 候選中標 CORE，不把 BLOCK 拉上來。
+        candidate_ok = action.isin(["TEST", "WATCH"]) | _txt(d, "strategy_type").str.upper().isin(["IGNITION", "EVOLUTION"])
+        core_mask = candidate_ok & risk_ok & (core_score >= 74) & trend_core & (momentum_core | capital_core)
+
+        # 保險：若當天太少，從高分趨勢股補到 3 檔，但不超過 15 檔。
+        if int(core_mask.sum()) < 3:
+            fallback = candidate_ok & risk_ok & trend_core & (core_score >= 60)
+            top_idx = d.loc[fallback].assign(_core_score_v319=core_score.loc[fallback]).sort_values(
+                ["_core_score_v319", "stock_id"], ascending=[False, True]
+            ).head(3).index
+            core_mask.loc[top_idx] = True
+
+        # 控制 CORE 數量，避免變成另一張大清單。
+        core_idx = d.loc[core_mask].assign(_core_score_v319=core_score.loc[core_mask]).sort_values(
+            ["_core_score_v319", "stock_id"], ascending=[False, True]
+        ).head(15).index
+        final_core = d.index.isin(core_idx)
+
+        if "lifecycle_stage" not in d.columns:
+            d["lifecycle_stage"] = ""
+        if "core_score_v319" not in d.columns:
+            d["core_score_v319"] = ""
+
+        d.loc[:, "core_score_v319"] = core_score
+        d.loc[:, "is_core_v319"] = 0
+        d.loc[final_core, "is_core_v319"] = 1
+
+        # 不新增 UI，只把既有卡片欄位變成特殊文字標記。
+        for c in ["strategy_layer", "strategy_bucket", "strategy_type", "bucket", "entry_type", "system_note", "reason"]:
+            if c not in d.columns:
+                d[c] = ""
+
+        d.loc[final_core, "lifecycle_stage"] = "🟣 CORE"
+        d.loc[final_core, "strategy_layer"] = "🟣 CORE｜核心主升"
+        d.loc[final_core, "strategy_bucket"] = "🟣 CORE｜主升核心"
+        d.loc[final_core, "bucket"] = "CORE"
+        d.loc[final_core, "entry_type"] = "核心主升追蹤"
+        d.loc[final_core, "system_note"] = "🟣 CORE：由 EVOLUTION/TEST 升級的核心主升追蹤，不是一般試單。"
+        d.loc[final_core, "reason"] = "v319 CORE：趨勢、動能、籌碼/流動性達核心條件，標記為核心主升。"
+
+        # 保留原 action，不把 UI 主分類打亂；strategy_type 只在非 IGNITION/EVOLUTION panel 中標 CORE。
+        current_stype = _txt(d, "strategy_type").str.upper()
+        d.loc[final_core & (~current_stype.isin(["IGNITION", "EVOLUTION"])), "strategy_type"] = "CORE"
+
+        d["source"] = "v319_core_lifecycle_marker"
+        return d
+
+    target_names = [
+        "trade_plan.csv",
+        "candidates.csv",
+        "core_candidates.csv",
+        "alpha_candidates.csv",
+        "ignition_candidates.csv",
+        "strategy_evolution.csv",
+    ]
+
+    for name in target_names:
+        # 優先讀 root，沒有再讀 data
+        df = _read_csv_safe(ROOT / name)
+        if df.empty:
+            df = _read_csv_safe(DATA_DIR / name)
+        if df.empty:
+            continue
+
+        out = _mark(df)
+        for base in [ROOT, DATA_DIR]:
+            base.mkdir(parents=True, exist_ok=True)
+            out.to_csv(base / name, index=False, encoding="utf-8-sig")
+        print("v319 core lifecycle marked:", name, "rows=", len(out), "core=", int(pd.to_numeric(out.get("is_core_v319", 0), errors="coerce").fillna(0).sum()))
+
+    for base in [ROOT, DATA_DIR]:
+        p = base / "meta.json"
+        if p.exists():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8-sig"))
+                data["source"] = "v319_core_lifecycle_marker"
+                data["core_marker"] = "🟣 CORE｜核心主升"
+                data["core_logic"] = "CORE 不新增清單；寫入 strategy_layer / strategy_bucket / lifecycle_stage 作特殊標記"
+                p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+            except Exception:
+                pass
+
+
 if __name__ == "__main__":
     main_v266577_structure_weight_continuation_patch()
     apply_v311_csv_final_lock()
@@ -3054,3 +3252,4 @@ if __name__ == "__main__":
     except Exception as e:
         print("v315 panel output skipped:", repr(e))
     write_v317_panel_files_hard_guarantee()
+    apply_v319_core_lifecycle_marker_to_outputs()
