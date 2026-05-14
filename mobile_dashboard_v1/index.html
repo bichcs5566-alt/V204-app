@@ -6,42 +6,53 @@
   <title>每日操作介面</title>
   <link rel="stylesheet" href="./style.css" />
 
-  <!-- v322 CORE visible marker patch：只補 CORE 視覺標記，不改 app.js / 不改資料結構 / 不新增清單。 -->
+  <!-- v323 CORE compact visual patch
+       只補 CORE 視覺，不改 app.js / 不改後端 / 不新增清單。
+       修正 v322 太大問題：
+       1) 不再插入大型紫色說明卡
+       2) 只把核心股原本黃色卡片改成淡紫框/淡紫底
+       3) 在卡片右下/空白處放小型 CORE 提示
+  -->
   <style>
-    .v322-core-card {
-      border-color: #8b5cf6 !important;
-      box-shadow: 0 0 0 3px rgba(139, 92, 246, .14), 0 10px 28px rgba(91, 33, 182, .12) !important;
-      background: linear-gradient(180deg, rgba(250,245,255,.92), rgba(255,255,255,.98)) !important;
+    .v323-core-card {
+      border-color: #a855f7 !important;
+      box-shadow: 0 0 0 2px rgba(168, 85, 247, .14) !important;
+      background: linear-gradient(180deg, rgba(250,245,255,.86), rgba(255,255,255,.98)) !important;
     }
-    .v322-core-badge {
-      display: inline-flex;
+
+    .v323-core-pill {
+      display: inline-flex !important;
       align-items: center;
-      gap: .35em;
-      padding: .30em .65em;
-      margin-left: .45em;
+      justify-content: center;
+      gap: .28em;
+      padding: .24rem .58rem;
       border-radius: 999px;
-      border: 1px solid rgba(139, 92, 246, .38);
-      background: rgba(139, 92, 246, .13);
-      color: #6d28d9;
-      font-weight: 900;
-      letter-spacing: .02em;
+      border: 1px solid rgba(168, 85, 247, .35);
+      background: rgba(168, 85, 247, .12);
+      color: #7e22ce;
+      font-size: clamp(12px, 2.8vw, 15px);
+      font-weight: 950;
+      line-height: 1.15;
       white-space: nowrap;
-      vertical-align: middle;
+      box-sizing: border-box;
     }
-    .v322-core-text {
-      color: #6d28d9 !important;
+
+    .v323-core-slot {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      min-height: 1.8rem;
+      margin-top: .35rem;
+    }
+
+    .v323-core-text {
+      color: #7e22ce !important;
       font-weight: 950 !important;
     }
-    .v322-core-ribbon {
-      display: block;
-      width: fit-content;
-      margin: .45rem 0 .15rem 0;
-      padding: .42rem .72rem;
-      border-radius: 14px;
-      background: rgba(139, 92, 246, .12);
-      color: #6d28d9;
-      font-weight: 950;
-      border: 1px solid rgba(139, 92, 246, .30);
+
+    .v323-core-card .v322-core-ribbon,
+    .v323-core-card .v322-core-badge {
+      display: none !important;
     }
   </style>
 </head>
@@ -115,14 +126,12 @@
     }
 
     async function loadCoreMap() {
-      const urls = [...new Set(DATA_FILES)];
-      for (const url of urls) {
+      for (const url of [...new Set(DATA_FILES)]) {
         try {
           const res = await fetch(url + "?v=" + Date.now(), { cache: "no-store" });
           if (!res.ok) continue;
           const text = await res.text();
-          const rows = parseCSV(text);
-          rows.forEach(r => {
+          parseCSV(text).forEach(r => {
             const sid = sidOf(r);
             if (sid && isCore(r)) coreMap.set(sid, r);
           });
@@ -140,60 +149,84 @@
       if (!el || el === document.body || el === document.documentElement) return false;
       const t = textOf(el);
       if (!t) return false;
-      return (
-        /股票名稱|策略層|進場型態|參考價|流動性|籌碼集中度/.test(t) &&
-        /\d{4}/.test(t)
-      );
+
+      // 展開卡片
+      if (/股票名稱|策略層|進場型態|參考價|流動性|籌碼集中度/.test(t) && /\d{4}/.test(t)) return true;
+
+      // 收合列卡片：通常只有「試單/觀察 + 股號 + 價格 + 高流動性」
+      if (/(試單|觀察|買進|WATCH|TEST)/.test(t) && /\d{4}/.test(t) && /高流動性|中流動性|低流動性/.test(t)) return true;
+
+      return false;
     }
 
     function nearestCard(el) {
       let cur = el;
-      for (let i = 0; cur && i < 8; i++, cur = cur.parentElement) {
+      for (let i = 0; cur && i < 9; i++, cur = cur.parentElement) {
         if (looksLikeCard(cur)) return cur;
       }
       return null;
     }
 
-    function markCard(card, sid, row) {
-      if (!card || card.dataset.v322CoreDone === sid) return;
-      card.dataset.v322CoreDone = sid;
-      card.classList.add("v322-core-card");
+    function isCollapsedCard(card) {
+      const t = textOf(card);
+      return !/股票名稱|策略層|進場型態|籌碼集中度/.test(t);
+    }
 
-      const titleTarget =
-        Array.from(card.querySelectorAll("*")).find(el => textOf(el) === sid) ||
-        card.querySelector("*") ||
-        card;
+    function putCompactPill(card, sid) {
+      if (card.querySelector(".v323-core-pill")) return;
 
-      if (!card.querySelector(".v322-core-badge")) {
-        const badge = document.createElement("span");
-        badge.className = "v322-core-badge";
-        badge.textContent = "🟣 CORE";
-        titleTarget.insertAdjacentElement("afterend", badge);
+      const pill = document.createElement("span");
+      pill.className = "v323-core-pill";
+      pill.textContent = "🟣 CORE";
+
+      if (isCollapsedCard(card)) {
+        // 收合列：放在最右側，取代原本 v322 大標籤。
+        card.appendChild(pill);
+        return;
       }
 
+      // 展開卡片：優先放在你截圖圈起來的右下空白區附近。
       const all = Array.from(card.querySelectorAll("*"));
-      for (const el of all) {
-        const tx = textOf(el);
-        if (tx === "EVOLUTION" || tx === "IGNITION" || tx === "TEST" || tx === "WATCH") {
-          el.textContent = "🟣 CORE｜核心主升";
-          el.classList.add("v322-core-text");
-        }
-        if (/策略進場/.test(tx) && row && /核心主升|CORE|🟣/.test(Object.values(row).join(" "))) {
-          el.textContent = "核心主升";
-          el.classList.add("v322-core-text");
-        }
-      }
+      const anchor =
+        all.find(el => /籌碼集中度/.test(textOf(el))) ||
+        all.find(el => /流動性分數/.test(textOf(el))) ||
+        all.find(el => /K線結構/.test(textOf(el))) ||
+        all.find(el => /建議金額/.test(textOf(el)));
 
-      if (!card.querySelector(".v322-core-ribbon")) {
-        const ribbon = document.createElement("div");
-        ribbon.className = "v322-core-ribbon";
-        ribbon.textContent = "🟣 CORE｜核心主升：由 EVOLUTION 升級，主倉候選";
-        const detailAnchor = all.find(el => /股票名稱|系統評測|策略層/.test(textOf(el))) || card.firstElementChild;
-        if (detailAnchor && detailAnchor.parentElement) {
-          detailAnchor.parentElement.insertBefore(ribbon, detailAnchor);
-        } else {
-          card.prepend(ribbon);
-        }
+      const slot = document.createElement("div");
+      slot.className = "v323-core-slot";
+      slot.appendChild(pill);
+
+      if (anchor && anchor.parentElement) {
+        anchor.parentElement.insertAdjacentElement("afterend", slot);
+      } else {
+        card.appendChild(slot);
+      }
+    }
+
+    function markCard(card, sid, row) {
+      if (!card || card.dataset.v323CoreDone === sid) return;
+      card.dataset.v323CoreDone = sid;
+      card.classList.add("v323-core-card");
+
+      // 移除舊版 v322 大提示，避免擋畫面。
+      card.querySelectorAll(".v322-core-badge,.v322-core-ribbon").forEach(el => el.remove());
+
+      putCompactPill(card, sid);
+
+      // 展開卡片才改策略欄文字；收合列只加小 CORE 標籤與紫框。
+      if (!isCollapsedCard(card)) {
+        Array.from(card.querySelectorAll("*")).forEach(el => {
+          const tx = textOf(el);
+          if (tx === "EVOLUTION" || tx === "IGNITION" || tx === "TEST" || tx === "WATCH") {
+            el.textContent = "🟣 CORE｜核心主升";
+            el.classList.add("v323-core-text");
+          }
+          if (/策略進場/.test(tx) && row && /核心主升|CORE|🟣/.test(Object.values(row).join(" "))) {
+            el.textContent = "核心主升";
+            el.classList.add("v323-core-text");
+          }
+        });
       }
     }
 
@@ -205,10 +238,11 @@
       while (walker.nextNode()) textNodes.push(walker.currentNode);
 
       for (const [sid, row] of coreMap.entries()) {
-        const hit = textNodes.find(n => String(n.nodeValue || "").trim() === sid);
-        if (!hit) continue;
-        const card = nearestCard(hit.parentElement);
-        if (card) markCard(card, sid, row);
+        const hits = textNodes.filter(n => String(n.nodeValue || "").trim() === sid);
+        hits.forEach(hit => {
+          const card = nearestCard(hit.parentElement);
+          if (card) markCard(card, sid, row);
+        });
       }
     }
 
