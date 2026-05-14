@@ -3163,13 +3163,40 @@ def apply_v319_core_lifecycle_marker_to_outputs():
 
         # 只從 TEST / WATCH / panel 候選中標 CORE，不把 BLOCK 拉上來。
         candidate_ok = action.isin(["TEST", "WATCH"]) | _txt(d, "strategy_type").str.upper().isin(["IGNITION", "EVOLUTION"])
-        core_mask = candidate_ok & risk_ok & (core_score >= 74) & trend_core & (momentum_core | capital_core)
+        # v321 CORE 升級：
+        # CORE 不是新清單，而是從 EVOLUTION / TEST 中，把真正進入主升核心的股票升級標記。
+        # 這裡放寬「一定要有 mom 欄位」的依賴，避免資料欄位缺失導致明顯主升股不升級。
+        full_bull_ma = (
+            (ma5 >= ma10 * 1.002) &
+            (ma10 >= ma20 * 1.002) &
+            (ma20 >= ma60 * 0.990) &
+            (close >= ma5 * 0.985)
+        )
 
-        # 保險：若當天太少，從高分趨勢股補到 3 檔，但不超過 15 檔。
+        core_from_evolution = (
+            _txt(d, "strategy_type").str.upper().eq("EVOLUTION") &
+            full_bull_ma &
+            (liq >= 88) &
+            (chip >= 60) &
+            (vol_ratio.between(0.70, 5.50)) &
+            risk_ok
+        )
+
+        core_from_score = candidate_ok & risk_ok & (core_score >= 70) & trend_core & (momentum_core | capital_core)
+
+        core_mask = core_from_score | core_from_evolution
+
+        # 保險：若當天太少，從 EVOLUTION 裡高分趨勢股補到最多 3 檔，但不碰 BLOCK。
         if int(core_mask.sum()) < 3:
-            fallback = candidate_ok & risk_ok & trend_core & (core_score >= 60)
-            top_idx = d.loc[fallback].assign(_core_score_v319=core_score.loc[fallback]).sort_values(
-                ["_core_score_v319", "stock_id"], ascending=[False, True]
+            fallback = (
+                candidate_ok &
+                risk_ok &
+                full_bull_ma &
+                (liq >= 80) &
+                (core_score >= 55)
+            )
+            top_idx = d.loc[fallback].assign(_core_score_v321=core_score.loc[fallback]).sort_values(
+                ["_core_score_v321", "stock_id"], ascending=[False, True]
             ).head(3).index
             core_mask.loc[top_idx] = True
 
@@ -3199,9 +3226,10 @@ def apply_v319_core_lifecycle_marker_to_outputs():
         d.loc[final_core, "system_note"] = "🟣 CORE：由 EVOLUTION/TEST 升級的核心主升追蹤，不是一般試單。"
         d.loc[final_core, "reason"] = "v319 CORE：趨勢、動能、籌碼/流動性達核心條件，標記為核心主升。"
 
-        # 保留原 action，不把 UI 主分類打亂；strategy_type 只在非 IGNITION/EVOLUTION panel 中標 CORE。
-        current_stype = _txt(d, "strategy_type").str.upper()
-        d.loc[final_core & (~current_stype.isin(["IGNITION", "EVOLUTION"])), "strategy_type"] = "CORE"
+        # v321：CORE 必須在卡片策略層直接看得見。
+        # 不改 action，所以仍會留在原本 TEST/EVOLUTION 清單；但卡片策略層會升級成 CORE。
+        d.loc[final_core, "strategy_type"] = "CORE"
+        d.loc[final_core, "bucket"] = "CORE"
 
         # v320：不要把卡片「來源」顯示成版本技術字串。
         # UI 會把 source 欄位直接顯示在卡片裡，所以這裡統一轉成使用者看得懂的中文。
@@ -3239,9 +3267,9 @@ def apply_v319_core_lifecycle_marker_to_outputs():
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v320_core_readable_source"
+                data["source"] = "v321_core_upgrade_visible"
                 data["core_marker"] = "🟣 CORE｜核心主升"
-                data["core_logic"] = "CORE 不新增清單；寫入 strategy_layer / strategy_bucket / lifecycle_stage 作特殊標記"
+                data["core_logic"] = "CORE 不新增清單；從 EVOLUTION/TEST 升級，直接寫入 strategy_type / strategy_layer / lifecycle_stage 作特殊標記"
                 p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
             except Exception:
                 pass
@@ -3311,23 +3339,30 @@ if __name__ == "__main__":
             if "final_action" not in panel.columns:
                 panel["final_action"] = panel["action"]
 
+            # v321：final guard 只補缺欄，不覆蓋 CORE 升級結果。
             if "strategy_type" not in panel.columns:
                 panel["strategy_type"] = strategy_type
             else:
-                panel["strategy_type"] = strategy_type
+                st = panel["strategy_type"].astype(str).fillna("")
+                panel["strategy_type"] = st.where(st.str.contains("CORE", case=False, na=False), strategy_type)
 
             if "bucket" not in panel.columns:
-                panel["bucket"] = strategy_type
+                panel["bucket"] = panel["strategy_type"]
             else:
-                panel["bucket"] = strategy_type
+                bk = panel["bucket"].astype(str).fillna("")
+                panel["bucket"] = bk.where(bk.str.contains("CORE", case=False, na=False), panel["strategy_type"])
 
             if "strategy_layer" not in panel.columns:
-                panel["strategy_layer"] = strategy_type
+                panel["strategy_layer"] = panel["strategy_type"]
+            else:
+                sl = panel["strategy_layer"].astype(str).fillna("")
+                panel["strategy_layer"] = sl.where(sl.str.len() > 0, panel["strategy_type"])
 
             if "source" not in panel.columns:
                 panel["source"] = "策略進場"
             else:
-                panel["source"] = "策略進場"
+                src = panel["source"].astype(str).fillna("")
+                panel["source"] = src.where(src.str.contains("核心主升|CORE", case=False, na=False), "策略進場")
 
             if "strategy_name" not in panel.columns:
                 panel["strategy_name"] = strategy_type
