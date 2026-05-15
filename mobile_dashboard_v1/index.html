@@ -5,341 +5,116 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>每日操作介面</title>
   <link rel="stylesheet" href="./style.css" />
-  <!-- v324.1 CORE visual patch：修復空白頁，CSS 放 head，JS 放 app.js 後面 -->
+
+  <!-- v324.2 CORE force visual patch：關掉右側 pill，展開卡片補右下小欄位 -->
   <style>
-    .v324-core-card {
-      border-color: #a855f7 !important;
-      box-shadow: 0 0 0 2px rgba(168, 85, 247, .14) !important;
-      background: linear-gradient(180deg, rgba(250,245,255,.88), rgba(255,255,255,.98)) !important;
+    .v322-core-badge,.v322-core-ribbon,.v323-core-pill,.v323-core-slot{
+      display:none!important;visibility:hidden!important;width:0!important;max-width:0!important;
+      overflow:hidden!important;padding:0!important;margin:0!important;
     }
-    .v324-core-collapsed {
-      border-color: #a855f7 !important;
-      background: linear-gradient(90deg, rgba(250,245,255,.98), rgba(255,255,255,.96)) !important;
+    .v3242-core-card{
+      border-color:#a855f7!important;
+      box-shadow:0 0 0 2px rgba(168,85,247,.16)!important;
+      background:linear-gradient(180deg,rgba(250,245,255,.90),rgba(255,255,255,.98))!important;
     }
-    .v324-core-collapsed::after {
-      content: "🟣 CORE";
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      margin-left: auto;
-      margin-right: 10px;
-      padding: .24rem .56rem;
-      border-radius: 999px;
-      border: 1px solid rgba(168, 85, 247, .34);
-      background: rgba(168, 85, 247, .12);
-      color: #7e22ce;
-      font-size: clamp(12px, 2.8vw, 15px);
-      font-weight: 950;
-      line-height: 1.1;
-      white-space: nowrap;
-      max-width: 84px;
-      box-sizing: border-box;
+    .v3242-core-collapsed{
+      border-color:#a855f7!important;
+      background:linear-gradient(90deg,rgba(250,245,255,.98),rgba(255,255,255,.96))!important;
     }
-    .v324-core-field {
-      min-height: 68px;
-      border-radius: 18px;
-      border: 1px solid rgba(168, 85, 247, .34);
-      background: rgba(250, 245, 255, .88);
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,.72);
-      padding: .50rem .62rem;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: .12rem;
-      box-sizing: border-box;
+    .v3242-core-collapsed::after{
+      content:"🟣 CORE";display:inline-flex;align-items:center;justify-content:center;
+      margin-left:auto;margin-right:10px;padding:.22rem .54rem;border-radius:999px;
+      border:1px solid rgba(168,85,247,.34);background:rgba(168,85,247,.12);
+      color:#7e22ce;font-size:clamp(12px,2.8vw,15px);font-weight:950;line-height:1.1;
+      white-space:nowrap;box-sizing:border-box;
     }
-    .v324-core-field-label {
-      color: #7e22ce;
-      font-size: clamp(12px, 2.9vw, 15px);
-      font-weight: 850;
-      line-height: 1.12;
-      opacity: .86;
+    .v3242-core-field{
+      min-height:64px;border-radius:18px;border:1px solid rgba(168,85,247,.34);
+      background:rgba(250,245,255,.90);box-shadow:inset 0 0 0 1px rgba(255,255,255,.72);
+      padding:.46rem .58rem;display:flex;flex-direction:column;justify-content:center;gap:.12rem;
+      box-sizing:border-box;
     }
-    .v324-core-field-value {
-      color: #6d28d9;
-      font-size: clamp(17px, 4.3vw, 23px);
-      font-weight: 950;
-      line-height: 1.15;
-    }
-    .v324-core-text {
-      color: #7e22ce !important;
-      font-weight: 950 !important;
-    }
-    .v322-core-ribbon,
-    .v322-core-badge,
-    .v323-core-pill,
-    .v323-core-slot {
-      display: none !important;
-    }
-    @media (max-width: 430px) {
-      .v324-core-collapsed::after {
-        margin-right: 8px;
-        padding-left: .46rem;
-        padding-right: .46rem;
-        font-size: 12px;
-      }
-      .v324-core-field {
-        min-height: 64px;
-        padding: .46rem .58rem;
-      }
-    }
+    .v3242-core-field-label{color:#7e22ce;font-size:clamp(12px,2.9vw,15px);font-weight:850;line-height:1.12;opacity:.86}
+    .v3242-core-field-value{color:#6d28d9;font-size:clamp(17px,4.3vw,23px);font-weight:950;line-height:1.15}
+    .v3242-core-text{color:#7e22ce!important;font-weight:950!important}
   </style>
 </head>
 <body>
   <script src="./app.js"></script>
-  <!-- v324.1 CORE visual patch：JS 必須在 app.js 後面執行，避免空白頁 -->
+
+  <!-- v324.2 CORE force visual patch：JS 必須在 app.js 後面 -->
   <script>
-  (function () {
+  (function(){
     "use strict";
+    function ready(fn){document.readyState==="loading"?document.addEventListener("DOMContentLoaded",fn,{once:true}):fn();}
+    ready(function(){
+      var files=["./data/strategy_evolution.csv","./data/ignition_candidates.csv","data/strategy_evolution.csv","data/ignition_candidates.csv","./strategy_evolution.csv","./ignition_candidates.csv"];
+      var core=new Map(), loaded=false;
 
-    function ready(fn) {
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", fn, { once: true });
-      } else {
-        fn();
-      }
-    }
-
-    ready(function () {
-      var DATA_FILES = [
-        "./data/strategy_evolution.csv",
-        "./data/ignition_candidates.csv",
-        "data/strategy_evolution.csv",
-        "data/ignition_candidates.csv",
-        "./strategy_evolution.csv",
-        "./ignition_candidates.csv"
-      ];
-
-      var coreMap = new Map();
-      var loaded = false;
-
-      function parseCSV(text) {
-        var rows = [];
-        var row = [];
-        var cell = "";
-        var q = false;
-
-        for (var i = 0; i < text.length; i++) {
-          var ch = text[i];
-          var nx = text[i + 1];
-
-          if (q) {
-            if (ch === '"' && nx === '"') {
-              cell += '"';
-              i++;
-            } else if (ch === '"') {
-              q = false;
-            } else {
-              cell += ch;
-            }
-          } else {
-            if (ch === '"') {
-              q = true;
-            } else if (ch === ",") {
-              row.push(cell);
-              cell = "";
-            } else if (ch === "\n") {
-              row.push(cell);
-              rows.push(row);
-              row = [];
-              cell = "";
-            } else if (ch !== "\r") {
-              cell += ch;
-            }
-          }
+      function parseCSV(t){
+        var rows=[],row=[],cell="",q=false;
+        for(var i=0;i<t.length;i++){
+          var ch=t[i],nx=t[i+1];
+          if(q){if(ch=='"'&&nx=='"'){cell+='"';i++;}else if(ch=='"')q=false;else cell+=ch;}
+          else{if(ch=='"')q=true;else if(ch==","){row.push(cell);cell="";}else if(ch=="\n"){row.push(cell);rows.push(row);row=[];cell="";}else if(ch!="\r")cell+=ch;}
         }
-
-        if (cell.length || row.length) {
-          row.push(cell);
-          rows.push(row);
-        }
-
-        if (!rows.length) return [];
-
-        var header = rows.shift().map(function (s) {
-          return String(s || "").trim();
+        if(cell.length||row.length){row.push(cell);rows.push(row);}
+        if(!rows.length)return[];
+        var h=rows.shift().map(function(s){return String(s||"").trim();});
+        return rows.filter(function(r){return r.some(function(x){return String(x||"").trim()!=="";});}).map(function(r){
+          var o={};h.forEach(function(k,i){o[k]=r[i]==null?"":String(r[i]).trim();});return o;
         });
-
-        return rows
-          .filter(function (r) {
-            return r.some(function (x) {
-              return String(x || "").trim() !== "";
-            });
-          })
-          .map(function (r) {
-            var o = {};
-            header.forEach(function (h, i) {
-              o[h] = r[i] == null ? "" : String(r[i]).trim();
-            });
-            return o;
+      }
+      function sidOf(r){var m=String(r.stock_id||r.sid||r.code||r.symbol||"").match(/\d{4}/);return m?m[0]:"";}
+      function isCore(r){
+        var s=[r.lifecycle_stage,r.strategy_bucket,r.strategy_layer,r.strategy_type,r.bucket,r.source,r.system_note,r.reason,r.is_core_v319,r.core_marker].map(function(x){return String(x||"");}).join(" ");
+        return /CORE|核心主升|🟣/.test(s)||String(r.is_core_v319||"").trim()==="1";
+      }
+      function txt(el){return(el&&el.textContent?el.textContent:"").replace(/\s+/g," ").trim();}
+      function expanded(el){var t=txt(el);return /股票名稱/.test(t)&&/策略層/.test(t)&&/進場型態/.test(t)&&/\d{4}/.test(t);}
+      function collapsed(el){var t=txt(el);return !expanded(el)&&/(試單|觀察|買進|WATCH|TEST)/.test(t)&&/\d{4}/.test(t)&&/高流動性|中流動性|低流動性/.test(t);}
+      function nearest(el){
+        var cur=el,b=null;
+        for(var i=0;cur&&i<12;i++,cur=cur.parentElement){if(expanded(cur))return cur;if(!b&&collapsed(cur))b=cur;}
+        return b;
+      }
+      function killOld(root){
+        Array.prototype.slice.call((root||document).querySelectorAll(".v322-core-badge,.v322-core-ribbon,.v323-core-pill,.v323-core-slot")).forEach(function(e){e.remove();});
+      }
+      function addField(card){
+        if(card.querySelector(".v3242-core-field"))return;
+        var field=document.createElement("div");
+        field.className="v3242-core-field";
+        field.innerHTML='<div class="v3242-core-field-label">CORE 標記</div><div class="v3242-core-field-value">🟣 核心主升</div>';
+        var all=Array.prototype.slice.call(card.querySelectorAll("*"));
+        var a=all.find(function(e){return /^籌碼集中度/.test(txt(e));})||all.find(function(e){return /^K線結構/.test(txt(e));})||all.find(function(e){return /^MA20觀察/.test(txt(e));})||all.find(function(e){return /^流動性分數/.test(txt(e));});
+        if(a&&a.parentElement)a.parentElement.insertAdjacentElement("afterend",field);else card.appendChild(field);
+      }
+      function mark(card,row){
+        if(!card)return; killOld(card);
+        if(expanded(card)){
+          card.classList.add("v3242-core-card"); addField(card);
+          Array.prototype.slice.call(card.querySelectorAll("*")).forEach(function(e){
+            var x=txt(e);
+            if(x==="EVOLUTION"||x==="IGNITION"||x==="TEST"||x==="WATCH"){e.textContent="🟣 CORE｜核心主升";e.classList.add("v3242-core-text");}
+            if(/策略進場/.test(x)&&row&&/核心主升|CORE|🟣/.test(Object.values(row).join(" "))){e.textContent="核心主升";e.classList.add("v3242-core-text");}
           });
+        }else{card.classList.add("v3242-core-collapsed");}
       }
-
-      function sidOf(row) {
-        var raw = row.stock_id || row.sid || row.code || row.symbol || "";
-        var m = String(raw).match(/\d{4}/);
-        return m ? m[0] : "";
-      }
-
-      function isCore(row) {
-        var joined = [
-          row.lifecycle_stage,
-          row.strategy_bucket,
-          row.strategy_layer,
-          row.strategy_type,
-          row.bucket,
-          row.source,
-          row.system_note,
-          row.reason,
-          row.is_core_v319,
-          row.core_marker
-        ].map(function (x) {
-          return String(x || "");
-        }).join(" ");
-
-        return /CORE|核心主升|🟣/.test(joined) || String(row.is_core_v319 || "").trim() === "1";
-      }
-
-      function textOf(el) {
-        return (el && el.textContent ? el.textContent : "").replace(/\s+/g, " ").trim();
-      }
-
-      function looksLikeCard(el) {
-        if (!el || el === document.body || el === document.documentElement) return false;
-        var t = textOf(el);
-        if (!t) return false;
-
-        if (/股票名稱|策略層|進場型態|參考價|流動性|籌碼集中度/.test(t) && /\d{4}/.test(t)) return true;
-        if (/(試單|觀察|買進|WATCH|TEST)/.test(t) && /\d{4}/.test(t) && /高流動性|中流動性|低流動性/.test(t)) return true;
-
-        return false;
-      }
-
-      function nearestCard(el) {
-        var cur = el;
-        for (var i = 0; cur && i < 9; i++, cur = cur.parentElement) {
-          if (looksLikeCard(cur)) return cur;
-        }
-        return null;
-      }
-
-      function isCollapsedCard(card) {
-        var t = textOf(card);
-        return !/股票名稱|策略層|進場型態|籌碼集中度/.test(t);
-      }
-
-      function findInsertAfterAnchor(card) {
-        var all = Array.prototype.slice.call(card.querySelectorAll("*"));
-        return (
-          all.find(function (el) { return /籌碼集中度/.test(textOf(el)); }) ||
-          all.find(function (el) { return /流動性分數/.test(textOf(el)); }) ||
-          all.find(function (el) { return /K線結構/.test(textOf(el)); }) ||
-          all.find(function (el) { return /MA20觀察/.test(textOf(el)); }) ||
-          all.find(function (el) { return /建議金額/.test(textOf(el)); })
-        );
-      }
-
-      function addCoreField(card) {
-        if (card.querySelector(".v324-core-field")) return;
-
-        var field = document.createElement("div");
-        field.className = "v324-core-field";
-        field.innerHTML =
-          '<div class="v324-core-field-label">CORE 標記</div>' +
-          '<div class="v324-core-field-value">🟣 核心主升</div>';
-
-        var anchor = findInsertAfterAnchor(card);
-        if (anchor && anchor.parentElement) {
-          anchor.parentElement.insertAdjacentElement("afterend", field);
-        } else {
-          card.appendChild(field);
-        }
-      }
-
-      function markCard(card, sid, row) {
-        if (!card) return;
-
-        Array.prototype.slice.call(card.querySelectorAll(".v322-core-badge,.v322-core-ribbon,.v323-core-pill,.v323-core-slot")).forEach(function (el) {
-          el.remove();
-        });
-
-        if (isCollapsedCard(card)) {
-          card.classList.add("v324-core-collapsed");
-          return;
-        }
-
-        card.classList.add("v324-core-card");
-        addCoreField(card);
-
-        Array.prototype.slice.call(card.querySelectorAll("*")).forEach(function (el) {
-          var tx = textOf(el);
-
-          if (tx === "EVOLUTION" || tx === "IGNITION" || tx === "TEST" || tx === "WATCH") {
-            el.textContent = "🟣 CORE｜核心主升";
-            el.classList.add("v324-core-text");
-          }
-
-          if (/策略進場/.test(tx) && row && /核心主升|CORE|🟣/.test(Object.values(row).join(" "))) {
-            el.textContent = "核心主升";
-            el.classList.add("v324-core-text");
-          }
+      function apply(){
+        if(!loaded||!core.size||!document.body)return;
+        killOld(document);
+        var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT),nodes=[];
+        while(w.nextNode())nodes.push(w.currentNode);
+        core.forEach(function(row,sid){
+          nodes.filter(function(n){return String(n.nodeValue||"").trim()===sid;}).forEach(function(n){var c=nearest(n.parentElement);if(c)mark(c,row);});
         });
       }
-
-      function applyCoreMarks() {
-        if (!loaded || !coreMap.size || !document.body) return;
-
-        var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-        var textNodes = [];
-
-        while (walker.nextNode()) {
-          textNodes.push(walker.currentNode);
-        }
-
-        coreMap.forEach(function (row, sid) {
-          textNodes
-            .filter(function (n) {
-              return String(n.nodeValue || "").trim() === sid;
-            })
-            .forEach(function (hit) {
-              var card = nearestCard(hit.parentElement);
-              if (card) markCard(card, sid, row);
-            });
-        });
-      }
-
-      function loadCoreMap() {
-        Promise.all(DATA_FILES.map(function (url) {
-          return fetch(url + "?v=" + Date.now(), { cache: "no-store" })
-            .then(function (res) {
-              if (!res.ok) return "";
-              return res.text();
-            })
-            .then(function (text) {
-              if (!text) return;
-              parseCSV(text).forEach(function (r) {
-                var sid = sidOf(r);
-                if (sid && isCore(r)) coreMap.set(sid, r);
-              });
-            })
-            .catch(function () {});
-        })).then(function () {
-          loaded = true;
-          applyCoreMarks();
-        });
-      }
-
-      loadCoreMap();
-
-      var observer = new MutationObserver(function () {
-        window.requestAnimationFrame(applyCoreMarks);
-      });
-
-      observer.observe(document.documentElement, { childList: true, subtree: true });
-
-      window.addEventListener("focus", applyCoreMarks);
-      document.addEventListener("visibilitychange", applyCoreMarks);
-      setInterval(applyCoreMarks, 2500);
+      Promise.all(files.map(function(u){
+        return fetch(u+"?v="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():"";}).then(function(t){if(!t)return;parseCSV(t).forEach(function(r){var s=sidOf(r);if(s&&isCore(r))core.set(s,r);});}).catch(function(){});
+      })).then(function(){loaded=true;apply();});
+      new MutationObserver(function(){requestAnimationFrame(apply);}).observe(document.documentElement,{childList:true,subtree:true});
+      window.addEventListener("focus",apply);document.addEventListener("visibilitychange",apply);setInterval(apply,1200);
     });
   })();
   </script>
