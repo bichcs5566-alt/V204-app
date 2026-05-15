@@ -5610,4 +5610,212 @@ loadFinalRows = async function() {
 
 window.__APP_UI_LOCK_VERSION_V3112 = APP_UI_LOCK_VERSION_V3112;
 console.log("APP UI LOCK ACTIVE:", APP_UI_LOCK_VERSION_V3112);
+/* =========================================================
+   v311.3 SAFE CORE PANEL FINAL FIX
+   - append-only
+   - 不改原本邏輯
+   - 不炸 blank screen
+   - 安全插入 detail-grid 下方
+   ========================================================= /
 
+(function safeCorePanelFixV3113() {
+
+  if (window.SAFE_CORE_PANEL_V3113) return;
+  window.SAFE_CORE_PANEL_V3113 = true;
+
+  / =========================
+     SAFE STYLE
+     ========================= /
+
+  function injectSafeCoreStyleV3113() {
+
+    if (document.getElementById("safe-core-style-v3113")) return;
+
+    const style = document.createElement("style");
+
+    style.id = "safe-core-style-v3113";
+
+    style.textContent =        .safe-core-box-v3113{         margin-top:12px;         padding:14px;         border-radius:18px;         background:linear-gradient(           135deg,           rgba(139,92,246,.14),           rgba(99,102,241,.10)         );         border:1px solid rgba(139,92,246,.25);       }        .safe-core-head-v3113{         display:flex;         align-items:center;         justify-content:space-between;         gap:10px;         margin-bottom:8px;       }        .safe-core-title-v3113{         font-size:14px;         font-weight:900;         color:#6d28d9;       }        .safe-core-tag-v3113{         padding:4px 10px;         border-radius:999px;         background:#7c3aed;         color:#fff;         font-size:11px;         font-weight:900;       }        .safe-core-text-v3113{         font-size:13px;         line-height:1.7;         color:#4c1d95;         font-weight:800;         word-break:break-word;       }     ;
+
+    document.head.appendChild(style);
+  }
+
+  / =========================
+     SAFE HTML
+     ========================= /
+
+  function buildSafeCoreHtmlV3113(row) {
+
+    try {
+
+      row = row || {};
+
+      const strategy =
+        String(
+          row.strategy_type ||
+          row.strategy ||
+          row.trade_type ||
+          ""
+        ).toUpperCase();
+
+      const isCore =
+        strategy.includes("CORE") ||
+        strategy.includes("EARLY") ||
+        strategy.includes("BREAKOUT");
+
+      if (!isCore) return "";
+
+      const score =
+        Number(
+          row.score ||
+          row.total_score ||
+          row.final_score ||
+          0
+        );
+
+      const reason =
+        row.reason ||
+        row.memo ||
+        row.ai_reason ||
+        row.comment ||
+        "早期動能布局訊號";
+
+      return         <div class="safe-core-box-v3113">            <div class="safe-core-head-v3113">              <div class="safe-core-title-v3113">               🟣 CORE 策略觀察             </div>              <div class="safe-core-tag-v3113">               SCORE ${score}             </div>            </div>            <div class="safe-core-text-v3113">             ${String(reason).replace(/[<>]/g,"")}           </div>          </div>      ;
+
+    } catch(e) {
+
+      console.error("buildSafeCoreHtmlV3113", e);
+
+      return "";
+
+    }
+
+  }
+
+  / =========================
+     SAFE PATCH
+     ========================= /
+
+  function patchRenderScanRowV3113() {
+
+    if (
+      typeof window.renderScanRow !== "function"
+    ) {
+      return;
+    }
+
+    if (
+      window.RENDER_PATCHED_V3113
+    ) {
+      return;
+    }
+
+    window.RENDER_PATCHED_V3113 = true;
+
+    const oldRender = window.renderScanRow;
+
+    window.renderScanRow = function(row) {
+
+      try {
+
+        let html = oldRender(row);
+
+        if (!html || typeof html !== "string") {
+          return html;
+        }
+
+        const coreHtml =
+          buildSafeCoreHtmlV3113(row);
+
+        if (!coreHtml) {
+          return html;
+        }
+
+        / 安全插入 detail-grid 後 /
+
+        if (
+          html.includes(
+            '<div class="detail-grid">'
+          )
+        ) {
+
+          html = html.replace(
+            /(<div class="detail-grid">[\s\S]?</div>\s*)/,
+            $1${coreHtml}
+          );
+
+        } else {
+
+          /* fallback /
+
+          html += coreHtml;
+
+        }
+
+        return html;
+
+      } catch(e) {
+
+        console.error(
+          "renderScanRow patch v3113",
+          e
+        );
+
+        try {
+          return oldRender(row);
+        } catch(_) {
+          return "";
+        }
+
+      }
+
+    };
+
+  }
+
+  / =========================
+     INIT
+     ========================= */
+
+  try {
+
+    injectSafeCoreStyleV3113();
+
+    if (
+      document.readyState === "loading"
+    ) {
+
+      document.addEventListener(
+        "DOMContentLoaded",
+        function() {
+
+          try {
+
+            injectSafeCoreStyleV3113();
+            patchRenderScanRowV3113();
+
+          } catch(e) {
+
+            console.error(e);
+
+          }
+
+        }
+      );
+
+    } else {
+
+      patchRenderScanRowV3113();
+
+    }
+
+  } catch(e) {
+
+    console.error(
+      "safeCorePanelFixV3113",
+      e
+    );
+
+  }
+
+})();
