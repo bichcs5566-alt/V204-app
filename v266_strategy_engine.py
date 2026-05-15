@@ -3290,7 +3290,7 @@ def apply_v319_core_lifecycle_marker_to_outputs():
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v3272_lifecycle_dtype_safe_compile_verified"
+                data["source"] = "v328_priority_operation_pool"
                 data["core_marker"] = "🟣 CORE｜核心主升"
                 data["core_logic"] = "CORE 不新增清單；從 EVOLUTION/TEST 升級，直接寫入 strategy_type / strategy_layer / lifecycle_stage 作特殊標記"
                 p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
@@ -3546,12 +3546,280 @@ def apply_v327_lifecycle_list_planning_guard():
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v3272_lifecycle_dtype_safe_compile_verified"
+                data["source"] = "v328_priority_operation_pool"
                 data["list_logic"] = "IGNITION=點火；TEST=ATTACK攻擊池；EVOLUTION=趨勢確認；CORE=少數主升標記；WATCH=預備；BLOCK=禁止"
                 data["core_limit"] = "每個輸出檔最多 5 檔 CORE，不強制補滿"
                 p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
             except Exception:
                 pass
+
+
+
+# ===== v328 PRIORITY OPERATION POOL =====
+# 目的：
+# - 不改前端、不改 yml、不新增獨立資料來源。
+# - 把已經被紫框標記的名單，正式匯總成「主升操作池」。
+# - 讓「最終操作」不再空白：從紫框名單中依強弱排序，分配 TOP 操作。
+# - 非紫框仍保留在 TEST / EVOLUTION / WATCH / BLOCK，不會被硬拉進最終操作。
+def apply_v328_priority_operation_pool():
+    import pandas as pd
+    import numpy as np
+    import json
+
+    def _read_csv_safe(path):
+        try:
+            if path.exists() and path.stat().st_size > 0:
+                return pd.read_csv(path, encoding="utf-8-sig")
+        except Exception:
+            try:
+                return pd.read_csv(path, encoding="utf-8")
+            except Exception:
+                return pd.DataFrame()
+        return pd.DataFrame()
+
+    def _txt(df, col, default=""):
+        if col in df.columns:
+            return df[col].astype("object").where(df[col].notna(), default).astype(str).replace("nan", "")
+        return pd.Series(default, index=df.index, dtype="object")
+
+    def _num(df, col, default=0.0):
+        if col in df.columns:
+            return pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
+        return pd.Series(default, index=df.index, dtype="float64")
+
+    def _first_num(df, cols, default=0.0):
+        out = pd.Series(np.nan, index=df.index, dtype="float64")
+        for c in cols:
+            if c in df.columns:
+                v = pd.to_numeric(df[c], errors="coerce").replace([np.inf, -np.inf], np.nan)
+                out = out.where(out.notna(), v)
+        return out.fillna(default)
+
+    def _normalize_sid(df):
+        if "stock_id" in df.columns:
+            df["stock_id"] = df["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False).fillna(df["stock_id"].astype(str).str[:4])
+        return df
+
+    def _ensure_text_columns(df):
+        text_cols = [
+            "stock_id", "stock_name", "industry", "action", "final_action",
+            "action_label", "action_sub", "strategy_type", "bucket",
+            "strategy_layer", "strategy_bucket", "layer", "entry_type",
+            "source", "reason", "system_note", "note", "engine",
+            "is_core_v319", "core_score_v319", "priority_grade_v328",
+            "priority_rank_v328", "v327_lifecycle_role"
+        ]
+        for c in text_cols:
+            if c not in df.columns:
+                df[c] = ""
+            df[c] = df[c].astype("object").where(df[c].notna(), "")
+        return df
+
+    def _rank_score(df):
+        return (
+            _first_num(df, ["core_score_v319"], 0) * 1.00 +
+            _first_num(df, ["final_sort_score_v312", "final_sort_score_v310", "final_sort_score_v309", "score"], 0) * 0.55 +
+            _first_num(df, ["attack_score_v312", "attack_score_v310", "attack_score_v309"], 0) * 0.45 +
+            _first_num(df, ["final_attack_score_v312", "final_attack_score_v310", "final_attack_score_v309"], 0) * 0.25 +
+            _first_num(df, ["entry_score", "evolution_score"], 0) * 0.20 +
+            _first_num(df, ["liquidity_score"], 0) * 0.12
+        ).round(2)
+
+    def _core_like(df):
+        joined = (
+            _txt(df, "strategy_type") + " " +
+            _txt(df, "strategy_layer") + " " +
+            _txt(df, "strategy_bucket") + " " +
+            _txt(df, "bucket") + " " +
+            _txt(df, "lifecycle_stage") + " " +
+            _txt(df, "system_note") + " " +
+            _txt(df, "reason")
+        ).str.upper()
+        return (
+            _txt(df, "is_core_v319").str.strip().eq("1") |
+            joined.str.contains("CORE|核心主升|🟣", case=False, regex=True, na=False)
+        )
+
+    source_names = [
+        "trade_plan.csv",
+        "strategy_evolution.csv",
+        "ignition_candidates.csv",
+        "candidates.csv",
+        "core_candidates.csv",
+        "alpha_candidates.csv",
+    ]
+
+    frames = []
+    for name in source_names:
+        df = _read_csv_safe(ROOT / name)
+        if df.empty:
+            df = _read_csv_safe(DATA_DIR / name)
+        if df.empty or "stock_id" not in df.columns:
+            continue
+        df = _normalize_sid(_ensure_text_columns(df.copy()))
+        df["_v328_from_file"] = name
+        frames.append(df)
+
+    if not frames:
+        print("v328 priority operation pool: no source rows")
+        return
+
+    pool = pd.concat(frames, ignore_index=True)
+    pool = _normalize_sid(_ensure_text_columns(pool))
+
+    core_mask = _core_like(pool)
+    if not bool(core_mask.any()):
+        print("v328 priority operation pool: no purple/core rows")
+        return
+
+    purple = pool.loc[core_mask].copy()
+    purple["_priority_score_v328"] = _rank_score(purple)
+    purple["_action_sort_v328"] = np.select(
+        [
+            _txt(purple, "action").str.upper().eq("TEST"),
+            _txt(purple, "action").str.upper().eq("BUY"),
+            _txt(purple, "action").str.upper().eq("WATCH")
+        ],
+        [0, 1, 2],
+        default=3
+    )
+    purple["_file_sort_v328"] = np.select(
+        [
+            _txt(purple, "_v328_from_file").eq("trade_plan.csv"),
+            _txt(purple, "_v328_from_file").eq("strategy_evolution.csv"),
+            _txt(purple, "_v328_from_file").eq("ignition_candidates.csv")
+        ],
+        [0, 1, 2],
+        default=3
+    )
+
+    purple = (
+        purple.sort_values(
+            ["_priority_score_v328", "_action_sort_v328", "_file_sort_v328", "stock_id"],
+            ascending=[False, True, True, True]
+        )
+        .drop_duplicates("stock_id", keep="first")
+        .head(8)
+        .copy()
+    )
+
+    if purple.empty:
+        print("v328 priority operation pool: purple rows empty after dedupe")
+        return
+
+    # TOP 分配：
+    # TOP 1-3 = S 主攻
+    # TOP 4-6 = A 可操作
+    # TOP 7-8 = B 追蹤
+    for rank, idx in enumerate(purple.index, start=1):
+        if rank <= 3:
+            grade = "S"
+            amount = 20000
+            weight = 0.010
+            sub = f"🟣 PRIORITY S{rank}｜主升主攻：紫框強度排序 TOP{rank}，可優先評估小倉/主倉。"
+        elif rank <= 6:
+            grade = "A"
+            amount = 10000
+            weight = 0.005
+            sub = f"🟣 PRIORITY A{rank}｜主升候選：紫框強度排序 TOP{rank}，可小倉試單或等回檔。"
+        else:
+            grade = "B"
+            amount = 0
+            weight = 0.000
+            sub = f"🟣 PRIORITY B{rank}｜主升觀察：紫框強度排序 TOP{rank}，先觀察不重倉。"
+
+        px = float(pd.to_numeric(pd.Series([purple.at[idx, "price"] if "price" in purple.columns else purple.at[idx, "ref_price"] if "ref_price" in purple.columns else purple.at[idx, "close"] if "close" in purple.columns else 0]), errors="coerce").fillna(0).iloc[0])
+        ref_px = float(pd.to_numeric(pd.Series([purple.at[idx, "ref_price"] if "ref_price" in purple.columns else purple.at[idx, "close"] if "close" in purple.columns else px]), errors="coerce").fillna(px).iloc[0])
+        use_px = px if px > 0 else ref_px
+
+        purple.at[idx, "action"] = "BUY" if rank <= 6 else "WATCH"
+        purple.at[idx, "final_action"] = purple.at[idx, "action"]
+        purple.at[idx, "v311_locked_action"] = purple.at[idx, "action"]
+        purple.at[idx, "action_label"] = "主升" if rank <= 6 else "觀察"
+        purple.at[idx, "action_sub"] = sub
+        purple.at[idx, "strategy_type"] = "CORE"
+        purple.at[idx, "bucket"] = "PRIORITY"
+        purple.at[idx, "engine"] = "CORE"
+        purple.at[idx, "strategy_layer"] = f"🟣 PRIORITY｜主升操作池 {grade}"
+        purple.at[idx, "strategy_bucket"] = f"🟣 CORE｜主升候選 TOP{rank}"
+        purple.at[idx, "layer"] = purple.at[idx, "strategy_layer"]
+        purple.at[idx, "entry_type"] = "主升候選操作"
+        purple.at[idx, "source"] = "v328_priority_operation_pool"
+        purple.at[idx, "reason"] = sub
+        purple.at[idx, "system_note"] = sub
+        purple.at[idx, "priority_grade_v328"] = grade
+        purple.at[idx, "priority_rank_v328"] = str(rank)
+        purple.at[idx, "opportunity_rank"] = str(rank)
+        purple.at[idx, "top_rank_v3066"] = rank
+        purple.at[idx, "is_top_v3066"] = 1
+        purple.at[idx, "top_opportunity"] = f"🔥PRIORITY_TOP{rank}"
+        purple.at[idx, "section_top_opportunity"] = f"PRIORITY_TOP{rank}"
+        purple.at[idx, "top_reason"] = sub
+        purple.at[idx, "is_core_v319"] = "1"
+        purple.at[idx, "core_score_v319"] = str(float(purple.at[idx, "_priority_score_v328"]))
+
+        if use_px > 0:
+            purple.at[idx, "price"] = round(use_px, 2)
+            purple.at[idx, "ref_price"] = round(ref_px if ref_px > 0 else use_px, 2)
+            purple.at[idx, "target_weight"] = round(weight, 4)
+            purple.at[idx, "suggest_amount"] = amount
+            purple.at[idx, "suggest_shares"] = round(amount / use_px, 0) if amount > 0 else 0
+        else:
+            purple.at[idx, "target_weight"] = round(weight, 4)
+            purple.at[idx, "suggest_amount"] = amount
+            purple.at[idx, "suggest_shares"] = 0
+
+    # 讀原 trade_plan，把 priority rows 放最前面，其他原本 TEST/WATCH/BLOCK 保留。
+    base = _read_csv_safe(ROOT / "trade_plan.csv")
+    if base.empty:
+        base = _read_csv_safe(DATA_DIR / "trade_plan.csv")
+    if base.empty:
+        base = purple.copy()
+    else:
+        base = _normalize_sid(_ensure_text_columns(base.copy()))
+        base = base.loc[~base["stock_id"].astype(str).isin(set(purple["stock_id"].astype(str)))].copy()
+        base = pd.concat([purple, base], ignore_index=True)
+
+    # 排序：BUY 主升在最前，WATCH/BLOCK 照原本在後。
+    base["_v328_action_order"] = np.select(
+        [
+            _txt(base, "action").str.upper().eq("BUY"),
+            _txt(base, "action").str.upper().eq("TEST"),
+            _txt(base, "action").str.upper().eq("WATCH"),
+            _txt(base, "action").str.upper().eq("BLOCK"),
+        ],
+        [0, 1, 2, 9],
+        default=5
+    )
+    base["_v328_rank_num"] = pd.to_numeric(base.get("priority_rank_v328", 9999), errors="coerce").fillna(9999)
+    base["_v328_score"] = _rank_score(base)
+    base = base.sort_values(
+        ["_v328_action_order", "_v328_rank_num", "_v328_score", "stock_id"],
+        ascending=[True, True, False, True]
+    ).drop(columns=[c for c in ["_v328_action_order", "_v328_rank_num", "_v328_score", "_priority_score_v328", "_action_sort_v328", "_file_sort_v328", "_v328_from_file"] if c in base.columns], errors="ignore")
+
+    for base_dir in [ROOT, DATA_DIR]:
+        base_dir.mkdir(parents=True, exist_ok=True)
+        base.to_csv(base_dir / "trade_plan.csv", index=False, encoding="utf-8-sig")
+
+    # 額外輸出一份主升操作池 CSV，前端未吃也沒關係，方便你人工檢查。
+    priority_out = purple.drop(columns=[c for c in ["_priority_score_v328", "_action_sort_v328", "_file_sort_v328", "_v328_from_file"] if c in purple.columns], errors="ignore")
+    for base_dir in [ROOT, DATA_DIR]:
+        priority_out.to_csv(base_dir / "priority_operation_pool.csv", index=False, encoding="utf-8-sig")
+
+    for base_dir in [ROOT, DATA_DIR]:
+        p = base_dir / "meta.json"
+        if p.exists():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8-sig"))
+                data["source"] = "v328_priority_operation_pool"
+                data["final_operation_name"] = "🟣 PRIORITY 主升操作池"
+                data["priority_logic"] = "從所有紫框名單匯總，依強弱排序 TOP1-8；TOP1-3=S，TOP4-6=A，TOP7-8=B"
+                p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+            except Exception:
+                pass
+
+    print("v328 priority operation pool:", "rows=", len(priority_out), "buy=", int((_txt(priority_out, "action").str.upper() == "BUY").sum()))
 
 
 if __name__ == "__main__":
@@ -3665,6 +3933,7 @@ if __name__ == "__main__":
             raise RuntimeError("v320 strategy_evolution.csv still empty")
 
         apply_v327_lifecycle_list_planning_guard()
+        apply_v328_priority_operation_pool()
 
     except Exception as e:
         print("v320 final panel guard failed:", repr(e))
