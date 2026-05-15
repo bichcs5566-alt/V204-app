@@ -3173,219 +3173,43 @@ def apply_v319_core_lifecycle_marker_to_outputs():
             (close >= ma5 * 0.985)
         )
 
-        core_from_evolution = (
-            _txt(d, "strategy_type").str.upper().eq("EVOLUTION") &
-            full_bull_ma &
-            (liq >= 88) &
-            (chip >= 60) &
-            (vol_ratio.between(0.70, 5.50)) &
-            risk_ok
+        # v326 CORE 收窄版：
+        # 不再只因為 EVOLUTION + 均線多頭就升 CORE。
+        # 必須同時具備：
+        # 1. 主升結構
+        # 2. 動能延續
+        # 3. 籌碼/主力強度
+        # 4. 高流動性
+        # 5. 排名靠前
+
+        strong_trend = (
+            (close >= ma5 * 0.995) &
+            (ma5 >= ma10 * 1.004) &
+            (ma10 >= ma20 * 1.004) &
+            (ma20 >= ma60 * 1.002)
         )
 
-        core_from_score = candidate_ok & risk_ok & (core_score >= 70) & trend_core & (momentum_core | capital_core)
+        strong_momentum = (
+            (mom5 >= 0.03) &
+            (mom10 >= 0.06) &
+            (mom20 >= 0.10)
+        )
 
-        core_mask = core_from_score | core_from_evolution
+        strong_chip = (
+            (main_force >= 68) |
+            (chip >= 72)
+        )
 
-        # 保險：若當天太少，從 EVOLUTION 裡高分趨勢股補到最多 3 檔，但不碰 BLOCK。
-        if int(core_mask.sum()) < 3:
-            fallback = (
-                candidate_ok &
-                risk_ok &
-                full_bull_ma &
-                (liq >= 80) &
-                (core_score >= 55)
-            )
-            top_idx = d.loc[fallback].assign(_core_score_v321=core_score.loc[fallback]).sort_values(
-                ["_core_score_v321", "stock_id"], ascending=[False, True]
-            ).head(3).index
-            core_mask.loc[top_idx] = True
+        strong_liq = (
+            (liq >= 90) &
+            (vol_ratio.between(0.90, 3.80))
+        )
 
-        # 控制 CORE 數量，避免變成另一張大清單。
-        core_idx = d.loc[core_mask].assign(_core_score_v319=core_score.loc[core_mask]).sort_values(
-            ["_core_score_v319", "stock_id"], ascending=[False, True]
-        ).head(15).index
-        final_core = d.index.isin(core_idx)
+        strong_rank = (
+            (attack >= 70) |
+            (final_sort >= 75)
+        )
 
-        if "lifecycle_stage" not in d.columns:
-            d["lifecycle_stage"] = ""
-        # v319.1：輸出欄位統一寫成字串，避免 pandas StringDtype 欄位被塞數值 Series 後炸掉。
-        d["core_score_v319"] = core_score.round(2).astype(str)
-        d["is_core_v319"] = "0"
-        d.loc[final_core, "is_core_v319"] = "1"
-
-        # 不新增 UI，只把既有卡片欄位變成特殊文字標記。
-        for c in ["strategy_layer", "strategy_bucket", "strategy_type", "bucket", "entry_type", "system_note", "reason"]:
-            if c not in d.columns:
-                d[c] = ""
-
-        d.loc[final_core, "lifecycle_stage"] = "🟣 CORE"
-        d.loc[final_core, "strategy_layer"] = "🟣 CORE｜核心主升"
-        d.loc[final_core, "strategy_bucket"] = "🟣 CORE｜主升核心"
-        d.loc[final_core, "bucket"] = "CORE"
-        d.loc[final_core, "entry_type"] = "核心主升追蹤"
-        d.loc[final_core, "system_note"] = "🟣 CORE：由 EVOLUTION/TEST 升級的核心主升追蹤，不是一般試單。"
-        d.loc[final_core, "reason"] = "v319 CORE：趨勢、動能、籌碼/流動性達核心條件，標記為核心主升。"
-
-        # v321：CORE 必須在卡片策略層直接看得見。
-        # 不改 action，所以仍會留在原本 TEST/EVOLUTION 清單；但卡片策略層會升級成 CORE。
-        d.loc[final_core, "strategy_type"] = "CORE"
-        d.loc[final_core, "bucket"] = "CORE"
-
-        # v320：不要把卡片「來源」顯示成版本技術字串。
-        # UI 會把 source 欄位直接顯示在卡片裡，所以這裡統一轉成使用者看得懂的中文。
-        src_text = _txt(d, "source")
-        technical_source = src_text.str.contains(r"^v\d+|core_lifecycle|fallback|real_split|panel_file", case=False, regex=True, na=False)
-        d.loc[technical_source, "source"] = "策略進場"
-        d.loc[final_core, "source"] = "核心主升"
-        return d
-
-    target_names = [
-        "trade_plan.csv",
-        "candidates.csv",
-        "core_candidates.csv",
-        "alpha_candidates.csv",
-        "ignition_candidates.csv",
-        "strategy_evolution.csv",
-    ]
-
-    for name in target_names:
-        # 優先讀 root，沒有再讀 data
-        df = _read_csv_safe(ROOT / name)
-        if df.empty:
-            df = _read_csv_safe(DATA_DIR / name)
-        if df.empty:
-            continue
-
-        out = _mark(df)
-        for base in [ROOT, DATA_DIR]:
-            base.mkdir(parents=True, exist_ok=True)
-            out.to_csv(base / name, index=False, encoding="utf-8-sig")
-        print("v319 core lifecycle marked:", name, "rows=", len(out), "core=", int(pd.to_numeric(out.get("is_core_v319", 0), errors="coerce").fillna(0).sum()))
-
-    for base in [ROOT, DATA_DIR]:
-        p = base / "meta.json"
-        if p.exists():
-            try:
-                data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v321_core_upgrade_visible"
-                data["core_marker"] = "🟣 CORE｜核心主升"
-                data["core_logic"] = "CORE 不新增清單；從 EVOLUTION/TEST 升級，直接寫入 strategy_type / strategy_layer / lifecycle_stage 作特殊標記"
-                p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
-            except Exception:
-                pass
-
-
-if __name__ == "__main__":
-    main_v266577_structure_weight_continuation_patch()
-    apply_v311_csv_final_lock()
-    try:
-        apply_v315_ignition_evolution_outputs()
-    except Exception as e:
-        print("v315 panel output skipped:", repr(e))
-
-    write_v317_panel_files_hard_guarantee()
-    apply_v319_core_lifecycle_marker_to_outputs()
-
-    # ===== v320 FINAL PANEL NON-EMPTY + READABLE SOURCE GUARD =====
-    # 目的：
-    # - 不讓 ignition/evolution 空檔造成 workflow fail。
-    # - 不用未定義的 ign/evo 變數。
-    # - 最後一關把 source 轉成人看得懂的文字。
-    try:
-        import pandas as pd
-
-        def _read_panel_safe(path):
-            try:
-                if path.exists() and path.stat().st_size > 0:
-                    return pd.read_csv(path, encoding="utf-8-sig")
-            except Exception:
-                try:
-                    return pd.read_csv(path, encoding="utf-8")
-                except Exception:
-                    pass
-            return pd.DataFrame()
-
-        seed = pd.DataFrame()
-        for p in [
-            ROOT / "trade_plan.csv",
-            DATA_DIR / "trade_plan.csv",
-            ROOT / "candidates.csv",
-            DATA_DIR / "candidates.csv",
-        ]:
-            df = _read_panel_safe(p)
-            if not df.empty:
-                seed = df.copy()
-                break
-
-        def _ensure_panel(name, strategy_type, fallback_action):
-            root_p = ROOT / name
-            data_p = DATA_DIR / name
-
-            panel = _read_panel_safe(root_p)
-            if panel.empty:
-                panel = _read_panel_safe(data_p)
-
-            if panel.empty and not seed.empty:
-                panel = seed.head(10).copy()
-
-            if panel.empty:
-                return panel
-
-            if "action" not in panel.columns:
-                panel["action"] = fallback_action
-            else:
-                panel["action"] = panel["action"].fillna("").replace("", fallback_action)
-
-            if "final_action" not in panel.columns:
-                panel["final_action"] = panel["action"]
-
-            # v321：final guard 只補缺欄，不覆蓋 CORE 升級結果。
-            if "strategy_type" not in panel.columns:
-                panel["strategy_type"] = strategy_type
-            else:
-                st = panel["strategy_type"].astype(str).fillna("")
-                panel["strategy_type"] = st.where(st.str.contains("CORE", case=False, na=False), strategy_type)
-
-            if "bucket" not in panel.columns:
-                panel["bucket"] = panel["strategy_type"]
-            else:
-                bk = panel["bucket"].astype(str).fillna("")
-                panel["bucket"] = bk.where(bk.str.contains("CORE", case=False, na=False), panel["strategy_type"])
-
-            if "strategy_layer" not in panel.columns:
-                panel["strategy_layer"] = panel["strategy_type"]
-            else:
-                sl = panel["strategy_layer"].astype(str).fillna("")
-                panel["strategy_layer"] = sl.where(sl.str.len() > 0, panel["strategy_type"])
-
-            if "source" not in panel.columns:
-                panel["source"] = "策略進場"
-            else:
-                src = panel["source"].astype(str).fillna("")
-                panel["source"] = src.where(src.str.contains("核心主升|CORE", case=False, na=False), "策略進場")
-
-            if "strategy_name" not in panel.columns:
-                panel["strategy_name"] = strategy_type
-
-            if "entry_type" not in panel.columns:
-                panel["entry_type"] = "起漲觀察" if strategy_type == "IGNITION" else "趨勢確認升級"
-
-            for base in [ROOT, DATA_DIR]:
-                base.mkdir(parents=True, exist_ok=True)
-                panel.to_csv(base / name, index=False, encoding="utf-8-sig")
-
-            print("v320 final panel guard:", name, "rows=", len(panel))
-            return panel
-
-        ign_final = _ensure_panel("ignition_candidates.csv", "IGNITION", "TEST")
-        evo_final = _ensure_panel("strategy_evolution.csv", "EVOLUTION", "WATCH")
-
-        if ign_final.empty:
-            raise RuntimeError("v320 ignition_candidates.csv still empty")
-        if evo_final.empty:
-            raise RuntimeError("v320 strategy_evolution.csv still empty")
-
-    except Exception as e:
-        print("v320 final panel guard failed:", repr(e))
-        raise
-
+        core_from_evolution = (
+            _txt(d, "strategy_type").str.upper().eq("EVOLUTION") &
+            strong_trend
