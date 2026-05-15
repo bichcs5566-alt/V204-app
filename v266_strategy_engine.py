@@ -3288,9 +3288,261 @@ def apply_v319_core_lifecycle_marker_to_outputs():
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v3261_core_filter_tightened_syntax_safe"
+                data["source"] = "v327_lifecycle_list_planning"
                 data["core_marker"] = "🟣 CORE｜核心主升"
                 data["core_logic"] = "CORE 不新增清單；從 EVOLUTION/TEST 升級，直接寫入 strategy_type / strategy_layer / lifecycle_stage 作特殊標記"
+                p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+            except Exception:
+                pass
+
+
+
+# ===== v327 LIFECYCLE LIST PLANNING GUARD =====
+# 目的：
+# - 不新增清單、不改前端、不改 yml。
+# - 只把既有五大清單的角色定義寫乾淨：
+#   IGNITION = 起漲點火
+#   TEST     = ATTACK 新強勢攻擊池
+#   EVOLUTION= 趨勢確認升級池
+#   CORE     = 少數核心主升標記，不是獨立清單
+#   WATCH    = 預備觀察
+#   BLOCK    = 禁止
+# - 同時限制 CORE 數量，避免整張 EVOLUTION / TEST 都變紫框。
+def apply_v327_lifecycle_list_planning_guard():
+    import pandas as pd
+    import numpy as np
+    import json
+
+    def _read_csv_safe(path):
+        try:
+            if path.exists() and path.stat().st_size > 0:
+                return pd.read_csv(path, encoding="utf-8-sig")
+        except Exception:
+            try:
+                return pd.read_csv(path, encoding="utf-8")
+            except Exception:
+                return pd.DataFrame()
+        return pd.DataFrame()
+
+    def _txt(df, col, default=""):
+        if col in df.columns:
+            return df[col].astype(str).replace("nan", "").fillna(default)
+        return pd.Series(default, index=df.index, dtype="object")
+
+    def _num(df, col, default=0.0):
+        if col in df.columns:
+            return pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
+        return pd.Series(default, index=df.index, dtype="float64")
+
+    def _first_num(df, cols, default=0.0):
+        out = pd.Series(np.nan, index=df.index, dtype="float64")
+        for c in cols:
+            if c in df.columns:
+                v = pd.to_numeric(df[c], errors="coerce").replace([np.inf, -np.inf], np.nan)
+                out = out.where(out.notna(), v)
+        return out.fillna(default)
+
+    def _normalize_sid(df):
+        if "stock_id" in df.columns:
+            df["stock_id"] = df["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False).fillna(df["stock_id"].astype(str).str[:4])
+        return df
+
+    def _base_action(df):
+        action = _txt(df, "v311_locked_action")
+        action = action.where(action.str.len() > 0, _txt(df, "final_action"))
+        action = action.where(action.str.len() > 0, _txt(df, "action"))
+        return action.str.upper().str.strip()
+
+    def _core_flag(df):
+        joined = (
+            _txt(df, "strategy_type") + " " +
+            _txt(df, "strategy_layer") + " " +
+            _txt(df, "strategy_bucket") + " " +
+            _txt(df, "bucket") + " " +
+            _txt(df, "lifecycle_stage") + " " +
+            _txt(df, "system_note") + " " +
+            _txt(df, "reason")
+        ).str.upper()
+        raw_core = (
+            _txt(df, "is_core_v319").str.strip().eq("1") |
+            joined.str.contains("CORE|核心主升|🟣", case=False, regex=True, na=False)
+        )
+        return raw_core
+
+    def _rank_score(df):
+        return (
+            _first_num(df, ["core_score_v319"], 0) * 1.00 +
+            _first_num(df, ["final_sort_score_v312", "final_sort_score_v310", "final_sort_score_v309"], 0) * 0.45 +
+            _first_num(df, ["attack_score_v312", "attack_score_v310", "attack_score_v309"], 0) * 0.35 +
+            _first_num(df, ["evolution_score", "entry_score", "score"], 0) * 0.20 +
+            _first_num(df, ["liquidity_score"], 0) * 0.10
+        ).round(2)
+
+    def _apply_role(df, name):
+        if df is None or df.empty or "stock_id" not in df.columns:
+            return df
+
+        d = _normalize_sid(df.copy())
+        action = _base_action(d)
+
+        for c in [
+            "action", "final_action", "strategy_type", "bucket", "strategy_layer",
+            "strategy_bucket", "lifecycle_stage", "entry_type", "source",
+            "system_note", "reason", "is_core_v319", "core_score_v319",
+            "action_label", "action_sub"
+        ]:
+            if c not in d.columns:
+                d[c] = ""
+
+        # 先保留既有 CORE 候選，再做名額制，避免整批紫框。
+        raw_core = _core_flag(d)
+        rank = _rank_score(d)
+
+        # 各輸出檔獨立控管 CORE，不讓 panel / trade_plan 互相污染。
+        # panel 顯示用，最多 5；一般輸出最多 5。沒有符合就 0，不強制補。
+        max_core = 5
+        keep_core = pd.Series(False, index=d.index)
+        if bool(raw_core.any()):
+            idx = (
+                d.loc[raw_core]
+                .assign(_v327_rank=rank.loc[raw_core])
+                .sort_values(["_v327_rank", "stock_id"], ascending=[False, True])
+                .head(max_core)
+                .index
+            )
+            keep_core.loc[idx] = True
+
+        # 先清掉過度擴散的 CORE 痕跡，後面只把 keep_core 補回來。
+        d["is_core_v319"] = "0"
+        d["lifecycle_stage"] = ""
+        d.loc[:, "strategy_layer"] = d["strategy_layer"].astype(str).replace("nan", "")
+        d.loc[:, "strategy_bucket"] = d["strategy_bucket"].astype(str).replace("nan", "")
+
+        # 檔案面板預設角色
+        file_is_ign = name == "ignition_candidates.csv"
+        file_is_evo = name == "strategy_evolution.csv"
+
+        test_mask = action.eq("TEST") | _txt(d, "action").str.upper().eq("TEST")
+        watch_mask = action.eq("WATCH") | _txt(d, "action").str.upper().eq("WATCH")
+        block_mask = action.eq("BLOCK") | _txt(d, "action").str.upper().eq("BLOCK")
+        ignition_mask = file_is_ign | _txt(d, "strategy_type").str.upper().eq("IGNITION")
+        evolution_mask = file_is_evo | _txt(d, "strategy_type").str.upper().eq("EVOLUTION")
+
+        # IGNITION：點火掃描，不直接等於主倉。
+        m = ignition_mask & ~keep_core
+        d.loc[m, "strategy_type"] = "IGNITION"
+        d.loc[m, "bucket"] = "IGNITION"
+        d.loc[m, "strategy_layer"] = "🧪 IGNITION｜起漲點火"
+        d.loc[m, "strategy_bucket"] = "🧪 IGNITION｜防假突破"
+        d.loc[m, "entry_type"] = "起漲訊號觀察"
+        d.loc[m, "source"] = "起漲偵測"
+        d.loc[m, "system_note"] = "IGNITION：剛點火，先觀察假突破，不直接重倉。"
+        d.loc[m, "reason"] = "v327：起漲訊號層，等待延續 K 棒與量價確認。"
+
+        # EVOLUTION：趨勢確認升級池，仍不是自動主倉。
+        m = evolution_mask & ~keep_core
+        d.loc[m, "strategy_type"] = "EVOLUTION"
+        d.loc[m, "bucket"] = "EVOLUTION"
+        d.loc[m, "strategy_layer"] = "🧬 EVOLUTION｜趨勢確認"
+        d.loc[m, "strategy_bucket"] = "🧬 EVOLUTION｜策略進化"
+        d.loc[m, "entry_type"] = "趨勢確認升級"
+        d.loc[m, "source"] = "策略進場"
+        d.loc[m, "system_note"] = "EVOLUTION：趨勢確認層，可銜接 CORE，但不自動加碼。"
+        d.loc[m, "reason"] = "v327：強勢確認 / 續強升級 / 觀察是否進入核心主升。"
+
+        # TEST 正式定位成 ATTACK：新強勢攻擊池，避免新名單被 CORE 名額制擋掉。
+        m = test_mask & ~keep_core & ~ignition_mask & ~evolution_mask
+        d.loc[m, "strategy_type"] = "TEST"
+        d.loc[m, "bucket"] = "ATTACK"
+        d.loc[m, "strategy_layer"] = "⚡ ATTACK｜新強勢攻擊"
+        d.loc[m, "strategy_bucket"] = "⚡ ATTACK｜準主流候選"
+        d.loc[m, "entry_type"] = "攻擊試單"
+        d.loc[m, "source"] = "攻擊試單"
+        d.loc[m, "action_label"] = "試單"
+        d.loc[m, "action_sub"] = "ATTACK：新強勢攻擊池，小倉試單，觀察是否續強升 CORE。"
+        d.loc[m, "system_note"] = "TEST/ATTACK：避免錯過新主流，但尚未確認為主倉。"
+        d.loc[m, "reason"] = "v327：攻擊條件達標，先列入 ATTACK 試單層，不直接視為 CORE。"
+
+        # WATCH：預備池。
+        m = watch_mask & ~keep_core & ~ignition_mask & ~evolution_mask
+        d.loc[m, "strategy_type"] = "WATCH"
+        d.loc[m, "bucket"] = "WATCH"
+        d.loc[m, "strategy_layer"] = "👀 WATCH｜預備觀察"
+        d.loc[m, "strategy_bucket"] = "👀 WATCH｜未發動"
+        d.loc[m, "entry_type"] = "觀察等待"
+        d.loc[m, "source"] = "觀察池"
+        d.loc[m, "action_label"] = "觀察"
+        d.loc[m, "action_sub"] = "WATCH：有結構但未發動，等確認。"
+
+        # BLOCK：禁止池。
+        m = block_mask & ~keep_core
+        d.loc[m, "strategy_type"] = "BLOCK"
+        d.loc[m, "bucket"] = "BLOCK"
+        d.loc[m, "strategy_layer"] = "⛔ BLOCK｜禁止"
+        d.loc[m, "strategy_bucket"] = "⛔ BLOCK｜風控排除"
+        d.loc[m, "entry_type"] = "禁止進場"
+        d.loc[m, "source"] = "風控排除"
+        d.loc[m, "action_label"] = "禁止"
+        d.loc[m, "action_sub"] = "BLOCK：禁止清單，避免重複踩雷。"
+
+        # CORE：少數核心主升標記。保留在原清單，不新增獨立清單。
+        d.loc[keep_core, "is_core_v319"] = "1"
+        d.loc[keep_core, "lifecycle_stage"] = "🟣 CORE"
+        d.loc[keep_core, "strategy_type"] = "CORE"
+        d.loc[keep_core, "bucket"] = "CORE"
+        d.loc[keep_core, "strategy_layer"] = "🟣 CORE｜核心主升"
+        d.loc[keep_core, "strategy_bucket"] = "🟣 CORE｜主升核心"
+        d.loc[keep_core, "entry_type"] = "核心主升追蹤"
+        d.loc[keep_core, "source"] = "核心主升"
+        d.loc[keep_core, "system_note"] = "CORE：由 IGNITION / TEST / EVOLUTION 中少數升級，主倉候選，不是新清單。"
+        d.loc[keep_core, "reason"] = "v327：通過 CORE 名額制，列為核心主升追蹤。"
+
+        d["v327_lifecycle_role"] = np.select(
+            [keep_core, ignition_mask & ~keep_core, evolution_mask & ~keep_core, test_mask & ~keep_core, watch_mask & ~keep_core, block_mask & ~keep_core],
+            ["CORE", "IGNITION", "EVOLUTION", "ATTACK", "WATCH", "BLOCK"],
+            default=""
+        )
+
+        d["core_score_v319"] = _first_num(d, ["core_score_v319"], 0).round(2).astype(str)
+        return d
+
+    target_names = [
+        "trade_plan.csv",
+        "candidates.csv",
+        "core_candidates.csv",
+        "alpha_candidates.csv",
+        "ignition_candidates.csv",
+        "strategy_evolution.csv",
+        "watchlist_monitor.csv",
+        "position_monitor.csv",
+    ]
+
+    for name in target_names:
+        df = _read_csv_safe(ROOT / name)
+        if df.empty:
+            df = _read_csv_safe(DATA_DIR / name)
+        if df.empty:
+            continue
+
+        out = _apply_role(df, name)
+        for base in [ROOT, DATA_DIR]:
+            base.mkdir(parents=True, exist_ok=True)
+            out.to_csv(base / name, index=False, encoding="utf-8-sig")
+
+        try:
+            core_n = int(pd.to_numeric(out.get("is_core_v319", 0), errors="coerce").fillna(0).sum())
+        except Exception:
+            core_n = 0
+        print("v327 lifecycle planning:", name, "rows=", len(out), "core=", core_n)
+
+    for base in [ROOT, DATA_DIR]:
+        p = base / "meta.json"
+        if p.exists():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8-sig"))
+                data["source"] = "v327_lifecycle_list_planning"
+                data["list_logic"] = "IGNITION=點火；TEST=ATTACK攻擊池；EVOLUTION=趨勢確認；CORE=少數主升標記；WATCH=預備；BLOCK=禁止"
+                data["core_limit"] = "每個輸出檔最多 5 檔 CORE，不強制補滿"
                 p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
             except Exception:
                 pass
@@ -3405,6 +3657,8 @@ if __name__ == "__main__":
             raise RuntimeError("v320 ignition_candidates.csv still empty")
         if evo_final.empty:
             raise RuntimeError("v320 strategy_evolution.csv still empty")
+
+        apply_v327_lifecycle_list_planning_guard()
 
     except Exception as e:
         print("v320 final panel guard failed:", repr(e))
