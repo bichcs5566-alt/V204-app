@@ -1,6 +1,6 @@
 {
   "version": "v266.33C_ma_merge_coalesce",
-  "updated_at": "2026-05-16 10:53:10",
+  "updated_at": "2026-05-16 15:32:08",
   "rows": 5,
   "stocks": [
     "2317",
