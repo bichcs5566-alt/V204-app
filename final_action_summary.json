@@ -1,5 +1,5 @@
 ﻿{
-  "generated_at": "2026-05-15 23:24:56",
+  "generated_at": "2026-05-16 08:20:29",
   "source": "v266_57_source_safe_string",
   "signal_date": "2026-05-15",
   "trade_date": "2026-05-18",
@@ -32,7 +32,7 @@
     "timing_candidates.csv"
   ],
   "with_name_count": 727,
-  "top_opportunity_count": 11,
+  "top_opportunity_count": 13,
   "chip_high_count": 29,
   "macro_regime": "NEUTRAL",
   "macro_label": "總經偏多（低信心）",
@@ -51,10 +51,10 @@
   "encoding": "utf-8-sig",
   "version": "v266.57",
   "latest_date": "2026-05-15",
-  "updated_at": "2026-05-15 23:27:25",
+  "updated_at": "2026-05-16 08:23:02",
   "date_lock_source": "feature_panel_daily.csv",
   "date_state": "locked_from_latest_feature",
-  "last_update": "2026-05-15 23:26:20",
+  "last_update": "2026-05-16 08:21:55",
   "timezone": "Asia/Taipei",
   "time_source": "github_actions_taipei",
   "refresh_mode": "behavior_interpretation",
@@ -70,5 +70,5 @@
     "4933",
     "6651"
   ],
-  "final_action_updated_at": "2026-05-15 23:27:25"
+  "final_action_updated_at": "2026-05-16 08:23:02"
 }
