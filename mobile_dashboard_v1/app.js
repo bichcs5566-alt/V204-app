@@ -243,6 +243,9 @@ function purgeStaleFinalRowsV26648(rows) {
 function forceClearClientCacheV26648() {
   try {
     Object.keys(localStorage || {}).forEach(k => {
+      // v332：本機持倉測試模式，持倉必須保留，才能重新整理後繼續重新評估。
+      if (k === POS_STORAGE_KEY || k === "daily_dashboard_positions_v1") return;
+      if (/position/i.test(k)) return;
       if (/final|workflow|dashboard|csv|cache/i.test(k)) localStorage.removeItem(k);
     });
   } catch (e) {}
@@ -2343,7 +2346,10 @@ function filterFinalRowsBySyncedPositionsV26656(rows) {
 function clearStaleFinalCacheV26656() {
   try {
     Object.keys(localStorage || {}).forEach(k => {
-      if (/final|action|sell|position|workflow|dashboard|csv/i.test(k)) {
+      // v332：保護本機持倉。重新整理 / 渲染最終操作時不可清掉持倉。
+      if (k === POS_STORAGE_KEY || k === "daily_dashboard_positions_v1") return;
+      if (/position/i.test(k)) return;
+      if (/final|action|sell|workflow|dashboard|csv/i.test(k)) {
         localStorage.removeItem(k);
       }
     });
@@ -5929,3 +5935,29 @@ document.addEventListener("DOMContentLoaded", function() {
   setTimeout(applyLocalPositionTestModeV330, 300);
   setTimeout(applyLocalPositionTestModeV330, 1200);
 });
+
+
+
+/* ===== v332 Protect Local Positions / 保護本機持倉 =====
+   - 本機持倉 key：daily_dashboard_positions_v1
+   - 不回寫 GitHub，不同步後端
+   - 重新整理 / 重跑策略後仍保留，可用最新清單重新評估
+*/
+function isProtectedPositionStorageKeyV332(k) {
+  return k === POS_STORAGE_KEY || k === "daily_dashboard_positions_v1" || /position/i.test(String(k || ""));
+}
+
+function verifyLocalPositionsStillExistV332() {
+  try {
+    const rows = loadPositions();
+    if (rows && rows.length) {
+      refreshPositionStatus("本機持倉已保留，可重新評估");
+    }
+  } catch (e) {}
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+  setTimeout(verifyLocalPositionsStillExistV332, 300);
+  setTimeout(verifyLocalPositionsStillExistV332, 1200);
+});
+
