@@ -3290,7 +3290,7 @@ def apply_v319_core_lifecycle_marker_to_outputs():
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v3281_priority_operation_pool_dtype_safe"
+                data["source"] = "v329_evolution_ab_auto_split"
                 data["core_marker"] = "🟣 CORE｜核心主升"
                 data["core_logic"] = "CORE 不新增清單；從 EVOLUTION/TEST 升級，直接寫入 strategy_type / strategy_layer / lifecycle_stage 作特殊標記"
                 p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
@@ -3546,7 +3546,7 @@ def apply_v327_lifecycle_list_planning_guard():
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v3281_priority_operation_pool_dtype_safe"
+                data["source"] = "v329_evolution_ab_auto_split"
                 data["list_logic"] = "IGNITION=點火；TEST=ATTACK攻擊池；EVOLUTION=趨勢確認；CORE=少數主升標記；WATCH=預備；BLOCK=禁止"
                 data["core_limit"] = "每個輸出檔最多 5 檔 CORE，不強制補滿"
                 p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
@@ -3824,7 +3824,7 @@ def apply_v328_priority_operation_pool():
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v3281_priority_operation_pool_dtype_safe"
+                data["source"] = "v329_evolution_ab_auto_split"
                 data["final_operation_name"] = "🟣 PRIORITY 主升操作池"
                 data["priority_logic"] = "從所有紫框名單匯總，依強弱排序 TOP1-8；TOP1-3=S，TOP4-6=A，TOP7-8=B"
                 p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
@@ -3834,119 +3834,49 @@ def apply_v328_priority_operation_pool():
     print("v328 priority operation pool:", "rows=", len(priority_out), "buy=", int((_txt(priority_out, "action").str.upper() == "BUY").sum()))
 
 
-if __name__ == "__main__":
-    main_v266577_structure_weight_continuation_patch()
-    apply_v311_csv_final_lock()
-    try:
-        apply_v315_ignition_evolution_outputs()
-    except Exception as e:
-        print("v315 panel output skipped:", repr(e))
 
-    write_v317_panel_files_hard_guarantee()
-    apply_v319_core_lifecycle_marker_to_outputs()
+# ===== v329 EVOLUTION A/B AUTO SPLIT =====
+# 目的：
+# - 不新增 UI、不改 yml、不動 app.js。
+# - 只把既有 strategy_evolution.csv 內部分成：
+#   EVOLUTION-A = 準主升，可進最終操作候選
+#   EVOLUTION-B = 培養觀察，留在 EVOLUTION，不進最終操作
+# - 每次後端更新都會重新評分，所以 B 變強會自動升 A，A 變弱會退 B。
+def apply_v329_evolution_ab_auto_split():
+    import pandas as pd
+    import numpy as np
+    import json
+    import math
 
-    # ===== v320 FINAL PANEL NON-EMPTY + READABLE SOURCE GUARD =====
-    # 目的：
-    # - 不讓 ignition/evolution 空檔造成 workflow fail。
-    # - 不用未定義的 ign/evo 變數。
-    # - 最後一關把 source 轉成人看得懂的文字。
-    try:
-        import pandas as pd
-
-        def _read_panel_safe(path):
+    def _read_csv_safe(path):
+        try:
+            if path.exists() and path.stat().st_size > 0:
+                return pd.read_csv(path, encoding="utf-8-sig")
+        except Exception:
             try:
-                if path.exists() and path.stat().st_size > 0:
-                    return pd.read_csv(path, encoding="utf-8-sig")
+                return pd.read_csv(path, encoding="utf-8")
             except Exception:
-                try:
-                    return pd.read_csv(path, encoding="utf-8")
-                except Exception:
-                    pass
-            return pd.DataFrame()
+                return pd.DataFrame()
+        return pd.DataFrame()
 
-        seed = pd.DataFrame()
-        for p in [
-            ROOT / "trade_plan.csv",
-            DATA_DIR / "trade_plan.csv",
-            ROOT / "candidates.csv",
-            DATA_DIR / "candidates.csv",
-        ]:
-            df = _read_panel_safe(p)
-            if not df.empty:
-                seed = df.copy()
-                break
+    def _txt(df, col, default=""):
+        if col in df.columns:
+            return df[col].astype("object").where(df[col].notna(), default).astype(str).replace("nan", "")
+        return pd.Series(default, index=df.index, dtype="object")
 
-        def _ensure_panel(name, strategy_type, fallback_action):
-            root_p = ROOT / name
-            data_p = DATA_DIR / name
+    def _num(df, col, default=0.0):
+        if col in df.columns:
+            return pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
+        return pd.Series(default, index=df.index, dtype="float64")
 
-            panel = _read_panel_safe(root_p)
-            if panel.empty:
-                panel = _read_panel_safe(data_p)
+    def _first_num(df, cols, default=0.0):
+        out = pd.Series(np.nan, index=df.index, dtype="float64")
+        for c in cols:
+            if c in df.columns:
+                v = pd.to_numeric(df[c], errors="coerce").replace([np.inf, -np.inf], np.nan)
+                out = out.where(out.notna(), v)
+        return out.fillna(default)
 
-            if panel.empty and not seed.empty:
-                panel = seed.head(10).copy()
-
-            if panel.empty:
-                return panel
-
-            if "action" not in panel.columns:
-                panel["action"] = fallback_action
-            else:
-                panel["action"] = panel["action"].fillna("").replace("", fallback_action)
-
-            if "final_action" not in panel.columns:
-                panel["final_action"] = panel["action"]
-
-            # v321：final guard 只補缺欄，不覆蓋 CORE 升級結果。
-            if "strategy_type" not in panel.columns:
-                panel["strategy_type"] = strategy_type
-            else:
-                st = panel["strategy_type"].astype(str).fillna("")
-                panel["strategy_type"] = st.where(st.str.contains("CORE", case=False, na=False), strategy_type)
-
-            if "bucket" not in panel.columns:
-                panel["bucket"] = panel["strategy_type"]
-            else:
-                bk = panel["bucket"].astype(str).fillna("")
-                panel["bucket"] = bk.where(bk.str.contains("CORE", case=False, na=False), panel["strategy_type"])
-
-            if "strategy_layer" not in panel.columns:
-                panel["strategy_layer"] = panel["strategy_type"]
-            else:
-                sl = panel["strategy_layer"].astype(str).fillna("")
-                panel["strategy_layer"] = sl.where(sl.str.len() > 0, panel["strategy_type"])
-
-            if "source" not in panel.columns:
-                panel["source"] = "策略進場"
-            else:
-                src = panel["source"].astype(str).fillna("")
-                panel["source"] = src.where(src.str.contains("核心主升|CORE", case=False, na=False), "策略進場")
-
-            if "strategy_name" not in panel.columns:
-                panel["strategy_name"] = strategy_type
-
-            if "entry_type" not in panel.columns:
-                panel["entry_type"] = "起漲觀察" if strategy_type == "IGNITION" else "趨勢確認升級"
-
-            for base in [ROOT, DATA_DIR]:
-                base.mkdir(parents=True, exist_ok=True)
-                panel.to_csv(base / name, index=False, encoding="utf-8-sig")
-
-            print("v320 final panel guard:", name, "rows=", len(panel))
-            return panel
-
-        ign_final = _ensure_panel("ignition_candidates.csv", "IGNITION", "TEST")
-        evo_final = _ensure_panel("strategy_evolution.csv", "EVOLUTION", "WATCH")
-
-        if ign_final.empty:
-            raise RuntimeError("v320 ignition_candidates.csv still empty")
-        if evo_final.empty:
-            raise RuntimeError("v320 strategy_evolution.csv still empty")
-
-        apply_v327_lifecycle_list_planning_guard()
-        apply_v328_priority_operation_pool()
-
-    except Exception as e:
-        print("v320 final panel guard failed:", repr(e))
-        raise
+    def _normalize_sid(df):
+        if "stock_id" in df.columns:
+            df["stock_id"] = df["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False).fillna(df["stock
