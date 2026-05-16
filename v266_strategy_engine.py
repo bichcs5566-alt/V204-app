@@ -3290,7 +3290,7 @@ def apply_v319_core_lifecycle_marker_to_outputs():
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v328_priority_operation_pool"
+                data["source"] = "v3281_priority_operation_pool_dtype_safe"
                 data["core_marker"] = "🟣 CORE｜核心主升"
                 data["core_logic"] = "CORE 不新增清單；從 EVOLUTION/TEST 升級，直接寫入 strategy_type / strategy_layer / lifecycle_stage 作特殊標記"
                 p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
@@ -3546,7 +3546,7 @@ def apply_v327_lifecycle_list_planning_guard():
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v328_priority_operation_pool"
+                data["source"] = "v3281_priority_operation_pool_dtype_safe"
                 data["list_logic"] = "IGNITION=點火；TEST=ATTACK攻擊池；EVOLUTION=趨勢確認；CORE=少數主升標記；WATCH=預備；BLOCK=禁止"
                 data["core_limit"] = "每個輸出檔最多 5 檔 CORE，不強制補滿"
                 p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
@@ -3603,16 +3603,28 @@ def apply_v328_priority_operation_pool():
     def _ensure_text_columns(df):
         text_cols = [
             "stock_id", "stock_name", "industry", "action", "final_action",
-            "action_label", "action_sub", "strategy_type", "bucket",
+            "v311_locked_action", "action_label", "action_sub", "strategy_type", "bucket",
             "strategy_layer", "strategy_bucket", "layer", "entry_type",
             "source", "reason", "system_note", "note", "engine",
             "is_core_v319", "core_score_v319", "priority_grade_v328",
-            "priority_rank_v328", "v327_lifecycle_role"
+            "priority_rank_v328", "v327_lifecycle_role",
+            "opportunity_rank", "top_opportunity", "section_top_opportunity",
+            "top_reason", "final_decision", "decision_note"
         ]
         for c in text_cols:
             if c not in df.columns:
                 df[c] = ""
             df[c] = df[c].astype("object").where(df[c].notna(), "")
+
+        numeric_cols = [
+            "top_rank_v3066", "is_top_v3066", "target_weight",
+            "suggest_amount", "suggest_shares", "price", "ref_price"
+        ]
+        for c in numeric_cols:
+            if c not in df.columns:
+                df[c] = 0
+            df[c] = pd.to_numeric(df[c], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0)
+
         return df
 
     def _rank_score(df):
@@ -3812,7 +3824,7 @@ def apply_v328_priority_operation_pool():
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v328_priority_operation_pool"
+                data["source"] = "v3281_priority_operation_pool_dtype_safe"
                 data["final_operation_name"] = "🟣 PRIORITY 主升操作池"
                 data["priority_logic"] = "從所有紫框名單匯總，依強弱排序 TOP1-8；TOP1-3=S，TOP4-6=A，TOP7-8=B"
                 p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
