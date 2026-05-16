@@ -5866,3 +5866,260 @@ console.log("APP UI LOCK ACTIVE:", APP_UI_LOCK_VERSION_V3112);
     function hasRealAppV3261() {
       return !!document.querySelector(".page, #syncStatus, #finalActionList, #ignitionList, #evolutionList");
     }
+
+    function bootV3261() {
+      try {
+        if (!window.__APP_INIT_STARTED_V3261__ && typeof init === "function") {
+          init();
+        }
+      } catch (e) {
+        try {
+          if (typeof renderAppShell === "function") renderAppShell();
+          if (typeof setSyncStatus === "function") {
+            setSyncStatus("❌ 前端啟動失敗：" + (e && e.message ? e.message : String(e)), "sync error");
+          }
+        } catch (_) {}
+      }
+
+      setTimeout(function() {
+        try {
+          if (!hasRealAppV3261() && typeof renderAppShell === "function") {
+            renderAppShell();
+            if (typeof setSyncStatus === "function") {
+              setSyncStatus("⚠️ 已啟動白屏防護：外殼已恢復，請按重新整理或回報 Actions/Console 錯誤。", "sync error");
+            }
+          }
+        } catch (e) {}
+      }, 1200);
+
+      setTimeout(function() {
+        try {
+          if (!hasRealAppV3261() && document.body) {
+            document.body.innerHTML = '<main class="page" style="padding:28px;font-family:-apple-system,BlinkMacSystemFont,Noto Sans TC,sans-serif;color:#111827"><section class="card"><h1>⚠️ 前端載入失敗</h1><p>app.js 已載入，但主畫面沒有成功渲染。</p><p>請回報瀏覽器 Console 錯誤。</p></section></main>';
+          }
+        } catch (e) {}
+      }, 3000);
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", bootV3261, { once: true });
+    } else {
+      setTimeout(bootV3261, 0);
+    }
+  } catch (e) {
+    console.error("blank guard install failed v326.1", e);
+  }
+})();
+
+
+/* ===== v330 Local Position Test Mode / 本機持倉測試模式 =====
+   - 移除同步持倉按鈕
+   - 新增/更新只存在 localStorage
+   - 重跑策略只觸發 data_pipeline，不回寫任何持倉 CSV
+*/
+function applyLocalPositionTestModeV330() {
+  try {
+    const syncBtn = document.getElementById("syncPositionBtn");
+    if (syncBtn) syncBtn.remove();
+
+    const hint = document.querySelector("#positionCard .section-head .hint");
+    if (hint) hint.textContent = "輸入後只做本機重新評估，不回寫後端";
+
+    const rerunBtn = document.getElementById("rerunWithPositionBtn");
+    if (rerunBtn) rerunBtn.textContent = "重跑策略";
+  } catch (e) {}
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+  applyLocalPositionTestModeV330();
+  setTimeout(applyLocalPositionTestModeV330, 300);
+  setTimeout(applyLocalPositionTestModeV330, 1200);
+});
+
+
+
+/* ===== v332 Protect Local Positions / 保護本機持倉 =====
+   - 本機持倉 key：daily_dashboard_positions_v1
+   - 不回寫 GitHub，不同步後端
+   - 重新整理 / 重跑策略後仍保留，可用最新清單重新評估
+*/
+function isProtectedPositionStorageKeyV332(k) {
+  return k === POS_STORAGE_KEY || k === "daily_dashboard_positions_v1" || /position/i.test(String(k || ""));
+}
+
+function verifyLocalPositionsStillExistV332() {
+  try {
+    const rows = loadPositions();
+    if (rows && rows.length) {
+      refreshPositionStatus("本機持倉已保留，可重新評估");
+    }
+  } catch (e) {}
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+  setTimeout(verifyLocalPositionsStillExistV332, 300);
+  setTimeout(verifyLocalPositionsStillExistV332, 1200);
+});
+
+
+
+/* ===== v333.1 Macro / Market Display Safe Compatibility Patch =====
+   只修：市場狀態、總經狀態、風險模式顯示。
+   不動：持倉、清單、排序、GitHub Actions、時鐘、重跑策略。
+   目的：讓前端相容 v333 後端輸出的新欄位：
+   market_state_v333 / macro_score_v333 / risk_mode_v333 / market_summary_v333 / market_note_v333
+*/
+(function v3331MacroMarketDisplaySafePatch() {
+  function v3331Text(v, fallback = "--") {
+    if (v === undefined || v === null || v === "") return fallback;
+    const s = String(v).trim();
+    return s ? s : fallback;
+  }
+
+  function v3331Pick(obj, keys, fallback = "") {
+    obj = obj || {};
+    for (const k of keys) {
+      if (obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== "") {
+        return obj[k];
+      }
+    }
+    return fallback;
+  }
+
+  function v3331MacroText(summary, macro) {
+    const label = v3331Pick(summary, [
+      "macro_bias_v333",
+      "macro_label_v333",
+      "macro_label"
+    ], v3331Pick(macro, ["macro_bias_v333", "macro_label_v333", "macro_label"], ""));
+
+    const score = v3331Pick(summary, [
+      "macro_score_v333",
+      "macro_score"
+    ], v3331Pick(macro, ["macro_score_v333", "macro_score"], ""));
+
+    const confidence = v3331Pick(summary, [
+      "confidence_v333",
+      "macro_confidence_label",
+      "macro_confidence"
+    ], v3331Pick(macro, ["confidence_v333", "macro_confidence_label", "macro_confidence"], ""));
+
+    const scoreText = v3331Text(score, "--");
+    const main = `${v3331Text(label, "總經中性")}｜分數 ${scoreText}`;
+    return confidence ? `${main}｜${confidence}` : main;
+  }
+
+  function v3331MarketText(regime, summary) {
+    const market = v3331Pick(summary, [
+      "market_state_v333",
+      "market_status_v333",
+      "market_status",
+      "market_label"
+    ], v3331Pick(regime, [
+      "market_state_v333",
+      "market_status_v333",
+      "market_status",
+      "market_label",
+      "label",
+      "regime"
+    ], ""));
+
+    const riskScore = v3331Pick(summary, [
+      "market_risk_score_v333"
+    ], v3331Pick(regime, ["market_risk_score_v333"], ""));
+
+    const extra = v3331Pick(summary, [
+      "index_change_pct_text"
+    ], v3331Pick(regime, ["index_change_pct_text"], ""));
+
+    let out = v3331Text(market, "--");
+    if (extra) out += ` ${extra}`;
+    if (riskScore !== "" && riskScore !== undefined && riskScore !== null) out += `｜風險分 ${riskScore}`;
+    return out;
+  }
+
+  function v3331RiskText(summary, regime, macro) {
+    const summaryText = v3331Pick(summary, ["market_summary_v333"], "");
+    const riskMode = v3331Pick(summary, [
+      "risk_mode_v333",
+      "risk_mode"
+    ], v3331Pick(regime, ["risk_mode_v333", "risk_mode", "action_policy"], ""));
+
+    const note = v3331Pick(summary, [
+      "market_note_v333"
+    ], v3331Pick(regime, ["market_note_v333"], ""));
+
+    if (summaryText) return summaryText;
+    const macroLabel = v3331Pick(summary, ["macro_bias_v333", "macro_label"], v3331Pick(macro, ["macro_bias_v333", "macro_label"], ""));
+    const marketLabel = v3331Pick(summary, ["market_state_v333", "market_status"], v3331Pick(regime, ["market_state_v333", "market_status", "market_label", "label"], ""));
+    const parts = [macroLabel, marketLabel, riskMode].filter(x => v3331Text(x, "") !== "");
+    const base = parts.length ? parts.join("｜") : "--";
+    return note ? `${base}｜${note}` : base;
+  }
+
+  function v3331ResolveUpdatedAt(regime, summary) {
+    try {
+      if (typeof resolveBackendUpdatedAtV266573 === "function") {
+        return resolveBackendUpdatedAtV266573(regime || {}, summary || {});
+      }
+    } catch (e) {}
+    return v3331Pick(summary, ["workflow_completed_at", "backend_completed_at", "completed_at", "updated_at", "generated_at"],
+      v3331Pick(regime, ["workflow_completed_at", "backend_completed_at", "completed_at", "updated_at", "generated_at"], "--"));
+  }
+
+  function v3331TradeDate(regime, summary) {
+    try {
+      if (typeof resolveTradeDateV26630 === "function") return resolveTradeDateV26630(regime || {}, summary || {});
+    } catch (e) {}
+    return v3331Pick(summary, ["trade_date", "next_trade_date"], v3331Pick(regime, ["trade_date", "next_trade_date"], "--"));
+  }
+
+  const oldRenderMeta = typeof renderMeta === "function" ? renderMeta : null;
+
+  renderMeta = function(regime, summary, macro, rows) {
+    try {
+      regime = regime || {};
+      summary = summary || {};
+      macro = macro || {};
+      rows = Array.isArray(rows) ? rows : [];
+
+      const metaBox = typeof qs === "function" ? qs("metaBox") : document.getElementById("metaBox");
+      if (!metaBox) {
+        if (oldRenderMeta) return oldRenderMeta(regime, summary, macro, rows);
+        return;
+      }
+
+      const marketText = v3331MarketText(regime, summary);
+      const macroText = v3331MacroText(summary, macro);
+      const riskText = v3331RiskText(summary, regime, macro);
+      const signalDate = v3331Text(summary.signal_date || summary.latest_date || regime.signal_date || regime.latest_date || regime.date || summary.generated_at, "--");
+      const tradeDate = v3331TradeDate(regime, summary);
+      const backendUpdatedAt = v3331ResolveUpdatedAt(regime, summary);
+
+      metaBox.innerHTML = `
+        <div class="mini"><span>來源版本</span><b>C 完整交易系統</b></div>
+        <div class="mini"><span>市場狀態</span><b>${marketText}</b></div>
+        <div class="mini"><span>總經狀態</span><b>${macroText}</b></div>
+        <div class="mini"><span>風險模式</span><b>${riskText}</b></div>
+        <div class="mini"><span>訊號日</span><b>${signalDate}</b></div>
+        <div class="mini"><span>交易日</span><b>${tradeDate}</b></div>
+        <div class="mini"><span>最後更新</span><b>${backendUpdatedAt}</b></div>
+        <div class="mini"><span>操作筆數</span><b>${rows.length}</b></div>
+      `;
+
+      try {
+        if (typeof setIdleSyncStatusV266574 === "function") {
+          setIdleSyncStatusV266574(`✅ 最終操作表已同步｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync ok");
+        } else if (typeof setSyncStatus === "function") {
+          setSyncStatus(`✅ 最終操作表已同步｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync ok");
+        }
+        if (typeof startLiveClock === "function") startLiveClock();
+      } catch (e) {}
+    } catch (e) {
+      console.warn("v333.1 renderMeta fallback", e);
+      if (oldRenderMeta) return oldRenderMeta(regime || {}, summary || {}, macro || {}, rows || []);
+    }
+  };
+
+  window.__v3331MacroMarketDisplaySafePatch = true;
+})();
