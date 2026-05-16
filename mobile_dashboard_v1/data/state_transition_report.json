@@ -4,7 +4,7 @@
   "changed_strategy_logic": false,
   "changed_action": false,
   "changed_position": false,
-  "updated_at": "2026-05-16 08:22:51",
+  "updated_at": "2026-05-16 11:28:53",
   "files": {
     "trade_plan.csv": {
       "trade_plan.csv": {
@@ -29,11 +29,11 @@
     "final_action_plan.csv": {
       "final_action_plan.csv": {
         "status": "updated",
-        "rows": 731
+        "rows": 642
       },
       "mobile_dashboard_v1/data/final_action_plan.csv": {
         "status": "updated",
-        "rows": 731
+        "rows": 642
       }
     },
     "candidates.csv": {
@@ -69,11 +69,11 @@
     "pre_move_candidates.csv": {
       "pre_move_candidates.csv": {
         "status": "updated",
-        "rows": 430
+        "rows": 341
       },
       "mobile_dashboard_v1/data/pre_move_candidates.csv": {
         "status": "updated",
-        "rows": 430
+        "rows": 341
       }
     },
     "top_opportunities.csv": {
@@ -87,25 +87,25 @@
       }
     }
   },
-  "memory_rows": 731,
+  "memory_rows": 642,
   "states": {
-    "突破中": 292,
-    "觀察": 223,
-    "出貨疑慮": 129,
+    "突破中": 254,
+    "觀察": 176,
+    "出貨疑慮": 125,
     "吸籌中": 50,
     "試盤中": 22,
     "發動中": 15
   },
   "transition_labels": {
-    "持續觀察": 292,
-    "準IGNITION": 288,
-    "降級風險": 129,
+    "準IGNITION": 250,
+    "持續觀察": 245,
+    "降級風險": 125,
     "升級觀察": 22
   },
   "ignition_flags": {
-    "NO": 292,
-    "READY": 288,
-    "RISK": 129,
+    "READY": 250,
+    "NO": 245,
+    "RISK": 125,
     "WATCH_UP": 22
   }
 }
