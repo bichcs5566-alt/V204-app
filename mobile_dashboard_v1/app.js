@@ -1646,11 +1646,11 @@ function addOrUpdatePosition() {
   rows.sort((a, b) => String(a.stock_id).localeCompare(String(b.stock_id)));
   savePositions(rows);
   renderPositions();
-  refreshPositionStatus("持倉區已同步");
+  refreshPositionStatus("本機持倉已重新評估");
   clearPositionForm();
   setSyncStatus(`✅ 持倉已儲存於本機｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync ok");
   startLiveClock();
-  refreshPositionStatus("持倉已儲存於本機");
+  refreshPositionStatus("本機持倉已重新評估");
 }
 
 function bindPositionRowActions() {
@@ -1679,7 +1679,7 @@ function bindPositionRowActions() {
       const rows = loadPositions().filter(r => (typeof stockKeyV26630H === "function" ? stockKeyV26630H(r.stock_id) : sidV26630(r.stock_id)) !== (typeof stockKeyV26630H === "function" ? stockKeyV26630H(stock) : sidV26630(stock)));
       savePositions(rows);
       renderPositions();
-  refreshPositionStatus("持倉區已同步");
+  refreshPositionStatus("本機持倉已重新評估");
       setSyncStatus(`✅ 已刪除持倉 ${stock}｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync ok");
       startLiveClock();
       refreshPositionStatus(`已刪除持倉 ${stock}`);
@@ -1834,20 +1834,27 @@ async function syncPositionsToRepo() {
 }
 
 async function rerunStrategyWithPositions() {
+  // v330：本機持倉測試模式。
+  // 只重跑後端策略，不同步 / 不回寫 manual_positions.csv 或 current_positions.csv。
+  // 前端持倉保留在 localStorage，跑完後重新載入最新清單，再和本機持倉一起重新評估顯示。
   try {
-    setPositionStatus(`🚀 持倉重跑策略準備中｜現在時間 <span id="positionLiveClock">${formatTWClock(new Date())}</span>`, "position-status");
-    startPositionClock();
+    const rows = loadPositions();
 
-    const ok = await syncPositionsToRepo();
-    if (!ok) return;
+    if (!rows.length) {
+      setPositionStatus(`⚠️ 尚未建立本機持倉；仍可重跑策略更新前方清單｜現在時間 <span id="positionLiveClock">${formatTWClock(new Date())}</span>`, "position-status");
+      startPositionClock();
+    } else {
+      setPositionStatus(`🚀 本機持倉 ${rows.length} 檔保留，不回寫後端；正在重跑策略｜現在時間 <span id="positionLiveClock">${formatTWClock(new Date())}</span>`, "position-status ok");
+      startPositionClock();
+    }
 
-    setPositionStatus(`🚀 已同步持倉，正在觸發重跑策略｜現在時間 <span id="positionLiveClock">${formatTWClock(new Date())}</span>`, "position-status ok");
-    startPositionClock();
+    setSyncStatus(`🚀 正在觸發後端策略｜本機持倉不回寫｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync");
+    startLiveClock();
 
     await triggerDataPipeline();
   } catch (e) {
-    setSyncStatus(`❌ 持倉同步 / 重跑失敗：${e.message}`, "sync error");
-    setPositionStatus(`❌ 持倉同步 / 重跑失敗：${e.message}`, "position-status error");
+    setSyncStatus(`❌ 重跑策略失敗：${e.message}`, "sync error");
+    setPositionStatus(`❌ 重跑策略失敗：${e.message}`, "position-status error");
   }
 }
 
@@ -1883,7 +1890,7 @@ function renderAppShell() {
       <section id="positionCard" class="card position-card">
         <div class="section-head">
           <h2>📦 持倉管理</h2>
-          <span class="hint">輸入後可同步並重跑策略</span>
+          <span class="hint">輸入後只做本機重新評估，不回寫後端</span>
         </div>
 
         <div class="position-form">
@@ -1895,7 +1902,6 @@ function renderAppShell() {
 
         <div class="position-actions">
           <button id="addPositionBtn" type="button">新增 / 更新</button>
-          <button id="syncPositionBtn" type="button" class="secondary">同步持倉</button>
           <button id="rerunWithPositionBtn" type="button" class="danger">重跑策略</button>
         </div>
 
@@ -1976,10 +1982,9 @@ function renderAppShell() {
   safeBindClickV3091("saveGhBtn", saveGithubSettings);
   safeBindClickV3091("clearGhBtn", clearGithubSettings);
   safeBindClickV3091("addPositionBtn", addOrUpdatePosition);
-  safeBindClickV3091("syncPositionBtn", syncPositionsToRepo);
   safeBindClickV3091("rerunWithPositionBtn", rerunStrategyWithPositions);
   renderPositions();
-  refreshPositionStatus("持倉區已同步");
+  refreshPositionStatus("本機持倉已重新評估");
 }
 
 async function githubApi(path, options = {}) {
@@ -5892,3 +5897,29 @@ console.log("APP UI LOCK ACTIVE:", APP_UI_LOCK_VERSION_V3112);
     console.error("blank guard install failed v326.1", e);
   }
 })();
+
+
+/* ===== v330 Local Position Test Mode / 本機持倉測試模式 =====
+   - 移除同步持倉按鈕
+   - 新增/更新只存在 localStorage
+   - 重跑策略只觸發 data_pipeline，不回寫任何持倉 CSV
+*/
+function applyLocalPositionTestModeV330() {
+  try {
+    const syncBtn = document.getElementById("syncPositionBtn");
+    if (syncBtn) syncBtn.remove();
+
+    const hint = document.querySelector("#positionCard .section-head .hint");
+    if (hint) hint.textContent = "輸入後只做本機重新評估，不回寫後端";
+
+    const rerunBtn = document.getElementById("rerunWithPositionBtn");
+    if (rerunBtn) rerunBtn.textContent = "重跑策略";
+  } catch (e) {}
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+  applyLocalPositionTestModeV330();
+  setTimeout(applyLocalPositionTestModeV330, 300);
+  setTimeout(applyLocalPositionTestModeV330, 1200);
+});
+
