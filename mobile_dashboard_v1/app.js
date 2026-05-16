@@ -191,7 +191,7 @@ app.js - v266.30E MA顯示修補版：保留原本功能 + 只補持倉 MA5/MA20
 
 const DATA_DIR = "./data/";
 
-const APP_PATCH_VERSION = "v266.57.4_workflow_status_stable_patch";
+const APP_PATCH_VERSION = "v329_priority_final_bridge";
 const FORCE_REFRESH_NONCE_V26646 = Date.now();
 function bustUrlV26647(url) {
   const sep = String(url).includes("?") ? "&" : "?";
@@ -3201,20 +3201,132 @@ function renderStats(rows, summary) {
   `;
 }
 
+// ===== v329 PRIORITY Final Action Bridge / 最終操作吃紫框主升池 =====
+// 目的：
+// 1) 不動原本 UI / 持倉 / Actions。
+// 2) final_action_plan.csv 若沒有 BUY，仍從 trade_plan.csv 抓 v328 PRIORITY 主升操作池。
+// 3) 讓「🔥 最終操作」顯示紫框 TOP 排序，不再因沒有同步持倉而空白。
+function isPriorityOperationRowV329(row) {
+  row = row || {};
+  const joined = [
+    row.source,
+    row.bucket,
+    row.strategy_type,
+    row.strategy_layer,
+    row.strategy_bucket,
+    row.engine,
+    row.priority_grade_v328,
+    row.priority_rank_v328,
+    row.is_core_v319,
+    row.core_score_v319,
+    row.system_note,
+    row.reason
+  ].map(v => String(v ?? "")).join(" ").toUpperCase();
+
+  return (
+    joined.includes("V328_PRIORITY_OPERATION_POOL") ||
+    joined.includes("PRIORITY") ||
+    joined.includes("CORE｜主升候選") ||
+    joined.includes("主升操作池") ||
+    String(row.is_core_v319 ?? "").trim() === "1" ||
+    String(row.priority_rank_v328 ?? "").trim() !== ""
+  );
+}
+
+function normalizePriorityOperationRowV329(r) {
+  const rank = String(r.priority_rank_v328 || r.opportunity_rank || r.section_opportunity_rank || "").trim();
+  const grade = String(r.priority_grade_v328 || "").trim();
+  const actionRaw = normalizeAction(r.final_action || r.action || (rank && Number(rank) <= 6 ? "BUY" : "WATCH"));
+  const action = actionRaw === "WATCH" && rank && Number(rank) <= 6 ? "BUY" : actionRaw;
+  const note = r.system_note || r.reason || r.action_sub || "🟣 PRIORITY 主升操作池：由紫框名單匯總排序。";
+
+  return {
+    ...r,
+    final_action: action,
+    action: action,
+    stock_id: r.stock_id,
+    source: r.source || "v328_priority_operation_pool",
+    bucket: r.bucket || "PRIORITY",
+    strategy_type: r.strategy_type || "CORE",
+    strategy_layer: r.strategy_layer || `🟣 PRIORITY｜主升操作池 ${grade}`,
+    strategy_bucket: r.strategy_bucket || `🟣 CORE｜主升候選${rank ? " TOP" + rank : ""}`,
+    score: r.core_score_v319 || r.score || r.entry_score || r.rank_score || r.liquidity_score || "",
+    entry_type: r.entry_type || r.action_sub || "主升候選操作",
+    execution_flag: r.execution_flag || (rank ? `TOP${rank}` : "TOP"),
+    section_top_opportunity: r.section_top_opportunity || (rank ? `PRIORITY_TOP${rank}` : "PRIORITY"),
+    top_opportunity: r.top_opportunity || (rank ? `🔥PRIORITY_TOP${rank}` : "🔥PRIORITY"),
+    opportunity_rank: r.opportunity_rank || rank,
+    close: r.close || r.ref_price || r.price || "",
+    ref_price: r.ref_price || r.close || r.price || "",
+    suggested_amount: r.suggested_amount || r.suggest_amount || "",
+    target_weight: r.target_weight || "",
+    liquidity_level: r.liquidity_level || r.liquidity_tag || "HIGH",
+    liquidity_tag: r.liquidity_tag || r.liquidity_level || "HIGH",
+    liquidity_score: r.liquidity_score || "",
+    volume: r.volume || "",
+    turnover: r.turnover || "",
+    reason: r.reason || note,
+    system_note: note,
+    is_core_v319: r.is_core_v319 || "1",
+    core_score_v319: r.core_score_v319 || r.score || ""
+  };
+}
+
+function mergeFinalAndPriorityRowsV329(finalRows, priorityRows) {
+  const out = [];
+  const seen = new Set();
+
+  const push = (row) => {
+    if (!row || !row.stock_id) return;
+    const sid = String(row.stock_id).match(/\d{4}/)?.[0] || String(row.stock_id).trim();
+    const action = normalizeAction(row.final_action || row.action || "");
+    const key = sid + "::" + action;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ ...row, stock_id: sid });
+  };
+
+  (priorityRows || []).forEach(push);
+  (finalRows || []).forEach(push);
+  return out;
+}
+
+async function loadPriorityOperationRowsV329() {
+  try {
+    const txt = await fetchText(FILES.tradePlan);
+    const rows = parseCsv(txt);
+    return rows
+      .filter(isPriorityOperationRowV329)
+      .map(normalizePriorityOperationRowV329);
+  } catch (e) {
+    console.warn("priority operation pool fallback fail", e);
+    return [];
+  }
+}
+
 async function loadFinalRows() {
+  let finalRows = [];
+
   try {
     const txt = await fetchText(FILES.final);
-    const rows = parseCsv(txt);
-    if (rows.length) return rows;
+    finalRows = parseCsv(txt);
   } catch (e) {
     console.warn("final_action_plan fallback", e);
+  }
+
+  const priorityRows = await loadPriorityOperationRowsV329();
+
+  if (finalRows.length || priorityRows.length) {
+    return mergeFinalAndPriorityRowsV329(finalRows, priorityRows);
   }
 
   try {
     const txt = await fetchText(FILES.tradePlan);
     const oldRows = parseCsv(txt);
     return oldRows.map(r => ({
-      final_action: normalizeAction(r.action || "BUY"),
+      ...r,
+      final_action: normalizeAction(r.final_action || r.action || "BUY"),
+      action: normalizeAction(r.final_action || r.action || "BUY"),
       stock_id: r.stock_id,
       source: r.source || "ENTRY",
       bucket: r.strategy_type || r.bucket || "CORE",
@@ -3224,7 +3336,7 @@ async function loadFinalRows() {
       execution_flag: r.action || "TOP",
       allowed: "True",
       close: r.ref_price || r.close || r.price || "",
-      suggested_amount: r.suggested_amount || "",
+      suggested_amount: r.suggested_amount || r.suggest_amount || "",
       target_weight: r.target_weight || "",
       liquidity_level: r.liquidity_level || "",
       liquidity_tag: r.liquidity_tag || "",
@@ -3232,7 +3344,7 @@ async function loadFinalRows() {
       volume: r.volume || "",
       turnover: r.turnover || "",
       reason: r.reason || r.note || "",
-      system_note: r.note || "fallback trade_plan"
+      system_note: r.system_note || r.note || "fallback trade_plan"
     }));
   } catch (e) {
     console.error(e);
