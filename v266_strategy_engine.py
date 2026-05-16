@@ -3667,7 +3667,7 @@ def apply_v328_priority_operation_pool():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
                 cfg["max_final"] = int(float(data.get("max_final_slots_v333", cfg["max_final"])))
-                cfg["risk_mode"] = str(data.get("risk_mode_v333", data.get("risk_mode", cfg["risk_mode"])))
+                cfg["risk_mode"] = str(data.get("risk_mode_v333", data.get("test_pressure_v333", data.get("risk_mode", cfg["risk_mode"]))))
                 cfg["market_state"] = str(data.get("market_state_v333", data.get("market_status", cfg["market_state"])))
                 cfg["risk_score"] = int(float(data.get("market_risk_score_v333", cfg["risk_score"])))
                 cfg["macro_score"] = str(data.get("macro_score_v333", data.get("macro_score", cfg["macro_score"])))
@@ -4042,6 +4042,7 @@ def apply_v329_evolution_ab_auto_split():
 
 
 # ===== v333 DYNAMIC MARKET RISK ENGINE =====
+# v333.3 backend meta semantic cleanup
 # 目的：
 # - 讓「市場狀態 / 總經 / 清單名額」跟目前清單強弱連動，不再長時間卡在盤整。
 # - 不新增資料源、不改前端、不改 yml。
@@ -4281,18 +4282,37 @@ def apply_v333_dynamic_market_risk_engine():
         confidence = "低"
 
     market_note = "｜".join(reasons[:8]) if reasons else "清單廣度不足，維持保守評估"
-    summary = f"{macro_bias}｜分數 {macro_score}｜{test_pressure}｜信心{confidence}"
+
+    # v333.3：meta 顯示語意拆層
+    # 市場層：只講盤勢與風險分
+    # 總經層：只講總經方向、分數、信心
+    # 風控層：只講操作限制，不再混入總經文字
+    market_display_v333 = f"{market_state}｜風險分 {score}"
+    macro_display_v333 = f"{macro_bias}｜分數 {macro_score}｜{confidence}"
+    risk_display_v333 = f"{test_pressure}｜信心{confidence}"
+
+    # risk_mode_v333 保持為純操作風控欄位，避免前端風險模式重複出現「總經中性｜分數4/7」
+    risk_mode_clean_v333 = str(test_pressure or risk_mode or "試單控倉")
+
+    # market_summary_v333 改成總覽說明，不再當 risk_mode 使用
+    summary = f"市場{market_state}｜{risk_mode_clean_v333}｜信心{confidence}"
 
     # 寫入 meta，前端若讀 meta 就會更新；v328 也會讀 max_final_slots_v333。
     payload = {
         "source": "v333_dynamic_market_risk_engine",
         "market_state_v333": market_state,
         "market_status": market_state,
+        "market_display_v333": market_display_v333,
+
         "macro_bias_v333": macro_bias,
         "macro_score_v333": macro_score,
         "macro_score": macro_score,
-        "risk_mode_v333": risk_mode,
-        "risk_mode": risk_mode,
+        "macro_display_v333": macro_display_v333,
+
+        "risk_mode_v333": risk_mode_clean_v333,
+        "risk_mode": risk_mode_clean_v333,
+        "risk_display_v333": risk_display_v333,
+
         "market_risk_score_v333": score,
         "market_note_v333": market_note,
         "market_summary_v333": summary,
