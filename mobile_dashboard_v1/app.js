@@ -2259,18 +2259,134 @@ function resolveBackendUpdatedAtV266573(regime, summary) {
 }
 
 
+
 function renderMeta(regime, summary, macro, rows) {
+  regime = regime || {};
+  summary = summary || {};
+  macro = macro || {};
+  rows = Array.isArray(rows) ? rows : [];
+
   const backendUpdatedAt = resolveBackendUpdatedAtV266573(regime, summary);
 
-  const marketText = `${safeText(regime.market_label || summary.market_label || regime.label || regime.regime, "--")} ${safeText(regime.index_change_pct_text || summary.index_change_pct_text, "")}`.trim();
-  const macroText = `${safeText(macro.macro_label || summary.macro_label, "--")}｜分數 ${safeText(macro.macro_score ?? summary.macro_score, "--")}`;
-  const signalDate = safeText(summary.signal_date || summary.latest_date || regime.signal_date || regime.latest_date || regime.date || summary.generated_at, "--");
+  const pickMetaV3332 = (keys, fallback = "") => {
+    for (const k of keys) {
+      const candidates = [summary[k], regime[k], macro[k]];
+      for (const v of candidates) {
+        if (v !== undefined && v !== null && String(v).trim() !== "") return v;
+      }
+    }
+    return fallback;
+  };
+
+  const cleanMetaV3332 = (v, fallback = "--") => {
+    if (v === undefined || v === null) return fallback;
+    const s = String(v).trim();
+    if (!s || ["nan", "NaN", "undefined", "null", "None", "--"].includes(s)) return fallback;
+    return s;
+  };
+
+  const normalizeMacroScoreV3332 = (v) => {
+    const s = cleanMetaV3332(v, "");
+    if (!s) return "--";
+    if (s.includes("/")) return s;
+    const n = Number(String(s).replace(/[^0-9.-]/g, ""));
+    if (Number.isFinite(n)) return `${n}/7`;
+    return s;
+  };
+
+  // 1) 市場狀態：只講盤勢，不混總經與操作限制
+  const marketLabelV3332 = cleanMetaV3332(
+    pickMetaV3332([
+      "market_state_v333",
+      "market_status_v333",
+      "market_status",
+      "market_label",
+      "label",
+      "regime"
+    ], ""),
+    "--"
+  );
+
+  const riskScoreV3332 = cleanMetaV3332(
+    pickMetaV3332(["market_risk_score_v333"], ""),
+    ""
+  );
+
+  const marketText = riskScoreV3332
+    ? `${marketLabelV3332}｜風險分 ${riskScoreV3332}`
+    : marketLabelV3332;
+
+  // 2) 總經狀態：只講總經方向 + 分數，不放操作限制
+  const macroBiasV3332 = cleanMetaV3332(
+    pickMetaV3332([
+      "macro_bias_v333",
+      "macro_label_v333",
+      "macro_label",
+      "macro_regime_label"
+    ], ""),
+    "總經中性"
+  );
+
+  const macroScoreV3332 = normalizeMacroScoreV3332(
+    pickMetaV3332([
+      "macro_score_v333",
+      "macro_score"
+    ], "")
+  );
+
+  const macroConfidenceV3332 = cleanMetaV3332(
+    pickMetaV3332([
+      "confidence_v333",
+      "macro_confidence_label",
+      "macro_confidence"
+    ], ""),
+    ""
+  );
+
+  const macroText = macroConfidenceV3332
+    ? `${macroBiasV3332}｜分數 ${macroScoreV3332}｜${macroConfidenceV3332}`
+    : `${macroBiasV3332}｜分數 ${macroScoreV3332}`;
+
+  // 3) 風險模式：只講實際操作限制
+  const riskModeRawV3332 = cleanMetaV3332(
+    pickMetaV3332([
+      "risk_mode_v333",
+      "risk_mode",
+      "test_pressure_v333",
+      "macro_policy",
+      "action_policy"
+    ], ""),
+    "--"
+  );
+
+  const testPressureV3332 = cleanMetaV3332(
+    pickMetaV3332(["test_pressure_v333"], ""),
+    ""
+  );
+
+  const riskPartsV3332 = [];
+  riskPartsV3332.push(riskModeRawV3332);
+  if (testPressureV3332 && !riskModeRawV3332.includes(testPressureV3332)) riskPartsV3332.push(testPressureV3332);
+  if (macroConfidenceV3332) riskPartsV3332.push(`信心${macroConfidenceV3332.replace(/^信心/, "")}`);
+
+  const riskText = riskPartsV3332.filter(Boolean).join("｜") || "--";
+
+  const signalDate = safeText(
+    summary.signal_date ||
+    summary.latest_date ||
+    regime.signal_date ||
+    regime.latest_date ||
+    regime.date ||
+    summary.generated_at,
+    "--"
+  );
   const tradeDate = resolveTradeDateV26630(regime, summary);
+
   qs("metaBox").innerHTML = `
     <div class="mini"><span>來源版本</span><b>C 完整交易系統</b></div>
     <div class="mini"><span>市場狀態</span><b>${marketText}</b></div>
     <div class="mini"><span>總經狀態</span><b>${macroText}</b></div>
-    <div class="mini"><span>風險模式</span><b>${zhRiskMode(summary, regime, macro)}</b></div>
+    <div class="mini"><span>風險模式</span><b>${riskText}</b></div>
     <div class="mini"><span>訊號日</span><b>${signalDate}</b></div>
     <div class="mini"><span>交易日</span><b>${tradeDate}</b></div>
     <div class="mini"><span>最後更新</span><b>${backendUpdatedAt}</b></div>
@@ -2280,6 +2396,7 @@ function renderMeta(regime, summary, macro, rows) {
   setIdleSyncStatusV266574(`✅ 最終操作表已同步｜現在時間 <span id="liveClock">${formatTWClock(new Date())}</span>`, "sync ok");
   startLiveClock();
 }
+
 
 function renderDecision(rows) {
   const counts = groupCounts(rows);
@@ -4164,10 +4281,10 @@ async function renderMacroPreciseV26619() {
   }
 }
 
-setTimeout(renderMacroPreciseV26619, 400);
-setTimeout(renderMacroPreciseV26619, 1200);
-setTimeout(renderMacroPreciseV26619, 2400);
-setTimeout(renderMacroPreciseV26619, 4200);
+// v333.2 disabled legacy macro overwrite: setTimeout(renderMacroPreciseV26619, 400);
+// v333.2 disabled legacy macro overwrite: setTimeout(renderMacroPreciseV26619, 1200);
+// v333.2 disabled legacy macro overwrite: setTimeout(renderMacroPreciseV26619, 2400);
+// v333.2 disabled legacy macro overwrite: setTimeout(renderMacroPreciseV26619, 4200);
 
 
 
@@ -6123,3 +6240,10 @@ document.addEventListener("DOMContentLoaded", function() {
 
   window.__v3331MacroMarketDisplaySafePatch = true;
 })();
+
+
+/* ===== v333.2 Meta Semantic Layer Guard / 首頁三層語意防覆寫 =====
+   防止舊版 macro inline 補丁在 renderMeta 後把「總經狀態 / 風險模式」重新混在一起。
+   不影響持倉、清單、排序、Actions。
+*/
+window.__META_SEMANTIC_LAYER_V3332__ = true;
