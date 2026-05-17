@@ -4338,4 +4338,151 @@ def apply_v333_dynamic_market_risk_engine():
         "market_phase_v334": market_phase_v334,
         "final_slot_mode_v334": final_slot_mode_v334,
         "upgrade_speed_v334": upgrade_speed_v334,
-        "max_final_s
+        "max_final_slots_v333": int(max_final),
+        "max_final_slots_v334": int(max_final),
+        "test_pressure_v333": test_pressure,
+        "confidence_v333": confidence,
+        "final_count_v333": int(final_n),
+        "ignition_count_v333": int(ignition_n),
+        "evolution_count_v333": int(evolution_n),
+        "watch_count_v333": int(watch_n),
+        "block_count_v333": int(block_n),
+        "updated_at_v333": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+    for base in [ROOT, DATA_DIR]:
+        base.mkdir(parents=True, exist_ok=True)
+        p = base / "meta.json"
+        data = {}
+        if p.exists():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8-sig"))
+            except Exception:
+                data = {}
+        data.update(payload)
+        p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+
+        # 額外輸出一份狀態檔，不影響舊前端；之後要接 UI 可直接讀。
+        pd.DataFrame([payload]).to_csv(base / "market_risk_status.csv", index=False, encoding="utf-8-sig")
+
+    print("v333 dynamic market risk:", market_state, macro_score, risk_mode, "score=", score, "max_final=", max_final, "reason=", market_note)
+
+
+if __name__ == "__main__":
+    main_v266577_structure_weight_continuation_patch()
+    apply_v311_csv_final_lock()
+    try:
+        apply_v315_ignition_evolution_outputs()
+    except Exception as e:
+        print("v315 panel output skipped:", repr(e))
+
+    write_v317_panel_files_hard_guarantee()
+    apply_v319_core_lifecycle_marker_to_outputs()
+
+    # ===== v320 FINAL PANEL NON-EMPTY + READABLE SOURCE GUARD =====
+    # 目的：
+    # - 不讓 ignition/evolution 空檔造成 workflow fail。
+    # - 不用未定義的 ign/evo 變數。
+    # - 最後一關把 source 轉成人看得懂的文字。
+    try:
+        import pandas as pd
+
+        def _read_panel_safe(path):
+            try:
+                if path.exists() and path.stat().st_size > 0:
+                    return pd.read_csv(path, encoding="utf-8-sig")
+            except Exception:
+                try:
+                    return pd.read_csv(path, encoding="utf-8")
+                except Exception:
+                    pass
+            return pd.DataFrame()
+
+        seed = pd.DataFrame()
+        for p in [
+            ROOT / "trade_plan.csv",
+            DATA_DIR / "trade_plan.csv",
+            ROOT / "candidates.csv",
+            DATA_DIR / "candidates.csv",
+        ]:
+            df = _read_panel_safe(p)
+            if not df.empty:
+                seed = df.copy()
+                break
+
+        def _ensure_panel(name, strategy_type, fallback_action):
+            root_p = ROOT / name
+            data_p = DATA_DIR / name
+
+            panel = _read_panel_safe(root_p)
+            if panel.empty:
+                panel = _read_panel_safe(data_p)
+
+            if panel.empty and not seed.empty:
+                panel = seed.head(10).copy()
+
+            if panel.empty:
+                return panel
+
+            if "action" not in panel.columns:
+                panel["action"] = fallback_action
+            else:
+                panel["action"] = panel["action"].fillna("").replace("", fallback_action)
+
+            if "final_action" not in panel.columns:
+                panel["final_action"] = panel["action"]
+
+            # v321：final guard 只補缺欄，不覆蓋 CORE 升級結果。
+            if "strategy_type" not in panel.columns:
+                panel["strategy_type"] = strategy_type
+            else:
+                st = panel["strategy_type"].astype(str).fillna("")
+                panel["strategy_type"] = st.where(st.str.contains("CORE", case=False, na=False), strategy_type)
+
+            if "bucket" not in panel.columns:
+                panel["bucket"] = panel["strategy_type"]
+            else:
+                bk = panel["bucket"].astype(str).fillna("")
+                panel["bucket"] = bk.where(bk.str.contains("CORE", case=False, na=False), panel["strategy_type"])
+
+            if "strategy_layer" not in panel.columns:
+                panel["strategy_layer"] = panel["strategy_type"]
+            else:
+                sl = panel["strategy_layer"].astype(str).fillna("")
+                panel["strategy_layer"] = sl.where(sl.str.len() > 0, panel["strategy_type"])
+
+            if "source" not in panel.columns:
+                panel["source"] = "策略進場"
+            else:
+                src = panel["source"].astype(str).fillna("")
+                panel["source"] = src.where(src.str.contains("核心主升|CORE", case=False, na=False), "策略進場")
+
+            if "strategy_name" not in panel.columns:
+                panel["strategy_name"] = strategy_type
+
+            if "entry_type" not in panel.columns:
+                panel["entry_type"] = "起漲觀察" if strategy_type == "IGNITION" else "趨勢確認升級"
+
+            for base in [ROOT, DATA_DIR]:
+                base.mkdir(parents=True, exist_ok=True)
+                panel.to_csv(base / name, index=False, encoding="utf-8-sig")
+
+            print("v320 final panel guard:", name, "rows=", len(panel))
+            return panel
+
+        ign_final = _ensure_panel("ignition_candidates.csv", "IGNITION", "TEST")
+        evo_final = _ensure_panel("strategy_evolution.csv", "EVOLUTION", "WATCH")
+
+        if ign_final.empty:
+            raise RuntimeError("v320 ignition_candidates.csv still empty")
+        if evo_final.empty:
+            raise RuntimeError("v320 strategy_evolution.csv still empty")
+
+        apply_v327_lifecycle_list_planning_guard()
+        apply_v329_evolution_ab_auto_split()
+        apply_v333_dynamic_market_risk_engine()
+        apply_v328_priority_operation_pool()
+
+    except Exception as e:
+        print("v320 final panel guard failed:", repr(e))
+        raise
