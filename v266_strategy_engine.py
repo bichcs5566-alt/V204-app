@@ -3713,6 +3713,21 @@ def apply_v328_priority_operation_pool():
         return
 
     purple = pool.loc[core_mask].copy()
+
+    # v335.1 FIX3：
+    # v328/v3351 後段會把來源/理由/狀態等文字寫回 purple。
+    # 若原始欄位被 pandas 判成 int64，遇到 "106.5" 這類字串價格會炸：
+    # TypeError: Invalid value '106.5' for dtype 'int64'
+    # 只在最終操作池局部轉 object，不改選股邏輯、不改升級邏輯。
+    for _c in [
+        "final_action", "action", "stock_id", "stock_name", "name",
+        "source", "reason", "system_note", "entry_type",
+        "strategy_type", "bucket", "strategy_layer", "strategy_bucket",
+        "execution_flag", "liquidity_level", "liquidity_tag",
+        "close", "ref_price", "price", "suggested_amount", "target_weight"
+    ]:
+        if _c in purple.columns:
+            purple[_c] = purple[_c].astype("object")
     purple["_priority_score_v328"] = _rank_score(purple)
     purple["_action_sort_v328"] = np.select(
         [
