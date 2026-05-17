@@ -3666,7 +3666,7 @@ def apply_v328_priority_operation_pool():
                 continue
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                cfg["max_final"] = int(float(data.get("max_final_slots_v333", cfg["max_final"])))
+                cfg["max_final"] = int(float(data.get("max_final_slots_v334", data.get("max_final_slots_v333", cfg["max_final"]))))
                 cfg["risk_mode"] = str(data.get("risk_mode_v333", data.get("test_pressure_v333", data.get("risk_mode", cfg["risk_mode"]))))
                 cfg["market_state"] = str(data.get("market_state_v333", data.get("market_status", cfg["market_state"])))
                 cfg["risk_score"] = int(float(data.get("market_risk_score_v333", cfg["risk_score"])))
@@ -3674,7 +3674,7 @@ def apply_v328_priority_operation_pool():
                 break
             except Exception:
                 pass
-        cfg["max_final"] = max(2, min(8, int(cfg["max_final"])))
+        cfg["max_final"] = max(1, min(10, int(cfg["max_final"])))
         return cfg
 
     source_names = [
@@ -3752,6 +3752,7 @@ def apply_v328_priority_operation_pool():
     purple["market_risk_score_v333"] = int(risk_cfg_v333.get("risk_score", 0))
     purple["macro_score_v333"] = str(risk_cfg_v333.get("macro_score", "4/7"))
     purple["max_final_slots_v333"] = int(max_final_v333)
+    purple["max_final_slots_v334"] = int(max_final_v333)
 
     # TOP 分配：
     # TOP 1-3 = S 主攻
@@ -4043,6 +4044,7 @@ def apply_v329_evolution_ab_auto_split():
 
 # ===== v333 DYNAMIC MARKET RISK ENGINE =====
 # v333.3 backend meta semantic cleanup
+# v334 market rhythm dynamic slots
 # 目的：
 # - 讓「市場狀態 / 總經 / 清單名額」跟目前清單強弱連動，不再長時間卡在盤整。
 # - 不新增資料源、不改前端、不改 yml。
@@ -4240,46 +4242,63 @@ def apply_v333_dynamic_market_risk_engine():
     score = int(max(-7, min(7, score)))
 
     # C. 轉成前端可讀狀態與名額控制
-    if score >= 5:
+    # v334：市場節奏化
+    # 讓市場狀態直接影響 FINAL 名額 / TEST 壓力 / 升級速度 / 風控模式。
+    if score >= 6:
         market_state = "強勢"
-        risk_mode = "進攻"
+        market_phase_v334 = "進攻擴散"
+        risk_mode = "可分批主倉"
         macro_bias = "總經偏多"
         macro_score = "6/7"
-        max_final = 8
+        max_final = 10
         test_pressure = "可放寬試單"
         confidence = "中高"
-    elif score >= 3:
+        upgrade_speed_v334 = "加速升級"
+        final_slot_mode_v334 = "擴張"
+    elif score >= 4:
         market_state = "盤整偏強"
+        market_phase_v334 = "偏多輪動"
         risk_mode = "控風險進攻"
         macro_bias = "總經偏多"
         macro_score = "5/7"
-        max_final = 6
+        max_final = 8
         test_pressure = "試單可分批"
         confidence = "中"
-    elif score >= 1:
+        upgrade_speed_v334 = "正常偏快"
+        final_slot_mode_v334 = "偏擴張"
+    elif score >= 2:
         market_state = "盤整"
+        market_phase_v334 = "中性震盪"
         risk_mode = "試單控倉"
         macro_bias = "總經中性"
         macro_score = "4/7"
         max_final = 5
         test_pressure = "試單不可重倉"
         confidence = "中低"
-    elif score >= -2:
+        upgrade_speed_v334 = "正常"
+        final_slot_mode_v334 = "標準"
+    elif score >= 0:
         market_state = "盤整偏弱"
+        market_phase_v334 = "防守震盪"
         risk_mode = "防守試單"
         macro_bias = "總經中性偏保守"
         macro_score = "3/7"
         max_final = 3
         test_pressure = "只留最強試單"
         confidence = "低"
+        upgrade_speed_v334 = "放慢升級"
+        final_slot_mode_v334 = "收縮"
     else:
         market_state = "弱勢"
+        market_phase_v334 = "防守收縮"
         risk_mode = "防守"
         macro_bias = "總經偏空"
         macro_score = "2/7"
-        max_final = 2
+        max_final = 1
         test_pressure = "暫停重倉"
         confidence = "低"
+        upgrade_speed_v334 = "暫停升級"
+        final_slot_mode_v334 = "極度收縮"
 
     market_note = "｜".join(reasons[:8]) if reasons else "清單廣度不足，維持保守評估"
 
@@ -4295,7 +4314,7 @@ def apply_v333_dynamic_market_risk_engine():
     risk_mode_clean_v333 = str(test_pressure or risk_mode or "試單控倉")
 
     # market_summary_v333 改成總覽說明，不再當 risk_mode 使用
-    summary = f"市場{market_state}｜{risk_mode_clean_v333}｜信心{confidence}"
+    summary = f"{market_phase_v334}｜市場{market_state}｜{risk_mode_clean_v333}｜{upgrade_speed_v334}｜信心{confidence}"
 
     # 寫入 meta，前端若讀 meta 就會更新；v328 也會讀 max_final_slots_v333。
     payload = {
@@ -4316,150 +4335,7 @@ def apply_v333_dynamic_market_risk_engine():
         "market_risk_score_v333": score,
         "market_note_v333": market_note,
         "market_summary_v333": summary,
-        "max_final_slots_v333": int(max_final),
-        "test_pressure_v333": test_pressure,
-        "confidence_v333": confidence,
-        "final_count_v333": int(final_n),
-        "ignition_count_v333": int(ignition_n),
-        "evolution_count_v333": int(evolution_n),
-        "watch_count_v333": int(watch_n),
-        "block_count_v333": int(block_n),
-        "updated_at_v333": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    }
-
-    for base in [ROOT, DATA_DIR]:
-        base.mkdir(parents=True, exist_ok=True)
-        p = base / "meta.json"
-        data = {}
-        if p.exists():
-            try:
-                data = json.loads(p.read_text(encoding="utf-8-sig"))
-            except Exception:
-                data = {}
-        data.update(payload)
-        p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
-
-        # 額外輸出一份狀態檔，不影響舊前端；之後要接 UI 可直接讀。
-        pd.DataFrame([payload]).to_csv(base / "market_risk_status.csv", index=False, encoding="utf-8-sig")
-
-    print("v333 dynamic market risk:", market_state, macro_score, risk_mode, "score=", score, "max_final=", max_final, "reason=", market_note)
-
-
-if __name__ == "__main__":
-    main_v266577_structure_weight_continuation_patch()
-    apply_v311_csv_final_lock()
-    try:
-        apply_v315_ignition_evolution_outputs()
-    except Exception as e:
-        print("v315 panel output skipped:", repr(e))
-
-    write_v317_panel_files_hard_guarantee()
-    apply_v319_core_lifecycle_marker_to_outputs()
-
-    # ===== v320 FINAL PANEL NON-EMPTY + READABLE SOURCE GUARD =====
-    # 目的：
-    # - 不讓 ignition/evolution 空檔造成 workflow fail。
-    # - 不用未定義的 ign/evo 變數。
-    # - 最後一關把 source 轉成人看得懂的文字。
-    try:
-        import pandas as pd
-
-        def _read_panel_safe(path):
-            try:
-                if path.exists() and path.stat().st_size > 0:
-                    return pd.read_csv(path, encoding="utf-8-sig")
-            except Exception:
-                try:
-                    return pd.read_csv(path, encoding="utf-8")
-                except Exception:
-                    pass
-            return pd.DataFrame()
-
-        seed = pd.DataFrame()
-        for p in [
-            ROOT / "trade_plan.csv",
-            DATA_DIR / "trade_plan.csv",
-            ROOT / "candidates.csv",
-            DATA_DIR / "candidates.csv",
-        ]:
-            df = _read_panel_safe(p)
-            if not df.empty:
-                seed = df.copy()
-                break
-
-        def _ensure_panel(name, strategy_type, fallback_action):
-            root_p = ROOT / name
-            data_p = DATA_DIR / name
-
-            panel = _read_panel_safe(root_p)
-            if panel.empty:
-                panel = _read_panel_safe(data_p)
-
-            if panel.empty and not seed.empty:
-                panel = seed.head(10).copy()
-
-            if panel.empty:
-                return panel
-
-            if "action" not in panel.columns:
-                panel["action"] = fallback_action
-            else:
-                panel["action"] = panel["action"].fillna("").replace("", fallback_action)
-
-            if "final_action" not in panel.columns:
-                panel["final_action"] = panel["action"]
-
-            # v321：final guard 只補缺欄，不覆蓋 CORE 升級結果。
-            if "strategy_type" not in panel.columns:
-                panel["strategy_type"] = strategy_type
-            else:
-                st = panel["strategy_type"].astype(str).fillna("")
-                panel["strategy_type"] = st.where(st.str.contains("CORE", case=False, na=False), strategy_type)
-
-            if "bucket" not in panel.columns:
-                panel["bucket"] = panel["strategy_type"]
-            else:
-                bk = panel["bucket"].astype(str).fillna("")
-                panel["bucket"] = bk.where(bk.str.contains("CORE", case=False, na=False), panel["strategy_type"])
-
-            if "strategy_layer" not in panel.columns:
-                panel["strategy_layer"] = panel["strategy_type"]
-            else:
-                sl = panel["strategy_layer"].astype(str).fillna("")
-                panel["strategy_layer"] = sl.where(sl.str.len() > 0, panel["strategy_type"])
-
-            if "source" not in panel.columns:
-                panel["source"] = "策略進場"
-            else:
-                src = panel["source"].astype(str).fillna("")
-                panel["source"] = src.where(src.str.contains("核心主升|CORE", case=False, na=False), "策略進場")
-
-            if "strategy_name" not in panel.columns:
-                panel["strategy_name"] = strategy_type
-
-            if "entry_type" not in panel.columns:
-                panel["entry_type"] = "起漲觀察" if strategy_type == "IGNITION" else "趨勢確認升級"
-
-            for base in [ROOT, DATA_DIR]:
-                base.mkdir(parents=True, exist_ok=True)
-                panel.to_csv(base / name, index=False, encoding="utf-8-sig")
-
-            print("v320 final panel guard:", name, "rows=", len(panel))
-            return panel
-
-        ign_final = _ensure_panel("ignition_candidates.csv", "IGNITION", "TEST")
-        evo_final = _ensure_panel("strategy_evolution.csv", "EVOLUTION", "WATCH")
-
-        if ign_final.empty:
-            raise RuntimeError("v320 ignition_candidates.csv still empty")
-        if evo_final.empty:
-            raise RuntimeError("v320 strategy_evolution.csv still empty")
-
-        apply_v327_lifecycle_list_planning_guard()
-        apply_v329_evolution_ab_auto_split()
-        apply_v333_dynamic_market_risk_engine()
-        apply_v328_priority_operation_pool()
-
-    except Exception as e:
-        print("v320 final panel guard failed:", repr(e))
-        raise
+        "market_phase_v334": market_phase_v334,
+        "final_slot_mode_v334": final_slot_mode_v334,
+        "upgrade_speed_v334": upgrade_speed_v334,
+        "max_final_s
