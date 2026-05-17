@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-05-16 15:17:17",
+  "generated_at": "2026-05-17 03:58:30",
   "source": "backfill_missing_days",
   "before_last_date": "2026-04-24",
   "after_last_date": "2026-05-15",
-  "rows": 4814891,
-  "stock_count": 1970,
-  "unique_dates": 2821,
+  "rows": 4803943,
+  "stock_count": 1964,
+  "unique_dates": 2822,
   "filled_days": [
     {
       "date": "2026-04-27",
@@ -24,58 +24,63 @@
     },
     {
       "date": "2026-04-30",
-      "rows": 1952,
-      "symbols": 1952
+      "rows": 878,
+      "symbols": 878
+    },
+    {
+      "date": "2026-05-01",
+      "rows": 878,
+      "symbols": 878
     },
     {
       "date": "2026-05-04",
-      "rows": 1952,
-      "symbols": 1952
+      "rows": 878,
+      "symbols": 878
     },
     {
       "date": "2026-05-05",
-      "rows": 1952,
-      "symbols": 1952
+      "rows": 878,
+      "symbols": 878
     },
     {
       "date": "2026-05-06",
-      "rows": 1953,
-      "symbols": 1953
+      "rows": 878,
+      "symbols": 878
     },
     {
       "date": "2026-05-07",
-      "rows": 1954,
-      "symbols": 1954
+      "rows": 878,
+      "symbols": 878
     },
     {
       "date": "2026-05-08",
-      "rows": 1953,
-      "symbols": 1953
+      "rows": 878,
+      "symbols": 878
     },
     {
       "date": "2026-05-11",
-      "rows": 1955,
-      "symbols": 1955
+      "rows": 878,
+      "symbols": 878
     },
     {
       "date": "2026-05-12",
-      "rows": 1954,
-      "symbols": 1954
+      "rows": 878,
+      "symbols": 878
     },
     {
       "date": "2026-05-13",
-      "rows": 1952,
-      "symbols": 1952
+      "rows": 878,
+      "symbols": 878
     },
     {
       "date": "2026-05-14",
-      "rows": 1954,
-      "symbols": 1954
+      "rows": 878,
+      "symbols": 878
     },
     {
       "date": "2026-05-15",
-      "rows": 1953,
-      "symbols": 1953
+      "rows": 878,
+      "symbols": 878
     }
   ],
   "skipped_days": [
@@ -86,10 +91,6 @@
     {
       "date": "2026-04-26",
       "reason": "weekend"
-    },
-    {
-      "date": "2026-05-01",
-      "reason": "no data returned"
     },
     {
       "date": "2026-05-02",
@@ -109,6 +110,10 @@
     },
     {
       "date": "2026-05-16",
+      "reason": "weekend"
+    },
+    {
+      "date": "2026-05-17",
       "reason": "weekend"
     }
   ]
