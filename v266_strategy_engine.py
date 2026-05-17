@@ -3674,7 +3674,7 @@ def apply_v328_priority_operation_pool():
                 break
             except Exception:
                 pass
-        cfg["max_final"] = max(1, min(10, int(cfg["max_final"])))
+        cfg["max_final"] = max(3, min(10, int(cfg["max_final"])))
         return cfg
 
     source_names = [
@@ -4044,7 +4044,7 @@ def apply_v329_evolution_ab_auto_split():
 
 # ===== v333 DYNAMIC MARKET RISK ENGINE =====
 # v333.3 backend meta semantic cleanup
-# v334 market rhythm dynamic slots
+# v334.1 market rhythm soft guard
 # 目的：
 # - 讓「市場狀態 / 總經 / 清單名額」跟目前清單強弱連動，不再長時間卡在盤整。
 # - 不新增資料源、不改前端、不改 yml。
@@ -4242,8 +4242,11 @@ def apply_v333_dynamic_market_risk_engine():
     score = int(max(-7, min(7, score)))
 
     # C. 轉成前端可讀狀態與名額控制
-    # v334：市場節奏化
-    # 讓市場狀態直接影響 FINAL 名額 / TEST 壓力 / 升級速度 / 風控模式。
+    # v334.1：市場節奏化（溫和版）
+    # 修正前一版過度收縮：
+    # - 盤整不直接清空 TEST / WATCH
+    # - FINAL 盤整時維持 5~6 檔
+    # - 只有弱勢才明顯收縮
     if score >= 6:
         market_state = "強勢"
         market_phase_v334 = "進攻擴散"
@@ -4272,7 +4275,7 @@ def apply_v333_dynamic_market_risk_engine():
         risk_mode = "試單控倉"
         macro_bias = "總經中性"
         macro_score = "4/7"
-        max_final = 5
+        max_final = 6
         test_pressure = "試單不可重倉"
         confidence = "中低"
         upgrade_speed_v334 = "正常"
@@ -4283,22 +4286,22 @@ def apply_v333_dynamic_market_risk_engine():
         risk_mode = "防守試單"
         macro_bias = "總經中性偏保守"
         macro_score = "3/7"
-        max_final = 3
-        test_pressure = "只留最強試單"
+        max_final = 5
+        test_pressure = "只做小倉試單"
         confidence = "低"
         upgrade_speed_v334 = "放慢升級"
-        final_slot_mode_v334 = "收縮"
+        final_slot_mode_v334 = "溫和收縮"
     else:
         market_state = "弱勢"
         market_phase_v334 = "防守收縮"
         risk_mode = "防守"
         macro_bias = "總經偏空"
         macro_score = "2/7"
-        max_final = 1
+        max_final = 3
         test_pressure = "暫停重倉"
         confidence = "低"
         upgrade_speed_v334 = "暫停升級"
-        final_slot_mode_v334 = "極度收縮"
+        final_slot_mode_v334 = "收縮"
 
     market_note = "｜".join(reasons[:8]) if reasons else "清單廣度不足，維持保守評估"
 
