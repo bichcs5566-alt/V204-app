@@ -3214,7 +3214,7 @@ def apply_v319_core_lifecycle_marker_to_outputs():
         strong_core_pair = (strong_momentum & strong_chip) | (strong_momentum & strong_rank)
 
         core_from_evolution = evolution_mask & strong_trend & strong_momentum & strong_chip & strong_liq & strong_rank & risk_ok
-        core_from_score = candidate_ok & risk_ok & strong_trend & strong_liq & (core_score >= 82) & strong_core_pair
+        core_from_score = pd.Series(False, index=panel.index)  # v335 lifecycle guard: 禁止 score 直接升 CORE
 
         core_mask = core_from_score | core_from_evolution
 
@@ -3290,7 +3290,7 @@ def apply_v319_core_lifecycle_marker_to_outputs():
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v333_dynamic_market_risk_engine"
+                data["source"] = "v3291_evolution_ab_auto_split_safe"
                 data["core_marker"] = "🟣 CORE｜核心主升"
                 data["core_logic"] = "CORE 不新增清單；從 EVOLUTION/TEST 升級，直接寫入 strategy_type / strategy_layer / lifecycle_stage 作特殊標記"
                 p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
@@ -3546,7 +3546,7 @@ def apply_v327_lifecycle_list_planning_guard():
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v333_dynamic_market_risk_engine"
+                data["source"] = "v3291_evolution_ab_auto_split_safe"
                 data["list_logic"] = "IGNITION=點火；TEST=ATTACK攻擊池；EVOLUTION=趨勢確認；CORE=少數主升標記；WATCH=預備；BLOCK=禁止"
                 data["core_limit"] = "每個輸出檔最多 5 檔 CORE，不強制補滿"
                 p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
@@ -3652,31 +3652,6 @@ def apply_v328_priority_operation_pool():
             joined.str.contains("CORE|核心主升|🟣", case=False, regex=True, na=False)
         )
 
-    def _market_risk_cfg_v333():
-        cfg = {
-            "max_final": 6,
-            "risk_mode": "試單控倉",
-            "market_state": "盤整",
-            "risk_score": 0,
-            "macro_score": "4/7",
-        }
-        for base in [ROOT, DATA_DIR]:
-            p = base / "meta.json"
-            if not p.exists():
-                continue
-            try:
-                data = json.loads(p.read_text(encoding="utf-8-sig"))
-                cfg["max_final"] = int(float(data.get("max_final_slots_v334", data.get("max_final_slots_v333", cfg["max_final"]))))
-                cfg["risk_mode"] = str(data.get("risk_mode_v333", data.get("test_pressure_v333", data.get("risk_mode", cfg["risk_mode"]))))
-                cfg["market_state"] = str(data.get("market_state_v333", data.get("market_status", cfg["market_state"])))
-                cfg["risk_score"] = int(float(data.get("market_risk_score_v333", cfg["risk_score"])))
-                cfg["macro_score"] = str(data.get("macro_score_v333", data.get("macro_score", cfg["macro_score"])))
-                break
-            except Exception:
-                pass
-        cfg["max_final"] = max(3, min(10, int(cfg["max_final"])))
-        return cfg
-
     source_names = [
         "trade_plan.csv",
         "strategy_evolution.csv",
@@ -3730,29 +3705,19 @@ def apply_v328_priority_operation_pool():
         default=3
     )
 
-    risk_cfg_v333 = _market_risk_cfg_v333()
-    max_final_v333 = int(risk_cfg_v333.get("max_final", 6))
-
     purple = (
         purple.sort_values(
             ["_priority_score_v328", "_action_sort_v328", "_file_sort_v328", "stock_id"],
             ascending=[False, True, True, True]
         )
         .drop_duplicates("stock_id", keep="first")
-        .head(max_final_v333)
+        .head(8)
         .copy()
     )
 
     if purple.empty:
         print("v328 priority operation pool: purple rows empty after dedupe")
         return
-
-    purple["market_state_v333"] = str(risk_cfg_v333.get("market_state", "盤整"))
-    purple["risk_mode_v333"] = str(risk_cfg_v333.get("risk_mode", "試單控倉"))
-    purple["market_risk_score_v333"] = int(risk_cfg_v333.get("risk_score", 0))
-    purple["macro_score_v333"] = str(risk_cfg_v333.get("macro_score", "4/7"))
-    purple["max_final_slots_v333"] = int(max_final_v333)
-    purple["max_final_slots_v334"] = int(max_final_v333)
 
     # TOP 分配：
     # TOP 1-3 = S 主攻
@@ -3859,7 +3824,7 @@ def apply_v328_priority_operation_pool():
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v333_dynamic_market_risk_engine"
+                data["source"] = "v3291_evolution_ab_auto_split_safe"
                 data["final_operation_name"] = "🟣 PRIORITY 主升操作池"
                 data["priority_logic"] = "從所有紫框名單匯總，依強弱排序 TOP1-8；TOP1-3=S，TOP4-6=A，TOP7-8=B"
                 p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
@@ -3877,6 +3842,13 @@ def apply_v328_priority_operation_pool():
 #   EVOLUTION-A = 準主升，可進最終操作候選
 #   EVOLUTION-B = 培養觀察，留在 EVOLUTION，不進最終操作
 # - 每次後端更新都會重新評分，所以 B 變強會自動升 A，A 變弱會退 B。
+
+
+# ===== v335 LIFECYCLE GUARD =====
+# 恢復原始升級鏈：
+# TEST -> IGNITION -> EVOLUTION-B -> EVOLUTION-A -> FINAL
+# 市場節奏只能調節門檻 / 名額 / 風險提示
+# 不允許 score 直接跳級 FINAL / CORE
 def apply_v329_evolution_ab_auto_split():
     import pandas as pd
     import numpy as np
@@ -4030,7 +4002,7 @@ def apply_v329_evolution_ab_auto_split():
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v333_dynamic_market_risk_engine"
+                data["source"] = "v3291_evolution_ab_auto_split_safe"
                 data["evolution_ab_logic"] = "EVOLUTION-A=準主升，可進最終操作；EVOLUTION-B=培養觀察，每日重新評分，自動升降級"
                 data["evolution_a_count"] = int(is_a.sum())
                 data["evolution_b_count"] = int((~is_a).sum())
@@ -4039,336 +4011,6 @@ def apply_v329_evolution_ab_auto_split():
                 pass
 
     print("v329 evolution A/B:", "rows=", len(d), "A=", int(is_a.sum()), "B=", int((~is_a).sum()))
-
-
-
-# ===== v333 DYNAMIC MARKET RISK ENGINE =====
-# v333.3 backend meta semantic cleanup
-# v334.1 market rhythm soft guard
-# 目的：
-# - 讓「市場狀態 / 總經 / 清單名額」跟目前清單強弱連動，不再長時間卡在盤整。
-# - 不新增資料源、不改前端、不改 yml。
-# - 只用已產出的策略 CSV + 若存在的加權/指數欄位做二次風險判斷。
-# - 結果寫入 meta.json，並提供 v328 最終操作池動態控制名額。
-def apply_v333_dynamic_market_risk_engine():
-    import pandas as pd
-    import numpy as np
-    import json
-    from datetime import datetime
-
-    def _read_csv_safe(path):
-        try:
-            if path.exists() and path.stat().st_size > 0:
-                return pd.read_csv(path, encoding="utf-8-sig")
-        except Exception:
-            try:
-                return pd.read_csv(path, encoding="utf-8")
-            except Exception:
-                return pd.DataFrame()
-        return pd.DataFrame()
-
-    def _txt_series(df, col, default=""):
-        if col in df.columns:
-            return df[col].astype("object").where(df[col].notna(), default).astype(str)
-        return pd.Series(default, index=df.index, dtype="object")
-
-    def _num_series(df, col, default=np.nan):
-        if col in df.columns:
-            return pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan)
-        return pd.Series(default, index=df.index, dtype="float64")
-
-    def _first_num(row, cols, default=np.nan):
-        for c in cols:
-            if c in row.index:
-                try:
-                    v = pd.to_numeric(row[c], errors="coerce")
-                    if pd.notna(v) and np.isfinite(v):
-                        return float(v)
-                except Exception:
-                    pass
-        return default
-
-    def _find_index_row():
-        # 優先找加權 / TAIEX；找不到則回傳 None，改用清單廣度推估。
-        for name in [
-            "feature_panel_daily.csv",
-            "price_panel_daily.csv",
-            "full_summary.csv",
-            "selection_debug.csv",
-        ]:
-            df = _read_csv_safe(ROOT / name)
-            if df.empty:
-                df = _read_csv_safe(DATA_DIR / name)
-            if df.empty:
-                continue
-
-            cols = [c for c in ["stock_id", "symbol", "code", "name", "stock_name"] if c in df.columns]
-            if not cols:
-                continue
-
-            joined = pd.Series("", index=df.index, dtype="object")
-            for c in cols:
-                joined = joined + " " + df[c].astype(str)
-
-            mask = joined.str.contains("TAIEX|加權|台股加權|發行量加權|TWII|IX0001|9999", case=False, regex=True, na=False)
-            if bool(mask.any()):
-                return df.loc[mask].tail(1).iloc[0]
-        return None
-
-    def _count_rows(name):
-        df = _read_csv_safe(ROOT / name)
-        if df.empty:
-            df = _read_csv_safe(DATA_DIR / name)
-        return int(len(df)) if not df.empty else 0
-
-    # 讀主要清單數量
-    final_n = _count_rows("priority_operation_pool.csv")
-    ignition_n = _count_rows("ignition_candidates.csv")
-    evolution_n = _count_rows("strategy_evolution.csv")
-    test_n = _count_rows("trade_plan.csv")
-    watch_n = _count_rows("watchlist_monitor.csv")
-    block_n = _count_rows("blocklist.csv") or _count_rows("blocked_candidates.csv")
-
-    frames = []
-    for name in ["priority_operation_pool.csv", "trade_plan.csv", "strategy_evolution.csv", "ignition_candidates.csv", "watchlist_monitor.csv", "blocklist.csv", "blocked_candidates.csv"]:
-        df = _read_csv_safe(ROOT / name)
-        if df.empty:
-            df = _read_csv_safe(DATA_DIR / name)
-        if not df.empty:
-            df["_v333_file"] = name
-            frames.append(df)
-
-    all_df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-
-    score = 0
-    reasons = []
-
-    # A. 指數結構：有指數資料就用；沒有就不硬猜。
-    idx = _find_index_row()
-    idx_close = idx_ma5 = idx_ma20 = idx_ma60 = idx_chg = idx_vol_ratio = np.nan
-    if idx is not None:
-        idx_close = _first_num(idx, ["close", "收盤", "price", "last_price"])
-        idx_ma5 = _first_num(idx, ["ma5", "MA5", "ma_5"])
-        idx_ma20 = _first_num(idx, ["ma20", "MA20", "ma_20"])
-        idx_ma60 = _first_num(idx, ["ma60", "MA60", "ma_60"])
-        idx_chg = _first_num(idx, ["pct_chg", "change_pct", "漲跌幅", "return_1d"])
-        idx_vol_ratio = _first_num(idx, ["volume_ratio", "vol_ratio", "量比"])
-
-        if np.isfinite(idx_close) and np.isfinite(idx_ma20):
-            if idx_close >= idx_ma20:
-                score += 2
-                reasons.append("加權站上 MA20")
-            else:
-                score -= 3
-                reasons.append("加權跌破 MA20")
-
-        if np.isfinite(idx_close) and np.isfinite(idx_ma5):
-            if idx_close >= idx_ma5:
-                score += 1
-                reasons.append("加權站上 MA5")
-            else:
-                score -= 1
-                reasons.append("加權跌破 MA5")
-
-        if np.isfinite(idx_close) and np.isfinite(idx_ma60):
-            if idx_close >= idx_ma60:
-                score += 1
-                reasons.append("中期趨勢仍在 MA60 上")
-            else:
-                score -= 2
-                reasons.append("跌破 MA60，中期風險升級")
-
-        if np.isfinite(idx_chg):
-            if idx_chg <= -1.2:
-                score -= 2
-                reasons.append("加權單日跌幅偏大")
-            elif idx_chg >= 1.0:
-                score += 1
-                reasons.append("加權單日轉強")
-
-        if np.isfinite(idx_chg) and np.isfinite(idx_vol_ratio) and idx_chg < 0 and idx_vol_ratio >= 1.15:
-            score -= 2
-            reasons.append("量增下跌，風險扣分")
-
-    # B. 清單廣度：跟你目前五大清單 / A/B分流連動。
-    if final_n >= 6:
-        score += 2
-        reasons.append("最終操作擴散")
-    elif final_n >= 3:
-        score += 1
-        reasons.append("最終操作仍有名單")
-    elif final_n <= 1:
-        score -= 2
-        reasons.append("最終操作不足")
-
-    if evolution_n >= 8:
-        score += 1
-        reasons.append("EVOLUTION 養成池擴散")
-    if ignition_n >= 8:
-        score += 1
-        reasons.append("IGNITION 點火數增加")
-    if block_n >= max(8, final_n + ignition_n):
-        score -= 2
-        reasons.append("BLOCK / 禁止數偏多")
-    if watch_n >= 60 and final_n <= 2:
-        score -= 1
-        reasons.append("觀察多、可操作少")
-
-    if not all_df.empty:
-        joined = (
-            _txt_series(all_df, "action") + " " +
-            _txt_series(all_df, "final_action") + " " +
-            _txt_series(all_df, "strategy_type") + " " +
-            _txt_series(all_df, "strategy_layer") + " " +
-            _txt_series(all_df, "strategy_bucket") + " " +
-            _txt_series(all_df, "reason") + " " +
-            _txt_series(all_df, "system_note")
-        ).str.upper()
-
-        buy_like = int(joined.str.contains("BUY|買進|CORE|PRIORITY|EVOLUTION-A|🟣", regex=True, na=False).sum())
-        test_like = int(joined.str.contains("TEST|試單|IGNITION|起漲", regex=True, na=False).sum())
-        block_like = int(joined.str.contains("BLOCK|禁止|SELL|賣出", regex=True, na=False).sum())
-
-        if buy_like >= 8:
-            score += 1
-            reasons.append("主升 / 紫框訊號偏多")
-        if test_like >= 20:
-            score += 1
-            reasons.append("試單與點火訊號活躍")
-        if block_like >= buy_like and block_like >= 8:
-            score -= 2
-            reasons.append("風險 / 禁止訊號高於主升訊號")
-
-    score = int(max(-7, min(7, score)))
-
-    # C. 轉成前端可讀狀態與名額控制
-    # v334.1：市場節奏化（溫和版）
-    # 修正前一版過度收縮：
-    # - 盤整不直接清空 TEST / WATCH
-    # - FINAL 盤整時維持 5~6 檔
-    # - 只有弱勢才明顯收縮
-    if score >= 6:
-        market_state = "強勢"
-        market_phase_v334 = "進攻擴散"
-        risk_mode = "可分批主倉"
-        macro_bias = "總經偏多"
-        macro_score = "6/7"
-        max_final = 10
-        test_pressure = "可放寬試單"
-        confidence = "中高"
-        upgrade_speed_v334 = "加速升級"
-        final_slot_mode_v334 = "擴張"
-    elif score >= 4:
-        market_state = "盤整偏強"
-        market_phase_v334 = "偏多輪動"
-        risk_mode = "控風險進攻"
-        macro_bias = "總經偏多"
-        macro_score = "5/7"
-        max_final = 8
-        test_pressure = "試單可分批"
-        confidence = "中"
-        upgrade_speed_v334 = "正常偏快"
-        final_slot_mode_v334 = "偏擴張"
-    elif score >= 2:
-        market_state = "盤整"
-        market_phase_v334 = "中性震盪"
-        risk_mode = "試單控倉"
-        macro_bias = "總經中性"
-        macro_score = "4/7"
-        max_final = 6
-        test_pressure = "試單不可重倉"
-        confidence = "中低"
-        upgrade_speed_v334 = "正常"
-        final_slot_mode_v334 = "標準"
-    elif score >= 0:
-        market_state = "盤整偏弱"
-        market_phase_v334 = "防守震盪"
-        risk_mode = "防守試單"
-        macro_bias = "總經中性偏保守"
-        macro_score = "3/7"
-        max_final = 5
-        test_pressure = "只做小倉試單"
-        confidence = "低"
-        upgrade_speed_v334 = "放慢升級"
-        final_slot_mode_v334 = "溫和收縮"
-    else:
-        market_state = "弱勢"
-        market_phase_v334 = "防守收縮"
-        risk_mode = "防守"
-        macro_bias = "總經偏空"
-        macro_score = "2/7"
-        max_final = 3
-        test_pressure = "暫停重倉"
-        confidence = "低"
-        upgrade_speed_v334 = "暫停升級"
-        final_slot_mode_v334 = "收縮"
-
-    market_note = "｜".join(reasons[:8]) if reasons else "清單廣度不足，維持保守評估"
-
-    # v333.3：meta 顯示語意拆層
-    # 市場層：只講盤勢與風險分
-    # 總經層：只講總經方向、分數、信心
-    # 風控層：只講操作限制，不再混入總經文字
-    market_display_v333 = f"{market_state}｜風險分 {score}"
-    macro_display_v333 = f"{macro_bias}｜分數 {macro_score}｜{confidence}"
-    risk_display_v333 = f"{test_pressure}｜信心{confidence}"
-
-    # risk_mode_v333 保持為純操作風控欄位，避免前端風險模式重複出現「總經中性｜分數4/7」
-    risk_mode_clean_v333 = str(test_pressure or risk_mode or "試單控倉")
-
-    # market_summary_v333 改成總覽說明，不再當 risk_mode 使用
-    summary = f"{market_phase_v334}｜市場{market_state}｜{risk_mode_clean_v333}｜{upgrade_speed_v334}｜信心{confidence}"
-
-    # 寫入 meta，前端若讀 meta 就會更新；v328 也會讀 max_final_slots_v333。
-    payload = {
-        "source": "v333_dynamic_market_risk_engine",
-        "market_state_v333": market_state,
-        "market_status": market_state,
-        "market_display_v333": market_display_v333,
-
-        "macro_bias_v333": macro_bias,
-        "macro_score_v333": macro_score,
-        "macro_score": macro_score,
-        "macro_display_v333": macro_display_v333,
-
-        "risk_mode_v333": risk_mode_clean_v333,
-        "risk_mode": risk_mode_clean_v333,
-        "risk_display_v333": risk_display_v333,
-
-        "market_risk_score_v333": score,
-        "market_note_v333": market_note,
-        "market_summary_v333": summary,
-        "market_phase_v334": market_phase_v334,
-        "final_slot_mode_v334": final_slot_mode_v334,
-        "upgrade_speed_v334": upgrade_speed_v334,
-        "max_final_slots_v333": int(max_final),
-        "max_final_slots_v334": int(max_final),
-        "test_pressure_v333": test_pressure,
-        "confidence_v333": confidence,
-        "final_count_v333": int(final_n),
-        "ignition_count_v333": int(ignition_n),
-        "evolution_count_v333": int(evolution_n),
-        "watch_count_v333": int(watch_n),
-        "block_count_v333": int(block_n),
-        "updated_at_v333": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    }
-
-    for base in [ROOT, DATA_DIR]:
-        base.mkdir(parents=True, exist_ok=True)
-        p = base / "meta.json"
-        data = {}
-        if p.exists():
-            try:
-                data = json.loads(p.read_text(encoding="utf-8-sig"))
-            except Exception:
-                data = {}
-        data.update(payload)
-        p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
-
-        # 額外輸出一份狀態檔，不影響舊前端；之後要接 UI 可直接讀。
-        pd.DataFrame([payload]).to_csv(base / "market_risk_status.csv", index=False, encoding="utf-8-sig")
-
-    print("v333 dynamic market risk:", market_state, macro_score, risk_mode, "score=", score, "max_final=", max_final, "reason=", market_note)
 
 
 if __name__ == "__main__":
@@ -4483,7 +4125,6 @@ if __name__ == "__main__":
 
         apply_v327_lifecycle_list_planning_guard()
         apply_v329_evolution_ab_auto_split()
-        apply_v333_dynamic_market_risk_engine()
         apply_v328_priority_operation_pool()
 
     except Exception as e:
