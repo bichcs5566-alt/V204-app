@@ -3555,6 +3555,9 @@ def apply_v327_lifecycle_list_planning_guard():
 
 
 
+# ===== v335.1 STRICT LIFECYCLE RESTORE =====
+# FINAL 只從 EVOLUTION-A 進入；v328 不再從高分熱門股直接拉 FINAL。
+
 # ===== v328 PRIORITY OPERATION POOL =====
 # 目的：
 # - 不改前端、不改 yml、不新增獨立資料來源。
@@ -3652,13 +3655,12 @@ def apply_v328_priority_operation_pool():
             joined.str.contains("CORE|核心主升|🟣", case=False, regex=True, na=False)
         )
 
+    # v335.1 STRICT LIFECYCLE：
+    # 最終操作池只能從 EVOLUTION 分流結果產生。
+    # 不再從 trade_plan / candidates / ignition 直接拉高分熱門股進 FINAL。
     source_names = [
-        "trade_plan.csv",
+        "strategy_evolution_ab.csv",
         "strategy_evolution.csv",
-        "ignition_candidates.csv",
-        "candidates.csv",
-        "core_candidates.csv",
-        "alpha_candidates.csv",
     ]
 
     frames = []
@@ -3680,8 +3682,34 @@ def apply_v328_priority_operation_pool():
     pool = _normalize_sid(_ensure_text_columns(pool))
 
     core_mask = _core_like(pool)
+
+    # v335.1 STRICT LIFECYCLE：
+    # FINAL / 最終操作只能由 EVOLUTION-A 進入。
+    # 這裡禁止：
+    # - TEST 直接 FINAL
+    # - IGNITION 直接 FINAL
+    # - 高分 / 熱門 / 爆量股直接 FINAL
+    # - trade_plan / candidates 直接 FINAL
+    evo_stage = _txt(pool, "evolution_stage_v329").str.upper()
+    evo_grade = _txt(pool, "evolution_grade_v329").str.upper()
+    evo_text = (
+        _txt(pool, "strategy_layer") + " " +
+        _txt(pool, "strategy_bucket") + " " +
+        _txt(pool, "entry_type") + " " +
+        _txt(pool, "reason") + " " +
+        _txt(pool, "system_note")
+    ).str.upper()
+
+    evolution_a_mask = (
+        evo_stage.eq("EVOLUTION-A") |
+        evo_grade.eq("A") |
+        evo_text.str.contains("EVOLUTION-A|準主升|可進最終操作候選", case=False, regex=True, na=False)
+    )
+
+    core_mask = core_mask & evolution_a_mask
+
     if not bool(core_mask.any()):
-        print("v328 priority operation pool: no purple/core rows")
+        print("v328 priority operation pool: no EVOLUTION-A rows for final operation")
         return
 
     purple = pool.loc[core_mask].copy()
@@ -3697,12 +3725,11 @@ def apply_v328_priority_operation_pool():
     )
     purple["_file_sort_v328"] = np.select(
         [
-            _txt(purple, "_v328_from_file").eq("trade_plan.csv"),
-            _txt(purple, "_v328_from_file").eq("strategy_evolution.csv"),
-            _txt(purple, "_v328_from_file").eq("ignition_candidates.csv")
+            _txt(purple, "_v328_from_file").eq("strategy_evolution_ab.csv"),
+            _txt(purple, "_v328_from_file").eq("strategy_evolution.csv")
         ],
-        [0, 1, 2],
-        default=3
+        [0, 1],
+        default=9
     )
 
     purple = (
@@ -3755,9 +3782,9 @@ def apply_v328_priority_operation_pool():
         purple.at[idx, "strategy_layer"] = f"🟣 PRIORITY｜主升操作池 {grade}"
         purple.at[idx, "strategy_bucket"] = f"🟣 CORE｜主升候選 TOP{rank}"
         purple.at[idx, "layer"] = purple.at[idx, "strategy_layer"]
-        purple.at[idx, "entry_type"] = "主升候選操作"
-        purple.at[idx, "source"] = "v328_priority_operation_pool"
-        purple.at[idx, "reason"] = sub
+        purple.at[idx, "entry_type"] = "EVOLUTION-A 完成升級後操作"
+        purple.at[idx, "source"] = "v335_lifecycle_final_from_evolution_a"
+        purple.at[idx, "reason"] = "v335.1：由 EVOLUTION-A 進入最終操作；禁止高分/熱門/爆量股直接跳級 FINAL。"
         purple.at[idx, "system_note"] = sub
         purple.at[idx, "priority_grade_v328"] = grade
         purple.at[idx, "priority_rank_v328"] = str(rank)
