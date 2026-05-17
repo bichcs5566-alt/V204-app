@@ -1,31 +1,31 @@
 {
-  "generated_at": "2026-05-17 03:58:30",
+  "generated_at": "2026-05-17 04:39:55",
   "source": "backfill_missing_days",
   "before_last_date": "2026-04-24",
   "after_last_date": "2026-05-15",
-  "rows": 4803943,
-  "stock_count": 1964,
+  "rows": 4818968,
+  "stock_count": 1970,
   "unique_dates": 2822,
   "filled_days": [
     {
       "date": "2026-04-27",
-      "rows": 878,
-      "symbols": 878
+      "rows": 1947,
+      "symbols": 1947
     },
     {
       "date": "2026-04-28",
-      "rows": 878,
-      "symbols": 878
+      "rows": 1934,
+      "symbols": 1934
     },
     {
       "date": "2026-04-29",
-      "rows": 878,
-      "symbols": 878
+      "rows": 1952,
+      "symbols": 1952
     },
     {
       "date": "2026-04-30",
-      "rows": 878,
-      "symbols": 878
+      "rows": 1952,
+      "symbols": 1952
     },
     {
       "date": "2026-05-01",
@@ -34,53 +34,53 @@
     },
     {
       "date": "2026-05-04",
-      "rows": 878,
-      "symbols": 878
+      "rows": 1952,
+      "symbols": 1952
     },
     {
       "date": "2026-05-05",
-      "rows": 878,
-      "symbols": 878
+      "rows": 1952,
+      "symbols": 1952
     },
     {
       "date": "2026-05-06",
-      "rows": 878,
-      "symbols": 878
+      "rows": 1953,
+      "symbols": 1953
     },
     {
       "date": "2026-05-07",
-      "rows": 878,
-      "symbols": 878
+      "rows": 1954,
+      "symbols": 1954
     },
     {
       "date": "2026-05-08",
-      "rows": 878,
-      "symbols": 878
+      "rows": 1953,
+      "symbols": 1953
     },
     {
       "date": "2026-05-11",
-      "rows": 878,
-      "symbols": 878
+      "rows": 1955,
+      "symbols": 1955
     },
     {
       "date": "2026-05-12",
-      "rows": 878,
-      "symbols": 878
+      "rows": 1954,
+      "symbols": 1954
     },
     {
       "date": "2026-05-13",
-      "rows": 878,
-      "symbols": 878
+      "rows": 1952,
+      "symbols": 1952
     },
     {
       "date": "2026-05-14",
-      "rows": 878,
-      "symbols": 878
+      "rows": 1954,
+      "symbols": 1954
     },
     {
       "date": "2026-05-15",
-      "rows": 878,
-      "symbols": 878
+      "rows": 1953,
+      "symbols": 1953
     }
   ],
   "skipped_days": [
