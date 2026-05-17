@@ -3290,7 +3290,7 @@ def apply_v319_core_lifecycle_marker_to_outputs():
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v3281_priority_operation_pool_dtype_safe"
+                data["source"] = "v3291_evolution_ab_auto_split_safe"
                 data["core_marker"] = "🟣 CORE｜核心主升"
                 data["core_logic"] = "CORE 不新增清單；從 EVOLUTION/TEST 升級，直接寫入 strategy_type / strategy_layer / lifecycle_stage 作特殊標記"
                 p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
@@ -3546,7 +3546,7 @@ def apply_v327_lifecycle_list_planning_guard():
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v3281_priority_operation_pool_dtype_safe"
+                data["source"] = "v3291_evolution_ab_auto_split_safe"
                 data["list_logic"] = "IGNITION=點火；TEST=ATTACK攻擊池；EVOLUTION=趨勢確認；CORE=少數主升標記；WATCH=預備；BLOCK=禁止"
                 data["core_limit"] = "每個輸出檔最多 5 檔 CORE，不強制補滿"
                 p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
@@ -3824,7 +3824,7 @@ def apply_v328_priority_operation_pool():
         if p.exists():
             try:
                 data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v3281_priority_operation_pool_dtype_safe"
+                data["source"] = "v3291_evolution_ab_auto_split_safe"
                 data["final_operation_name"] = "🟣 PRIORITY 主升操作池"
                 data["priority_logic"] = "從所有紫框名單匯總，依強弱排序 TOP1-8；TOP1-3=S，TOP4-6=A，TOP7-8=B"
                 p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
@@ -3832,6 +3832,178 @@ def apply_v328_priority_operation_pool():
                 pass
 
     print("v328 priority operation pool:", "rows=", len(priority_out), "buy=", int((_txt(priority_out, "action").str.upper() == "BUY").sum()))
+
+
+
+# ===== v329 EVOLUTION A/B AUTO SPLIT =====
+# 目的：
+# - 不新增 UI、不改 yml、不動 app.js。
+# - 只把既有 strategy_evolution.csv 內部分成：
+#   EVOLUTION-A = 準主升，可進最終操作候選
+#   EVOLUTION-B = 培養觀察，留在 EVOLUTION，不進最終操作
+# - 每次後端更新都會重新評分，所以 B 變強會自動升 A，A 變弱會退 B。
+def apply_v329_evolution_ab_auto_split():
+    import pandas as pd
+    import numpy as np
+    import json
+    import math
+
+    def _read_csv_safe(path):
+        try:
+            if path.exists() and path.stat().st_size > 0:
+                return pd.read_csv(path, encoding="utf-8-sig")
+        except Exception:
+            try:
+                return pd.read_csv(path, encoding="utf-8")
+            except Exception:
+                return pd.DataFrame()
+        return pd.DataFrame()
+
+    def _txt(df, col, default=""):
+        if col in df.columns:
+            return df[col].astype("object").where(df[col].notna(), default).astype(str).replace("nan", "")
+        return pd.Series(default, index=df.index, dtype="object")
+
+    def _first_num(df, cols, default=0.0):
+        out = pd.Series(np.nan, index=df.index, dtype="float64")
+        for c in cols:
+            if c in df.columns:
+                v = pd.to_numeric(df[c], errors="coerce").replace([np.inf, -np.inf], np.nan)
+                out = out.where(out.notna(), v)
+        return out.fillna(default)
+
+    def _normalize_sid(df):
+        if "stock_id" in df.columns:
+            original = df["stock_id"].astype(str)
+            extracted = original.str.extract(r"(\d{4})", expand=False)
+            df["stock_id"] = extracted.fillna(original.str[:4])
+        return df
+
+    def _ensure_cols(df):
+        text_cols = [
+            "stock_id", "stock_name", "industry", "action", "final_action", "v311_locked_action",
+            "strategy_type", "bucket", "strategy_layer", "strategy_bucket", "layer",
+            "entry_type", "source", "reason", "system_note", "action_label", "action_sub",
+            "is_core_v319", "core_score_v319", "v327_lifecycle_role",
+            "evolution_stage_v329", "evolution_grade_v329", "evolution_rank_v329"
+        ]
+        for c in text_cols:
+            if c not in df.columns:
+                df[c] = ""
+            df[c] = df[c].astype("object").where(df[c].notna(), "")
+        if "evolution_ab_score_v329" not in df.columns:
+            df["evolution_ab_score_v329"] = 0
+        df["evolution_ab_score_v329"] = pd.to_numeric(df["evolution_ab_score_v329"], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0)
+        return df
+
+    def _score(df):
+        return (
+            _first_num(df, ["core_score_v319"], 0) * 0.85 +
+            _first_num(df, ["final_sort_score_v312", "final_sort_score_v310", "final_sort_score_v309", "score"], 0) * 0.65 +
+            _first_num(df, ["attack_score_v312", "attack_score_v310", "attack_score_v309"], 0) * 0.42 +
+            _first_num(df, ["final_attack_score_v312", "final_attack_score_v310", "final_attack_score_v309"], 0) * 0.25 +
+            _first_num(df, ["entry_score", "evolution_score"], 0) * 0.25 +
+            _first_num(df, ["liquidity_score"], 0) * 0.15
+        ).round(2)
+
+    df = _read_csv_safe(ROOT / "strategy_evolution.csv")
+    if df.empty:
+        df = _read_csv_safe(DATA_DIR / "strategy_evolution.csv")
+    if df.empty or "stock_id" not in df.columns:
+        print("v329 evolution A/B: no strategy_evolution rows")
+        return
+
+    d = _normalize_sid(_ensure_cols(df.copy()))
+    d["evolution_ab_score_v329"] = _score(d)
+
+    d = (
+        d.sort_values(["evolution_ab_score_v329", "stock_id"], ascending=[False, True])
+        .drop_duplicates("stock_id", keep="first")
+        .copy()
+    )
+
+    n = len(d)
+    if n <= 0:
+        print("v329 evolution A/B: empty after dedupe")
+        return
+
+    a_count = int(min(8, max(3, math.ceil(n * 0.35))))
+    a_count = min(a_count, n)
+
+    d["_rank_v329_tmp"] = range(1, n + 1)
+    is_a = d["_rank_v329_tmp"] <= a_count
+
+    joined = (
+        _txt(d, "strategy_type") + " " +
+        _txt(d, "strategy_layer") + " " +
+        _txt(d, "strategy_bucket") + " " +
+        _txt(d, "bucket") + " " +
+        _txt(d, "system_note") + " " +
+        _txt(d, "reason")
+    ).str.upper()
+    existing_core = (
+        _txt(d, "is_core_v319").str.strip().eq("1") |
+        joined.str.contains("CORE|核心主升|🟣", case=False, regex=True, na=False)
+    )
+    is_a = is_a | existing_core
+
+    d["strategy_type"] = "EVOLUTION"
+    d["bucket"] = "EVOLUTION"
+    d["engine"] = "EVOLUTION"
+    d["is_core_v319"] = "0"
+    d["v327_lifecycle_role"] = "EVOLUTION"
+    d["evolution_stage_v329"] = "EVOLUTION-B"
+    d["evolution_grade_v329"] = "B"
+    d["evolution_rank_v329"] = d["_rank_v329_tmp"].astype(str)
+    d["strategy_layer"] = "🟡 EVOLUTION-B｜主升培養"
+    d["strategy_bucket"] = "🟡 EVOLUTION-B｜培養觀察"
+    d["layer"] = d["strategy_layer"]
+    d["entry_type"] = "主升培養觀察"
+    d["source"] = "v329_evolution_ab_auto_split"
+    d["reason"] = "EVOLUTION-B：培養觀察層，每日重新評分；條件變強會自動升 A。"
+    d["system_note"] = "EVOLUTION-B：留在策略進化清單，不直接進最終操作。"
+    cur_action = _txt(d, "action")
+    d["action"] = cur_action.where(cur_action.str.len() > 0, "WATCH")
+    d["final_action"] = d["action"]
+    cur_label = _txt(d, "action_label")
+    d["action_label"] = cur_label.where(cur_label.str.len() > 0, "觀察")
+    d["action_sub"] = "EVOLUTION-B：培養觀察，等待升級 A。"
+
+    d.loc[is_a, "is_core_v319"] = "1"
+    d.loc[is_a, "v327_lifecycle_role"] = "CORE"
+    d.loc[is_a, "evolution_stage_v329"] = "EVOLUTION-A"
+    d.loc[is_a, "evolution_grade_v329"] = "A"
+    d.loc[is_a, "strategy_layer"] = "🟣 EVOLUTION-A｜準主升"
+    d.loc[is_a, "strategy_bucket"] = "🟣 EVOLUTION-A｜可進最終操作候選"
+    d.loc[is_a, "layer"] = "🟣 EVOLUTION-A｜準主升"
+    d.loc[is_a, "entry_type"] = "準主升候選"
+    d.loc[is_a, "source"] = "v329_evolution_ab_auto_split"
+    d.loc[is_a, "reason"] = "EVOLUTION-A：策略進化前段，準主升，可由 v328 依強弱挑入最終操作。"
+    d.loc[is_a, "system_note"] = "EVOLUTION-A：每日重評，若轉弱會退 B；若維持強勢可進最終操作。"
+    d.loc[is_a, "action_sub"] = "EVOLUTION-A：準主升候選，可進最終操作排序。"
+    d.loc[is_a, "core_score_v319"] = d.loc[is_a, "evolution_ab_score_v329"].astype(str)
+
+    d = d.drop(columns=[c for c in ["_rank_v329_tmp"] if c in d.columns], errors="ignore")
+
+    for base in [ROOT, DATA_DIR]:
+        base.mkdir(parents=True, exist_ok=True)
+        d.to_csv(base / "strategy_evolution.csv", index=False, encoding="utf-8-sig")
+        d.to_csv(base / "strategy_evolution_ab.csv", index=False, encoding="utf-8-sig")
+
+    for base in [ROOT, DATA_DIR]:
+        p = base / "meta.json"
+        if p.exists():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8-sig"))
+                data["source"] = "v3291_evolution_ab_auto_split_safe"
+                data["evolution_ab_logic"] = "EVOLUTION-A=準主升，可進最終操作；EVOLUTION-B=培養觀察，每日重新評分，自動升降級"
+                data["evolution_a_count"] = int(is_a.sum())
+                data["evolution_b_count"] = int((~is_a).sum())
+                p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+            except Exception:
+                pass
+
+    print("v329 evolution A/B:", "rows=", len(d), "A=", int(is_a.sum()), "B=", int((~is_a).sum()))
 
 
 if __name__ == "__main__":
@@ -3945,6 +4117,7 @@ if __name__ == "__main__":
             raise RuntimeError("v320 strategy_evolution.csv still empty")
 
         apply_v327_lifecycle_list_planning_guard()
+        apply_v329_evolution_ab_auto_split()
         apply_v328_priority_operation_pool()
 
     except Exception as e:
