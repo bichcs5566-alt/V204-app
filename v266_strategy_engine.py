@@ -3555,6 +3555,9 @@ def apply_v327_lifecycle_list_planning_guard():
 
 
 
+# ===== v335.2 LIFECYCLE TIMING RESTORE =====
+# FINAL 只吃 EVOLUTION-A 初期確認；避免已噴出後才追價。
+
 # ===== v335.1 STRICT LIFECYCLE RESTORE =====
 # FINAL 只從 EVOLUTION-A 進入；v328 不再從高分熱門股直接拉 FINAL。
 
@@ -3703,10 +3706,16 @@ def apply_v328_priority_operation_pool():
     evolution_a_mask = (
         evo_stage.eq("EVOLUTION-A") |
         evo_grade.eq("A") |
-        evo_text.str.contains("EVOLUTION-A|準主升|可進最終操作候選", case=False, regex=True, na=False)
+        evo_text.str.contains("EVOLUTION-A|初期確認|準主升|可進最終操作候選", case=False, regex=True, na=False)
     )
 
-    core_mask = core_mask & evolution_a_mask
+    # v335.2：FINAL timing guard
+    # 必須是 EVOLUTION-A 且 timing 尚未過熱，避免已大漲後才進最終操作。
+    timing_text_v3352 = _txt(pool, "lifecycle_timing_v3352")
+    late_flag_v3352 = pd.to_numeric(_txt(pool, "late_chase_flag_v3352"), errors="coerce").fillna(0)
+    timing_ok_v3352 = timing_text_v3352.eq("EARLY_CONFIRM") | late_flag_v3352.eq(0)
+
+    core_mask = core_mask & evolution_a_mask & timing_ok_v3352
 
     if not bool(core_mask.any()):
         print("v328 priority operation pool: no EVOLUTION-A rows for final operation")
@@ -3729,6 +3738,10 @@ def apply_v328_priority_operation_pool():
         if _c in purple.columns:
             purple[_c] = purple[_c].astype("object")
     purple["_priority_score_v328"] = _rank_score(purple)
+    purple["_timing_score_v3352"] = pd.to_numeric(
+        purple["lifecycle_timing_score_v3352"] if "lifecycle_timing_score_v3352" in purple.columns else purple["_priority_score_v328"],
+        errors="coerce"
+    ).fillna(purple["_priority_score_v328"])
     purple["_action_sort_v328"] = np.select(
         [
             _txt(purple, "action").str.upper().eq("TEST"),
@@ -3749,8 +3762,8 @@ def apply_v328_priority_operation_pool():
 
     purple = (
         purple.sort_values(
-            ["_priority_score_v328", "_action_sort_v328", "_file_sort_v328", "stock_id"],
-            ascending=[False, True, True, True]
+            ["_timing_score_v3352", "_priority_score_v328", "_action_sort_v328", "_file_sort_v328", "stock_id"],
+            ascending=[False, False, True, True, True]
         )
         .drop_duplicates("stock_id", keep="first")
         .head(8)
@@ -3797,9 +3810,9 @@ def apply_v328_priority_operation_pool():
         purple.at[idx, "strategy_layer"] = f"🟣 PRIORITY｜主升操作池 {grade}"
         purple.at[idx, "strategy_bucket"] = f"🟣 CORE｜主升候選 TOP{rank}"
         purple.at[idx, "layer"] = purple.at[idx, "strategy_layer"]
-        purple.at[idx, "entry_type"] = "EVOLUTION-A 完成升級後操作"
+        purple.at[idx, "entry_type"] = "EVOLUTION-A 初期確認後操作"
         purple.at[idx, "source"] = "v335_lifecycle_final_from_evolution_a"
-        purple.at[idx, "reason"] = "v335.1：由 EVOLUTION-A 進入最終操作；禁止高分/熱門/爆量股直接跳級 FINAL。"
+        purple.at[idx, "reason"] = "v335.2：由 EVOLUTION-A 初期確認進入最終操作；禁止高分/熱門/爆量/過熱乖離股直接跳級 FINAL。"
         purple.at[idx, "system_note"] = sub
         purple.at[idx, "priority_grade_v328"] = grade
         purple.at[idx, "priority_rank_v328"] = str(rank)
@@ -3965,8 +3978,66 @@ def apply_v329_evolution_ab_auto_split():
     d = _normalize_sid(_ensure_cols(df.copy()))
     d["evolution_ab_score_v329"] = _score(d)
 
+    # v335.2：生命周期 timing 修正
+    # EVOLUTION-A 不再等於「分數最高 / 已經最熱門」。
+    # A 必須偏向「主升初期確認」：站上均線、剛轉強，但不能過度乖離 MA5/MA20。
+    close_v3352 = _first_num(d, ["close", "ref_price", "price"], 0)
+    ma5_v3352 = _first_num(d, ["ma5", "MA5"], close_v3352)
+    ma10_v3352 = _first_num(d, ["ma10", "MA10"], close_v3352)
+    ma20_v3352 = _first_num(d, ["ma20", "MA20"], close_v3352)
+    mom5_v3352 = _first_num(d, ["mom5", "return_5d"], 0)
+    mom10_v3352 = _first_num(d, ["mom10", "return_10d"], 0)
+    mom20_v3352 = _first_num(d, ["mom20", "return_20d"], 0)
+    vol_ratio_v3352 = _first_num(d, ["volume_ratio", "vol_ratio"], 1)
+
+    close_safe_v3352 = close_v3352.replace(0, np.nan)
+    ma5_safe_v3352 = ma5_v3352.replace(0, np.nan)
+    ma20_safe_v3352 = ma20_v3352.replace(0, np.nan)
+
+    gap_ma5_v3352 = ((close_safe_v3352 / ma5_safe_v3352) - 1).replace([np.inf, -np.inf], np.nan).fillna(0)
+    gap_ma20_v3352 = ((close_safe_v3352 / ma20_safe_v3352) - 1).replace([np.inf, -np.inf], np.nan).fillna(0)
+    ma5_ma20_gap_v3352 = ((ma5_safe_v3352 / ma20_safe_v3352) - 1).replace([np.inf, -np.inf], np.nan).fillna(0)
+
+    trend_turning_v3352 = (
+        (close_v3352 >= ma5_v3352 * 0.985) &
+        (ma5_v3352 >= ma10_v3352 * 0.995) &
+        (ma10_v3352 >= ma20_v3352 * 0.985)
+    )
+
+    # 不能太晚：避免漲停、爆量、乖離過大後才進 FINAL。
+    early_not_extended_v3352 = (
+        (gap_ma5_v3352 <= 0.080) &
+        (gap_ma20_v3352 <= 0.220) &
+        (ma5_ma20_gap_v3352 <= 0.160) &
+        (mom5_v3352 <= 0.180) &
+        (mom10_v3352 <= 0.350) &
+        (mom20_v3352 <= 0.650) &
+        (vol_ratio_v3352 <= 6.0)
+    )
+
+    early_confirm_v3352 = trend_turning_v3352 & early_not_extended_v3352
+
+    d["extension_ma5_v3352"] = gap_ma5_v3352.round(4)
+    d["extension_ma20_v3352"] = gap_ma20_v3352.round(4)
+    d["late_chase_flag_v3352"] = np.where(early_confirm_v3352, 0, 1)
+
+    # timing 分數：越接近主升初期越高；過度乖離扣分。
+    d["lifecycle_timing_score_v3352"] = (
+        d["evolution_ab_score_v329"] -
+        (gap_ma5_v3352.clip(lower=0) * 180).fillna(0) -
+        (gap_ma20_v3352.clip(lower=0) * 80).fillna(0) -
+        (ma5_ma20_gap_v3352.clip(lower=0) * 60).fillna(0) -
+        (mom5_v3352.clip(lower=0) * 25).fillna(0)
+    ).round(2)
+
+    d["lifecycle_timing_v3352"] = np.where(
+        early_confirm_v3352,
+        "EARLY_CONFIRM",
+        "LATE_OR_WAIT"
+    )
+
     d = (
-        d.sort_values(["evolution_ab_score_v329", "stock_id"], ascending=[False, True])
+        d.sort_values(["lifecycle_timing_score_v3352", "evolution_ab_score_v329", "stock_id"], ascending=[False, False, True])
         .drop_duplicates("stock_id", keep="first")
         .copy()
     )
@@ -3980,7 +4051,19 @@ def apply_v329_evolution_ab_auto_split():
     a_count = min(a_count, n)
 
     d["_rank_v329_tmp"] = range(1, n + 1)
-    is_a = d["_rank_v329_tmp"] <= a_count
+
+    # v335.2：EVOLUTION-A = 主升初期確認，不是追漲排行。
+    early_pool_v3352 = _txt(d, "lifecycle_timing_v3352").eq("EARLY_CONFIRM")
+
+    is_a = pd.Series(False, index=d.index)
+    if bool(early_pool_v3352.any()):
+        a_idx = (
+            d.loc[early_pool_v3352]
+            .sort_values(["lifecycle_timing_score_v3352", "evolution_ab_score_v329", "stock_id"], ascending=[False, False, True])
+            .head(a_count)
+            .index
+        )
+        is_a.loc[a_idx] = True
 
     joined = (
         _txt(d, "strategy_type") + " " +
@@ -3994,7 +4077,9 @@ def apply_v329_evolution_ab_auto_split():
         _txt(d, "is_core_v319").str.strip().eq("1") |
         joined.str.contains("CORE|核心主升|🟣", case=False, regex=True, na=False)
     )
-    is_a = is_a | existing_core
+
+    # 舊 CORE 只能在 timing 合格時保留為 A，避免已噴出標的靠舊 CORE 痕跡進 FINAL。
+    is_a = is_a | (existing_core & early_pool_v3352)
 
     d["strategy_type"] = "EVOLUTION"
     d["bucket"] = "EVOLUTION"
@@ -4025,11 +4110,11 @@ def apply_v329_evolution_ab_auto_split():
     d.loc[is_a, "strategy_layer"] = "🟣 EVOLUTION-A｜準主升"
     d.loc[is_a, "strategy_bucket"] = "🟣 EVOLUTION-A｜可進最終操作候選"
     d.loc[is_a, "layer"] = "🟣 EVOLUTION-A｜準主升"
-    d.loc[is_a, "entry_type"] = "準主升候選"
+    d.loc[is_a, "entry_type"] = "EVOLUTION-A 初期確認"
     d.loc[is_a, "source"] = "v329_evolution_ab_auto_split"
-    d.loc[is_a, "reason"] = "EVOLUTION-A：策略進化前段，準主升，可由 v328 依強弱挑入最終操作。"
-    d.loc[is_a, "system_note"] = "EVOLUTION-A：每日重評，若轉弱會退 B；若維持強勢可進最終操作。"
-    d.loc[is_a, "action_sub"] = "EVOLUTION-A：準主升候選，可進最終操作排序。"
+    d.loc[is_a, "reason"] = "EVOLUTION-A：主升初期確認，尚未過度乖離，才可交由 v328 進最終操作排序。"
+    d.loc[is_a, "system_note"] = "EVOLUTION-A：初期確認層，避免等到過熱追價才進 FINAL；若乖離擴大會退回 B/WATCH。"
+    d.loc[is_a, "action_sub"] = "EVOLUTION-A：初期確認，可進最終操作排序，但禁止過熱追價。"
     d.loc[is_a, "core_score_v319"] = d.loc[is_a, "evolution_ab_score_v329"].astype(str)
 
     d = d.drop(columns=[c for c in ["_rank_v329_tmp"] if c in d.columns], errors="ignore")
