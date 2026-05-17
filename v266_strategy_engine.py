@@ -3214,7 +3214,7 @@ def apply_v319_core_lifecycle_marker_to_outputs():
         strong_core_pair = (strong_momentum & strong_chip) | (strong_momentum & strong_rank)
 
         core_from_evolution = evolution_mask & strong_trend & strong_momentum & strong_chip & strong_liq & strong_rank & risk_ok
-        core_from_score = pd.Series(False, index=panel.index)  # v335 lifecycle guard: 禁止 score 直接升 CORE
+        core_from_score = False  # v335 lifecycle guard: 禁止 score 直接升 CORE
 
         core_mask = core_from_score | core_from_evolution
 
