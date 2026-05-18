@@ -3261,6 +3261,166 @@ def apply_v319_core_lifecycle_marker_to_outputs():
                 pass
 
 
+
+
+# ===== v401 EARLY-STAGE ANTI-CHASE OUTPUT FILTER =====
+# 只修「EVOLUTION 變強勢榜」：輸出後把已噴太遠的股票從 EVOLUTION/IGNITION 降 WATCH。
+# 不補票、不硬塞 FINAL、不改 UI、不改 yml、不改持倉。
+def apply_v401_early_stage_anti_chase_filter():
+    import pandas as pd
+    import numpy as np
+    import json
+    from pathlib import Path
+    from datetime import datetime
+
+    bases = []
+    try:
+        bases = [ROOT, DATA_DIR]
+    except Exception:
+        bases = [Path("."), Path("mobile_dashboard_v1/data")]
+
+    def _read_first(name):
+        for b in bases:
+            p = b / name
+            try:
+                if p.exists() and p.stat().st_size > 0:
+                    return pd.read_csv(p, encoding="utf-8-sig")
+            except Exception:
+                try:
+                    return pd.read_csv(p, encoding="utf-8")
+                except Exception:
+                    pass
+        return pd.DataFrame()
+
+    def _write_all(df, name):
+        for b in bases:
+            try:
+                b.mkdir(parents=True, exist_ok=True)
+                df.to_csv(b / name, index=False, encoding="utf-8-sig")
+            except Exception as e:
+                print("v401 write skip", name, repr(e))
+
+    def _num(df, cols, default=np.nan):
+        out = pd.Series(np.nan, index=df.index, dtype="float64")
+        for c in cols:
+            if c in df.columns:
+                v = pd.to_numeric(df[c], errors="coerce").replace([np.inf, -np.inf], np.nan)
+                out = out.where(out.notna(), v)
+        return out.fillna(default)
+
+    def _txt(df, col, default=""):
+        if col in df.columns:
+            return df[col].astype("object").where(df[col].notna(), default).astype(str).replace("nan", "")
+        return pd.Series(default, index=df.index, dtype="object")
+
+    def _sid(df):
+        if "stock_id" in df.columns:
+            return df["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False).fillna(df["stock_id"].astype(str).str[:4])
+        return pd.Series("", index=df.index, dtype="object")
+
+    def _mark(df):
+        if df.empty:
+            return df
+        px = _num(df, ["close", "ref_price", "price", "last_price", "參考價"], np.nan)
+        ma5 = _num(df, ["ma5", "MA5"], np.nan)
+        ma20 = _num(df, ["ma20", "MA20"], np.nan)
+        mom5 = _num(df, ["mom5", "return_5d", "ret5"], 0)
+        mom10 = _num(df, ["mom10", "return_10d", "ret10"], 0)
+        mom20 = _num(df, ["mom20", "return_20d", "ret20"], 0)
+        chg = _num(df, ["change_pct", "pct_chg", "漲跌幅"], 0)
+        volr = _num(df, ["volume_ratio", "vol_ratio"], 1)
+
+        for s in [mom5, mom10, mom20, chg]:
+            s.loc[s.abs() > 1.5] = s.loc[s.abs() > 1.5] / 100.0
+
+        gap20 = ((px.replace(0, np.nan) / ma20.replace(0, np.nan)) - 1).replace([np.inf, -np.inf], np.nan).fillna(0)
+        gap5 = ((px.replace(0, np.nan) / ma5.replace(0, np.nan)) - 1).replace([np.inf, -np.inf], np.nan).fillna(0)
+        no_ma = px.isna() | ma5.isna() | ma20.isna()
+
+        early_ok = (
+            (gap20 <= 0.16) &
+            (gap5 <= 0.09) &
+            (mom5 <= 0.14) &
+            (mom10 <= 0.25) &
+            (mom20 <= 0.50) &
+            (chg <= 0.07) &
+            (volr <= 5.0)
+        )
+        early_ok = early_ok | (no_ma & (mom10 <= 0.22) & (mom20 <= 0.42) & (chg <= 0.06) & (volr <= 4.5))
+
+        final_ok = (
+            (gap20 <= 0.10) &
+            (gap5 <= 0.06) &
+            (mom5 <= 0.10) &
+            (mom10 <= 0.18) &
+            (mom20 <= 0.35) &
+            (chg <= 0.05) &
+            (volr <= 4.0)
+        )
+        final_ok = final_ok | (no_ma & (mom10 <= 0.16) & (mom20 <= 0.32) & (chg <= 0.045) & (volr <= 3.8))
+
+        df["v401_gap_ma20"] = gap20.round(4)
+        df["v401_gap_ma5"] = gap5.round(4)
+        df["v401_early_ok"] = early_ok.astype(int)
+        df["v401_final_ok"] = final_ok.astype(int)
+        df["v401_note"] = np.where(early_ok, "起漲前緣/初升段", "過熱降觀察")
+        return df
+
+    watch = _read_first("watchlist_monitor.csv")
+    if not watch.empty:
+        watch = _mark(watch)
+
+    for name in ["ignition_candidates.csv", "strategy_evolution.csv"]:
+        df = _read_first(name)
+        if df.empty:
+            continue
+        df = _mark(df)
+        keep = pd.to_numeric(df["v401_early_ok"], errors="coerce").fillna(0).eq(1)
+        demote = df.loc[~keep].copy()
+        df = df.loc[keep].copy()
+        if len(demote):
+            demote["action"] = "WATCH"
+            demote["final_action"] = "WATCH"
+            demote["entry_type"] = "過熱降觀察"
+            demote["reason"] = (_txt(demote, "reason") + "｜v401：已脫離起漲前緣，降 WATCH，避免 EVOLUTION 變強勢榜。").str.strip("｜")
+            watch = pd.concat([watch, demote], ignore_index=True) if not watch.empty else demote
+            print("v401 demoted from", name, ",".join(_sid(demote).head(30).tolist()))
+        _write_all(df, name)
+
+    plan = _read_first("trade_plan.csv")
+    if not plan.empty:
+        plan = _mark(plan)
+        action = _txt(plan, "action").str.upper()
+        final_action = _txt(plan, "final_action").str.upper()
+        is_buy = action.isin(["BUY", "買進"]) | final_action.isin(["BUY", "買進"])
+        keep = (~is_buy) | pd.to_numeric(plan["v401_final_ok"], errors="coerce").fillna(0).eq(1)
+        removed = plan.loc[~keep].copy()
+        plan = plan.loc[keep].copy()
+        if len(removed):
+            print("v401 removed overextended FINAL:", ",".join(_sid(removed).head(30).tolist()))
+        _write_all(plan, "trade_plan.csv")
+
+    if not watch.empty:
+        if "stock_id" in watch.columns:
+            watch = watch.drop_duplicates(subset=["stock_id"], keep="first")
+        _write_all(watch, "watchlist_monitor.csv")
+
+    try:
+        for b in bases:
+            p = b / "meta.json"
+            data = {}
+            if p.exists():
+                data = json.loads(p.read_text(encoding="utf-8-sig"))
+            data["v401_anti_chase_filter"] = "ON"
+            data["v401_rule"] = "EVOLUTION/IGNITION 僅保留起漲前緣或初升段；過熱降 WATCH；FINAL 更嚴格。"
+            data["v401_updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+    except Exception as e:
+        print("v401 meta skipped:", repr(e))
+
+    print("v401 early-stage anti-chase filter done")
+
+
 if __name__ == "__main__":
     main_v266577_structure_weight_continuation_patch()
     apply_v311_csv_final_lock()
@@ -3368,3 +3528,10 @@ if __name__ == "__main__":
         print("v320 final panel guard failed:", repr(e))
         raise
 
+
+
+if __name__ == "__main__":
+    try:
+        apply_v401_early_stage_anti_chase_filter()
+    except Exception as e:
+        print("v401 anti-chase filter skipped:", repr(e))
