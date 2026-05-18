@@ -1,14 +1,12 @@
 """
-SAFE MERGE VERSION
-==================
-Base: v40
-Policy:
-- 保持原始 lifecycle
-- 保持早期卡位
-# DISABLED_SAFE_MODE => - 禁止 priority_operation_pool
-# DISABLED_SAFE_MODE => - 禁止 lifecycle_final
-# DISABLED_SAFE_MODE => - 禁止 core_from_score
-# DISABLED_SAFE_MODE => # DISABLED_SAFE_MODE => # DISABLED_SAFE_MODE => - 禁止 v333/v334/v335 強制重排
+SAFE40 FIXED TEST VERSION
+=========================
+核心：
+- 完整保留 v40 原始升級鏈
+- 保留 TEST → IGNITION → EVOLUTION → FINAL
+- 不關閉 lifecycle
+- 不重排 FINAL
+- 不導入熱門股追價模式
 """
 
 import re
@@ -3366,4 +3364,3 @@ if __name__ == "__main__":
     except Exception as e:
         print("v320 final panel guard failed:", repr(e))
         raise
-
