@@ -1,91 +1,91 @@
 {
-  "generated_at": "2026-05-18 06:22:01",
+  "generated_at": "2026-05-18 08:14:51",
   "source": "backfill_missing_days",
   "before_last_date": "2026-04-24",
   "after_last_date": "2026-05-18",
-  "rows": 4820939,
+  "rows": 4820837,
   "stock_count": 1971,
   "unique_dates": 2823,
   "filled_days": [
     {
       "date": "2026-04-27",
+      "rows": 1941,
+      "symbols": 1941
+    },
+    {
+      "date": "2026-04-28",
+      "rows": 1944,
+      "symbols": 1944
+    },
+    {
+      "date": "2026-04-29",
+      "rows": 1946,
+      "symbols": 1946
+    },
+    {
+      "date": "2026-04-30",
+      "rows": 1942,
+      "symbols": 1942
+    },
+    {
+      "date": "2026-05-01",
+      "rows": 872,
+      "symbols": 872
+    },
+    {
+      "date": "2026-05-04",
+      "rows": 1946,
+      "symbols": 1946
+    },
+    {
+      "date": "2026-05-05",
+      "rows": 1944,
+      "symbols": 1944
+    },
+    {
+      "date": "2026-05-06",
       "rows": 1947,
       "symbols": 1947
     },
     {
-      "date": "2026-04-28",
-      "rows": 1950,
-      "symbols": 1950
-    },
-    {
-      "date": "2026-04-29",
-      "rows": 1952,
-      "symbols": 1952
-    },
-    {
-      "date": "2026-04-30",
-      "rows": 1952,
-      "symbols": 1952
-    },
-    {
-      "date": "2026-05-01",
-      "rows": 878,
-      "symbols": 878
-    },
-    {
-      "date": "2026-05-04",
-      "rows": 1952,
-      "symbols": 1952
-    },
-    {
-      "date": "2026-05-05",
-      "rows": 1952,
-      "symbols": 1952
-    },
-    {
-      "date": "2026-05-06",
-      "rows": 1953,
-      "symbols": 1953
-    },
-    {
       "date": "2026-05-07",
-      "rows": 1954,
-      "symbols": 1954
+      "rows": 1948,
+      "symbols": 1948
     },
     {
       "date": "2026-05-08",
-      "rows": 1953,
-      "symbols": 1953
+      "rows": 1947,
+      "symbols": 1947
     },
     {
       "date": "2026-05-11",
-      "rows": 1955,
-      "symbols": 1955
+      "rows": 1949,
+      "symbols": 1949
     },
     {
       "date": "2026-05-12",
-      "rows": 1954,
-      "symbols": 1954
+      "rows": 1948,
+      "symbols": 1948
     },
     {
       "date": "2026-05-13",
-      "rows": 1952,
-      "symbols": 1952
+      "rows": 1946,
+      "symbols": 1946
     },
     {
       "date": "2026-05-14",
-      "rows": 1954,
-      "symbols": 1954
+      "rows": 1948,
+      "symbols": 1948
     },
     {
       "date": "2026-05-15",
-      "rows": 1953,
-      "symbols": 1953
+      "rows": 1947,
+      "symbols": 1947
     },
     {
       "date": "2026-05-18",
-      "rows": 1955,
-      "symbols": 1955
+      "rows": 1949,
+      "symbols": 1949
     }
   ],
   "skipped_days": [

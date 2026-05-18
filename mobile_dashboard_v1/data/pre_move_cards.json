@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-18 06:31:27",
+  "generated_at": "2026-05-18 08:24:42",
   "count": 30,
   "cards": [
     {
@@ -60,6 +60,19 @@
       "label": "小倉試單",
       "score": 86.0,
       "close": 26.85,
+      "price_tier": "50以下",
+      "target_weight": 0.01,
+      "suggested_amount": 10000,
+      "setup_type": "主力佈局完成",
+      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 接近突破 | 結構尚可",
+      "color": "green"
+    },
+    {
+      "stock_id": "2897",
+      "action": "BUY",
+      "label": "小倉試單",
+      "score": 86.0,
+      "close": 9.95,
       "price_tier": "50以下",
       "target_weight": 0.01,
       "suggested_amount": 10000,
@@ -146,6 +159,19 @@
       "color": "green"
     },
     {
+      "stock_id": "1220",
+      "action": "TEST",
+      "label": "佈局試單",
+      "score": 72.0,
+      "close": 12.0,
+      "price_tier": "50以下",
+      "target_weight": 0.005,
+      "suggested_amount": 5000,
+      "setup_type": "佈局高機率",
+      "signal_tags": "波動壓縮 | 安靜吸籌 | 洗盤收回 | 均線收斂 | 結構尚可",
+      "color": "yellow"
+    },
+    {
       "stock_id": "1234",
       "action": "TEST",
       "label": "佈局試單",
@@ -224,11 +250,24 @@
       "color": "yellow"
     },
     {
-      "stock_id": "2897",
+      "stock_id": "2910",
       "action": "TEST",
       "label": "佈局試單",
       "score": 72.0,
-      "close": 9.95,
+      "close": 21.4,
+      "price_tier": "50以下",
+      "target_weight": 0.005,
+      "suggested_amount": 5000,
+      "setup_type": "佈局高機率",
+      "signal_tags": "波動壓縮 | 安靜吸籌 | 洗盤收回 | 均線收斂 | 結構尚可",
+      "color": "yellow"
+    },
+    {
+      "stock_id": "3373",
+      "action": "TEST",
+      "label": "佈局試單",
+      "score": 72.0,
+      "close": 17.1,
       "price_tier": "50以下",
       "target_weight": 0.005,
       "suggested_amount": 5000,
@@ -247,6 +286,45 @@
       "suggested_amount": 5000,
       "setup_type": "佈局高機率",
       "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 放量吸收 | 結構尚可",
+      "color": "yellow"
+    },
+    {
+      "stock_id": "4198",
+      "action": "TEST",
+      "label": "佈局試單",
+      "score": 72.0,
+      "close": 39.3,
+      "price_tier": "50以下",
+      "target_weight": 0.005,
+      "suggested_amount": 5000,
+      "setup_type": "佈局高機率",
+      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可",
+      "color": "yellow"
+    },
+    {
+      "stock_id": "4419",
+      "action": "TEST",
+      "label": "佈局試單",
+      "score": 72.0,
+      "close": 45.15,
+      "price_tier": "50以下",
+      "target_weight": 0.005,
+      "suggested_amount": 5000,
+      "setup_type": "佈局高機率",
+      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可",
+      "color": "yellow"
+    },
+    {
+      "stock_id": "4767",
+      "action": "TEST",
+      "label": "佈局試單",
+      "score": 72.0,
+      "close": 26.05,
+      "price_tier": "50以下",
+      "target_weight": 0.005,
+      "suggested_amount": 5000,
+      "setup_type": "佈局高機率",
+      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可",
       "color": "yellow"
     },
     {
@@ -276,6 +354,32 @@
       "color": "yellow"
     },
     {
+      "stock_id": "6217",
+      "action": "TEST",
+      "label": "佈局試單",
+      "score": 72.0,
+      "close": 294.5,
+      "price_tier": "100-500",
+      "target_weight": 0.005,
+      "suggested_amount": 5000,
+      "setup_type": "佈局高機率",
+      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可",
+      "color": "yellow"
+    },
+    {
+      "stock_id": "6720",
+      "action": "TEST",
+      "label": "佈局試單",
+      "score": 72.0,
+      "close": 157.5,
+      "price_tier": "100-500",
+      "target_weight": 0.005,
+      "suggested_amount": 5000,
+      "setup_type": "佈局高機率",
+      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可",
+      "color": "yellow"
+    },
+    {
       "stock_id": "9917",
       "action": "TEST",
       "label": "佈局試單",
@@ -286,110 +390,6 @@
       "suggested_amount": 5000,
       "setup_type": "佈局高機率",
       "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可",
-      "color": "yellow"
-    },
-    {
-      "stock_id": "9926",
-      "action": "TEST",
-      "label": "佈局試單",
-      "score": 72.0,
-      "close": 49.1,
-      "price_tier": "50以下",
-      "target_weight": 0.005,
-      "suggested_amount": 5000,
-      "setup_type": "佈局高機率",
-      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可",
-      "color": "yellow"
-    },
-    {
-      "stock_id": "9937",
-      "action": "TEST",
-      "label": "佈局試單",
-      "score": 72.0,
-      "close": 56.2,
-      "price_tier": "50-100",
-      "target_weight": 0.005,
-      "suggested_amount": 5000,
-      "setup_type": "佈局高機率",
-      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可",
-      "color": "yellow"
-    },
-    {
-      "stock_id": "9946",
-      "action": "TEST",
-      "label": "佈局試單",
-      "score": 72.0,
-      "close": 16.8,
-      "price_tier": "50以下",
-      "target_weight": 0.005,
-      "suggested_amount": 5000,
-      "setup_type": "佈局高機率",
-      "signal_tags": "波動壓縮 | 安靜吸籌 | 均線收斂 | 接近突破 | 結構尚可",
-      "color": "yellow"
-    },
-    {
-      "stock_id": "6598",
-      "action": "TEST",
-      "label": "佈局試單",
-      "score": 70.0,
-      "close": 24.5,
-      "price_tier": "50以下",
-      "target_weight": 0.005,
-      "suggested_amount": 5000,
-      "setup_type": "佈局高機率",
-      "signal_tags": "波動壓縮 | 安靜吸籌 | 放量吸收 | 接近突破 | 結構尚可",
-      "color": "yellow"
-    },
-    {
-      "stock_id": "1231",
-      "action": "TEST",
-      "label": "佈局試單",
-      "score": 68.0,
-      "close": 86.0,
-      "price_tier": "50-100",
-      "target_weight": 0.005,
-      "suggested_amount": 5000,
-      "setup_type": "佈局高機率",
-      "signal_tags": "波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破 | 結構尚可",
-      "color": "yellow"
-    },
-    {
-      "stock_id": "1468",
-      "action": "TEST",
-      "label": "佈局試單",
-      "score": 68.0,
-      "close": 12.0,
-      "price_tier": "50以下",
-      "target_weight": 0.005,
-      "suggested_amount": 5000,
-      "setup_type": "佈局高機率",
-      "signal_tags": "波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破 | 結構尚可",
-      "color": "yellow"
-    },
-    {
-      "stock_id": "1527",
-      "action": "TEST",
-      "label": "佈局試單",
-      "score": 68.0,
-      "close": 32.25,
-      "price_tier": "50以下",
-      "target_weight": 0.005,
-      "suggested_amount": 5000,
-      "setup_type": "佈局高機率",
-      "signal_tags": "波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破 | 結構尚可",
-      "color": "yellow"
-    },
-    {
-      "stock_id": "1558",
-      "action": "TEST",
-      "label": "佈局試單",
-      "score": 68.0,
-      "close": 90.3,
-      "price_tier": "50-100",
-      "target_weight": 0.005,
-      "suggested_amount": 5000,
-      "setup_type": "佈局高機率",
-      "signal_tags": "波動壓縮 | 洗盤收回 | 均線收斂 | 接近突破 | 結構尚可",
       "color": "yellow"
     }
   ]
