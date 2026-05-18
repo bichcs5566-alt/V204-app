@@ -3421,117 +3421,60 @@ def apply_v401_early_stage_anti_chase_filter():
     print("v401 early-stage anti-chase filter done")
 
 
-if __name__ == "__main__":
-    main_v266577_structure_weight_continuation_patch()
-    apply_v311_csv_final_lock()
+
+
+# ===== v402 TRUE UPSTREAM ANTI-CHASE REBUILD =====
+def apply_v402_true_upstream_anti_chase_rebuild():
+    import pandas as pd
+    import numpy as np
+    import json
+    from pathlib import Path
+    from datetime import datetime
     try:
-        apply_v315_ignition_evolution_outputs()
-    except Exception as e:
-        print("v315 panel output skipped:", repr(e))
-
-    write_v317_panel_files_hard_guarantee()
-    apply_v319_core_lifecycle_marker_to_outputs()
-
-    # ===== v320 FINAL PANEL NON-EMPTY + READABLE SOURCE GUARD =====
-    # 目的：
-    # - 不讓 ignition/evolution 空檔造成 workflow fail。
-    # - 不用未定義的 ign/evo 變數。
-    # - 最後一關把 source 轉成人看得懂的文字。
-    try:
-        import pandas as pd
-
-        def _read_panel_safe(path):
+        bases = [ROOT, DATA_DIR]
+    except Exception:
+        bases = [Path('.'), Path('mobile_dashboard_v1/data')]
+    def _read_first(name):
+        for b in bases:
+            p = b / name
             try:
-                if path.exists() and path.stat().st_size > 0:
-                    return pd.read_csv(path, encoding="utf-8-sig")
+                if p.exists() and p.stat().st_size > 0:
+                    return pd.read_csv(p, encoding='utf-8-sig')
             except Exception:
                 try:
-                    return pd.read_csv(path, encoding="utf-8")
+                    return pd.read_csv(p, encoding='utf-8')
                 except Exception:
                     pass
+        return pd.DataFrame()
+    def _write_all(df, name):
+        for b in bases:
+            try:
+                b.mkdir(parents=True, exist_ok=True)
+                df.to_csv(b / name, index=False, encoding='utf-8-sig')
+            except Exception as e:
+                print('v402 write skip', name, repr(e))
+    def _sid_series(df):
+        col = 'stock_id' if 'stock_id' in df.columns else ('code' if 'code' in df.columns else None)
+        if col:
+            s = df[col].astype(str)
+            return s.str.extract(r'(\d{4})', expand=False).fillna(s.str[:4])
+        return pd.Series('', index=df.index, dtype='object')
+    def _txt(df, col, default=''):
+        if col in df.columns:
+            return df[col].astype('object').where(df[col].notna(), default).astype(str).replace('nan','')
+        return pd.Series(default, index=df.index, dtype='object')
+    def _history_metrics():
+        try:
+            hist = load_feature()
+        except Exception:
+            hist = pd.DataFrame()
+        if hist.empty:
+            for n in ['price_panel_daily.csv','feature_panel.csv','features.csv']:
+                hist = _read_first(n)
+                if not hist.empty:
+                    break
+        if hist.empty:
+            print('v402 no history; use existing output columns only')
             return pd.DataFrame()
-
-        seed = pd.DataFrame()
-        for p in [
-            ROOT / "trade_plan.csv",
-            DATA_DIR / "trade_plan.csv",
-            ROOT / "candidates.csv",
-            DATA_DIR / "candidates.csv",
-        ]:
-            df = _read_panel_safe(p)
-            if not df.empty:
-                seed = df.copy()
-                break
-
-        def _ensure_panel(name, strategy_type, fallback_action):
-            root_p = ROOT / name
-            data_p = DATA_DIR / name
-
-            panel = _read_panel_safe(root_p)
-            if panel.empty:
-                panel = _read_panel_safe(data_p)
-
-            if panel.empty and not seed.empty:
-                panel = seed.head(10).copy()
-
-            if panel.empty:
-                return panel
-
-            if "action" not in panel.columns:
-                panel["action"] = fallback_action
-            else:
-                panel["action"] = panel["action"].fillna("").replace("", fallback_action)
-
-            if "final_action" not in panel.columns:
-                panel["final_action"] = panel["action"]
-
-            if "strategy_type" not in panel.columns:
-                panel["strategy_type"] = strategy_type
-            else:
-                panel["strategy_type"] = strategy_type
-
-            if "bucket" not in panel.columns:
-                panel["bucket"] = strategy_type
-            else:
-                panel["bucket"] = strategy_type
-
-            if "strategy_layer" not in panel.columns:
-                panel["strategy_layer"] = strategy_type
-
-            if "source" not in panel.columns:
-                panel["source"] = "策略進場"
-            else:
-                panel["source"] = "策略進場"
-
-            if "strategy_name" not in panel.columns:
-                panel["strategy_name"] = strategy_type
-
-            if "entry_type" not in panel.columns:
-                panel["entry_type"] = "起漲觀察" if strategy_type == "IGNITION" else "趨勢確認升級"
-
-            for base in [ROOT, DATA_DIR]:
-                base.mkdir(parents=True, exist_ok=True)
-                panel.to_csv(base / name, index=False, encoding="utf-8-sig")
-
-            print("v320 final panel guard:", name, "rows=", len(panel))
-            return panel
-
-        ign_final = _ensure_panel("ignition_candidates.csv", "IGNITION", "TEST")
-        evo_final = _ensure_panel("strategy_evolution.csv", "EVOLUTION", "WATCH")
-
-        if ign_final.empty:
-            raise RuntimeError("v320 ignition_candidates.csv still empty")
-        if evo_final.empty:
-            raise RuntimeError("v320 strategy_evolution.csv still empty")
-
-    except Exception as e:
-        print("v320 final panel guard failed:", repr(e))
-        raise
-
-
-
-if __name__ == "__main__":
-    try:
-        apply_v401_early_stage_anti_chase_filter()
-    except Exception as e:
-        print("v401 anti-chase filter skipped:", repr(e))
+        sid_col = 'stock_id' if 'stock_id' in hist.columns else ('code' if 'code' in hist.columns else None)
+        close_col = next((c for
