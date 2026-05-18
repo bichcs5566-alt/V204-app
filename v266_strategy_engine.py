@@ -1,3 +1,10 @@
+# ===== v50 SHELL + v40 STRATEGY RESTORE =====
+# Base shell: v266_strategy_engine 50.py
+# Strategy / lifecycle / five-list tail restored from: v266_strategy_engine 40.py
+# 保留 50 在 v319 前的既有資料、持倉、macro、欄位補強。
+# 從 v319 開始完全改回 40，移除 50 後段 v327/v328/v329/v335 對五大清單與 FINAL 的干預。
+# ============================================================
+
 import re
 """
 v266_strategy_engine.py
@@ -3353,3 +3360,4 @@ if __name__ == "__main__":
     except Exception as e:
         print("v320 final panel guard failed:", repr(e))
         raise
+
