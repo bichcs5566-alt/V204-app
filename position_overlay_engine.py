@@ -1,11 +1,12 @@
-# ===== POSITION OVERLAY v38 FIX =====
-# 修正目的：
-# - 配合 v266_strategy_engine 38 的波段/生命周期邏輯
-# - 修正張數/股數換算
-# - 損益異常防呆
-# - MA5 降權重，MA20 作為主結構
-# - 籌碼改成輔助，不單獨觸發停利/出場
-# - 移除過度情緒化提示，改成量化結構提示
+# ===== POSITION OVERLAY FINAL FIX =====
+# 一次定位修正：
+# - 修 coalesce_after_merge 欄位污染
+# - avg_price 永遠取持倉成本
+# - close / ma5 / ma20 永遠取 price/feature 標準欄位
+# - 清掉 close_x/close_y/avg_price_x/avg_price_y 副欄位
+# - pnl 用標準 avg_price / close 重算
+# - MA20 為主結構，MA5 只做短線提醒
+# - 不動主策略、不動 yml、不動 UI
 # ============================================================
 
 # -*- coding: utf-8 -*-
@@ -60,7 +61,7 @@ import pandas as pd
 DATA_DIR = Path("mobile_dashboard_v1/data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-VERSION = "position_overlay_v38_fix"
+VERSION = "position_overlay_final_fix"
 
 OUT_COLS = [
     "stock_id",
@@ -686,53 +687,103 @@ def load_chip() -> tuple[pd.DataFrame, str]:
 
 def coalesce_after_merge(df: pd.DataFrame) -> pd.DataFrame:
     """
-    v266.33C：merge 後欄位合併鎖定。
-    解決 manual_positions / 舊持倉檔本身有 close/ma5/ma20 空欄位，
-    merge price 後變成 close_x/close_y、ma5_x/ma5_y，導致程式讀到空白欄位。
+    FINAL FIX:
+    merge 後欄位統一，避免 close_x / close_y / avg_price_x / avg_price_y 污染。
     """
+    if df is None or df.empty:
+        return df
+
     out = df.copy()
 
-    def pick_numeric(base: str):
-        candidates = [f"{base}_y", base, f"{base}_x"]
-        existing = [c for c in candidates if c in out.columns]
-        if not existing:
-            out[base] = ""
-            return
+    def _first_num(cols, default=0.0):
+        s = pd.Series([float("nan")] * len(out), index=out.index, dtype="float64")
+        for c in cols:
+            if c in out.columns:
+                v = pd.to_numeric(out[c], errors="coerce").replace([float("inf"), float("-inf")], float("nan"))
+                s = s.where(s.notna(), v)
+        return s.fillna(default)
 
-        s = out[existing[0]]
-        for c in existing[1:]:
-            s_num = pd.to_numeric(s, errors="coerce")
-            c_num = pd.to_numeric(out[c], errors="coerce")
-            s = s.where(s_num.notna(), out[c].where(c_num.notna(), s))
-        out[base] = s
+    def _first_text(cols, default=""):
+        s = pd.Series([None] * len(out), index=out.index, dtype="object")
+        for c in cols:
+            if c in out.columns:
+                v = out[c].astype("object").where(out[c].notna(), None)
+                s = s.where(s.notna(), v)
+        return s.fillna(default).astype(str).replace("nan", "")
 
-    def pick_text(base: str):
-        candidates = [base, f"{base}_x", f"{base}_y"]
-        existing = [c for c in candidates if c in out.columns]
-        if not existing:
-            out[base] = ""
-            return
+    if "stock_id" not in out.columns:
+        out["stock_id"] = _first_text(["stock_id_x", "stock_id_y", "code", "symbol", "股票代號", "證券代號"])
+    else:
+        out["stock_id"] = normalize_sid_series(out["stock_id"])
 
-        s = out[existing[0]].astype(str)
-        for c in existing[1:]:
-            alt = out[c].astype(str)
-            bad = s.str.strip().isin(["", "nan", "None", "null", "--"])
-            s = s.where(~bad, alt)
-        out[base] = s
+    if "stock_name" not in out.columns:
+        out["stock_name"] = _first_text(["stock_name_x", "stock_name_y", "name", "股票名稱", "證券名稱"])
+    else:
+        out["stock_name"] = out["stock_name"].astype("object").where(out["stock_name"].notna(), "").astype(str)
 
-    for base in ["close", "ma5", "ma20", "chip_score"]:
-        pick_numeric(base)
+    # 成本永遠以持倉檔為主
+    out["avg_price"] = _first_num([
+        "avg_price", "avg_price_x", "average_price", "avg_cost", "cost", "成本", "均價"
+    ], 0.0)
 
-    for base in ["chip_label", "chip_reason", "stock_name"]:
-        pick_text(base)
+    # 張數/股數防呆
+    shares = _first_num(["shares", "shares_x", "股數", "quantity", "qty"], float("nan"))
+    lots = _first_num(["lots", "lots_x", "張數", "lot"], float("nan"))
+    use_lots = lots.notna() & (lots > 0)
+    fixed_shares = shares.copy()
+    fixed_shares = fixed_shares.where(~(shares.notna() & (shares > 0) & (shares <= 50)), shares * 1000)
+    fixed_shares = fixed_shares.where(~use_lots, lots * 1000).fillna(0)
+    out["shares"] = fixed_shares
+    out["lots"] = lots.where(lots.notna() & (lots > 0), out["shares"] / 1000).fillna(0)
 
+    # 現價與均線以 price/feature merge 後的標準欄位為主
+    out["close"] = _first_num([
+        "close_y", "Close_y", "price_y", "last_price_y", "ref_price_y",
+        "close", "Close", "price", "last_price", "ref_price", "收盤價", "參考價",
+        "close_x", "Close_x", "price_x", "last_price_x", "ref_price_x",
+    ], 0.0)
+
+    out["ma5"] = _first_num([
+        "ma5_y", "MA5_y", "sma5_y",
+        "ma5", "MA5", "sma5",
+        "ma5_x", "MA5_x", "sma5_x",
+    ], 0.0)
+
+    out["ma10"] = _first_num([
+        "ma10_y", "MA10_y", "sma10_y",
+        "ma10", "MA10", "sma10",
+        "ma10_x", "MA10_x", "sma10_x",
+    ], 0.0)
+
+    out["ma20"] = _first_num([
+        "ma20_y", "MA20_y", "sma20_y",
+        "ma20", "MA20", "sma20",
+        "ma20_x", "MA20_x", "sma20_x",
+    ], 0.0)
+
+    out["chip_score"] = _first_num(["chip_score_y", "chip_score", "chip_score_x", "籌碼集中度"], 50.0)
+    out["chip_label"] = _first_text(["chip_label_y", "chip_label", "chip_label_x"], "")
+    out["chip_reason"] = _first_text(["chip_reason_y", "chip_reason", "chip_reason_x"], "")
+
+    # 價格防呆標記
+    out["data_guard_note"] = ""
+    close = pd.to_numeric(out["close"], errors="coerce").fillna(0)
+    ma20 = pd.to_numeric(out["ma20"], errors="coerce").replace(0, float("nan"))
+    bad_price = (close <= 0) | ((ma20.notna()) & ((close / ma20) > 8))
+    out.loc[bad_price, "data_guard_note"] = "價格/均線欄位可能錯接"
+
+    # 清掉副欄位，避免後續又吃錯
+    protected = {
+        "stock_id", "stock_name", "avg_price", "shares", "lots",
+        "close", "ma5", "ma10", "ma20",
+        "chip_score", "chip_label", "chip_reason", "data_guard_note"
+    }
     drop_cols = []
-    protected = {"close", "ma5", "ma20", "chip_score", "chip_label", "chip_reason", "stock_name"}
-    for c in out.columns:
+    for c in list(out.columns):
         if c.endswith("_x") or c.endswith("_y"):
-            if c[:-2] in protected:
+            b = c[:-2]
+            if b in protected:
                 drop_cols.append(c)
-
     if drop_cols:
         out = out.drop(columns=drop_cols, errors="ignore")
 
@@ -741,11 +792,9 @@ def coalesce_after_merge(df: pd.DataFrame) -> pd.DataFrame:
 
 def decide_position(row: dict) -> tuple[str, str, str, str, str, float | None]:
     """
-    v38-position-fix:
-    讓持倉診斷回到波段/生命周期邏輯。
-    - MA20 是主結構，MA5 只做短線提醒。
-    - 籌碼只做輔助，不單獨觸發停利/出場。
-    - 損益異常時回傳資料檢查，避免 330% 這種錯誤提示。
+    FINAL FIX:
+    pnl 只用標準 avg_price / close 重算。
+    MA20 是主結構，MA5 只做短線提醒。
     """
     avg = to_num(row.get("avg_price"))
     close = to_num(row.get("close"))
@@ -758,157 +807,48 @@ def decide_position(row: dict) -> tuple[str, str, str, str, str, float | None]:
         pnl = (close - avg) / avg * 100
 
     if close <= 0:
-        return (
-            "🟡 觀察",
-            "NO_PRICE",
-            "沒有最新價格資料，暫不判斷停利、停損與均線位置。",
-            "先確認價格資料是否更新，再決定是否處理。",
-            "價格資料不足，暫不做停利判斷。",
-            pnl,
-        )
+        return ("🟡 觀察", "NO_PRICE", "沒有最新價格資料，暫不判斷停利、停損與均線位置。", "先確認價格資料是否更新。", "價格資料不足，暫不做停利判斷。", pnl)
 
     if avg <= 0:
-        return (
-            "🟡 觀察",
-            "NO_COST",
-            "沒有成本均價，無法計算損益。",
-            "請先同步持倉均價。",
-            "成本資料不足，暫不做停利判斷。",
-            pnl,
-        )
+        return ("🟡 觀察", "NO_COST", "沒有成本均價，無法計算損益。", "請先同步持倉均價。", "成本資料不足，暫不做停利判斷。", pnl)
 
-    # 資料異常防呆：例如成本/收盤來源錯接造成 330%。
     if pnl is not None and abs(pnl) >= 120:
-        return (
-            "🟡 觀察",
-            "PNL_DATA_CHECK",
-            f"損益 {pnl:.2f}% 超出一般持倉判斷範圍，可能是均價或價格欄位錯接。",
-            "先檢查均價、現價與張數欄位；確認資料後再判斷停利或停損。",
-            "資料異常時不做停利判斷。",
-            pnl,
-        )
+        return ("🟡 觀察", "PNL_DATA_CHECK", f"損益 {pnl:.2f}% 超出一般持倉判斷範圍，可能是均價或價格欄位錯接。", "先檢查均價、現價與張數欄位；確認資料後再判斷。", "資料異常時不做停利判斷。", pnl)
 
     below_ma20 = ma20 > 0 and close < ma20
     below_ma5 = ma5 > 0 and close < ma5
     chip_weak = chip_score < 25
     chip_mid_weak = chip_score < 40
 
-    # 停損：以成本與 MA20 主結構為核心。
     if pnl is not None and pnl <= -8:
         if below_ma20:
-            return (
-                "🔴 出場",
-                "STOP_LOSS_MA20",
-                f"虧損 {pnl:.2f}% 且跌破 MA20，主結構轉弱。",
-                "優先控風險，可分批或直接出場。",
-                "目前不是停利情境，而是停損風控。",
-                pnl,
-            )
-        return (
-            "🟠 減碼觀察",
-            "LOSS_WATCH",
-            f"虧損 {pnl:.2f}%，但尚未確認跌破 MA20 主結構。",
-            "先降低風險，不建議加碼；若跌破 MA20 再提高出場優先級。",
-            "虧損區先保守，等待結構確認。",
-            pnl,
-        )
+            return ("🔴 出場", "STOP_LOSS_MA20", f"虧損 {pnl:.2f}% 且跌破 MA20，主結構轉弱。", "優先控風險，可分批或直接出場。", "目前是停損風控。", pnl)
+        return ("🟠 減碼觀察", "LOSS_WATCH", f"虧損 {pnl:.2f}%，但尚未跌破 MA20 主結構。", "先降低風險，不建議加碼；跌破 MA20 再提高出場優先級。", "虧損區先保守，等待結構確認。", pnl)
 
-    # 高獲利：不因 MA5 單獨轉弱就恐慌，需 MA20 或籌碼極弱才提高動作。
     if pnl is not None and pnl >= 20:
         if below_ma20:
-            return (
-                "🟠 停利觀察",
-                "TAKE_PROFIT_MA20_BREAK",
-                f"獲利 {pnl:.2f}% 且跌破 MA20，主結構轉弱。",
-                "建議分批停利，保留部分部位觀察是否站回 MA20。",
-                "主結構轉弱才執行停利，不因單日震盪全數出場。",
-                pnl,
-            )
+            return ("🟠 停利觀察", "TAKE_PROFIT_MA20_BREAK", f"獲利 {pnl:.2f}% 且跌破 MA20，主結構轉弱。", "建議分批停利，保留部分部位觀察是否站回 MA20。", "主結構轉弱才執行停利。", pnl)
         if below_ma5 or chip_mid_weak:
-            return (
-                "🟡 觀察",
-                "PROFIT_MA5_OR_CHIP_WATCH",
-                f"獲利 {pnl:.2f}%，但短線或籌碼出現降溫。",
-                "不建議追高加碼；續抱觀察 MA20，不跌破主結構先不急著出場。",
-                "短線轉弱先觀察，跌破 MA20 再分批停利。",
-                pnl,
-            )
-        return (
-            "🟢 抱住",
-            "PROFIT_STRUCTURE_HOLD",
-            f"獲利 {pnl:.2f}%，且 MA20 主結構未破壞。",
-            "續抱，以 MA20 作為主防守線，MA5 只做短線提醒。",
-            "趨勢未壞，續抱觀察。",
-            pnl,
-        )
+            return ("🟡 觀察", "PROFIT_MA5_OR_CHIP_WATCH", f"獲利 {pnl:.2f}%，但短線或籌碼出現降溫。", "不建議追高加碼；續抱觀察 MA20。", "MA5 只做短線提醒，主線仍看 MA20。", pnl)
+        return ("🟢 抱住", "PROFIT_STRUCTURE_HOLD", f"獲利 {pnl:.2f}%，且 MA20 主結構未破壞。", "續抱，以 MA20 作為主防守線。", "趨勢未壞，續抱觀察。", pnl)
 
     if pnl is not None and pnl >= 10:
         if below_ma20:
-            return (
-                "🟠 停利觀察",
-                "PROFIT_MA20_WEAK",
-                f"已有獲利 {pnl:.2f}%，但跌破 MA20。",
-                "可分批停利或降低部位，等待重新站回 MA20。",
-                "主結構轉弱，保護既有獲利。",
-                pnl,
-            )
+            return ("🟠 停利觀察", "PROFIT_MA20_WEAK", f"已有獲利 {pnl:.2f}%，但跌破 MA20。", "可分批停利或降低部位，等待重新站回 MA20。", "主結構轉弱，保護既有獲利。", pnl)
         if below_ma5 or chip_weak:
-            return (
-                "🟡 觀察",
-                "PROFIT_SHORT_WATCH",
-                f"已有獲利 {pnl:.2f}%，短線降溫但主結構未破。",
-                "先觀察，不建議追高加碼；跌破 MA20 再處理。",
-                "短線先觀察，主線看 MA20。",
-                pnl,
-            )
-        return (
-            "🟢 抱住",
-            "PROFIT_HOLD",
-            f"已有獲利 {pnl:.2f}%，主結構仍正常。",
-            "續抱觀察，以 MA20 作為主要防守。",
-            "獲利區續抱，避免過早賣飛。",
-            pnl,
-        )
+            return ("🟡 觀察", "PROFIT_SHORT_WATCH", f"已有獲利 {pnl:.2f}%，短線降溫但主結構未破。", "先觀察，不建議追高加碼；跌破 MA20 再處理。", "短線先觀察，主線看 MA20。", pnl)
+        return ("🟢 抱住", "PROFIT_HOLD", f"已有獲利 {pnl:.2f}%，主結構仍正常。", "續抱觀察，以 MA20 作為主要防守。", "獲利區續抱，避免過早賣飛。", pnl)
 
-    # 中線結構判斷：MA20 優先，MA5 只提醒。
     if below_ma20:
-        return (
-            "🟡 觀察",
-            "BELOW_MA20",
-            "跌破 MA20，中線結構開始轉弱。",
-            "先觀察或減碼；若無法站回 MA20，再提高風控。",
-            "MA20 是主防守線，跌破後不加碼。",
-            pnl,
-        )
+        return ("🟡 觀察", "BELOW_MA20", "跌破 MA20，中線結構開始轉弱。", "先觀察或減碼；若無法站回 MA20，再提高風控。", "MA20 是主防守線，跌破後不加碼。", pnl)
 
     if below_ma5:
-        return (
-            "🟡 觀察",
-            "BELOW_MA5_ONLY",
-            "跌破 MA5，短線動能降溫，但 MA20 主結構尚未破壞。",
-            "短線先觀察，不建議追高加碼；不因 MA5 單獨跌破就出場。",
-            "MA5 只做短線提醒，主線仍看 MA20。",
-            pnl,
-        )
+        return ("🟡 觀察", "BELOW_MA5_ONLY", "跌破 MA5，短線動能降溫，但 MA20 主結構尚未破壞。", "短線先觀察，不建議追高加碼；不因 MA5 單獨跌破就出場。", "MA5 只做短線提醒，主線仍看 MA20。", pnl)
 
     if chip_weak:
-        return (
-            "🟡 觀察",
-            "CHIP_WEAK_ONLY",
-            "籌碼偏弱，但價格主結構尚未破壞。",
-            "不建議加碼；需搭配 MA20 跌破才提高風控。",
-            "籌碼只作輔助，不單獨作為出場依據。",
-            pnl,
-        )
+        return ("🟡 觀察", "CHIP_WEAK_ONLY", "籌碼偏弱，但價格主結構尚未破壞。", "不建議加碼；需搭配 MA20 跌破才提高風控。", "籌碼只作輔助，不單獨作為出場依據。", pnl)
 
-    return (
-        "🟢 抱住",
-        "STRUCTURE_HOLD",
-        "尚未出現明確出場訊號，MA20 主結構仍維持。",
-        "以續抱觀察為主，跌破 MA20 再調整部位。",
-        "尚未達明確停利或停損條件。",
-        pnl,
-    )
+    return ("🟢 抱住", "STRUCTURE_HOLD", "尚未出現明確出場訊號，MA20 主結構仍維持。", "以續抱觀察為主，跌破 MA20 再調整部位。", "尚未達明確停利或停損條件。", pnl)
 
 
 def build_overlay() -> pd.DataFrame:
@@ -963,7 +903,7 @@ def build_overlay() -> pd.DataFrame:
             "stock_id": str(row.get("stock_id", "")),
             "stock_name": str(row.get("stock_name", "")),
             "position_action": action,
-            "position_reason": reason,
+            "position_reason": (str(row.get("data_guard_note", "")).strip() + "｜" + reason).strip("｜") if str(row.get("data_guard_note", "")).strip() else reason,
             "position_hint": hint,
             "take_profit_hint": take_profit,
             "chip_hint": chip_hint_from_score(chip_score),
