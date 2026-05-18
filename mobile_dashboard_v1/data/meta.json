@@ -1,21 +1,21 @@
 ﻿{
-  "generated_at": "2026-05-18 13:56:09",
+  "generated_at": "2026-05-18 14:36:23",
   "source": "v266_57_source_safe_string",
   "signal_date": "2026-05-18",
   "trade_date": "2026-05-19",
   "data_state": "fresh",
   "market_regime": "RANGE",
   "regime_info": {
-    "pct_above_ma20": 0.3593,
-    "pct_above_ma60": 0.4737,
-    "pct_mom20_pos": 0.3844,
-    "pct_strong": 0.1156,
-    "median_mom20": -0.0205,
+    "pct_above_ma20": 0.3677,
+    "pct_above_ma60": 0.4531,
+    "pct_mom20_pos": 0.3661,
+    "pct_strong": 0.1282,
+    "median_mom20": -0.0272,
     "regime_score": 1
   },
-  "trade_plan_count": 78,
+  "trade_plan_count": 61,
   "buy_count": 0,
-  "test_count": 59,
+  "test_count": 61,
   "watch_count": 0,
   "dual_strategy": {
     "CORE": "早期卡位 / 1000張以上小倉",
@@ -29,10 +29,10 @@
   "core_logic": "CORE 不新增清單；寫入 strategy_layer / strategy_bucket / lifecycle_stage 作特殊標記",
   "version": "v266.57",
   "latest_date": "2026-05-18",
-  "updated_at": "2026-05-18 13:58:35",
+  "updated_at": "2026-05-18 14:38:53",
   "date_lock_source": "feature_panel_daily.csv",
   "date_state": "locked_from_latest_feature",
-  "last_update": "2026-05-18 13:57:32",
+  "last_update": "2026-05-18 14:37:48",
   "timezone": "Asia/Taipei",
   "time_source": "github_actions_taipei"
 }
