@@ -1,14 +1,3 @@
-# ===== v266 SAFE40 LIFECYCLE BASE =====
-# Base: v266_strategy_engine 40.py
-# Purpose:
-# - 保留原始起漲前 / 潛伏 / 逐步升級邏輯
-# - 保留五大清單原本節奏
-# - 不導入 v42 的「分數直升核心」
-# - 不導入強制核心標記
-# - 不導入 priority pool / v333 / v334 / v335
-# - 不註解、不封鎖原始 lifecycle
-# ============================================================
-
 import re
 """
 v266_strategy_engine.py
@@ -3258,49 +3247,6 @@ def apply_v319_core_lifecycle_marker_to_outputs():
                 pass
 
 
-
-
-def _safe40_remove_empty_lifecycle_outputs():
-    """
-    SAFE40_EMPTY_LIFECYCLE_ALLOWED
-    v40 原始策略允許 IGNITION / EVOLUTION / FINAL 空名單。
-    後期 workflow guard 會把「檔案存在但 0 rows」視為錯誤。
-    所以這裡只在主程式跑完後移除 0-row lifecycle panel 檔案。
-    不改選股、不補票、不重排、不強制產生名單。
-    """
-    try:
-        from pathlib import Path
-        import pandas as pd
-
-        targets = [
-            "ignition_candidates.csv",
-            "strategy_evolution.csv",
-            "strategy_evolution_ab.csv",
-            "final_operation_pool.csv",
-        ]
-
-        bases = [
-            Path("."),
-            Path("mobile_dashboard_v1/data"),
-            Path("data"),
-        ]
-
-        for base_dir in bases:
-            for name in targets:
-                p = base_dir / name
-                if not p.exists():
-                    continue
-                try:
-                    df = pd.read_csv(p)
-                    if len(df) == 0:
-                        p.unlink()
-                        print(f"SAFE40: removed empty lifecycle output: {p}")
-                except Exception as e:
-                    print(f"SAFE40: skip empty lifecycle cleanup for {p}: {e}")
-    except Exception as e:
-        print("SAFE40 empty lifecycle cleanup failed:", repr(e))
-
-
 if __name__ == "__main__":
     main_v266577_structure_weight_continuation_patch()
     apply_v311_csv_final_lock()
@@ -3408,7 +3354,3 @@ if __name__ == "__main__":
         print("v320 final panel guard failed:", repr(e))
         raise
 
-
-
-if __name__ == "__main__":
-    _safe40_remove_empty_lifecycle_outputs()
