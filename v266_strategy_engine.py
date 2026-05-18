@@ -1,8 +1,15 @@
-# ===== v50 SHELL + v40 STRATEGY RESTORE =====
-# Base shell: v266_strategy_engine 50.py
-# Strategy / lifecycle / five-list tail restored from: v266_strategy_engine 40.py
-# 保留 50 在 v319 前的既有資料、持倉、macro、欄位補強。
-# 從 v319 開始完全改回 40，移除 50 後段 v327/v328/v329/v335 對五大清單與 FINAL 的干預。
+# ===== v42 BASE + v40 LIFECYCLE RESTORE =====
+# Base: v266_strategy_engine 42.py
+# Restore from v40:
+# - apply_v319_core_lifecycle_marker_to_outputs()
+# - __main__ execution tail
+#
+# 目的：
+# - 保留 42 檔案基底
+# - 策略/升級/五大清單節奏回到 40
+# - 移除 42 的 score-direct-core 行為
+# - 移除強制 strategy_type = CORE 行為
+# - 不補票、不硬塞 FINAL、不改 UI、不動 yml
 # ============================================================
 
 import re
