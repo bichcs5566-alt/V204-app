@@ -553,10 +553,10 @@ def alpha_engine(x):
     high_liq = d["liquidity_level"].eq("HIGH")
     mid_or_high = d["liquidity_level"].isin(["MEDIUM", "HIGH"])
 
-    # v266.40 lifecycle guard：ALPHA 只把流動性當安全門檻，不讓 turnover/liquidity 主導排序。
-    d["entry_score"] += high_liq.astype(int) * 8
-    d["entry_score"] += (d["volume"] >= 3000).astype(int) * 4
-    d["entry_score"] += (d["turnover"] >= 80_000_000).astype(int) * 4
+    # 流動性是 ALPHA 的第一門檻
+    d["entry_score"] += high_liq.astype(int) * 20
+    d["entry_score"] += (d["volume"] >= 3000).astype(int) * 10
+    d["entry_score"] += (d["turnover"] >= 80_000_000).astype(int) * 10
 
     # 強勢延續
     d["entry_score"] += (d["mom5"] > 0.015).astype(int) * 8
@@ -577,34 +577,26 @@ def alpha_engine(x):
     d["entry_score"] += (d["volume_ratio"] >= 1.25).astype(int) * 8
     d["entry_score"] += d["volume_ratio"].between(1.25, 6.0).astype(int) * 6
 
-    # 避免過熱：40 版補 lifecycle guard，不追離 MA20 太遠 / 5日急噴 / 爆量加速。
-    dist_ma20_alpha = (d["close"] / d["ma20"].replace(0, np.nan) - 1).replace([np.inf, -np.inf], np.nan).fillna(0)
+    # 避免過熱
     d["entry_score"] -= (d["mom20"] > 0.55).astype(int) * 12
-    d["entry_score"] -= (d["mom5"] > 0.18).astype(int) * 12
-    d["entry_score"] -= (dist_ma20_alpha > 0.20).astype(int) * 14
-    d["entry_score"] -= (d["volume_ratio"] > 5.5).astype(int) * 12
+    d["entry_score"] -= (d["volume_ratio"] > 8.0).astype(int) * 10
     d["entry_score"] -= (~mid_or_high).astype(int) * 30
 
     buy = (
-        (d["entry_score"] >= 64)
+        (d["entry_score"] >= 70)
         & high_liq
         & (d["close"] > d["ma20"])
         & (d["ma20"] > d["ma60"])
         & (d["mom10"] > 0.03)
-        & (d["volume_ratio"] >= 1.15)
-        & (dist_ma20_alpha <= 0.18)
-        & (d["mom5"] <= 0.16)
-        & (d["volume_ratio"] <= 5.5)
+        & (d["volume_ratio"] >= 1.25)
     )
 
     test = (
-        (d["entry_score"] >= 54)
+        (d["entry_score"] >= 58)
         & ~buy
         & mid_or_high
         & (d["close"] > d["ma20"])
         & (d["mom5"] > 0)
-        & (dist_ma20_alpha <= 0.22)
-        & (d["volume_ratio"] <= 6.0)
     )
 
     watch = (d["entry_score"] >= 46) & ~buy & ~test
@@ -1186,7 +1178,7 @@ def write_v318_ignition_evolution_real_split(pool=None, plan=None):
         ign["operation_advice_zh"] = "不自動買進；只作防假突破觀察。"
         ign["reason"] = "v316 起漲訊號：由 TEST/WATCH 候選中挑出。"
         ign["system_note"] = "IGNITION：提示面板，不直接改主清單。"
-        ign["source"] = "策略進場"
+        ign["source"] = "v318_ignition_evolution_real_split"
 
     for c in ign_cols:
         if c not in ign.columns:
@@ -1222,7 +1214,7 @@ def write_v318_ignition_evolution_real_split(pool=None, plan=None):
         evo["execution_flag"] = evo["section_top_opportunity"]
         evo["reason"] = "v316 策略進化：追蹤可升級標的。"
         evo["system_note"] = "EVOLUTION：提示面板，不自動加碼。"
-        evo["source"] = "策略進場"
+        evo["source"] = "v318_ignition_evolution_real_split"
 
     for c in evo_cols:
         if c not in evo.columns:
@@ -2616,7 +2608,7 @@ def apply_v315_ignition_evolution_outputs():
         ign["operation_advice_zh"] = "不自動買進；若隔日延續強勢才考慮小量試單。"
         ign["reason"] = "v315 起漲訊號：從 TEST/WATCH 中挑選量價、均線、突破較完整者。"
         ign["system_note"] = "IGNITION：只做防假突破觀察，不自動丟入買進。"
-        ign["source"] = "策略進場"
+        ign["source"] = "v318_ignition_evolution_real_split"
 
     ignition_cols = [
         "stock_id", "stock_name", "industry", "action", "final_action", "strategy_type", "bucket",
@@ -2679,7 +2671,7 @@ def apply_v315_ignition_evolution_outputs():
         evo["execution_flag"] = evo["section_top_opportunity"]
         evo["reason"] = "v315 策略進化：追蹤可由觀察升級到試單、或由試單升級到核心的標的。"
         evo["system_note"] = "EVOLUTION：升級提示，不自動加碼；需等隔日延續與風控確認。"
-        evo["source"] = "策略進場"
+        evo["source"] = "v318_ignition_evolution_real_split"
 
     evolution_cols = [
         "stock_id", "stock_name", "industry", "action", "final_action", "strategy_type", "bucket",
@@ -2916,7 +2908,7 @@ def write_v317_panel_files_hard_guarantee():
             ign["operation_advice_zh"] = "不自動買進；只作防假突破觀察。"
             ign["reason"] = "v318 IGNITION：起漲前夕 / 收斂後點火 / 假突破低。"
             ign["system_note"] = "IGNITION：早期雷達，不等於主力倉位。"
-            ign["source"] = "策略進場"
+            ign["source"] = "v318_ignition_evolution_real_split"
 
         ign_cols = [
             "stock_id","stock_name","industry","action","final_action","strategy_type","bucket",
@@ -3009,7 +3001,7 @@ def write_v317_panel_files_hard_guarantee():
             evo["execution_flag"] = evo["section_top_opportunity"]
             evo["reason"] = "v318 EVOLUTION：趨勢確認 / 續強升級 / 不再複製 IGNITION。"
             evo["system_note"] = "EVOLUTION：強勢確認層，後續可銜接 CORE，但不自動加碼。"
-            evo["source"] = "策略進場"
+            evo["source"] = "v318_ignition_evolution_real_split"
 
         evo_cols = [
             "stock_id","stock_name","industry","action","final_action","strategy_type","bucket",
@@ -3054,413 +3046,6 @@ def write_v317_panel_files_hard_guarantee():
             except Exception:
                 pass
 
-
-# ===== v319 CORE LIFECYCLE MARKER =====
-# 目的：
-# - 不新增 CORE 清單，不動 UI。
-# - 只在既有卡片欄位顯示「🟣 CORE｜核心主升」。
-# - 讓 CORE 成為 EVOLUTION 之上的生命週期層，而不是單純 engine 標籤。
-def apply_v319_core_lifecycle_marker_to_outputs():
-    import pandas as pd
-    import numpy as np
-    import json
-    from pathlib import Path
-
-    def _read_csv_safe(path):
-        try:
-            if path.exists() and path.stat().st_size > 0:
-                return pd.read_csv(path, encoding="utf-8-sig")
-        except Exception:
-            try:
-                return pd.read_csv(path, encoding="utf-8")
-            except Exception:
-                return pd.DataFrame()
-        return pd.DataFrame()
-
-    def _num(df, col, default=0.0):
-        if col in df.columns:
-            return pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
-        return pd.Series(default, index=df.index, dtype="float64")
-
-    def _txt(df, col, default=""):
-        if col in df.columns:
-            return df[col].astype(str).replace("nan", "").fillna(default)
-        return pd.Series(default, index=df.index, dtype="object")
-
-    def _first_num(df, cols, default=0.0):
-        out = pd.Series(np.nan, index=df.index, dtype="float64")
-        for c in cols:
-            if c in df.columns:
-                v = pd.to_numeric(df[c], errors="coerce").replace([np.inf, -np.inf], np.nan)
-                out = out.where(out.notna(), v)
-        return out.fillna(default)
-
-    def _mark(df):
-        if df is None or df.empty or "stock_id" not in df.columns:
-            return df
-
-        d = df.copy()
-        d["stock_id"] = d["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False).fillna(d["stock_id"].astype(str).str[:4])
-
-        action = _txt(d, "v311_locked_action")
-        action = action.where(action.str.len() > 0, _txt(d, "action")).str.upper()
-
-        industry = _txt(d, "industry")
-        sid = _txt(d, "stock_id")
-        finance = sid.str.startswith(("28", "58")) | industry.str.contains("金融|保險|金控|銀行|證券", na=False)
-
-        close = _first_num(d, ["close", "ref_price", "price"], 0)
-        ma5 = _first_num(d, ["ma5", "MA5"], close)
-        ma10 = _first_num(d, ["ma10", "MA10"], close)
-        ma20 = _first_num(d, ["ma20", "MA20"], close)
-        ma60 = _first_num(d, ["ma60", "MA60"], close)
-
-        mom5 = _first_num(d, ["mom5", "return_5d"], 0)
-        mom10 = _first_num(d, ["mom10", "return_10d"], 0)
-        mom20 = _first_num(d, ["mom20", "return_20d"], 0)
-
-        vol_ratio = _first_num(d, ["volume_ratio", "vol_ratio"], 1)
-        attack = _first_num(d, ["attack_score_v312", "attack_score_v310", "attack_score_v309", "entry_score", "score"], 0)
-        final_sort = _first_num(d, ["final_sort_score_v312", "final_sort_score_v310", "final_sort_score_v309", "score", "entry_score"], 0)
-        main_force = _first_num(d, ["main_force_score_v300", "main_force_score"], 0)
-        chip = _first_num(d, ["chip_score"], 0)
-        liq = _first_num(d, ["liquidity_score"], 0)
-        hard_block = _first_num(d, ["hard_block_v313"], 0)
-        hard_reject = _first_num(d, ["hard_reject_v313", "hard_reject_v312", "hard_reject_v310"], 0)
-
-        # CORE 條件：不追求最多，只標出真正可做主升核心追蹤的標的。
-        close_safe = close.replace(0, np.nan)
-        ma20_safe = ma20.replace(0, np.nan)
-        ma60_safe = ma60.replace(0, np.nan)
-
-        trend_core = (
-            (close >= ma20 * 1.015) &
-            (ma5 >= ma10 * 1.003) &
-            (ma10 >= ma20 * 1.003) &
-            (ma20 >= ma60 * 0.995)
-        )
-
-        momentum_core = (
-            (mom5 > 0.008) &
-            (mom10 > 0.018) &
-            (mom20 > 0.025)
-        )
-
-        capital_core = (
-            (main_force >= 60) |
-            (chip >= 60) |
-            (liq >= 82)
-        )
-
-        risk_ok = (
-            (~finance) &
-            (hard_block < 1) &
-            (hard_reject < 1) &
-            ((close / ma20_safe - 1).replace([np.inf, -np.inf], 0).fillna(0) < 0.38)
-        )
-
-        core_score = (
-            trend_core.astype(int) * 30 +
-            momentum_core.astype(int) * 25 +
-            capital_core.astype(int) * 20 +
-            (vol_ratio.between(0.85, 4.50)).astype(int) * 10 +
-            risk_ok.astype(int) * 10 +
-            (attack / 10).clip(0, 12) +
-            (final_sort / 20).clip(0, 8)
-        ).round(2)
-
-        # 只從 TEST / WATCH / panel 候選中標 CORE，不把 BLOCK 拉上來。
-        candidate_ok = action.isin(["TEST", "WATCH"]) | _txt(d, "strategy_type").str.upper().isin(["IGNITION", "EVOLUTION"])
-        core_mask = candidate_ok & risk_ok & (core_score >= 74) & trend_core & (momentum_core | capital_core)
-
-        # 保險：若當天太少，從高分趨勢股補到 3 檔，但不超過 15 檔。
-        if int(core_mask.sum()) < 3:
-            fallback = candidate_ok & risk_ok & trend_core & (core_score >= 60)
-            top_idx = d.loc[fallback].assign(_core_score_v319=core_score.loc[fallback]).sort_values(
-                ["_core_score_v319", "stock_id"], ascending=[False, True]
-            ).head(3).index
-            core_mask.loc[top_idx] = True
-
-        # 控制 CORE 數量，避免變成另一張大清單。
-        core_idx = d.loc[core_mask].assign(_core_score_v319=core_score.loc[core_mask]).sort_values(
-            ["_core_score_v319", "stock_id"], ascending=[False, True]
-        ).head(15).index
-        final_core = d.index.isin(core_idx)
-
-        if "lifecycle_stage" not in d.columns:
-            d["lifecycle_stage"] = ""
-        # v319.1：輸出欄位統一寫成字串，避免 pandas StringDtype 欄位被塞數值 Series 後炸掉。
-        d["core_score_v319"] = core_score.round(2).astype(str)
-        d["is_core_v319"] = "0"
-        d.loc[final_core, "is_core_v319"] = "1"
-
-        # 不新增 UI，只把既有卡片欄位變成特殊文字標記。
-        for c in ["strategy_layer", "strategy_bucket", "strategy_type", "bucket", "entry_type", "system_note", "reason"]:
-            if c not in d.columns:
-                d[c] = ""
-
-        d.loc[final_core, "lifecycle_stage"] = "🟣 CORE"
-        d.loc[final_core, "strategy_layer"] = "🟣 CORE｜核心主升"
-        d.loc[final_core, "strategy_bucket"] = "🟣 CORE｜主升核心"
-        d.loc[final_core, "bucket"] = "CORE"
-        d.loc[final_core, "entry_type"] = "核心主升追蹤"
-        d.loc[final_core, "system_note"] = "🟣 CORE：由 EVOLUTION/TEST 升級的核心主升追蹤，不是一般試單。"
-        d.loc[final_core, "reason"] = "v319 CORE：趨勢、動能、籌碼/流動性達核心條件，標記為核心主升。"
-
-        # 保留原 action，不把 UI 主分類打亂；strategy_type 只在非 IGNITION/EVOLUTION panel 中標 CORE。
-        current_stype = _txt(d, "strategy_type").str.upper()
-        d.loc[final_core & (~current_stype.isin(["IGNITION", "EVOLUTION"])), "strategy_type"] = "CORE"
-
-        # v320：不要把卡片「來源」顯示成版本技術字串。
-        # UI 會把 source 欄位直接顯示在卡片裡，所以這裡統一轉成使用者看得懂的中文。
-        src_text = _txt(d, "source")
-        technical_source = src_text.str.contains(r"^v\d+|core_lifecycle|fallback|real_split|panel_file", case=False, regex=True, na=False)
-        d.loc[technical_source, "source"] = "策略進場"
-        d.loc[final_core, "source"] = "核心主升"
-        return d
-
-    target_names = [
-        "trade_plan.csv",
-        "candidates.csv",
-        "core_candidates.csv",
-        "alpha_candidates.csv",
-        "ignition_candidates.csv",
-        "strategy_evolution.csv",
-    ]
-
-    for name in target_names:
-        # 優先讀 root，沒有再讀 data
-        df = _read_csv_safe(ROOT / name)
-        if df.empty:
-            df = _read_csv_safe(DATA_DIR / name)
-        if df.empty:
-            continue
-
-        out = _mark(df)
-        for base in [ROOT, DATA_DIR]:
-            base.mkdir(parents=True, exist_ok=True)
-            out.to_csv(base / name, index=False, encoding="utf-8-sig")
-        print("v319 core lifecycle marked:", name, "rows=", len(out), "core=", int(pd.to_numeric(out.get("is_core_v319", 0), errors="coerce").fillna(0).sum()))
-
-    for base in [ROOT, DATA_DIR]:
-        p = base / "meta.json"
-        if p.exists():
-            try:
-                data = json.loads(p.read_text(encoding="utf-8-sig"))
-                data["source"] = "v320_core_readable_source"
-                data["core_marker"] = "🟣 CORE｜核心主升"
-                data["core_logic"] = "CORE 不新增清單；寫入 strategy_layer / strategy_bucket / lifecycle_stage 作特殊標記"
-                p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
-            except Exception:
-                pass
-
-
-
-
-# ===== v266.40 LIFECYCLE GUARD PATCH =====
-# 母體：v266_strategy_engine 40.py
-# 目的：保護「起漲前監控＋生命周期升級」純度。
-# 只做三件事：
-# 1) 過熱降級：離 MA20 太遠、5日急噴、爆量過熱，不讓 EVOLUTION/TEST/FINAL 追高。
-# 2) FINAL 微放寬：只從未過熱 TEST/CORE 候選產出 final_action_plan，不硬湊、不覆蓋 trade_plan。
-# 3) ALPHA 降權：前面 alpha_engine 已把 liquidity/turnover 從主導因子改成安全門檻。
-def apply_v26640_lifecycle_guard_patch():
-    import json
-    import numpy as np
-    import pandas as pd
-
-    def _read_csv_safe(path):
-        try:
-            if path.exists() and path.stat().st_size > 0:
-                return pd.read_csv(path, encoding="utf-8-sig")
-        except Exception:
-            try:
-                return pd.read_csv(path, encoding="utf-8")
-            except Exception:
-                return pd.DataFrame()
-        return pd.DataFrame()
-
-    def _write_both_safe(df, name):
-        for base in [ROOT, DATA_DIR]:
-            base.mkdir(parents=True, exist_ok=True)
-            df.to_csv(base / name, index=False, encoding="utf-8-sig")
-
-    def _num(df, names, default=0.0):
-        if isinstance(names, str):
-            names = [names]
-        out = pd.Series(np.nan, index=df.index, dtype="float64")
-        for c in names:
-            if c in df.columns:
-                v = pd.to_numeric(df[c], errors="coerce").replace([np.inf, -np.inf], np.nan)
-                out = out.where(out.notna(), v)
-        return out.fillna(default)
-
-    def _txt(df, col, default=""):
-        if col in df.columns:
-            return df[col].astype(str).replace("nan", "").fillna(default)
-        return pd.Series(default, index=df.index, dtype="object")
-
-    def _attach_heat(df):
-        if df is None or df.empty:
-            return df
-        d = df.copy()
-        close = _num(d, ["close", "ref_price", "price"], 0)
-        ma20 = _num(d, ["ma20", "MA20"], np.nan).replace(0, np.nan)
-        mom5 = _num(d, ["mom5", "return_5d"], 0)
-        mom20 = _num(d, ["mom20", "return_20d"], 0)
-        volr = _num(d, ["volume_ratio", "vol_ratio"], 1)
-        dist = (close / ma20 - 1).replace([np.inf, -np.inf], np.nan).fillna(0)
-
-        heat_score = (
-            (dist >= 0.18).astype(int) * 2 +
-            (dist >= 0.24).astype(int) * 2 +
-            (mom5 >= 0.12).astype(int) * 2 +
-            (mom5 >= 0.18).astype(int) * 2 +
-            (mom20 >= 0.32).astype(int) * 1 +
-            (mom20 >= 0.45).astype(int) * 2 +
-            (volr >= 4.5).astype(int) * 1 +
-            (volr >= 5.5).astype(int) * 2
-        )
-        severe = (heat_score >= 5) | (dist >= 0.24) | (mom5 >= 0.20) | (volr >= 7.0) | ((mom20 >= 0.45) & (dist >= 0.16))
-        mild = (heat_score >= 3) | (dist >= 0.18) | (mom5 >= 0.12) | (volr >= 5.5)
-
-        d["dist_ma20_v26640"] = dist.round(4)
-        d["overheat_score_v26640"] = heat_score.astype(int)
-        d["overheat_level_v26640"] = np.where(severe, "SEVERE", np.where(mild, "MILD", "OK"))
-
-        flags = []
-        for i in d.index:
-            f = []
-            if bool(dist.loc[i] >= 0.18): f.append("離MA20偏遠")
-            if bool(mom5.loc[i] >= 0.12): f.append("5日急漲")
-            if bool(mom20.loc[i] >= 0.32): f.append("20日偏熱")
-            if bool(volr.loc[i] >= 5.5): f.append("爆量過熱")
-            flags.append("、".join(f))
-        d["overheat_flags_v26640"] = flags
-        return d
-
-    def _downgrade(df, name):
-        if df is None or df.empty or "stock_id" not in df.columns:
-            return df, 0
-        d = _attach_heat(df)
-        stype = _txt(d, "strategy_type").str.upper()
-        bucket = _txt(d, "bucket").str.upper()
-        action = _txt(d, "action").str.upper()
-        heat = _txt(d, "overheat_level_v26640").str.upper()
-
-        is_evo = stype.eq("EVOLUTION") | bucket.eq("EVOLUTION") | name.eq("strategy_evolution.csv")
-        severe = heat.eq("SEVERE")
-        mild = heat.eq("MILD")
-        downgraded = (is_evo & (severe | mild)) | (action.isin(["TEST", "BUY"]) & severe)
-
-        for c in ["system_note", "reason", "note"]:
-            if c not in d.columns:
-                d[c] = ""
-
-        if downgraded.any():
-            d.loc[downgraded, "action"] = "WATCH"
-            d.loc[downgraded, "final_action"] = "WATCH"
-            d.loc[downgraded, "v311_locked_action"] = "WATCH"
-            d.loc[downgraded, "action_label"] = "觀察"
-            d.loc[downgraded, "action_sub"] = "v266.40：過熱降級，等待回測MA20或量縮整理"
-            d.loc[downgraded, "strategy_layer"] = "預備觀察"
-            d.loc[downgraded, "strategy_bucket"] = "過熱降級觀察"
-            d.loc[downgraded, "target_weight"] = 0
-            d.loc[downgraded, "suggest_amount"] = 0
-            d.loc[downgraded, "suggest_shares"] = 0
-            d.loc[downgraded, "lifecycle_guard_action_v26640"] = "DOWNGRADE_TO_WATCH"
-            d.loc[downgraded, "system_note"] = d.loc[downgraded, "system_note"].astype(str) + "｜v266.40過熱降級：" + d.loc[downgraded, "overheat_flags_v26640"].astype(str)
-            d.loc[downgraded, "reason"] = d.loc[downgraded, "reason"].astype(str) + "｜v266.40過熱降級：" + d.loc[downgraded, "overheat_flags_v26640"].astype(str)
-        if "lifecycle_guard_action_v26640" not in d.columns:
-            d["lifecycle_guard_action_v26640"] = "KEEP"
-        d.loc[d["lifecycle_guard_action_v26640"].astype(str).eq(""), "lifecycle_guard_action_v26640"] = "KEEP"
-        return d, int(downgraded.sum())
-
-    targets = [
-        "core_candidates.csv", "alpha_candidates.csv", "candidates.csv", "trade_plan.csv",
-        "ignition_candidates.csv", "strategy_evolution.csv", "selection_debug.csv",
-        "pre_move_candidates.csv", "top_opportunities.csv"
-    ]
-    changed = {}
-    for name in targets:
-        base_df = _read_csv_safe(ROOT / name)
-        if base_df.empty:
-            base_df = _read_csv_safe(DATA_DIR / name)
-        if base_df.empty:
-            continue
-        out, n = _downgrade(base_df, name)
-        _write_both_safe(out, name)
-        changed[name] = {"rows": int(len(out)), "downgraded": int(n)}
-
-    # FINAL 微放寬：只從 trade_plan 的 TEST / CORE 候選中挑未過熱者；不硬湊，不改 trade_plan action。
-    plan = _read_csv_safe(ROOT / "trade_plan.csv")
-    if plan.empty:
-        plan = _read_csv_safe(DATA_DIR / "trade_plan.csv")
-    final = pd.DataFrame()
-    if not plan.empty and "stock_id" in plan.columns:
-        p = _attach_heat(plan)
-        action = _txt(p, "action").str.upper()
-        stype = _txt(p, "strategy_type").str.upper()
-        heat = _txt(p, "overheat_level_v26640").str.upper()
-        score = _num(p, ["score", "final_sort_score_v310", "entry_score"], 0)
-        dist = _num(p, "dist_ma20_v26640", 0)
-        liq = _txt(p, "liquidity_level").str.upper()
-
-        eligible = (
-            action.eq("TEST") &
-            heat.eq("OK") &
-            (dist <= 0.18) &
-            (score >= 58) &
-            (stype.isin(["CORE", "ALPHA"])) &
-            (liq.isin(["MEDIUM", "HIGH", ""]))
-        )
-        # 若完全沒有 FINAL，放寬到高分且未嚴重過熱，但仍不接受 SEVERE。
-        if int(eligible.sum()) == 0:
-            eligible = action.eq("TEST") & (~heat.eq("SEVERE")) & (dist <= 0.20) & (score >= 54)
-
-        final = p.loc[eligible].copy()
-        if not final.empty:
-            final["_final_score_v26640"] = score.loc[final.index] - _num(final, "overheat_score_v26640", 0) * 4
-            final = final.sort_values(["_final_score_v26640", "stock_id"], ascending=[False, True]).head(8).copy()
-            final["action"] = "BUY"
-            final["final_action"] = "BUY"
-            final["action_label"] = "買進"
-            final["action_sub"] = "v266.40 FINAL：確認進場候選，未過熱"
-            final["strategy_type"] = "FINAL"
-            final["bucket"] = "FINAL"
-            final["strategy_layer"] = "最終操作"
-            final["strategy_bucket"] = "主升前緣"
-            final["entry_type"] = "確認後進場"
-            final["final_rank_v26640"] = range(1, len(final) + 1)
-            final["system_note"] = "v266.40 FINAL：只從未過熱 TEST 候選升級；不是強勢排行榜。"
-            final["reason"] = "v266.40 FINAL：趨勢確認、未遠離MA20、未爆量過熱。"
-            final["source"] = "v266.40 lifecycle guard"
-            if "target_weight" in final.columns:
-                final["target_weight"] = np.where(_txt(final, "engine").str.upper().eq("ALPHA"), 0.010, 0.005)
-            if "price" in final.columns and "suggest_amount" in final.columns:
-                final["suggest_amount"] = INITIAL_CAPITAL * pd.to_numeric(final.get("target_weight", 0), errors="coerce").fillna(0)
-                px = pd.to_numeric(final["price"], errors="coerce").replace(0, np.nan)
-                final["suggest_shares"] = (final["suggest_amount"] / px).replace([np.inf, -np.inf], 0).fillna(0).round(0)
-
-    _write_both_safe(final, "final_action_plan.csv")
-    changed["final_action_plan.csv"] = {"rows": int(len(final)), "downgraded": 0}
-
-    report = {
-        "version": "v266.40_lifecycle_guard",
-        "mode": "40_base_minimal_strategy_fix",
-        "changed_core_logic": False,
-        "changed_alpha_liquidity_weight": True,
-        "added_overheat_downgrade": True,
-        "final_relaxation": "micro: TEST且未過熱才升FINAL；不硬湊",
-        "files": changed,
-        "updated_at": taipei_now_str(),
-        "description": "用40當母體，只補過熱降級、FINAL微放寬、ALPHA流動性降權，保護起漲前生命周期。"
-    }
-    for base in [ROOT, DATA_DIR]:
-        base.mkdir(parents=True, exist_ok=True)
-        (base / "v26640_lifecycle_guard_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8-sig")
-    print(json.dumps(report, ensure_ascii=False, indent=2))
-
 if __name__ == "__main__":
     main_v266577_structure_weight_continuation_patch()
     apply_v311_csv_final_lock()
@@ -3468,105 +3053,4 @@ if __name__ == "__main__":
         apply_v315_ignition_evolution_outputs()
     except Exception as e:
         print("v315 panel output skipped:", repr(e))
-
     write_v317_panel_files_hard_guarantee()
-    apply_v319_core_lifecycle_marker_to_outputs()
-    apply_v26640_lifecycle_guard_patch()
-
-    # ===== v320 FINAL PANEL NON-EMPTY + READABLE SOURCE GUARD =====
-    # 目的：
-    # - 不讓 ignition/evolution 空檔造成 workflow fail。
-    # - 不用未定義的 ign/evo 變數。
-    # - 最後一關把 source 轉成人看得懂的文字。
-    try:
-        import pandas as pd
-
-        def _read_panel_safe(path):
-            try:
-                if path.exists() and path.stat().st_size > 0:
-                    return pd.read_csv(path, encoding="utf-8-sig")
-            except Exception:
-                try:
-                    return pd.read_csv(path, encoding="utf-8")
-                except Exception:
-                    pass
-            return pd.DataFrame()
-
-        seed = pd.DataFrame()
-        for p in [
-            ROOT / "trade_plan.csv",
-            DATA_DIR / "trade_plan.csv",
-            ROOT / "candidates.csv",
-            DATA_DIR / "candidates.csv",
-        ]:
-            df = _read_panel_safe(p)
-            if not df.empty:
-                seed = df.copy()
-                break
-
-        def _ensure_panel(name, strategy_type, fallback_action):
-            root_p = ROOT / name
-            data_p = DATA_DIR / name
-
-            panel = _read_panel_safe(root_p)
-            if panel.empty:
-                panel = _read_panel_safe(data_p)
-
-            if panel.empty and not seed.empty:
-                panel = seed.head(10).copy()
-
-            if panel.empty:
-                return panel
-
-            if "action" not in panel.columns:
-                panel["action"] = fallback_action
-            else:
-                panel["action"] = panel["action"].fillna("").replace("", fallback_action)
-
-            if "final_action" not in panel.columns:
-                panel["final_action"] = panel["action"]
-
-            if "strategy_type" not in panel.columns:
-                panel["strategy_type"] = strategy_type
-            else:
-                panel["strategy_type"] = strategy_type
-
-            if "bucket" not in panel.columns:
-                panel["bucket"] = strategy_type
-            else:
-                panel["bucket"] = strategy_type
-
-            if "strategy_layer" not in panel.columns:
-                panel["strategy_layer"] = strategy_type
-
-            if "source" not in panel.columns:
-                panel["source"] = "策略進場"
-            else:
-                panel["source"] = "策略進場"
-
-            if "strategy_name" not in panel.columns:
-                panel["strategy_name"] = strategy_type
-
-            if "entry_type" not in panel.columns:
-                panel["entry_type"] = "起漲觀察" if strategy_type == "IGNITION" else "趨勢確認升級"
-
-            for base in [ROOT, DATA_DIR]:
-                base.mkdir(parents=True, exist_ok=True)
-                panel.to_csv(base / name, index=False, encoding="utf-8-sig")
-
-            print("v320 final panel guard:", name, "rows=", len(panel))
-            return panel
-
-        ign_final = _ensure_panel("ignition_candidates.csv", "IGNITION", "TEST")
-        evo_final = _ensure_panel("strategy_evolution.csv", "EVOLUTION", "WATCH")
-        apply_v26640_lifecycle_guard_patch()
-
-        if ign_final.empty:
-            raise RuntimeError("v320 ignition_candidates.csv still empty")
-        if evo_final.empty:
-            raise RuntimeError("v320 strategy_evolution.csv still empty")
-
-    except Exception as e:
-        print("v320 final panel guard failed:", repr(e))
-        raise
-
