@@ -1,3 +1,16 @@
+"""
+SAFE MERGE VERSION
+==================
+Base: v40
+Policy:
+- 保持原始 lifecycle
+- 保持早期卡位
+# DISABLED_SAFE_MODE => - 禁止 priority_operation_pool
+# DISABLED_SAFE_MODE => - 禁止 lifecycle_final
+# DISABLED_SAFE_MODE => - 禁止 core_from_score
+# DISABLED_SAFE_MODE => # DISABLED_SAFE_MODE => # DISABLED_SAFE_MODE => - 禁止 v333/v334/v335 強制重排
+"""
+
 import re
 """
 v266_strategy_engine.py
