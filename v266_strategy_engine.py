@@ -3047,10 +3047,19 @@ def write_v317_panel_files_hard_guarantee():
                 pass
 
 if __name__ == "__main__":
+    # v51 lifecycle clean patch
+    # 保留主策略引擎與 v311 CSV final lock。
+    # 停用 v315 / v317-v318 panel hard guarantee，避免後段用高流動性 / momentum / 補榜邏輯覆蓋原始 lifecycle。
     main_v266577_structure_weight_continuation_patch()
     apply_v311_csv_final_lock()
-    try:
-        apply_v315_ignition_evolution_outputs()
-    except Exception as e:
-        print("v315 panel output skipped:", repr(e))
-    write_v317_panel_files_hard_guarantee()
+
+    # DISABLED: 這段會重寫 ignition_candidates.csv / strategy_evolution.csv，容易把 lifecycle 變成強勢排行榜。
+    # try:
+    #     apply_v315_ignition_evolution_outputs()
+    # except Exception as e:
+    #     print("v315 panel output skipped:", repr(e))
+
+    # DISABLED: v317 / v318 hard guarantee 會強制補 panel，污染 38/40 的原始分層。
+    # write_v317_panel_files_hard_guarantee()
+
+    print("v51 lifecycle clean mode: v315/v317-v318 panel override disabled.")
