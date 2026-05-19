@@ -4565,90 +4565,115 @@ def apply_v53_condition_bucket_boundary_lock():
     close_to_high20 = (close / high20_safe).replace([np.inf, -np.inf], np.nan).fillna(0)
     range20 = ((high20 - low20) / low20_safe).replace([np.inf, -np.inf], np.nan).fillna(0)
 
-    not_overheat = (dist_ma20 <= 0.12) & (mom5 <= 0.10) & (mom20 <= 0.28) & (vol_ratio <= 3.20)
+    # 共用風控：過熱不進高階 bucket
+    # 這裡不是追最強，而是避免接最後一棒。
+    not_overheat = (
+        (dist_ma20 <= 0.12) &
+        (mom5 <= 0.10) &
+        (mom20 <= 0.28) &
+        (vol_ratio <= 3.20)
+    )
 
+    # WATCH：長時間整理 / 潛伏區
+    # 條件重點：沒爆量、沒突破、靠近成本區、波動收斂。
     watch_cond = (
         (close > 0) &
-        (dist_ma20.between(-0.08, 0.10)) &
-        (range20 <= 0.35) &
-        (mom20.between(-0.08, 0.18)) &
-        (vol_ratio.between(0.45, 2.40))
+        (dist_ma20.between(-0.10, 0.08)) &
+        (range20 <= 0.34) &
+        (mom5.between(-0.06, 0.055)) &
+        (mom10.between(-0.08, 0.085)) &
+        (mom20.between(-0.12, 0.16)) &
+        (vol_ratio.between(0.35, 1.65))
     )
 
+    # TEST：微量增溫 / MA5 翻平 / 市場還沒注意
+    # 條件重點：剛開始有生命跡象，但不允許強突破、不允許爆量。
+    ma5_flat_or_turn = (
+        (ma5 >= ma10 * 0.955) &
+        (ma5 <= ma10 * 1.045)
+    )
+    micro_warm = (
+        mom5.between(-0.025, 0.075) &
+        mom10.between(-0.035, 0.105) &
+        vol_ratio.between(0.55, 2.05)
+    )
     test_cond = (
-        (close >= ma20 * 0.98) &
-        (ma5 >= ma10 * 0.97) &
-        (mom5.between(-0.02, 0.09)) &
-        (mom10.between(-0.02, 0.14)) &
-        (vol_ratio.between(0.70, 2.70)) &
-        (dist_ma20 <= 0.115)
+        (close >= ma20 * 0.955) &
+        (dist_ma20.between(-0.065, 0.095)) &
+        ma5_flat_or_turn &
+        micro_warm &
+        (range20 <= 0.38)
     )
 
+    # IGNITION：主力開始吸 / 開始做圖
+    # 條件重點：承接、OBV/籌碼/主力痕跡初現，還不是市場一致追價。
+    absorption_trace = (
+        (main_force >= 38) |
+        (chip >= 38) |
+        ((obv > 0) & (low_hold >= 1))
+    )
+    support_trace = (
+        (low_hold >= 1) |
+        (close >= ma10 * 0.975) |
+        (close_to_high20.between(0.80, 1.03))
+    )
     ignition_cond = (
-        (close >= ma5 * 0.99) &
-        (close >= ma20 * 1.00) &
-        (ma5 >= ma10 * 0.985) &
-        (mom5.between(0.00, 0.10)) &
-        (mom10.between(0.00, 0.16)) &
-        (vol_ratio.between(0.90, 2.90)) &
-        (close_to_high20.between(0.86, 1.04)) &
+        (close >= ma20 * 0.980) &
+        (ma5 >= ma10 * 0.965) &
+        (dist_ma20.between(-0.035, 0.105)) &
+        (mom5.between(-0.015, 0.090)) &
+        (mom10.between(-0.010, 0.135)) &
+        (vol_ratio.between(0.75, 2.45)) &
+        absorption_trace &
+        support_trace &
         not_overheat
     )
 
-    # EVOLUTION：主力慢推模型
-    # 重點不是今天最強，而是「跌不太下去、量能慢慢回來、均線慢慢打開、主力痕跡開始出現」。
+    # EVOLUTION：主力控盤慢推期
+    # 條件重點：主力已經開始控節奏、回檔有人接、量能穩定回升、均線慢慢打開；
+    # 但市場還沒全面追價，不能變成追強。
     mainforce_trace = (
         (main_force >= 42) |
         (chip >= 42) |
         ((obv > 0) & (low_hold >= 1))
     )
-
-    slow_push_structure = (
-        (close >= ma20 * 0.985) &
-        (ma5 >= ma10 * 0.975) &
-        (ma10 >= ma20 * 0.965) &
-        (dist_ma20.between(-0.025, 0.115)) &
-        (range20 <= 0.38)
+    mainforce_slow_control = (
+        (close >= ma20 * 0.990) &
+        (ma5 >= ma10 * 0.972) &
+        (ma10 >= ma20 * 0.960) &
+        (dist_ma20.between(-0.025, 0.105)) &
+        (mom5.between(-0.020, 0.085)) &
+        (mom10.between(-0.005, 0.145)) &
+        (mom20.between(0.000, 0.245)) &
+        (vol_ratio.between(0.82, 2.65)) &
+        (range20 <= 0.385)
     )
-
-    slow_push_momentum = (
-        (mom5.between(-0.025, 0.095)) &
-        (mom10.between(-0.010, 0.155)) &
-        (mom20.between(0.000, 0.265))
-    )
-
-    slow_volume_build = (
-        vol_ratio.between(0.78, 2.85)
-    )
-
-    support_absorption = (
+    pullback_absorbed = (
         (low_hold >= 1) |
-        (close >= ma10 * 0.985) |
-        (close_to_high20.between(0.82, 1.04))
+        (close >= ma10 * 0.980) |
+        (close_to_high20.between(0.82, 1.025))
     )
-
     evolution_cond = (
-        slow_push_structure &
-        slow_push_momentum &
-        slow_volume_build &
-        support_absorption &
+        mainforce_slow_control &
         mainforce_trace &
+        pullback_absorbed &
         not_overheat
     )
 
-    # FINAL：只從 EVOLUTION 中升級，必須比 EVOLUTION 更確認，但不能過熱。
-    final_cond = (
-        evolution_cond &
+    # FINAL：主力慢推後，主升確認但未過熱
+    # 條件重點：只能從 EVOLUTION 條件上再確認；不是 TEST 直接跳 FINAL。
+    final_confirm = (
         (close >= ma5 * 0.995) &
         (ma5 >= ma10 * 0.990) &
         (ma10 >= ma20 * 0.985) &
-        (vol_ratio.between(1.05, 2.80)) &
-        (mom5.between(0.00, 0.10)) &
-        (mom10.between(0.02, 0.16)) &
-        (mom20.between(0.03, 0.28)) &
+        (vol_ratio.between(1.05, 2.70)) &
+        (mom5.between(0.000, 0.095)) &
+        (mom10.between(0.020, 0.155)) &
+        (mom20.between(0.030, 0.270)) &
         ((main_force >= 55) | (chip >= 55) | ((obv > 0) & (low_hold >= 3))) &
         not_overheat
     )
+    final_cond = evolution_cond & final_confirm
 
     stage = pd.Series("WATCH", index=pool.index, dtype="object")
     stage.loc[test_cond] = "TEST"
@@ -4693,10 +4718,10 @@ def apply_v53_condition_bucket_boundary_lock():
         out["source"] = "v53_condition_bucket_boundary_lock"
         return out
 
-    test = _shape(pool.loc[stage == "TEST"], "TEST", "TEST", "TEST：結構開始轉強，可小倉試單；不得直接跳 FINAL。", 12)
-    ignition = _shape(pool.loc[stage == "IGNITION"], "IGNITION", "TEST", "IGNITION：起漲點火，接近突破且未過熱。", 10)
-    evolution = _shape(pool.loc[stage == "EVOLUTION"], "EVOLUTION", "TEST", "EVOLUTION：主力慢推，跌不太下去、量能逐步回來、均線慢慢打開，未過熱。", 10)
-    final = _shape(pool.loc[stage == "FINAL"], "FINAL", "FINAL", "FINAL：僅由 EVOLUTION 條件升級，主力確認拉升且未過熱。", 5)
+    test = _shape(pool.loc[stage == "TEST"], "TEST", "TEST", "TEST：微量增溫、MA5 翻平、市場還沒注意；不得直接跳 FINAL。", 12)
+    ignition = _shape(pool.loc[stage == "IGNITION"], "IGNITION", "TEST", "IGNITION：主力開始吸、承接出現、尚未市場一致追價。", 10)
+    evolution = _shape(pool.loc[stage == "EVOLUTION"], "EVOLUTION", "TEST", "EVOLUTION：主力控盤慢推、回檔有人接、均線慢慢打開，市場尚未全面追價。", 10)
+    final = _shape(pool.loc[stage == "FINAL"], "FINAL", "FINAL", "FINAL：僅由 EVOLUTION 條件升級，主力慢推後主升確認但未過熱。", 5)
 
     _write_both(test, "trade_plan.csv")
     _write_both(ignition, "ignition_candidates.csv")
@@ -4729,3 +4754,7 @@ if __name__ == "__main__":
 # v52 EVOLUTION overheat downgrade patch: MA20 cost-zone, mild volume, no chase.
 
 # v53 slow-push evolution model: condition bucket lock retained, no TEST to FINAL shortcut.
+
+# v53 lifecycle definition patch: WATCH consolidation, TEST micro-warm, IGNITION absorption, EVOLUTION mainforce-slow-control, FINAL confirmed-uptrend.
+
+# v53 evolution correction: EVOLUTION = mainforce slow-control phase, not market-noticing chase.
