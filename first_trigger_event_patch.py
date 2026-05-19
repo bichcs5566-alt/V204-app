@@ -224,19 +224,13 @@ def build_first_trigger(df):
     df["first_trigger_label_v26663"] = label
 
     # =========================
-    # lifecycle clean:
-    # 只補 first trigger 分數與排名，不重新排序、不改 bucket、不改 action。
-    # 原因：
-    # 這支若 sort_values 後覆蓋原檔，後段會把它當成新的 ranking pool，
-    # 造成 IGNITION / EVOLUTION 同質化。
+    # lifecycle clean rank
     # =========================
-
-    order = (
-        pd.Series(score, index=df.index)
-        .rank(method="first", ascending=False)
-        .astype(int)
+    # 不再用 first_trigger_score_v26663 重新排序整份名單。
+    # 只在「原本順序」上補 rank，避免後段 patch 把 lifecycle 變成強勢排行。
+    df["first_trigger_rank_v26663"] = (
+        np.arange(len(df)) + 1
     )
-    df["first_trigger_rank_v26663"] = order
 
     return df
 
@@ -293,3 +287,4 @@ def main():
     print("v266.63 first trigger patch done")
 
 if __name__ == "__main__":
+    main()
