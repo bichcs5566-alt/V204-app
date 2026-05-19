@@ -1185,8 +1185,74 @@ def write_v318_ignition_evolution_real_split(pool=None, plan=None):
             ign[c] = ""
     _write(ign[ign_cols].copy(), "ignition_candidates.csv")
 
-    # EVOLUTION：策略進化提示，同樣保底不空。
-    evo = df.loc[base_mask].copy()
+    # EVOLUTION：主力卡位型進化，不追強、不接刀。
+    # 核心：剛脫離整理、MA20 附近、量能溫和回升、籌碼/主力有跡象，但尚未過熱。
+    ma5 = _num(df, "ma5", 0)
+    ma10 = _num(df, "ma10", 0)
+    ma20 = _num(df, "ma20", 0)
+    ma60 = _num(df, "ma60", 0)
+    mom5 = _num(df, "mom5", 0)
+    mom10 = _num(df, "mom10", 0)
+    mom20 = _num(df, "mom20", 0)
+    vol_ratio = _num(df, "volume_ratio", 1)
+    main_force = _num(df, "main_force_score_v300", 0)
+    chip_score2 = _num(df, "chip_score", 0)
+    obv = _num(df, "obv_mom5", 0)
+    low_hold = _num(df, "low_non_down_count_5", 0)
+    ma_conv = _num(df, "ma_converge_pct", 999)
+    high20 = _num(df, "high_20", close)
+    low20 = _num(df, "low_20", close)
+
+    ma20_safe = ma20.replace(0, np.nan)
+    high20_safe = high20.replace(0, np.nan)
+    rng20 = ((high20 - low20) / low20.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
+    box_pos = ((close - low20) / (high20 - low20).replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
+    dist_ma20 = (close / ma20_safe - 1).replace([np.inf, -np.inf], 0).fillna(0)
+    close_to_high20 = (close / high20_safe).replace([np.inf, -np.inf], 0).fillna(0)
+
+    near_cost = dist_ma20.between(-0.02, 0.14)
+    ma_turn = (close >= ma20 * 0.99) & (ma5 >= ma10 * 0.995) & (ma10 >= ma20 * 0.985)
+    base_build = (rng20.between(0.045, 0.22) | (ma_conv <= 0.13)) & (box_pos >= 0.50)
+    mild_push = (mom5.between(-0.01, 0.09)) & (mom10.between(0.00, 0.16)) & (mom20.between(0.015, 0.30))
+    volume_build = vol_ratio.between(0.90, 3.60)
+    force_trace = (main_force >= 45) | (chip_score2 >= 45) | (obv > 0) | (low_hold >= 3)
+    not_overheat = (dist_ma20 <= 0.16) & (mom5 <= 0.12) & (mom20 <= 0.34) & (vol_ratio <= 4.80)
+
+    evolution_score = (
+        near_cost.astype(int) * 22 +
+        ma_turn.astype(int) * 22 +
+        base_build.astype(int) * 18 +
+        mild_push.astype(int) * 16 +
+        volume_build.astype(int) * 14 +
+        force_trace.astype(int) * 14 +
+        close_to_high20.between(0.86, 0.99).astype(int) * 8 +
+        not_overheat.astype(int) * 18 +
+        (attack / 12).clip(0, 8)
+    ).round(2)
+
+    evolution_mask = (
+        base_mask &
+        near_cost &
+        ma_turn &
+        mild_push &
+        volume_build &
+        force_trace &
+        not_overheat &
+        (evolution_score >= 70)
+    )
+
+    evo = df.loc[evolution_mask].copy()
+
+    # 保守備援：若今天沒有完整主力卡位型，只放「未過熱、接近升級」者；不再用強勢排行硬補。
+    if evo.empty:
+        evo = df.loc[
+            base_mask &
+            near_cost &
+            not_overheat &
+            (ma_turn | base_build) &
+            (force_trace | volume_build)
+        ].copy()
+
     evo_cols = [
         "stock_id","stock_name","industry","action","final_action","strategy_type","bucket",
         "strategy_name","evolution_score","entry_score","score","close","ref_price","evolution_phase",
@@ -1195,25 +1261,25 @@ def write_v318_ignition_evolution_real_split(pool=None, plan=None):
     ]
 
     if not evo.empty:
-        evo["_panel_score"] = panel_score.loc[evo.index]
-        evo = evo.sort_values(["_panel_score","stock_id"], ascending=[False, True]).head(10).copy()
+        evo["_evolution_score_mainforce"] = evolution_score.loc[evo.index]
+        evo = evo.sort_values(["_evolution_score_mainforce","stock_id"], ascending=[False, True]).head(10).copy()
         evo["action"] = "WATCH"
         evo["final_action"] = "WATCH"
         evo["strategy_type"] = "EVOLUTION"
         evo["bucket"] = "EVOLUTION"
-        evo["strategy_name"] = "EVOLUTION 策略進化訊號"
-        evo["evolution_score"] = evo["_panel_score"].round(2)
-        evo["entry_score"] = evo["_panel_score"].round(2)
-        evo["score"] = evo["_panel_score"].round(2)
+        evo["strategy_name"] = "EVOLUTION 主力卡位進化訊號"
+        evo["evolution_score"] = evo["_evolution_score_mainforce"].round(2)
+        evo["entry_score"] = evo["_evolution_score_mainforce"].round(2)
+        evo["score"] = evo["_evolution_score_mainforce"].round(2)
         evo["close"] = close.loc[evo.index].round(2)
         evo["ref_price"] = evo["close"]
-        evo["evolution_phase"] = np.where(action.loc[evo.index].eq("TEST"), "TEST→核心觀察", "WATCH→試單候選")
+        evo["evolution_phase"] = np.where(action.loc[evo.index].eq("TEST"), "TEST→主力卡位觀察", "WATCH→初升段候選")
         evo["entry_type"] = evo["evolution_phase"]
         evo["section_top_opportunity"] = [f"EVOLUTION_TOP{i}" for i in range(1, len(evo)+1)]
         evo["top_opportunity"] = [f"🧬TOP{i}" for i in range(1, len(evo)+1)]
         evo["execution_flag"] = evo["section_top_opportunity"]
-        evo["reason"] = "v316 策略進化：追蹤可升級標的。"
-        evo["system_note"] = "EVOLUTION：提示面板，不自動加碼。"
+        evo["reason"] = "EVOLUTION 主力卡位：整理後轉強、量能溫和回升、未過熱；排除追高接刀。"
+        evo["system_note"] = "EVOLUTION：初升段進化觀察，不追強、不自動加碼。"
         evo["source"] = "策略進場"
 
     for c in evo_cols:
@@ -2623,29 +2689,73 @@ def apply_v315_ignition_evolution_outputs():
             ign[c] = ""
     _write_both(ign[ignition_cols].copy(), "ignition_candidates.csv")
 
-    # EVOLUTION：策略升級提示。從 TEST 優先，其次 WATCH，挑分數最高。
+    # EVOLUTION：主力卡位型升級提示；不再用最高分追強。
+    ma5 = _num(pool, "ma5", 0)
+    ma10 = _num(pool, "ma10", 0)
+    ma20 = _num(pool, "ma20", 0)
+    mom5 = _num(pool, "mom5", 0)
+    mom10 = _num(pool, "mom10", 0)
+    mom20 = _num(pool, "mom20", 0)
+    vol_ratio = _num(pool, "volume_ratio", 1)
+    main_force = _num(pool, "main_force_score_v300", 0)
+    chip_score2 = _num(pool, "chip_score", 0)
+    obv = _num(pool, "obv_mom5", 0)
+    low_hold = _num(pool, "low_non_down_count_5", 0)
+    ma_conv = _num(pool, "ma_converge_pct", 999)
+    high20 = _num(pool, "high_20", close)
+    low20 = _num(pool, "low_20", close)
+
+    ma20_safe = ma20.replace(0, np.nan)
+    high20_safe = high20.replace(0, np.nan)
+    rng20 = ((high20 - low20) / low20.replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
+    box_pos = ((close - low20) / (high20 - low20).replace(0, np.nan)).replace([np.inf, -np.inf], 0).fillna(0)
+    dist_ma20 = (close / ma20_safe - 1).replace([np.inf, -np.inf], 0).fillna(0)
+    close_to_high20 = (close / high20_safe).replace([np.inf, -np.inf], 0).fillna(0)
+
+    near_cost = dist_ma20.between(-0.02, 0.14)
+    ma_turn = (close >= ma20 * 0.99) & (ma5 >= ma10 * 0.995) & (ma10 >= ma20 * 0.985)
+    base_build = (rng20.between(0.045, 0.22) | (ma_conv <= 0.13)) & (box_pos >= 0.50)
+    mild_push = (mom5.between(-0.01, 0.09)) & (mom10.between(0.00, 0.16)) & (mom20.between(0.015, 0.30))
+    volume_build = vol_ratio.between(0.90, 3.60)
+    force_trace = (main_force >= 45) | (chip_score2 >= 45) | (obv > 0) | (low_hold >= 3)
+    not_overheat = (dist_ma20 <= 0.16) & (mom5 <= 0.12) & (mom20 <= 0.34) & (vol_ratio <= 4.80)
+
     evolution_score = (
-        attack * 0.60 +
-        final_sort * 0.25 +
-        trend * 6 +
-        momentum * 8 +
-        breakout * 8 +
-        volume_ok * 6 +
-        chip * 6 -
-        hard_block * 90 -
-        finance.astype(int) * 100
+        near_cost.astype(int) * 22 +
+        ma_turn.astype(int) * 22 +
+        base_build.astype(int) * 18 +
+        mild_push.astype(int) * 16 +
+        volume_build.astype(int) * 14 +
+        force_trace.astype(int) * 14 +
+        close_to_high20.between(0.86, 0.99).astype(int) * 8 +
+        not_overheat.astype(int) * 18 +
+        (attack / 12).clip(0, 8)
     ).round(2)
 
     evo_mask = (
         action.isin(["TEST", "WATCH"]) &
         (hard_block < 1) &
         (~finance) &
-        (evolution_score >= 45)
+        near_cost &
+        ma_turn &
+        mild_push &
+        volume_build &
+        force_trace &
+        not_overheat &
+        (evolution_score >= 70)
     )
 
     evo = pool.loc[evo_mask].copy()
     if evo.empty:
-        evo = pool.loc[action.eq("TEST") & (hard_block < 1) & (~finance)].copy()
+        evo = pool.loc[
+            action.isin(["TEST", "WATCH"]) &
+            (hard_block < 1) &
+            (~finance) &
+            near_cost &
+            not_overheat &
+            (ma_turn | base_build) &
+            (force_trace | volume_build)
+        ].copy()
 
     if not evo.empty:
         evo["_evolution_score_v315"] = evolution_score.loc[evo.index]
@@ -2654,7 +2764,7 @@ def apply_v315_ignition_evolution_outputs():
         evo["final_action"] = "WATCH"
         evo["strategy_type"] = "EVOLUTION"
         evo["bucket"] = "EVOLUTION"
-        evo["strategy_name"] = "EVOLUTION 策略進化鏈"
+        evo["strategy_name"] = "EVOLUTION 主力卡位進化訊號"
         evo["evolution_score"] = evo["_evolution_score_v315"].round(2)
         evo["score"] = evo["_evolution_score_v315"].round(2)
         evo["entry_score"] = evo["_evolution_score_v315"].round(2)
@@ -2662,15 +2772,15 @@ def apply_v315_ignition_evolution_outputs():
         evo["ref_price"] = evo["close"]
         evo["evolution_phase"] = np.where(
             action.loc[evo.index].eq("TEST"),
-            "TEST→核心觀察",
-            "WATCH→試單候選"
+            "TEST→主力卡位觀察",
+            "WATCH→初升段候選"
         )
         evo["entry_type"] = evo["evolution_phase"]
         evo["section_top_opportunity"] = [f"EVOLUTION_TOP{i}" for i in range(1, len(evo) + 1)]
         evo["top_opportunity"] = [f"🧬TOP{i}" for i in range(1, len(evo) + 1)]
         evo["execution_flag"] = evo["section_top_opportunity"]
-        evo["reason"] = "v315 策略進化：追蹤可由觀察升級到試單、或由試單升級到核心的標的。"
-        evo["system_note"] = "EVOLUTION：升級提示，不自動加碼；需等隔日延續與風控確認。"
+        evo["reason"] = "EVOLUTION 主力卡位：整理後轉強、量能溫和回升、未過熱；排除追高接刀。"
+        evo["system_note"] = "EVOLUTION：初升段進化觀察，不追強、不自動加碼。"
         evo["source"] = "策略進場"
 
     evolution_cols = [
@@ -2921,54 +3031,71 @@ def write_v317_panel_files_hard_guarantee():
             if c not in ign.columns:
                 ign[c] = ""
 
-        # EVOLUTION：趨勢確認/升級，不應和 IGNITION 完全相同。
-        strong_trend = (
-            (close >= ma5 * 0.99) &
-            (ma5 >= ma10 * 1.002) &
-            (ma10 >= ma20 * 1.002) &
-            (ma20 >= ma60 * 0.985)
+        # EVOLUTION：主力卡位型進化，不追強、不接刀。
+        # 核心：剛脫離整理、MA20 附近、量能溫和回升、籌碼/主力有跡象，但尚未過熱。
+        dist_ma20 = (close / ma20_safe - 1).replace([np.inf, -np.inf], 0).fillna(0)
+
+        near_cost = dist_ma20.between(-0.02, 0.14)
+        ma_turn = (
+            (close >= ma20 * 0.99) &
+            (ma5 >= ma10 * 0.995) &
+            (ma10 >= ma20 * 0.985) &
+            (ma20 >= ma60 * 0.970)
         )
-        momentum_confirm = (
-            (mom5 > 0.012) &
-            (mom10 > 0.025) &
-            (mom20 > 0.035)
+        base_build = (
+            rng20.between(0.045, 0.22) &
+            (box_pos >= 0.50)
         )
-        price_confirm = (
-            (close_to_high20 >= 0.94) &
-            (box_pos >= 0.70)
+        mild_push = (
+            mom5.between(-0.01, 0.09) &
+            mom10.between(0.00, 0.16) &
+            mom20.between(0.015, 0.30)
         )
-        volume_confirm = (
-            vol_ratio.between(1.15, 4.80) |
-            ((main_force >= 60) & (chip >= 55))
+        volume_build = vol_ratio.between(0.90, 3.60)
+        force_trace = (main_force >= 45) | (chip >= 45) | (obv > 0)
+        not_overheat_evo = (
+            (dist_ma20 <= 0.16) &
+            (mom5 <= 0.12) &
+            (mom20 <= 0.34) &
+            (vol_ratio <= 4.80)
         )
-        chip_confirm = (main_force >= 58) | (chip >= 60) | (obv > 0)
 
         evolution_score = (
-            strong_trend.astype(int) * 24 +
-            momentum_confirm.astype(int) * 24 +
-            price_confirm.astype(int) * 18 +
-            volume_confirm.astype(int) * 16 +
-            chip_confirm.astype(int) * 12 +
+            near_cost.astype(int) * 22 +
+            ma_turn.astype(int) * 22 +
+            base_build.astype(int) * 18 +
+            mild_push.astype(int) * 16 +
+            volume_build.astype(int) * 14 +
+            force_trace.astype(int) * 14 +
+            close_to_high20.between(0.86, 0.99).astype(int) * 8 +
+            not_overheat_evo.astype(int) * 18 +
             fake_low.astype(int) * 6 +
-            (attack / 10).clip(0, 12)
+            (attack / 12).clip(0, 8)
         ).round(2)
 
         evolution_mask = (
             base_mask &
-            (evolution_score >= 68) &
-            strong_trend &
-            (momentum_confirm | price_confirm) &
+            (evolution_score >= 72) &
+            near_cost &
+            ma_turn &
+            mild_push &
+            volume_build &
+            force_trace &
+            not_overheat_evo &
             fake_low
         )
 
         evo = pool.loc[evolution_mask].copy()
 
-        # 若當天沒有真正 EVOLUTION，用比 IGNITION 更高門檻的候選補，不直接複製 ignition 前幾名。
+        # 若今天沒有完整主力卡位型，只放「未過熱、接近升級」者；不再用強勢排行硬補。
         if evo.empty:
             evo = pool.loc[
                 base_mask &
                 fake_low &
-                ((strong_trend & (evolution_score >= 55)) | ((action == "TEST") & (attack >= 70)))
+                near_cost &
+                not_overheat_evo &
+                (ma_turn | base_build) &
+                (force_trace | volume_build)
             ].copy()
 
         if not evo.empty:
@@ -2984,23 +3111,23 @@ def write_v317_panel_files_hard_guarantee():
             evo["final_action"] = "WATCH"
             evo["strategy_type"] = "EVOLUTION"
             evo["bucket"] = "EVOLUTION"
-            evo["strategy_name"] = "EVOLUTION 策略進化訊號"
+            evo["strategy_name"] = "EVOLUTION 主力卡位進化訊號"
             evo["evolution_score"] = evo["_evolution_score_v318"].round(2)
             evo["entry_score"] = evo["_evolution_score_v318"].round(2)
             evo["score"] = evo["_evolution_score_v318"].round(2)
             evo["close"] = close.loc[evo.index].round(2)
             evo["ref_price"] = evo["close"]
             evo["evolution_phase"] = np.where(
-                strong_trend.loc[evo.index] & momentum_confirm.loc[evo.index],
-                "趨勢確認升級",
-                "續強觀察"
+                action.loc[evo.index].eq("TEST"),
+                "TEST→主力卡位觀察",
+                "WATCH→初升段候選"
             )
-            evo["entry_type"] = "策略進化觀察"
+            evo["entry_type"] = "主力卡位進化觀察"
             evo["section_top_opportunity"] = [f"EVOLUTION_TOP{i}" for i in range(1, len(evo) + 1)]
             evo["top_opportunity"] = [f"🧬TOP{i}" for i in range(1, len(evo) + 1)]
             evo["execution_flag"] = evo["section_top_opportunity"]
-            evo["reason"] = "v318 EVOLUTION：趨勢確認 / 續強升級 / 不再複製 IGNITION。"
-            evo["system_note"] = "EVOLUTION：強勢確認層，後續可銜接 CORE，但不自動加碼。"
+            evo["reason"] = "EVOLUTION 主力卡位：整理後轉強、量能溫和回升、未過熱；排除追高接刀。"
+            evo["system_note"] = "EVOLUTION：初升段進化觀察，不追強、不自動加碼。"
             evo["source"] = "策略進場"
 
         evo_cols = [
