@@ -224,10 +224,14 @@ def build_first_trigger(df):
     df["first_trigger_label_v26663"] = label
 
     # =========================
-    # lifecycle clean rank
+    # 排序
     # =========================
-    # 不再用 first_trigger_score_v26663 重新排序整份名單。
-    # 只在「原本順序」上補 rank，避免後段 patch 把 lifecycle 變成強勢排行。
+
+    df = df.sort_values(
+        "first_trigger_score_v26663",
+        ascending=False
+    )
+
     df["first_trigger_rank_v26663"] = (
         np.arange(len(df)) + 1
     )
