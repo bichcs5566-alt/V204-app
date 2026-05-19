@@ -1273,10 +1273,13 @@ jobs:
           python trigger_event_patch.py
 
       # v266.63
-      - name: Run first trigger patch
+      # lifecycle clean:
+      # first_trigger_event_patch.py 會用 first trigger ranking 重新污染 lifecycle，
+      # 造成 IGNITION / EVOLUTION 名單同質化，所以先停用。
+      - name: Skip first trigger patch for lifecycle clean
         if: always()
         run: |
-          python first_trigger_event_patch.py
+          echo "skip first_trigger_event_patch.py for lifecycle clean"
 
       - name: Run turn first rank patch
         if: always()
