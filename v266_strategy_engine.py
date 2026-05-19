@@ -4405,39 +4405,3 @@ def apply_v333_dynamic_market_risk_engine():
         macro_bias = "總經偏空"
         macro_score = "2/7"
         max_final = 2
-        test_pressure = "暫停重倉"
-        confidence = "低"
-
-    market_note = "｜".join(reasons[:8]) if reasons else "清單廣度不足，維持保守評估"
-
-    # v333.3：meta 顯示語意拆層
-    # 市場層：只講盤勢與風險分
-    # 總經層：只講總經方向、分數、信心
-    # 風控層：只講操作限制，不再混入總經文字
-    market_display_v333 = f"{market_state}｜風險分 {score}"
-    macro_display_v333 = f"{macro_bias}｜分數 {macro_score}｜{confidence}"
-    risk_display_v333 = f"{test_pressure}｜信心{confidence}"
-
-    # risk_mode_v333 保持為純操作風控欄位，避免前端風險模式重複出現「總經中性｜分數4/7」
-    risk_mode_clean_v333 = str(test_pressure or risk_mode or "試單控倉")
-
-    # market_summary_v333 改成總覽說明，不再當 risk_mode 使用
-    summary = f"市場{market_state}｜{risk_mode_clean_v333}｜信心{confidence}"
-
-    # 寫入 meta，前端若讀 meta 就會更新；v328 也會讀 max_final_slots_v333。
-    payload = {
-        "source": "v333_dynamic_market_risk_engine",
-        "market_state_v333": market_state,
-        "market_status": market_state,
-        "market_display_v333": market_display_v333,
-
-        "macro_bias_v333": macro_bias,
-        "macro_score_v333": macro_score,
-        "macro_score": macro_score,
-        "macro_display_v333": macro_display_v333,
-
-        "risk_mode_v333": risk_mode_clean_v333,
-        "risk_mode": risk_mode_clean_v333,
-        "risk_display_v333": risk_display_v333,
-
-        "market_risk_score_v333": sc
