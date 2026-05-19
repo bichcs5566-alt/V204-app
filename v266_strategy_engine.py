@@ -1210,13 +1210,13 @@ def write_v318_ignition_evolution_real_split(pool=None, plan=None):
     dist_ma20 = (close / ma20_safe - 1).replace([np.inf, -np.inf], 0).fillna(0)
     close_to_high20 = (close / high20_safe).replace([np.inf, -np.inf], 0).fillna(0)
 
-    near_cost = dist_ma20.between(-0.02, 0.14)
+    near_cost = dist_ma20.between(-0.015, 0.105)
     ma_turn = (close >= ma20 * 0.99) & (ma5 >= ma10 * 0.995) & (ma10 >= ma20 * 0.985)
     base_build = (rng20.between(0.045, 0.22) | (ma_conv <= 0.13)) & (box_pos >= 0.50)
-    mild_push = (mom5.between(-0.01, 0.09)) & (mom10.between(0.00, 0.16)) & (mom20.between(0.015, 0.30))
-    volume_build = vol_ratio.between(0.90, 3.60)
+    mild_push = (mom5.between(-0.01, 0.08)) & (mom10.between(0.00, 0.14)) & (mom20.between(0.010, 0.25))
+    volume_build = vol_ratio.between(0.85, 2.80)
     force_trace = (main_force >= 45) | (chip_score2 >= 45) | (obv > 0) | (low_hold >= 3)
-    not_overheat = (dist_ma20 <= 0.16) & (mom5 <= 0.12) & (mom20 <= 0.34) & (vol_ratio <= 4.80)
+    not_overheat = (dist_ma20 <= 0.12) & (mom5 <= 0.10) & (mom20 <= 0.28) & (vol_ratio <= 3.20)
 
     evolution_score = (
         near_cost.astype(int) * 22 +
@@ -1278,8 +1278,8 @@ def write_v318_ignition_evolution_real_split(pool=None, plan=None):
         evo["section_top_opportunity"] = [f"EVOLUTION_TOP{i}" for i in range(1, len(evo)+1)]
         evo["top_opportunity"] = [f"🧬TOP{i}" for i in range(1, len(evo)+1)]
         evo["execution_flag"] = evo["section_top_opportunity"]
-        evo["reason"] = "EVOLUTION 主力卡位：整理後轉強、量能溫和回升、未過熱；排除追高接刀。"
-        evo["system_note"] = "EVOLUTION：初升段進化觀察，不追強、不自動加碼。"
+        evo["reason"] = "EVOLUTION 主力卡位：整理後轉強、量能溫和回升、靠近 MA20 成本區；過熱降級，排除追高接刀。"
+        evo["system_note"] = "EVOLUTION：主力卡位初升段；過熱不進化，不追強、不自動加碼。"
         evo["source"] = "策略進場"
 
     for c in evo_cols:
@@ -2712,13 +2712,13 @@ def apply_v315_ignition_evolution_outputs():
     dist_ma20 = (close / ma20_safe - 1).replace([np.inf, -np.inf], 0).fillna(0)
     close_to_high20 = (close / high20_safe).replace([np.inf, -np.inf], 0).fillna(0)
 
-    near_cost = dist_ma20.between(-0.02, 0.14)
+    near_cost = dist_ma20.between(-0.015, 0.105)
     ma_turn = (close >= ma20 * 0.99) & (ma5 >= ma10 * 0.995) & (ma10 >= ma20 * 0.985)
     base_build = (rng20.between(0.045, 0.22) | (ma_conv <= 0.13)) & (box_pos >= 0.50)
-    mild_push = (mom5.between(-0.01, 0.09)) & (mom10.between(0.00, 0.16)) & (mom20.between(0.015, 0.30))
-    volume_build = vol_ratio.between(0.90, 3.60)
+    mild_push = (mom5.between(-0.01, 0.08)) & (mom10.between(0.00, 0.14)) & (mom20.between(0.010, 0.25))
+    volume_build = vol_ratio.between(0.85, 2.80)
     force_trace = (main_force >= 45) | (chip_score2 >= 45) | (obv > 0) | (low_hold >= 3)
-    not_overheat = (dist_ma20 <= 0.16) & (mom5 <= 0.12) & (mom20 <= 0.34) & (vol_ratio <= 4.80)
+    not_overheat = (dist_ma20 <= 0.12) & (mom5 <= 0.10) & (mom20 <= 0.28) & (vol_ratio <= 3.20)
 
     evolution_score = (
         near_cost.astype(int) * 22 +
@@ -2779,8 +2779,8 @@ def apply_v315_ignition_evolution_outputs():
         evo["section_top_opportunity"] = [f"EVOLUTION_TOP{i}" for i in range(1, len(evo) + 1)]
         evo["top_opportunity"] = [f"🧬TOP{i}" for i in range(1, len(evo) + 1)]
         evo["execution_flag"] = evo["section_top_opportunity"]
-        evo["reason"] = "EVOLUTION 主力卡位：整理後轉強、量能溫和回升、未過熱；排除追高接刀。"
-        evo["system_note"] = "EVOLUTION：初升段進化觀察，不追強、不自動加碼。"
+        evo["reason"] = "EVOLUTION 主力卡位：整理後轉強、量能溫和回升、靠近 MA20 成本區；過熱降級，排除追高接刀。"
+        evo["system_note"] = "EVOLUTION：主力卡位初升段；過熱不進化，不追強、不自動加碼。"
         evo["source"] = "策略進場"
 
     evolution_cols = [
@@ -3035,7 +3035,7 @@ def write_v317_panel_files_hard_guarantee():
         # 核心：剛脫離整理、MA20 附近、量能溫和回升、籌碼/主力有跡象，但尚未過熱。
         dist_ma20 = (close / ma20_safe - 1).replace([np.inf, -np.inf], 0).fillna(0)
 
-        near_cost = dist_ma20.between(-0.02, 0.14)
+        near_cost = dist_ma20.between(-0.015, 0.105)
         ma_turn = (
             (close >= ma20 * 0.99) &
             (ma5 >= ma10 * 0.995) &
@@ -3051,13 +3051,13 @@ def write_v317_panel_files_hard_guarantee():
             mom10.between(0.00, 0.16) &
             mom20.between(0.015, 0.30)
         )
-        volume_build = vol_ratio.between(0.90, 3.60)
+        volume_build = vol_ratio.between(0.85, 2.80)
         force_trace = (main_force >= 45) | (chip >= 45) | (obv > 0)
         not_overheat_evo = (
-            (dist_ma20 <= 0.16) &
-            (mom5 <= 0.12) &
-            (mom20 <= 0.34) &
-            (vol_ratio <= 4.80)
+            (dist_ma20 <= 0.12) &
+            (mom5 <= 0.10) &
+            (mom20 <= 0.28) &
+            (vol_ratio <= 3.20)
         )
 
         evolution_score = (
@@ -3126,8 +3126,8 @@ def write_v317_panel_files_hard_guarantee():
             evo["section_top_opportunity"] = [f"EVOLUTION_TOP{i}" for i in range(1, len(evo) + 1)]
             evo["top_opportunity"] = [f"🧬TOP{i}" for i in range(1, len(evo) + 1)]
             evo["execution_flag"] = evo["section_top_opportunity"]
-            evo["reason"] = "EVOLUTION 主力卡位：整理後轉強、量能溫和回升、未過熱；排除追高接刀。"
-            evo["system_note"] = "EVOLUTION：初升段進化觀察，不追強、不自動加碼。"
+            evo["reason"] = "EVOLUTION 主力卡位：整理後轉強、量能溫和回升、靠近 MA20 成本區；過熱降級，排除追高接刀。"
+            evo["system_note"] = "EVOLUTION：主力卡位初升段；過熱不進化，不追強、不自動加碼。"
             evo["source"] = "策略進場"
 
         evo_cols = [
@@ -4482,3 +4482,5 @@ if __name__ == "__main__":
     except Exception as e:
         print("v315 panel output skipped:", repr(e))
     write_v317_panel_files_hard_guarantee()
+
+# v52 EVOLUTION overheat downgrade patch: MA20 cost-zone, mild volume, no chase.
