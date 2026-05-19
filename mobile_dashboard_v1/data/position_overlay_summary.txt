@@ -1,6 +1,6 @@
 {
-  "version": "position_overlay_final_fix",
-  "updated_at": "2026-05-19 05:08:02",
+  "version": "v266.33C_ma_merge_coalesce",
+  "updated_at": "2026-05-19 05:49:10",
   "rows": 5,
   "stocks": [
     "2317",
