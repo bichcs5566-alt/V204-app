@@ -4405,3 +4405,327 @@ def apply_v333_dynamic_market_risk_engine():
         macro_bias = "總經偏空"
         macro_score = "2/7"
         max_final = 2
+        test_pressure = "暫停重倉"
+        confidence = "低"
+
+    market_note = "｜".join(reasons[:8]) if reasons else "清單廣度不足，維持保守評估"
+
+    # v333.3：meta 顯示語意拆層
+    # 市場層：只講盤勢與風險分
+    # 總經層：只講總經方向、分數、信心
+    # 風控層：只講操作限制，不再混入總經文字
+    market_display_v333 = f"{market_state}｜風險分 {score}"
+    macro_display_v333 = f"{macro_bias}｜分數 {macro_score}｜{confidence}"
+    risk_display_v333 = f"{test_pressure}｜信心{confidence}"
+
+    # risk_mode_v333 保持為純操作風控欄位，避免前端風險模式重複出現「總經中性｜分數4/7」
+    risk_mode_clean_v333 = str(test_pressure or risk_mode or "試單控倉")
+
+    # market_summary_v333 改成總覽說明，不再當 risk_mode 使用
+    summary = f"市場{market_state}｜{risk_mode_clean_v333}｜信心{confidence}"
+
+    # 寫入 meta，前端若讀 meta 就會更新；v328 也會讀 max_final_slots_v333。
+    payload = {
+        "source": "v333_dynamic_market_risk_engine",
+        "market_state_v333": market_state,
+        "market_status": market_state,
+        "market_display_v333": market_display_v333,
+
+        "macro_bias_v333": macro_bias,
+        "macro_score_v333": macro_score,
+        "macro_score": macro_score,
+        "macro_display_v333": macro_display_v333,
+
+        "risk_mode_v333": risk_mode_clean_v333,
+        "risk_mode": risk_mode_clean_v333,
+        "risk_display_v333": risk_display_v333,
+
+        "market_risk_score_v333": score,
+        "market_note_v333": market_note,
+        "market_summary_v333": summary,
+        "max_final_slots_v333": int(max_final),
+        "test_pressure_v333": test_pressure,
+        "confidence_v333": confidence,
+        "final_count_v333": int(final_n),
+        "ignition_count_v333": int(ignition_n),
+        "evolution_count_v333": int(evolution_n),
+        "watch_count_v333": int(watch_n),
+        "block_count_v333": int(block_n),
+        "updated_at_v333": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+    for base in [ROOT, DATA_DIR]:
+        base.mkdir(parents=True, exist_ok=True)
+        p = base / "meta.json"
+        data = {}
+        if p.exists():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8-sig"))
+            except Exception:
+                data = {}
+        data.update(payload)
+        p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+
+        # 額外輸出一份狀態檔，不影響舊前端；之後要接 UI 可直接讀。
+        pd.DataFrame([payload]).to_csv(base / "market_risk_status.csv", index=False, encoding="utf-8-sig")
+
+    print("v333 dynamic market risk:", market_state, macro_score, risk_mode, "score=", score, "max_final=", max_final, "reason=", market_note)
+
+# v48 lifecycle restore:
+# main tail restored to v38 clean lifecycle path.
+# v319/v320/v327/v328/v329/v333 chase/fallback/ranking override functions are kept in file but not executed.
+
+
+# ===== v53 CONDITION BUCKET BOUNDARY LOCK =====
+# 每日重新掃描市場，但五大清單必須遵守條件狀態分層。
+# FINAL 僅允許由 EVOLUTION 條件升級，不允許 TEST / WATCH / IGNITION 直接跳 FINAL。
+def apply_v53_condition_bucket_boundary_lock():
+    import pandas as pd
+    import numpy as np
+    from pathlib import Path
+    import re
+
+    ROOT_LOCAL = Path(".")
+    DATA_LOCAL = ROOT_LOCAL / "mobile_dashboard_v1" / "data"
+    DATA_LOCAL.mkdir(parents=True, exist_ok=True)
+
+    def _read_csv_any(name):
+        for p in [ROOT_LOCAL / name, DATA_LOCAL / name]:
+            if p.exists() and p.stat().st_size > 0:
+                try:
+                    return pd.read_csv(p, dtype=str, encoding="utf-8-sig")
+                except Exception:
+                    try:
+                        return pd.read_csv(p, dtype=str)
+                    except Exception:
+                        pass
+        return pd.DataFrame()
+
+    def _write_both(df, name):
+        for p in [ROOT_LOCAL / name, DATA_LOCAL / name]:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            df.to_csv(p, index=False, encoding="utf-8-sig")
+
+    def _sid(v):
+        s = str(v or "").strip()
+        m = re.search(r"\d{4}", s)
+        return m.group(0) if m else s
+
+    def _num(df, col, default=0.0):
+        if col in df.columns:
+            return pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
+        return pd.Series(default, index=df.index, dtype="float64")
+
+    frames = []
+    for name in [
+        "candidates.csv",
+        "core_candidates.csv",
+        "alpha_candidates.csv",
+        "trade_plan.csv",
+        "ignition_candidates.csv",
+        "strategy_evolution.csv",
+        "selection_debug.csv",
+    ]:
+        df = _read_csv_any(name)
+        if not df.empty and "stock_id" in df.columns:
+            df = df.copy()
+            df["stock_id"] = df["stock_id"].map(_sid)
+            df["_source_file_v53"] = name
+            frames.append(df)
+
+    if not frames:
+        print("v53 bucket boundary lock skipped: no candidate source")
+        return
+
+    pool = pd.concat(frames, ignore_index=True)
+    pool = pool.drop_duplicates("stock_id", keep="first").copy()
+
+    close = _num(pool, "close", _num(pool, "ref_price", _num(pool, "price", 0)))
+    ma5 = _num(pool, "ma5", 0)
+    ma10 = _num(pool, "ma10", 0)
+    ma20 = _num(pool, "ma20", 0)
+    high20 = _num(pool, "high_20", close)
+    low20 = _num(pool, "low_20", close)
+
+    mom5 = _num(pool, "mom5", 0)
+    mom10 = _num(pool, "mom10", 0)
+    mom20 = _num(pool, "mom20", 0)
+    vol_ratio = _num(pool, "volume_ratio", 1)
+
+    main_force = _num(pool, "main_force_score_v300", 0)
+    chip = _num(pool, "chip_score", 0)
+    obv = _num(pool, "obv_mom5", 0)
+    low_hold = _num(pool, "low_non_down_count_5", 0)
+
+    ma20_safe = ma20.replace(0, np.nan)
+    high20_safe = high20.replace(0, np.nan)
+    low20_safe = low20.replace(0, np.nan)
+
+    dist_ma20 = (close / ma20_safe - 1).replace([np.inf, -np.inf], np.nan).fillna(0)
+    close_to_high20 = (close / high20_safe).replace([np.inf, -np.inf], np.nan).fillna(0)
+    range20 = ((high20 - low20) / low20_safe).replace([np.inf, -np.inf], np.nan).fillna(0)
+
+    not_overheat = (dist_ma20 <= 0.12) & (mom5 <= 0.10) & (mom20 <= 0.28) & (vol_ratio <= 3.20)
+
+    watch_cond = (
+        (close > 0) &
+        (dist_ma20.between(-0.08, 0.10)) &
+        (range20 <= 0.35) &
+        (mom20.between(-0.08, 0.18)) &
+        (vol_ratio.between(0.45, 2.40))
+    )
+
+    test_cond = (
+        (close >= ma20 * 0.98) &
+        (ma5 >= ma10 * 0.97) &
+        (mom5.between(-0.02, 0.09)) &
+        (mom10.between(-0.02, 0.14)) &
+        (vol_ratio.between(0.70, 2.70)) &
+        (dist_ma20 <= 0.115)
+    )
+
+    ignition_cond = (
+        (close >= ma5 * 0.99) &
+        (close >= ma20 * 1.00) &
+        (ma5 >= ma10 * 0.985) &
+        (mom5.between(0.00, 0.10)) &
+        (mom10.between(0.00, 0.16)) &
+        (vol_ratio.between(0.90, 2.90)) &
+        (close_to_high20.between(0.86, 1.04)) &
+        not_overheat
+    )
+
+    # EVOLUTION：主力慢推模型
+    # 重點不是今天最強，而是「跌不太下去、量能慢慢回來、均線慢慢打開、主力痕跡開始出現」。
+    mainforce_trace = (
+        (main_force >= 42) |
+        (chip >= 42) |
+        ((obv > 0) & (low_hold >= 1))
+    )
+
+    slow_push_structure = (
+        (close >= ma20 * 0.985) &
+        (ma5 >= ma10 * 0.975) &
+        (ma10 >= ma20 * 0.965) &
+        (dist_ma20.between(-0.025, 0.115)) &
+        (range20 <= 0.38)
+    )
+
+    slow_push_momentum = (
+        (mom5.between(-0.025, 0.095)) &
+        (mom10.between(-0.010, 0.155)) &
+        (mom20.between(0.000, 0.265))
+    )
+
+    slow_volume_build = (
+        vol_ratio.between(0.78, 2.85)
+    )
+
+    support_absorption = (
+        (low_hold >= 1) |
+        (close >= ma10 * 0.985) |
+        (close_to_high20.between(0.82, 1.04))
+    )
+
+    evolution_cond = (
+        slow_push_structure &
+        slow_push_momentum &
+        slow_volume_build &
+        support_absorption &
+        mainforce_trace &
+        not_overheat
+    )
+
+    # FINAL：只從 EVOLUTION 中升級，必須比 EVOLUTION 更確認，但不能過熱。
+    final_cond = (
+        evolution_cond &
+        (close >= ma5 * 0.995) &
+        (ma5 >= ma10 * 0.990) &
+        (ma10 >= ma20 * 0.985) &
+        (vol_ratio.between(1.05, 2.80)) &
+        (mom5.between(0.00, 0.10)) &
+        (mom10.between(0.02, 0.16)) &
+        (mom20.between(0.03, 0.28)) &
+        ((main_force >= 55) | (chip >= 55) | ((obv > 0) & (low_hold >= 3))) &
+        not_overheat
+    )
+
+    stage = pd.Series("WATCH", index=pool.index, dtype="object")
+    stage.loc[test_cond] = "TEST"
+    stage.loc[ignition_cond] = "IGNITION"
+    stage.loc[evolution_cond] = "EVOLUTION"
+    stage.loc[final_cond] = "FINAL"
+    pool["_v53_stage_lock"] = stage
+
+    stage_score = (
+        watch_cond.astype(int) * 10 +
+        test_cond.astype(int) * 20 +
+        ignition_cond.astype(int) * 30 +
+        evolution_cond.astype(int) * 40 +
+        final_cond.astype(int) * 50 +
+        mainforce_trace.astype(int) * 12 +
+        not_overheat.astype(int) * 10
+    )
+    pool["_v53_stage_score"] = stage_score.round(2)
+
+    def _shape(df, stage_name, action_label, reason, max_rows=10):
+        out = df.copy()
+        if out.empty:
+            return out
+        out = out.sort_values(["_v53_stage_score", "stock_id"], ascending=[False, True]).head(max_rows).copy()
+        out["action"] = action_label
+        out["final_action"] = action_label
+        out["strategy_type"] = stage_name
+        out["bucket"] = stage_name
+        out["strategy_name"] = {
+            "WATCH": "WATCH 觀察整理",
+            "TEST": "TEST 試單",
+            "IGNITION": "IGNITION 起漲點火",
+            "EVOLUTION": "EVOLUTION 主力推進",
+            "FINAL": "FINAL 主力確認拉升",
+        }.get(stage_name, stage_name)
+        out["score"] = out["_v53_stage_score"].round(2)
+        out["entry_score"] = out["_v53_stage_score"].round(2)
+        if "ref_price" not in out.columns:
+            out["ref_price"] = close.loc[out.index].round(2)
+        out["reason"] = reason
+        out["system_note"] = reason
+        out["source"] = "v53_condition_bucket_boundary_lock"
+        return out
+
+    test = _shape(pool.loc[stage == "TEST"], "TEST", "TEST", "TEST：結構開始轉強，可小倉試單；不得直接跳 FINAL。", 12)
+    ignition = _shape(pool.loc[stage == "IGNITION"], "IGNITION", "TEST", "IGNITION：起漲點火，接近突破且未過熱。", 10)
+    evolution = _shape(pool.loc[stage == "EVOLUTION"], "EVOLUTION", "TEST", "EVOLUTION：主力慢推，跌不太下去、量能逐步回來、均線慢慢打開，未過熱。", 10)
+    final = _shape(pool.loc[stage == "FINAL"], "FINAL", "FINAL", "FINAL：僅由 EVOLUTION 條件升級，主力確認拉升且未過熱。", 5)
+
+    _write_both(test, "trade_plan.csv")
+    _write_both(ignition, "ignition_candidates.csv")
+    _write_both(evolution, "strategy_evolution.csv")
+    _write_both(final, "final_action_plan.csv")
+    _write_both(pool, "selection_debug.csv")
+
+    print(
+        "v53 bucket boundary lock rows:",
+        "test=", len(test),
+        "ignition=", len(ignition),
+        "evolution=", len(evolution),
+        "final=", len(final),
+    )
+
+
+if __name__ == "__main__":
+    main_v266577_structure_weight_continuation_patch()
+    apply_v311_csv_final_lock()
+    try:
+        apply_v315_ignition_evolution_outputs()
+    except Exception as e:
+        print("v315 panel output skipped:", repr(e))
+    write_v317_panel_files_hard_guarantee()
+    try:
+        apply_v53_condition_bucket_boundary_lock()
+    except Exception as e:
+        print("v53 bucket boundary lock skipped:", repr(e))
+
+# v52 EVOLUTION overheat downgrade patch: MA20 cost-zone, mild volume, no chase.
+
+# v53 slow-push evolution model: condition bucket lock retained, no TEST to FINAL shortcut.
