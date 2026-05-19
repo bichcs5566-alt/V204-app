@@ -1,21 +1,21 @@
 ﻿{
-  "generated_at": "2026-05-19 10:13:01",
+  "generated_at": "2026-05-19 11:03:31",
   "source": "v266_57_source_safe_string",
   "signal_date": "2026-05-19",
   "trade_date": "2026-05-20",
   "data_state": "fresh",
   "market_regime": "RANGE",
   "regime_info": {
-    "pct_above_ma20": 0.3664,
-    "pct_above_ma60": 0.485,
+    "pct_above_ma20": 0.3882,
+    "pct_above_ma60": 0.4839,
     "pct_mom20_pos": 0.3825,
-    "pct_strong": 0.1371,
+    "pct_strong": 0.1728,
     "median_mom20": -0.0249,
     "regime_score": 1
   },
-  "trade_plan_count": 66,
+  "trade_plan_count": 40,
   "buy_count": 0,
-  "test_count": 66,
+  "test_count": 0,
   "watch_count": 0,
   "dual_strategy": {
     "CORE": "早期卡位 / 1000張以上小倉",
@@ -23,10 +23,10 @@
   },
   "version": "v266.57",
   "latest_date": "2026-05-19",
-  "updated_at": "2026-05-19 10:15:37",
+  "updated_at": "2026-05-19 11:05:57",
   "date_lock_source": "feature_panel_daily.csv",
   "date_state": "locked_from_latest_feature",
-  "last_update": "2026-05-19 10:14:30",
+  "last_update": "2026-05-19 11:04:57",
   "timezone": "Asia/Taipei",
   "time_source": "github_actions_taipei"
 }
