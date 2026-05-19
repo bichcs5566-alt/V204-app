@@ -214,12 +214,15 @@ jobs:
                   raise FileNotFoundError(f"{name} missing after v266_strategy_engine.py")
 
               df = pd.read_csv(root_p, dtype=str, encoding="utf-8-sig")
-              if df.empty:
-                  raise RuntimeError(f"{name} exists but has 0 rows")
 
-              df.to_csv(root_p, index=False, encoding="utf-8-sig")
-              df.to_csv(data_p, index=False, encoding="utf-8-sig")
+              # lifecycle system:
+              # ignition / evolution 允許空表，不再因為 0 rows 報錯。
               print("panel file OK:", name, "rows=", len(df))
+
+              # 有資料才重新寫回；空表保留原檔，避免強迫補榜。
+              if not df.empty:
+                  df.to_csv(root_p, index=False, encoding="utf-8-sig")
+                  df.to_csv(data_p, index=False, encoding="utf-8-sig")
           PY
 
 
