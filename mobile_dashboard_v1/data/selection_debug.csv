@@ -1,2 +1,2 @@
 ﻿generated_at,market_regime,pct_above_ma20,pct_above_ma60,pct_mom20_pos,pct_strong,median_mom20,regime_score,latest_stock_count,high_liquidity_count,medium_liquidity_count,low_liquidity_count,core_count,alpha_count,core_buy_count,core_test_count,alpha_buy_count,alpha_test_count,trade_plan_count,trade_buy_count,trade_test_count,trade_watch_count,core_max_score,alpha_max_score
-2026-05-19 07:27:33,RANGE,0.3506,0.4392,0.3521,0.1186,-0.0315,1,1931,1917,14,0,240,240,0,80,0,80,63,0,63,0,96.0,128.0
+2026-05-19 08:15:57,RANGE,0.3553,0.4402,0.3584,0.1186,-0.0278,1,1931,1917,14,0,240,240,0,80,0,80,63,0,63,0,96.0,128.0
