@@ -4476,19 +4476,21 @@ def apply_v333_dynamic_market_risk_engine():
 # v319/v320/v327/v328/v329/v333 chase/fallback/ranking override functions are kept in file but not executed.
 
 
-# ===== v53 STRICT FINAL FROM EVOLUTION ONLY =====
-# FINAL 嚴格只能由 EVOLUTION 升級，不允許 TEST / WATCH / IGNITION 直接跳 FINAL。
-def apply_v53_strict_final_from_evolution_only():
+# ===== v53 CONDITION BUCKET BOUNDARY LOCK =====
+# 每日重新掃描市場，但五大清單必須遵守條件狀態分層。
+# FINAL 僅允許由 EVOLUTION 條件升級，不允許 TEST / WATCH / IGNITION 直接跳 FINAL。
+def apply_v53_condition_bucket_boundary_lock():
     import pandas as pd
     import numpy as np
     from pathlib import Path
+    import re
 
-    root = Path(".")
-    data = root / "mobile_dashboard_v1" / "data"
-    data.mkdir(parents=True, exist_ok=True)
+    ROOT_LOCAL = Path(".")
+    DATA_LOCAL = ROOT_LOCAL / "mobile_dashboard_v1" / "data"
+    DATA_LOCAL.mkdir(parents=True, exist_ok=True)
 
-    def read_csv_any(name):
-        for p in [root / name, data / name]:
+    def _read_csv_any(name):
+        for p in [ROOT_LOCAL / name, DATA_LOCAL / name]:
             if p.exists() and p.stat().st_size > 0:
                 try:
                     return pd.read_csv(p, dtype=str, encoding="utf-8-sig")
@@ -4499,83 +4501,188 @@ def apply_v53_strict_final_from_evolution_only():
                         pass
         return pd.DataFrame()
 
-    def write_both(df, name):
-        for p in [root / name, data / name]:
+    def _write_both(df, name):
+        for p in [ROOT_LOCAL / name, DATA_LOCAL / name]:
             p.parent.mkdir(parents=True, exist_ok=True)
             df.to_csv(p, index=False, encoding="utf-8-sig")
 
-    def to_num(df, col, default=0.0):
+    def _sid(v):
+        s = str(v or "").strip()
+        m = re.search(r"\d{4}", s)
+        return m.group(0) if m else s
+
+    def _num(df, col, default=0.0):
         if col in df.columns:
             return pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
         return pd.Series(default, index=df.index, dtype="float64")
 
-    evo = read_csv_any("strategy_evolution.csv")
+    frames = []
+    for name in [
+        "candidates.csv",
+        "core_candidates.csv",
+        "alpha_candidates.csv",
+        "trade_plan.csv",
+        "ignition_candidates.csv",
+        "strategy_evolution.csv",
+        "selection_debug.csv",
+    ]:
+        df = _read_csv_any(name)
+        if not df.empty and "stock_id" in df.columns:
+            df = df.copy()
+            df["stock_id"] = df["stock_id"].map(_sid)
+            df["_source_file_v53"] = name
+            frames.append(df)
 
-    final_cols = [
-        "stock_id", "stock_name", "industry", "action", "final_action",
-        "strategy_type", "bucket", "strategy_name", "score", "entry_score",
-        "ref_price", "price", "reason", "system_note", "source"
-    ]
-
-    if evo.empty or "stock_id" not in evo.columns:
-        write_both(pd.DataFrame(columns=final_cols), "final_action_plan.csv")
-        print("v53 strict final: no EVOLUTION source, FINAL empty")
+    if not frames:
+        print("v53 bucket boundary lock skipped: no candidate source")
         return
 
-    final = evo.copy()
+    pool = pd.concat(frames, ignore_index=True)
+    pool = pool.drop_duplicates("stock_id", keep="first").copy()
 
-    # FINAL 是 EVOLUTION 後的確認，不是強度追高。
-    mom5 = to_num(final, "mom5", 0)
-    mom10 = to_num(final, "mom10", 0)
-    mom20 = to_num(final, "mom20", 0)
-    vol_ratio = to_num(final, "volume_ratio", 1)
-    close = to_num(final, "close", to_num(final, "ref_price", 0))
-    ma5 = to_num(final, "ma5", 0)
-    ma10 = to_num(final, "ma10", 0)
-    ma20 = to_num(final, "ma20", 0)
-    main_force = to_num(final, "main_force_score_v300", 0)
-    chip = to_num(final, "chip_score", 0)
-    obv = to_num(final, "obv_mom5", 0)
+    close = _num(pool, "close", _num(pool, "ref_price", _num(pool, "price", 0)))
+    ma5 = _num(pool, "ma5", 0)
+    ma10 = _num(pool, "ma10", 0)
+    ma20 = _num(pool, "ma20", 0)
+    high20 = _num(pool, "high_20", close)
+    low20 = _num(pool, "low_20", close)
 
-    trend_confirm = (
-        (close >= ma5 * 0.995) &
-        (ma5 >= ma10 * 0.995) &
-        (ma10 >= ma20 * 0.985) &
-        (close >= ma20 * 1.000)
-    )
+    mom5 = _num(pool, "mom5", 0)
+    mom10 = _num(pool, "mom10", 0)
+    mom20 = _num(pool, "mom20", 0)
+    vol_ratio = _num(pool, "volume_ratio", 1)
 
-    volume_confirm = vol_ratio.between(1.05, 2.80)
-    mainforce_confirm = (main_force >= 50) | (chip >= 50) | (obv > 0)
-    mild_push = mom5.between(0.00, 0.10) & mom10.between(0.02, 0.16) & mom20.between(0.03, 0.28)
+    main_force = _num(pool, "main_force_score_v300", 0)
+    chip = _num(pool, "chip_score", 0)
+    obv = _num(pool, "obv_mom5", 0)
+    low_hold = _num(pool, "low_non_down_count_5", 0)
 
     ma20_safe = ma20.replace(0, np.nan)
+    high20_safe = high20.replace(0, np.nan)
+    low20_safe = low20.replace(0, np.nan)
+
     dist_ma20 = (close / ma20_safe - 1).replace([np.inf, -np.inf], np.nan).fillna(0)
+    close_to_high20 = (close / high20_safe).replace([np.inf, -np.inf], np.nan).fillna(0)
+    range20 = ((high20 - low20) / low20_safe).replace([np.inf, -np.inf], np.nan).fillna(0)
+
     not_overheat = (dist_ma20 <= 0.12) & (mom5 <= 0.10) & (mom20 <= 0.28) & (vol_ratio <= 3.20)
 
-    mask = trend_confirm & volume_confirm & mainforce_confirm & mild_push & not_overheat
-    final = final.loc[mask].copy()
+    watch_cond = (
+        (close > 0) &
+        (dist_ma20.between(-0.08, 0.10)) &
+        (range20 <= 0.35) &
+        (mom20.between(-0.08, 0.18)) &
+        (vol_ratio.between(0.45, 2.40))
+    )
 
-    if final.empty:
-        write_both(pd.DataFrame(columns=final_cols), "final_action_plan.csv")
-        print("v53 strict final: no qualified EVOLUTION -> FINAL")
-        return
+    test_cond = (
+        (close >= ma20 * 0.98) &
+        (ma5 >= ma10 * 0.97) &
+        (mom5.between(-0.02, 0.09)) &
+        (mom10.between(-0.02, 0.14)) &
+        (vol_ratio.between(0.70, 2.70)) &
+        (dist_ma20 <= 0.115)
+    )
 
-    final = final.head(5).copy()
-    final["action"] = "FINAL"
-    final["final_action"] = "FINAL"
-    final["strategy_type"] = "FINAL"
-    final["bucket"] = "FINAL"
-    final["strategy_name"] = "FINAL 主力確認拉升"
-    final["reason"] = "FINAL 僅由 EVOLUTION 升級：主力確認拉升、量能溫和放大、均線展開、未過熱；禁止 TEST 直接跳 FINAL。"
-    final["system_note"] = "FINAL：主力確認要拉升，但不是追高；若條件不足則 FINAL 空白。"
-    final["source"] = "v53_strict_final_from_evolution_only"
+    ignition_cond = (
+        (close >= ma5 * 0.99) &
+        (close >= ma20 * 1.00) &
+        (ma5 >= ma10 * 0.985) &
+        (mom5.between(0.00, 0.10)) &
+        (mom10.between(0.00, 0.16)) &
+        (vol_ratio.between(0.90, 2.90)) &
+        (close_to_high20.between(0.86, 1.04)) &
+        not_overheat
+    )
 
-    for c in final_cols:
-        if c not in final.columns:
-            final[c] = ""
+    mainforce_trace = (main_force >= 48) | (chip >= 48) | ((obv > 0) & (low_hold >= 2))
+    evolution_cond = (
+        (close >= ma20 * 1.00) &
+        (ma5 >= ma10 * 0.995) &
+        (ma10 >= ma20 * 0.985) &
+        (dist_ma20.between(-0.015, 0.105)) &
+        (mom5.between(-0.005, 0.085)) &
+        (mom10.between(0.00, 0.145)) &
+        (mom20.between(0.01, 0.255)) &
+        (vol_ratio.between(0.85, 2.80)) &
+        mainforce_trace &
+        not_overheat
+    )
 
-    write_both(final[final_cols], "final_action_plan.csv")
-    print("v53 strict final rows =", len(final))
+    final_cond = (
+        evolution_cond &
+        (close >= ma5 * 0.995) &
+        (ma5 >= ma10 * 0.995) &
+        (ma10 >= ma20 * 0.995) &
+        (vol_ratio.between(1.05, 2.80)) &
+        (mom5.between(0.00, 0.10)) &
+        (mom10.between(0.02, 0.16)) &
+        (mom20.between(0.03, 0.28)) &
+        ((main_force >= 55) | (chip >= 55) | ((obv > 0) & (low_hold >= 3))) &
+        not_overheat
+    )
+
+    stage = pd.Series("WATCH", index=pool.index, dtype="object")
+    stage.loc[test_cond] = "TEST"
+    stage.loc[ignition_cond] = "IGNITION"
+    stage.loc[evolution_cond] = "EVOLUTION"
+    stage.loc[final_cond] = "FINAL"
+    pool["_v53_stage_lock"] = stage
+
+    stage_score = (
+        watch_cond.astype(int) * 10 +
+        test_cond.astype(int) * 20 +
+        ignition_cond.astype(int) * 30 +
+        evolution_cond.astype(int) * 40 +
+        final_cond.astype(int) * 50 +
+        mainforce_trace.astype(int) * 12 +
+        not_overheat.astype(int) * 10
+    )
+    pool["_v53_stage_score"] = stage_score.round(2)
+
+    def _shape(df, stage_name, action_label, reason, max_rows=10):
+        out = df.copy()
+        if out.empty:
+            return out
+        out = out.sort_values(["_v53_stage_score", "stock_id"], ascending=[False, True]).head(max_rows).copy()
+        out["action"] = action_label
+        out["final_action"] = action_label
+        out["strategy_type"] = stage_name
+        out["bucket"] = stage_name
+        out["strategy_name"] = {
+            "WATCH": "WATCH 觀察整理",
+            "TEST": "TEST 試單",
+            "IGNITION": "IGNITION 起漲點火",
+            "EVOLUTION": "EVOLUTION 主力推進",
+            "FINAL": "FINAL 主力確認拉升",
+        }.get(stage_name, stage_name)
+        out["score"] = out["_v53_stage_score"].round(2)
+        out["entry_score"] = out["_v53_stage_score"].round(2)
+        if "ref_price" not in out.columns:
+            out["ref_price"] = close.loc[out.index].round(2)
+        out["reason"] = reason
+        out["system_note"] = reason
+        out["source"] = "v53_condition_bucket_boundary_lock"
+        return out
+
+    test = _shape(pool.loc[stage == "TEST"], "TEST", "TEST", "TEST：結構開始轉強，可小倉試單；不得直接跳 FINAL。", 12)
+    ignition = _shape(pool.loc[stage == "IGNITION"], "IGNITION", "TEST", "IGNITION：起漲點火，接近突破且未過熱。", 10)
+    evolution = _shape(pool.loc[stage == "EVOLUTION"], "EVOLUTION", "TEST", "EVOLUTION：主力逐步進場推進，量能溫和放大，未過熱。", 10)
+    final = _shape(pool.loc[stage == "FINAL"], "FINAL", "FINAL", "FINAL：僅由 EVOLUTION 條件升級，主力確認拉升且未過熱。", 5)
+
+    _write_both(test, "trade_plan.csv")
+    _write_both(ignition, "ignition_candidates.csv")
+    _write_both(evolution, "strategy_evolution.csv")
+    _write_both(final, "final_action_plan.csv")
+    _write_both(pool, "selection_debug.csv")
+
+    print(
+        "v53 bucket boundary lock rows:",
+        "test=", len(test),
+        "ignition=", len(ignition),
+        "evolution=", len(evolution),
+        "final=", len(final),
+    )
 
 
 if __name__ == "__main__":
@@ -4587,8 +4694,8 @@ if __name__ == "__main__":
         print("v315 panel output skipped:", repr(e))
     write_v317_panel_files_hard_guarantee()
     try:
-        apply_v53_strict_final_from_evolution_only()
+        apply_v53_condition_bucket_boundary_lock()
     except Exception as e:
-        print("v53 strict final skipped:", repr(e))
+        print("v53 bucket boundary lock skipped:", repr(e))
 
 # v52 EVOLUTION overheat downgrade patch: MA20 cost-zone, mild volume, no chase.
