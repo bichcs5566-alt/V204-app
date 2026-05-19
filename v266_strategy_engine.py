@@ -4596,16 +4596,39 @@ def apply_v53_condition_bucket_boundary_lock():
     )
 
     mainforce_trace = (main_force >= 48) | (chip >= 48) | ((obv > 0) & (low_hold >= 2))
+    # EVOLUTION = 主力慢推模型
+    # 不是追強，不抓高潮，不抓暴衝。
+    # 核心是：
+    # 緩步墊高、量能慢慢增加、均線慢慢展開、回檔有人接。
+
+    slow_push_trend = (
+        (close >= ma20 * 0.995) &
+        (ma5 >= ma10 * 0.992) &
+        (ma10 >= ma20 * 0.982)
+    )
+
+    slow_push_structure = (
+        dist_ma20.between(-0.01, 0.08) &
+        mom5.between(-0.01, 0.06) &
+        mom10.between(0.00, 0.11) &
+        mom20.between(0.01, 0.20)
+    )
+
+    slow_push_volume = (
+        vol_ratio.between(0.90, 2.20)
+    )
+
+    slow_push_mainforce = (
+        (main_force >= 45) |
+        (chip >= 45) |
+        ((obv > 0) & (low_hold >= 2))
+    )
+
     evolution_cond = (
-        (close >= ma20 * 1.00) &
-        (ma5 >= ma10 * 0.995) &
-        (ma10 >= ma20 * 0.985) &
-        (dist_ma20.between(-0.015, 0.105)) &
-        (mom5.between(-0.005, 0.085)) &
-        (mom10.between(0.00, 0.145)) &
-        (mom20.between(0.01, 0.255)) &
-        (vol_ratio.between(0.85, 2.80)) &
-        mainforce_trace &
+        slow_push_trend &
+        slow_push_structure &
+        slow_push_volume &
+        slow_push_mainforce &
         not_overheat
     )
 
@@ -4697,5 +4720,3 @@ if __name__ == "__main__":
         apply_v53_condition_bucket_boundary_lock()
     except Exception as e:
         print("v53 bucket boundary lock skipped:", repr(e))
-
-# v52 EVOLUTION overheat downgrade patch: MA20 cost-zone, mild volume, no chase.
