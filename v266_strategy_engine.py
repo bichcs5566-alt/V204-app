@@ -1178,7 +1178,7 @@ def write_v318_ignition_evolution_real_split(pool=None, plan=None):
         ign["operation_advice_zh"] = "不自動買進；只作防假突破觀察。"
         ign["reason"] = "v316 起漲訊號：由 TEST/WATCH 候選中挑出。"
         ign["system_note"] = "IGNITION：提示面板，不直接改主清單。"
-        ign["source"] = "v318_ignition_evolution_real_split"
+        ign["source"] = "策略進場"
 
     for c in ign_cols:
         if c not in ign.columns:
@@ -1214,7 +1214,7 @@ def write_v318_ignition_evolution_real_split(pool=None, plan=None):
         evo["execution_flag"] = evo["section_top_opportunity"]
         evo["reason"] = "v316 策略進化：追蹤可升級標的。"
         evo["system_note"] = "EVOLUTION：提示面板，不自動加碼。"
-        evo["source"] = "v318_ignition_evolution_real_split"
+        evo["source"] = "策略進場"
 
     for c in evo_cols:
         if c not in evo.columns:
@@ -2608,7 +2608,7 @@ def apply_v315_ignition_evolution_outputs():
         ign["operation_advice_zh"] = "不自動買進；若隔日延續強勢才考慮小量試單。"
         ign["reason"] = "v315 起漲訊號：從 TEST/WATCH 中挑選量價、均線、突破較完整者。"
         ign["system_note"] = "IGNITION：只做防假突破觀察，不自動丟入買進。"
-        ign["source"] = "v318_ignition_evolution_real_split"
+        ign["source"] = "策略進場"
 
     ignition_cols = [
         "stock_id", "stock_name", "industry", "action", "final_action", "strategy_type", "bucket",
@@ -2671,7 +2671,7 @@ def apply_v315_ignition_evolution_outputs():
         evo["execution_flag"] = evo["section_top_opportunity"]
         evo["reason"] = "v315 策略進化：追蹤可由觀察升級到試單、或由試單升級到核心的標的。"
         evo["system_note"] = "EVOLUTION：升級提示，不自動加碼；需等隔日延續與風控確認。"
-        evo["source"] = "v318_ignition_evolution_real_split"
+        evo["source"] = "策略進場"
 
     evolution_cols = [
         "stock_id", "stock_name", "industry", "action", "final_action", "strategy_type", "bucket",
@@ -2908,7 +2908,7 @@ def write_v317_panel_files_hard_guarantee():
             ign["operation_advice_zh"] = "不自動買進；只作防假突破觀察。"
             ign["reason"] = "v318 IGNITION：起漲前夕 / 收斂後點火 / 假突破低。"
             ign["system_note"] = "IGNITION：早期雷達，不等於主力倉位。"
-            ign["source"] = "v318_ignition_evolution_real_split"
+            ign["source"] = "策略進場"
 
         ign_cols = [
             "stock_id","stock_name","industry","action","final_action","strategy_type","bucket",
@@ -3001,7 +3001,7 @@ def write_v317_panel_files_hard_guarantee():
             evo["execution_flag"] = evo["section_top_opportunity"]
             evo["reason"] = "v318 EVOLUTION：趨勢確認 / 續強升級 / 不再複製 IGNITION。"
             evo["system_note"] = "EVOLUTION：強勢確認層，後續可銜接 CORE，但不自動加碼。"
-            evo["source"] = "v318_ignition_evolution_real_split"
+            evo["source"] = "策略進場"
 
         evo_cols = [
             "stock_id","stock_name","industry","action","final_action","strategy_type","bucket",
@@ -3046,20 +3046,833 @@ def write_v317_panel_files_hard_guarantee():
             except Exception:
                 pass
 
-if __name__ == "__main__":
-    # v51 lifecycle clean patch
-    # 保留主策略引擎與 v311 CSV final lock。
-    # 停用 v315 / v317-v318 panel hard guarantee，避免後段用高流動性 / momentum / 補榜邏輯覆蓋原始 lifecycle。
-    main_v266577_structure_weight_continuation_patch()
-    apply_v311_csv_final_lock()
 
-    # DISABLED: 這段會重寫 ignition_candidates.csv / strategy_evolution.csv，容易把 lifecycle 變成強勢排行榜。
-    # try:
-    #     apply_v315_ignition_evolution_outputs()
-    # except Exception as e:
-    #     print("v315 panel output skipped:", repr(e))
+# ===== v319 CORE LIFECYCLE MARKER =====
+# 目的：
+# - 不新增 CORE 清單，不動 UI。
+# - 只在既有卡片欄位顯示「🟣 CORE｜核心主升」。
+# - 讓 CORE 成為 EVOLUTION 之上的生命週期層，而不是單純 engine 標籤。
+def apply_v319_core_lifecycle_marker_to_outputs():
+    import pandas as pd
+    import numpy as np
+    import json
+    from pathlib import Path
 
-    # DISABLED: v317 / v318 hard guarantee 會強制補 panel，污染 38/40 的原始分層。
-    # write_v317_panel_files_hard_guarantee()
+    def _read_csv_safe(path):
+        try:
+            if path.exists() and path.stat().st_size > 0:
+                return pd.read_csv(path, encoding="utf-8-sig")
+        except Exception:
+            try:
+                return pd.read_csv(path, encoding="utf-8")
+            except Exception:
+                return pd.DataFrame()
+        return pd.DataFrame()
 
-    print("v51 lifecycle clean mode: v315/v317-v318 panel override disabled.")
+    def _num(df, col, default=0.0):
+        if col in df.columns:
+            return pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
+        return pd.Series(default, index=df.index, dtype="float64")
+
+    def _txt(df, col, default=""):
+        if col in df.columns:
+            return df[col].astype(str).replace("nan", "").fillna(default)
+        return pd.Series(default, index=df.index, dtype="object")
+
+    def _first_num(df, cols, default=0.0):
+        out = pd.Series(np.nan, index=df.index, dtype="float64")
+        for c in cols:
+            if c in df.columns:
+                v = pd.to_numeric(df[c], errors="coerce").replace([np.inf, -np.inf], np.nan)
+                out = out.where(out.notna(), v)
+        return out.fillna(default)
+
+    def _mark(df):
+        if df is None or df.empty or "stock_id" not in df.columns:
+            return df
+
+        d = df.copy()
+        d["stock_id"] = d["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False).fillna(d["stock_id"].astype(str).str[:4])
+
+        action = _txt(d, "v311_locked_action")
+        action = action.where(action.str.len() > 0, _txt(d, "action")).str.upper()
+
+        industry = _txt(d, "industry")
+        sid = _txt(d, "stock_id")
+        finance = sid.str.startswith(("28", "58")) | industry.str.contains("金融|保險|金控|銀行|證券", na=False)
+
+        close = _first_num(d, ["close", "ref_price", "price"], 0)
+        ma5 = _first_num(d, ["ma5", "MA5"], close)
+        ma10 = _first_num(d, ["ma10", "MA10"], close)
+        ma20 = _first_num(d, ["ma20", "MA20"], close)
+        ma60 = _first_num(d, ["ma60", "MA60"], close)
+
+        mom5 = _first_num(d, ["mom5", "return_5d"], 0)
+        mom10 = _first_num(d, ["mom10", "return_10d"], 0)
+        mom20 = _first_num(d, ["mom20", "return_20d"], 0)
+
+        vol_ratio = _first_num(d, ["volume_ratio", "vol_ratio"], 1)
+        attack = _first_num(d, ["attack_score_v312", "attack_score_v310", "attack_score_v309", "entry_score", "score"], 0)
+        final_sort = _first_num(d, ["final_sort_score_v312", "final_sort_score_v310", "final_sort_score_v309", "score", "entry_score"], 0)
+        main_force = _first_num(d, ["main_force_score_v300", "main_force_score"], 0)
+        chip = _first_num(d, ["chip_score"], 0)
+        liq = _first_num(d, ["liquidity_score"], 0)
+        hard_block = _first_num(d, ["hard_block_v313"], 0)
+        hard_reject = _first_num(d, ["hard_reject_v313", "hard_reject_v312", "hard_reject_v310"], 0)
+
+        # CORE 條件：不追求最多，只標出真正可做主升核心追蹤的標的。
+        close_safe = close.replace(0, np.nan)
+        ma20_safe = ma20.replace(0, np.nan)
+        ma60_safe = ma60.replace(0, np.nan)
+
+        trend_core = (
+            (close >= ma20 * 1.015) &
+            (ma5 >= ma10 * 1.003) &
+            (ma10 >= ma20 * 1.003) &
+            (ma20 >= ma60 * 0.995)
+        )
+
+        momentum_core = (
+            (mom5 > 0.008) &
+            (mom10 > 0.018) &
+            (mom20 > 0.025)
+        )
+
+        capital_core = (
+            (main_force >= 60) |
+            (chip >= 60) |
+            (liq >= 82)
+        )
+
+        risk_ok = (
+            (~finance) &
+            (hard_block < 1) &
+            (hard_reject < 1) &
+            ((close / ma20_safe - 1).replace([np.inf, -np.inf], 0).fillna(0) < 0.38)
+        )
+
+        core_score = (
+            trend_core.astype(int) * 30 +
+            momentum_core.astype(int) * 25 +
+            capital_core.astype(int) * 20 +
+            (vol_ratio.between(0.85, 4.50)).astype(int) * 10 +
+            risk_ok.astype(int) * 10 +
+            (attack / 10).clip(0, 12) +
+            (final_sort / 20).clip(0, 8)
+        ).round(2)
+
+        # 只從 TEST / WATCH / panel 候選中標 CORE，不把 BLOCK 拉上來。
+        candidate_ok = action.isin(["TEST", "WATCH"]) | _txt(d, "strategy_type").str.upper().isin(["IGNITION", "EVOLUTION"])
+        # v321 CORE 升級：
+        # CORE 不是新清單，而是從 EVOLUTION / TEST 中，把真正進入主升核心的股票升級標記。
+        # 這裡放寬「一定要有 mom 欄位」的依賴，避免資料欄位缺失導致明顯主升股不升級。
+        full_bull_ma = (
+            (ma5 >= ma10 * 1.002) &
+            (ma10 >= ma20 * 1.002) &
+            (ma20 >= ma60 * 0.990) &
+            (close >= ma5 * 0.985)
+        )
+
+        # v326 CORE 收窄版：
+        # 不再只因為 EVOLUTION + 均線多頭就升 CORE。
+        # 必須同時具備：
+        # 1. 主升結構
+        # 2. 動能延續
+        # 3. 籌碼/主力強度
+        # 4. 高流動性
+        # 5. 排名靠前
+
+        strong_trend = (
+            (close >= ma5 * 0.995) &
+            (ma5 >= ma10 * 1.004) &
+            (ma10 >= ma20 * 1.004) &
+            (ma20 >= ma60 * 1.002)
+        )
+
+        strong_momentum = (
+            (mom5 >= 0.03) &
+            (mom10 >= 0.06) &
+            (mom20 >= 0.10)
+        )
+
+        strong_chip = (
+            (main_force >= 68) |
+            (chip >= 72)
+        )
+
+        strong_liq = (
+            (liq >= 90) &
+            (vol_ratio.between(0.90, 3.80))
+        )
+
+        strong_rank = (
+            (attack >= 70) |
+            (final_sort >= 75)
+        )
+
+        evolution_mask = _txt(d, "strategy_type").str.upper().eq("EVOLUTION")
+        strong_core_pair = (strong_momentum & strong_chip) | (strong_momentum & strong_rank)
+
+        core_from_evolution = evolution_mask & strong_trend & strong_momentum & strong_chip & strong_liq & strong_rank & risk_ok
+        core_from_score = False  # v335 lifecycle guard: 禁止 score 直接升 CORE
+
+        core_mask = core_from_score | core_from_evolution
+
+        # fallback 不再強制補滿 3 檔，避免整批被升級成 CORE。
+        # 現在寧可少，也不要失真。
+
+        # 控制 CORE 數量，避免變成另一張大清單。
+        core_idx = d.loc[core_mask].assign(_core_score_v319=core_score.loc[core_mask]).sort_values(
+            ["_core_score_v319", "stock_id"], ascending=[False, True]
+        ).head(5).index
+        final_core = d.index.isin(core_idx)
+
+        if "lifecycle_stage" not in d.columns:
+            d["lifecycle_stage"] = ""
+        # v319.1：輸出欄位統一寫成字串，避免 pandas StringDtype 欄位被塞數值 Series 後炸掉。
+        d["core_score_v319"] = core_score.round(2).astype(str)
+        d["is_core_v319"] = "0"
+        d.loc[final_core, "is_core_v319"] = "1"
+
+        # 不新增 UI，只把既有卡片欄位變成特殊文字標記。
+        # v327.1 dtype safe：這些欄位後面都會寫中文/emoji，先強制轉 object，避免原欄位是 float64 時炸掉。
+        for c in ["lifecycle_stage", "strategy_layer", "strategy_bucket", "strategy_type", "bucket", "entry_type", "system_note", "reason", "source"]:
+            if c not in d.columns:
+                d[c] = ""
+            d[c] = d[c].astype("object").where(d[c].notna(), "")
+
+        d.loc[final_core, "lifecycle_stage"] = "🟣 CORE"
+        d.loc[final_core, "strategy_layer"] = "🟣 CORE｜核心主升"
+        d.loc[final_core, "strategy_bucket"] = "🟣 CORE｜主升核心"
+        d.loc[final_core, "bucket"] = "CORE"
+        d.loc[final_core, "entry_type"] = "核心主升追蹤"
+        d.loc[final_core, "system_note"] = "🟣 CORE：由 EVOLUTION/TEST 升級的核心主升追蹤，不是一般試單。"
+        d.loc[final_core, "reason"] = "v319 CORE：趨勢、動能、籌碼/流動性達核心條件，標記為核心主升。"
+
+        # v321：CORE 必須在卡片策略層直接看得見。
+        # 不改 action，所以仍會留在原本 TEST/EVOLUTION 清單；但卡片策略層會升級成 CORE。
+        d.loc[final_core, "strategy_type"] = "CORE"
+        d.loc[final_core, "bucket"] = "CORE"
+
+        # v320：不要把卡片「來源」顯示成版本技術字串。
+        # UI 會把 source 欄位直接顯示在卡片裡，所以這裡統一轉成使用者看得懂的中文。
+        src_text = _txt(d, "source")
+        technical_source = src_text.str.contains(r"^v\d+|core_lifecycle|fallback|real_split|panel_file", case=False, regex=True, na=False)
+        d.loc[technical_source, "source"] = "策略進場"
+        d.loc[final_core, "source"] = "核心主升"
+        return d
+
+    target_names = [
+        "trade_plan.csv",
+        "candidates.csv",
+        "core_candidates.csv",
+        "alpha_candidates.csv",
+        "ignition_candidates.csv",
+        "strategy_evolution.csv",
+    ]
+
+    for name in target_names:
+        # 優先讀 root，沒有再讀 data
+        df = _read_csv_safe(ROOT / name)
+        if df.empty:
+            df = _read_csv_safe(DATA_DIR / name)
+        if df.empty:
+            continue
+
+        out = _mark(df)
+        for base in [ROOT, DATA_DIR]:
+            base.mkdir(parents=True, exist_ok=True)
+            out.to_csv(base / name, index=False, encoding="utf-8-sig")
+        print("v319 core lifecycle marked:", name, "rows=", len(out), "core=", int(pd.to_numeric(out.get("is_core_v319", 0), errors="coerce").fillna(0).sum()))
+
+    for base in [ROOT, DATA_DIR]:
+        p = base / "meta.json"
+        if p.exists():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8-sig"))
+                data["source"] = "v3291_evolution_ab_auto_split_safe"
+                data["core_marker"] = "🟣 CORE｜核心主升"
+                data["core_logic"] = "CORE 不新增清單；從 EVOLUTION/TEST 升級，直接寫入 strategy_type / strategy_layer / lifecycle_stage 作特殊標記"
+                p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+            except Exception:
+                pass
+
+
+
+# ===== v327 LIFECYCLE LIST PLANNING GUARD =====
+# 目的：
+# - 不新增清單、不改前端、不改 yml。
+# - 只把既有五大清單的角色定義寫乾淨：
+#   IGNITION = 起漲點火
+#   TEST     = ATTACK 新強勢攻擊池
+#   EVOLUTION= 趨勢確認升級池
+#   CORE     = 少數核心主升標記，不是獨立清單
+#   WATCH    = 預備觀察
+#   BLOCK    = 禁止
+# - 同時限制 CORE 數量，避免整張 EVOLUTION / TEST 都變紫框。
+def apply_v327_lifecycle_list_planning_guard():
+    import pandas as pd
+    import numpy as np
+    import json
+
+    def _read_csv_safe(path):
+        try:
+            if path.exists() and path.stat().st_size > 0:
+                return pd.read_csv(path, encoding="utf-8-sig")
+        except Exception:
+            try:
+                return pd.read_csv(path, encoding="utf-8")
+            except Exception:
+                return pd.DataFrame()
+        return pd.DataFrame()
+
+    def _txt(df, col, default=""):
+        if col in df.columns:
+            return df[col].astype(str).replace("nan", "").fillna(default)
+        return pd.Series(default, index=df.index, dtype="object")
+
+    def _num(df, col, default=0.0):
+        if col in df.columns:
+            return pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
+        return pd.Series(default, index=df.index, dtype="float64")
+
+    def _first_num(df, cols, default=0.0):
+        out = pd.Series(np.nan, index=df.index, dtype="float64")
+        for c in cols:
+            if c in df.columns:
+                v = pd.to_numeric(df[c], errors="coerce").replace([np.inf, -np.inf], np.nan)
+                out = out.where(out.notna(), v)
+        return out.fillna(default)
+
+    def _normalize_sid(df):
+        if "stock_id" in df.columns:
+            df["stock_id"] = df["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False).fillna(df["stock_id"].astype(str).str[:4])
+        return df
+
+    def _base_action(df):
+        action = _txt(df, "v311_locked_action")
+        action = action.where(action.str.len() > 0, _txt(df, "final_action"))
+        action = action.where(action.str.len() > 0, _txt(df, "action"))
+        return action.str.upper().str.strip()
+
+    def _core_flag(df):
+        joined = (
+            _txt(df, "strategy_type") + " " +
+            _txt(df, "strategy_layer") + " " +
+            _txt(df, "strategy_bucket") + " " +
+            _txt(df, "bucket") + " " +
+            _txt(df, "lifecycle_stage") + " " +
+            _txt(df, "system_note") + " " +
+            _txt(df, "reason")
+        ).str.upper()
+        raw_core = (
+            _txt(df, "is_core_v319").str.strip().eq("1") |
+            joined.str.contains("CORE|核心主升|🟣", case=False, regex=True, na=False)
+        )
+        return raw_core
+
+    def _rank_score(df):
+        return (
+            _first_num(df, ["core_score_v319"], 0) * 1.00 +
+            _first_num(df, ["final_sort_score_v312", "final_sort_score_v310", "final_sort_score_v309"], 0) * 0.45 +
+            _first_num(df, ["attack_score_v312", "attack_score_v310", "attack_score_v309"], 0) * 0.35 +
+            _first_num(df, ["evolution_score", "entry_score", "score"], 0) * 0.20 +
+            _first_num(df, ["liquidity_score"], 0) * 0.10
+        ).round(2)
+
+    def _apply_role(df, name):
+        if df is None or df.empty or "stock_id" not in df.columns:
+            return df
+
+        d = _normalize_sid(df.copy())
+        action = _base_action(d)
+
+        # v327.1 dtype safe：
+        # 這些欄位會被寫入中文、emoji、角色文字。
+        # 如果原 CSV 欄位全空，pandas 可能讀成 float64；直接 d.loc 寫字串會炸。
+        for c in [
+            "action", "final_action", "strategy_type", "bucket", "strategy_layer",
+            "strategy_bucket", "lifecycle_stage", "entry_type", "source",
+            "system_note", "reason", "is_core_v319", "core_score_v319",
+            "action_label", "action_sub", "v327_lifecycle_role"
+        ]:
+            if c not in d.columns:
+                d[c] = ""
+            d[c] = d[c].astype("object").where(d[c].notna(), "")
+
+        # 先保留既有 CORE 候選，再做名額制，避免整批紫框。
+        raw_core = _core_flag(d)
+        rank = _rank_score(d)
+
+        # 各輸出檔獨立控管 CORE，不讓 panel / trade_plan 互相污染。
+        # panel 顯示用，最多 5；一般輸出最多 5。沒有符合就 0，不強制補。
+        max_core = 5
+        keep_core = pd.Series(False, index=d.index)
+        if bool(raw_core.any()):
+            idx = (
+                d.loc[raw_core]
+                .assign(_v327_rank=rank.loc[raw_core])
+                .sort_values(["_v327_rank", "stock_id"], ascending=[False, True])
+                .head(max_core)
+                .index
+            )
+            keep_core.loc[idx] = True
+
+        # 先清掉過度擴散的 CORE 痕跡，後面只把 keep_core 補回來。
+        d["is_core_v319"] = "0"
+        d["lifecycle_stage"] = ""
+        d["strategy_layer"] = d["strategy_layer"].astype("object").astype(str).replace("nan", "")
+        d["strategy_bucket"] = d["strategy_bucket"].astype("object").astype(str).replace("nan", "")
+
+        # 檔案面板預設角色
+        file_is_ign = name == "ignition_candidates.csv"
+        file_is_evo = name == "strategy_evolution.csv"
+
+        test_mask = action.eq("TEST") | _txt(d, "action").str.upper().eq("TEST")
+        watch_mask = action.eq("WATCH") | _txt(d, "action").str.upper().eq("WATCH")
+        block_mask = action.eq("BLOCK") | _txt(d, "action").str.upper().eq("BLOCK")
+        ignition_mask = file_is_ign | _txt(d, "strategy_type").str.upper().eq("IGNITION")
+        evolution_mask = file_is_evo | _txt(d, "strategy_type").str.upper().eq("EVOLUTION")
+
+        # IGNITION：點火掃描，不直接等於主倉。
+        m = ignition_mask & ~keep_core
+        d.loc[m, "strategy_type"] = "IGNITION"
+        d.loc[m, "bucket"] = "IGNITION"
+        d.loc[m, "strategy_layer"] = "🧪 IGNITION｜起漲點火"
+        d.loc[m, "strategy_bucket"] = "🧪 IGNITION｜防假突破"
+        d.loc[m, "entry_type"] = "起漲訊號觀察"
+        d.loc[m, "source"] = "起漲偵測"
+        d.loc[m, "system_note"] = "IGNITION：剛點火，先觀察假突破，不直接重倉。"
+        d.loc[m, "reason"] = "v327：起漲訊號層，等待延續 K 棒與量價確認。"
+
+        # EVOLUTION：趨勢確認升級池，仍不是自動主倉。
+        m = evolution_mask & ~keep_core
+        d.loc[m, "strategy_type"] = "EVOLUTION"
+        d.loc[m, "bucket"] = "EVOLUTION"
+        d.loc[m, "strategy_layer"] = "🧬 EVOLUTION｜趨勢確認"
+        d.loc[m, "strategy_bucket"] = "🧬 EVOLUTION｜策略進化"
+        d.loc[m, "entry_type"] = "趨勢確認升級"
+        d.loc[m, "source"] = "策略進場"
+        d.loc[m, "system_note"] = "EVOLUTION：趨勢確認層，可銜接 CORE，但不自動加碼。"
+        d.loc[m, "reason"] = "v327：強勢確認 / 續強升級 / 觀察是否進入核心主升。"
+
+        # TEST 正式定位成 ATTACK：新強勢攻擊池，避免新名單被 CORE 名額制擋掉。
+        m = test_mask & ~keep_core & ~ignition_mask & ~evolution_mask
+        d.loc[m, "strategy_type"] = "TEST"
+        d.loc[m, "bucket"] = "ATTACK"
+        d.loc[m, "strategy_layer"] = "⚡ ATTACK｜新強勢攻擊"
+        d.loc[m, "strategy_bucket"] = "⚡ ATTACK｜準主流候選"
+        d.loc[m, "entry_type"] = "攻擊試單"
+        d.loc[m, "source"] = "攻擊試單"
+        d.loc[m, "action_label"] = "試單"
+        d.loc[m, "action_sub"] = "ATTACK：新強勢攻擊池，小倉試單，觀察是否續強升 CORE。"
+        d.loc[m, "system_note"] = "TEST/ATTACK：避免錯過新主流，但尚未確認為主倉。"
+        d.loc[m, "reason"] = "v327：攻擊條件達標，先列入 ATTACK 試單層，不直接視為 CORE。"
+
+        # WATCH：預備池。
+        m = watch_mask & ~keep_core & ~ignition_mask & ~evolution_mask
+        d.loc[m, "strategy_type"] = "WATCH"
+        d.loc[m, "bucket"] = "WATCH"
+        d.loc[m, "strategy_layer"] = "👀 WATCH｜預備觀察"
+        d.loc[m, "strategy_bucket"] = "👀 WATCH｜未發動"
+        d.loc[m, "entry_type"] = "觀察等待"
+        d.loc[m, "source"] = "觀察池"
+        d.loc[m, "action_label"] = "觀察"
+        d.loc[m, "action_sub"] = "WATCH：有結構但未發動，等確認。"
+
+        # BLOCK：禁止池。
+        m = block_mask & ~keep_core
+        d.loc[m, "strategy_type"] = "BLOCK"
+        d.loc[m, "bucket"] = "BLOCK"
+        d.loc[m, "strategy_layer"] = "⛔ BLOCK｜禁止"
+        d.loc[m, "strategy_bucket"] = "⛔ BLOCK｜風控排除"
+        d.loc[m, "entry_type"] = "禁止進場"
+        d.loc[m, "source"] = "風控排除"
+        d.loc[m, "action_label"] = "禁止"
+        d.loc[m, "action_sub"] = "BLOCK：禁止清單，避免重複踩雷。"
+
+        # CORE：少數核心主升標記。保留在原清單，不新增獨立清單。
+        d.loc[keep_core, "is_core_v319"] = "1"
+        d.loc[keep_core, "lifecycle_stage"] = "🟣 CORE"
+        d.loc[keep_core, "strategy_type"] = "CORE"
+        d.loc[keep_core, "bucket"] = "CORE"
+        d.loc[keep_core, "strategy_layer"] = "🟣 CORE｜核心主升"
+        d.loc[keep_core, "strategy_bucket"] = "🟣 CORE｜主升核心"
+        d.loc[keep_core, "entry_type"] = "核心主升追蹤"
+        d.loc[keep_core, "source"] = "核心主升"
+        d.loc[keep_core, "system_note"] = "CORE：由 IGNITION / TEST / EVOLUTION 中少數升級，主倉候選，不是新清單。"
+        d.loc[keep_core, "reason"] = "v327：通過 CORE 名額制，列為核心主升追蹤。"
+
+        d["v327_lifecycle_role"] = np.select(
+            [keep_core, ignition_mask & ~keep_core, evolution_mask & ~keep_core, test_mask & ~keep_core, watch_mask & ~keep_core, block_mask & ~keep_core],
+            ["CORE", "IGNITION", "EVOLUTION", "ATTACK", "WATCH", "BLOCK"],
+            default=""
+        )
+
+        d["core_score_v319"] = _first_num(d, ["core_score_v319"], 0).round(2).astype(str)
+        return d
+
+    target_names = [
+        "trade_plan.csv",
+        "candidates.csv",
+        "core_candidates.csv",
+        "alpha_candidates.csv",
+        "ignition_candidates.csv",
+        "strategy_evolution.csv",
+        "watchlist_monitor.csv",
+        "position_monitor.csv",
+    ]
+
+    for name in target_names:
+        df = _read_csv_safe(ROOT / name)
+        if df.empty:
+            df = _read_csv_safe(DATA_DIR / name)
+        if df.empty:
+            continue
+
+        out = _apply_role(df, name)
+        for base in [ROOT, DATA_DIR]:
+            base.mkdir(parents=True, exist_ok=True)
+            out.to_csv(base / name, index=False, encoding="utf-8-sig")
+
+        try:
+            core_n = int(pd.to_numeric(out.get("is_core_v319", 0), errors="coerce").fillna(0).sum())
+        except Exception:
+            core_n = 0
+        print("v327 lifecycle planning:", name, "rows=", len(out), "core=", core_n)
+
+    for base in [ROOT, DATA_DIR]:
+        p = base / "meta.json"
+        if p.exists():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8-sig"))
+                data["source"] = "v3291_evolution_ab_auto_split_safe"
+                data["list_logic"] = "IGNITION=點火；TEST=ATTACK攻擊池；EVOLUTION=趨勢確認；CORE=少數主升標記；WATCH=預備；BLOCK=禁止"
+                data["core_limit"] = "每個輸出檔最多 5 檔 CORE，不強制補滿"
+                p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+            except Exception:
+                pass
+
+
+
+# ===== v335.1 STRICT LIFECYCLE RESTORE =====
+# FINAL 只從 EVOLUTION-A 進入；v328 不再從高分熱門股直接拉 FINAL。
+
+# ===== v328 PRIORITY OPERATION POOL =====
+# 目的：
+# - 不改前端、不改 yml、不新增獨立資料來源。
+# - 把已經被紫框標記的名單，正式匯總成「主升操作池」。
+# - 讓「最終操作」不再空白：從紫框名單中依強弱排序，分配 TOP 操作。
+# - 非紫框仍保留在 TEST / EVOLUTION / WATCH / BLOCK，不會被硬拉進最終操作。
+def apply_v328_priority_operation_pool():
+    import pandas as pd
+    import numpy as np
+    import json
+
+    def _read_csv_safe(path):
+        try:
+            if path.exists() and path.stat().st_size > 0:
+                return pd.read_csv(path, encoding="utf-8-sig")
+        except Exception:
+            try:
+                return pd.read_csv(path, encoding="utf-8")
+            except Exception:
+                return pd.DataFrame()
+        return pd.DataFrame()
+
+    def _txt(df, col, default=""):
+        if col in df.columns:
+            return df[col].astype("object").where(df[col].notna(), default).astype(str).replace("nan", "")
+        return pd.Series(default, index=df.index, dtype="object")
+
+    def _num(df, col, default=0.0):
+        if col in df.columns:
+            return pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
+        return pd.Series(default, index=df.index, dtype="float64")
+
+    def _first_num(df, cols, default=0.0):
+        out = pd.Series(np.nan, index=df.index, dtype="float64")
+        for c in cols:
+            if c in df.columns:
+                v = pd.to_numeric(df[c], errors="coerce").replace([np.inf, -np.inf], np.nan)
+                out = out.where(out.notna(), v)
+        return out.fillna(default)
+
+    def _normalize_sid(df):
+        if "stock_id" in df.columns:
+            df["stock_id"] = df["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False).fillna(df["stock_id"].astype(str).str[:4])
+        return df
+
+    def _ensure_text_columns(df):
+        text_cols = [
+            "stock_id", "stock_name", "industry", "action", "final_action",
+            "v311_locked_action", "action_label", "action_sub", "strategy_type", "bucket",
+            "strategy_layer", "strategy_bucket", "layer", "entry_type",
+            "source", "reason", "system_note", "note", "engine",
+            "is_core_v319", "core_score_v319", "priority_grade_v328",
+            "priority_rank_v328", "v327_lifecycle_role",
+            "opportunity_rank", "top_opportunity", "section_top_opportunity",
+            "top_reason", "final_decision", "decision_note"
+        ]
+        for c in text_cols:
+            if c not in df.columns:
+                df[c] = ""
+            df[c] = df[c].astype("object").where(df[c].notna(), "")
+
+        numeric_cols = [
+            "top_rank_v3066", "is_top_v3066", "target_weight",
+            "suggest_amount", "suggest_shares", "price", "ref_price"
+        ]
+        for c in numeric_cols:
+            if c not in df.columns:
+                df[c] = 0
+            df[c] = pd.to_numeric(df[c], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0)
+
+        return df
+
+    def _rank_score(df):
+        return (
+            _first_num(df, ["core_score_v319"], 0) * 1.00 +
+            _first_num(df, ["final_sort_score_v312", "final_sort_score_v310", "final_sort_score_v309", "score"], 0) * 0.55 +
+            _first_num(df, ["attack_score_v312", "attack_score_v310", "attack_score_v309"], 0) * 0.45 +
+            _first_num(df, ["final_attack_score_v312", "final_attack_score_v310", "final_attack_score_v309"], 0) * 0.25 +
+            _first_num(df, ["entry_score", "evolution_score"], 0) * 0.20 +
+            _first_num(df, ["liquidity_score"], 0) * 0.12
+        ).round(2)
+
+    def _core_like(df):
+        joined = (
+            _txt(df, "strategy_type") + " " +
+            _txt(df, "strategy_layer") + " " +
+            _txt(df, "strategy_bucket") + " " +
+            _txt(df, "bucket") + " " +
+            _txt(df, "lifecycle_stage") + " " +
+            _txt(df, "system_note") + " " +
+            _txt(df, "reason")
+        ).str.upper()
+        return (
+            _txt(df, "is_core_v319").str.strip().eq("1") |
+            joined.str.contains("CORE|核心主升|🟣", case=False, regex=True, na=False)
+        )
+
+    # v335.1 STRICT LIFECYCLE：
+    # 最終操作池只能從 EVOLUTION 分流結果產生。
+    # 不再從 trade_plan / candidates / ignition 直接拉高分熱門股進 FINAL。
+    source_names = [
+        "strategy_evolution_ab.csv",
+        "strategy_evolution.csv",
+    ]
+
+    frames = []
+    for name in source_names:
+        df = _read_csv_safe(ROOT / name)
+        if df.empty:
+            df = _read_csv_safe(DATA_DIR / name)
+        if df.empty or "stock_id" not in df.columns:
+            continue
+        df = _normalize_sid(_ensure_text_columns(df.copy()))
+        df["_v328_from_file"] = name
+        frames.append(df)
+
+    if not frames:
+        print("v328 priority operation pool: no source rows")
+        return
+
+    pool = pd.concat(frames, ignore_index=True)
+    pool = _normalize_sid(_ensure_text_columns(pool))
+
+    core_mask = _core_like(pool)
+
+    # v335.1 STRICT LIFECYCLE：
+    # FINAL / 最終操作只能由 EVOLUTION-A 進入。
+    # 這裡禁止：
+    # - TEST 直接 FINAL
+    # - IGNITION 直接 FINAL
+    # - 高分 / 熱門 / 爆量股直接 FINAL
+    # - trade_plan / candidates 直接 FINAL
+    evo_stage = _txt(pool, "evolution_stage_v329").str.upper()
+    evo_grade = _txt(pool, "evolution_grade_v329").str.upper()
+    evo_text = (
+        _txt(pool, "strategy_layer") + " " +
+        _txt(pool, "strategy_bucket") + " " +
+        _txt(pool, "entry_type") + " " +
+        _txt(pool, "reason") + " " +
+        _txt(pool, "system_note")
+    ).str.upper()
+
+    evolution_a_mask = (
+        evo_stage.eq("EVOLUTION-A") |
+        evo_grade.eq("A") |
+        evo_text.str.contains("EVOLUTION-A|準主升|可進最終操作候選", case=False, regex=True, na=False)
+    )
+
+    core_mask = core_mask & evolution_a_mask
+
+    if not bool(core_mask.any()):
+        print("v328 priority operation pool: no EVOLUTION-A rows for final operation")
+        return
+
+    purple = pool.loc[core_mask].copy()
+
+    # v335.1 FIX3：
+    # v328/v3351 後段會把來源/理由/狀態等文字寫回 purple。
+    # 若原始欄位被 pandas 判成 int64，遇到 "106.5" 這類字串價格會炸：
+    # TypeError: Invalid value '106.5' for dtype 'int64'
+    # 只在最終操作池局部轉 object，不改選股邏輯、不改升級邏輯。
+    for _c in [
+        "final_action", "action", "stock_id", "stock_name", "name",
+        "source", "reason", "system_note", "entry_type",
+        "strategy_type", "bucket", "strategy_layer", "strategy_bucket",
+        "execution_flag", "liquidity_level", "liquidity_tag",
+        "close", "ref_price", "price", "suggested_amount", "target_weight"
+    ]:
+        if _c in purple.columns:
+            purple[_c] = purple[_c].astype("object")
+    purple["_priority_score_v328"] = _rank_score(purple)
+    purple["_action_sort_v328"] = np.select(
+        [
+            _txt(purple, "action").str.upper().eq("TEST"),
+            _txt(purple, "action").str.upper().eq("BUY"),
+            _txt(purple, "action").str.upper().eq("WATCH")
+        ],
+        [0, 1, 2],
+        default=3
+    )
+    purple["_file_sort_v328"] = np.select(
+        [
+            _txt(purple, "_v328_from_file").eq("strategy_evolution_ab.csv"),
+            _txt(purple, "_v328_from_file").eq("strategy_evolution.csv")
+        ],
+        [0, 1],
+        default=9
+    )
+
+    purple = (
+        purple.sort_values(
+            ["_priority_score_v328", "_action_sort_v328", "_file_sort_v328", "stock_id"],
+            ascending=[False, True, True, True]
+        )
+        .drop_duplicates("stock_id", keep="first")
+        .head(8)
+        .copy()
+    )
+
+    if purple.empty:
+        print("v328 priority operation pool: purple rows empty after dedupe")
+        return
+
+    # TOP 分配：
+    # TOP 1-3 = S 主攻
+    # TOP 4-6 = A 可操作
+    # TOP 7-8 = B 追蹤
+    for rank, idx in enumerate(purple.index, start=1):
+        if rank <= 3:
+            grade = "S"
+            amount = 20000
+            weight = 0.010
+            sub = f"🟣 PRIORITY S{rank}｜主升主攻：紫框強度排序 TOP{rank}，可優先評估小倉/主倉。"
+        elif rank <= 6:
+            grade = "A"
+            amount = 10000
+            weight = 0.005
+            sub = f"🟣 PRIORITY A{rank}｜主升候選：紫框強度排序 TOP{rank}，可小倉試單或等回檔。"
+        else:
+            grade = "B"
+            amount = 0
+            weight = 0.000
+            sub = f"🟣 PRIORITY B{rank}｜主升觀察：紫框強度排序 TOP{rank}，先觀察不重倉。"
+
+        px = float(pd.to_numeric(pd.Series([purple.at[idx, "price"] if "price" in purple.columns else purple.at[idx, "ref_price"] if "ref_price" in purple.columns else purple.at[idx, "close"] if "close" in purple.columns else 0]), errors="coerce").fillna(0).iloc[0])
+        ref_px = float(pd.to_numeric(pd.Series([purple.at[idx, "ref_price"] if "ref_price" in purple.columns else purple.at[idx, "close"] if "close" in purple.columns else px]), errors="coerce").fillna(px).iloc[0])
+        use_px = px if px > 0 else ref_px
+
+        purple.at[idx, "action"] = "BUY" if rank <= 6 else "WATCH"
+        purple.at[idx, "final_action"] = purple.at[idx, "action"]
+        purple.at[idx, "v311_locked_action"] = purple.at[idx, "action"]
+        purple.at[idx, "action_label"] = "主升" if rank <= 6 else "觀察"
+        purple.at[idx, "action_sub"] = sub
+        purple.at[idx, "strategy_type"] = "CORE"
+        purple.at[idx, "bucket"] = "PRIORITY"
+        purple.at[idx, "engine"] = "CORE"
+        purple.at[idx, "strategy_layer"] = f"🟣 PRIORITY｜主升操作池 {grade}"
+        purple.at[idx, "strategy_bucket"] = f"🟣 CORE｜主升候選 TOP{rank}"
+        purple.at[idx, "layer"] = purple.at[idx, "strategy_layer"]
+        purple.at[idx, "entry_type"] = "EVOLUTION-A 完成升級後操作"
+        purple.at[idx, "source"] = "v335_lifecycle_final_from_evolution_a"
+        purple.at[idx, "reason"] = "v335.1：由 EVOLUTION-A 進入最終操作；禁止高分/熱門/爆量股直接跳級 FINAL。"
+        purple.at[idx, "system_note"] = sub
+        purple.at[idx, "priority_grade_v328"] = grade
+        purple.at[idx, "priority_rank_v328"] = str(rank)
+        purple.at[idx, "opportunity_rank"] = str(rank)
+        purple.at[idx, "top_rank_v3066"] = rank
+        purple.at[idx, "is_top_v3066"] = 1
+        purple.at[idx, "top_opportunity"] = f"🔥PRIORITY_TOP{rank}"
+        purple.at[idx, "section_top_opportunity"] = f"PRIORITY_TOP{rank}"
+        purple.at[idx, "top_reason"] = sub
+        purple.at[idx, "is_core_v319"] = "1"
+        purple.at[idx, "core_score_v319"] = str(float(purple.at[idx, "_priority_score_v328"]))
+
+        if use_px > 0:
+            purple.at[idx, "price"] = round(use_px, 2)
+            purple.at[idx, "ref_price"] = round(ref_px if ref_px > 0 else use_px, 2)
+            purple.at[idx, "target_weight"] = round(weight, 4)
+            purple.at[idx, "suggest_amount"] = amount
+            purple.at[idx, "suggest_shares"] = round(amount / use_px, 0) if amount > 0 else 0
+        else:
+            purple.at[idx, "target_weight"] = round(weight, 4)
+            purple.at[idx, "suggest_amount"] = amount
+            purple.at[idx, "suggest_shares"] = 0
+
+    # 讀原 trade_plan，把 priority rows 放最前面，其他原本 TEST/WATCH/BLOCK 保留。
+    base = _read_csv_safe(ROOT / "trade_plan.csv")
+    if base.empty:
+        base = _read_csv_safe(DATA_DIR / "trade_plan.csv")
+    if base.empty:
+        base = purple.copy()
+    else:
+        base = _normalize_sid(_ensure_text_columns(base.copy()))
+        base = base.loc[~base["stock_id"].astype(str).isin(set(purple["stock_id"].astype(str)))].copy()
+        base = pd.concat([purple, base], ignore_index=True)
+
+    # 排序：BUY 主升在最前，WATCH/BLOCK 照原本在後。
+    base["_v328_action_order"] = np.select(
+        [
+            _txt(base, "action").str.upper().eq("BUY"),
+            _txt(base, "action").str.upper().eq("TEST"),
+            _txt(base, "action").str.upper().eq("WATCH"),
+            _txt(base, "action").str.upper().eq("BLOCK"),
+        ],
+        [0, 1, 2, 9],
+        default=5
+    )
+    base["_v328_rank_num"] = pd.to_numeric(base.get("priority_rank_v328", 9999), errors="coerce").fillna(9999)
+    base["_v328_score"] = _rank_score(base)
+    base = base.sort_values(
+        ["_v328_action_order", "_v328_rank_num", "_v328_score", "stock_id"],
+        ascending=[True, True, False, True]
+    ).drop(columns=[c for c in ["_v328_action_order", "_v328_rank_num", "_v328_score", "_priority_score_v328", "_action_sort_v328", "_file_sort_v328", "_v328_from_file"] if c in base.columns], errors="ignore")
+
+    for base_dir in [ROOT, DATA_DIR]:
+        base_dir.mkdir(parents=True, exist_ok=True)
+        base.to_csv(base_dir / "trade_plan.csv", index=False, encoding="utf-8-sig")
+
+    # 額外輸出一份主升操作池 CSV，前端未吃也沒關係，方便你人工檢查。
+    priority_out = purple.drop(columns=[c for c in ["_priority_score_v328", "_action_sort_v328", "_file_sort_v328", "_v328_from_file"] if c in purple.columns], errors="ignore")
+    for base_dir in [ROOT, DATA_DIR]:
+        priority_out.to_csv(base_dir / "priority_operation_pool.csv", index=False, encoding="utf-8-sig")
+
+    for base_dir in [ROOT, DATA_DIR]:
+        p = base_dir / "meta.json"
+        if p.exists():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8-sig"))
+                data["source"] = "v3291_evolution_ab_auto_split_safe"
+                data["final_operation_name"] = "🟣 PRIORITY 主升操作池"
+                data["priority_logic"] = "從所有紫框名單匯總，依強弱排序 TOP1-8；TOP1-3=S，TOP4-6=A，TOP7-8=B"
+                p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+            except Exception:
+                pass
+
+    print("v328 priority operation pool:", "rows=", len(priority_out), "buy=", int((_txt(priority_out, "action").str.upper() == "BUY").sum()))
+
+
