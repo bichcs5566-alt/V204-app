@@ -1,11 +1,3 @@
-# ===== data_pipeline v266.58 SAFE GIT PUSH FIX =====
-# 基底：使用者提供的 data_pipeline.yml 3.txt 原檔
-# 只修 GitHub Actions commit / pull / push 流程：
-# - 避免 cannot pull with rebase: You have unstaged changes
-# - 避免 non-fast-forward push rejected
-# - 不動策略、不動選股、不動五大清單、不動 UI、不動 position overlay
-# ============================================================
-
 name: data_pipeline  # v266.57 fake breakout guard
 
 on:
@@ -1667,36 +1659,10 @@ jobs:
           else
             git commit -m "lock pipeline final decision outputs"
 
-            # v266.58 SAFE PUSH:
-            # 這裡只修 Git 同步，不動策略、不動清單、不動 UI。
-            # 原本會在 pull --rebase 前遇到 runtime unstaged changes 而失敗。
-            echo "==== safe sync before push ===="
-            STASHED=0
-            if ! git diff --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
-              git stash push -u -m "ga-runtime-stash-${{ github.run_id }}-${{ github.run_attempt }}" || true
-              STASHED=1
-            fi
-
+            # v266.67.1: avoid push rejected when remote main has newer workflow commits
             git fetch origin main
-
-            if ! git pull --rebase origin main; then
-              echo "rebase failed, abort and retry with normal pull"
-              git rebase --abort || true
-              git pull --no-rebase origin main || true
-            fi
-
-            echo "==== push final outputs ===="
-            if ! git push origin HEAD:main; then
-              echo "push rejected, fetch/rebase once more then push again"
-              git fetch origin main
-              git pull --rebase origin main || true
-              git push origin HEAD:main
-            fi
-
-            if [ "$STASHED" = "1" ]; then
-              echo "drop runtime stash after successful push"
-              git stash list | grep "ga-runtime-stash-${{ github.run_id }}-${{ github.run_attempt }}" && git stash drop stash@{0} || true
-            fi
+            git pull --rebase origin main || true
+            git push
           fi
 
       # v266.57 TRUE LIVE TIMER：
@@ -1764,23 +1730,9 @@ jobs:
 
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-
+          git fetch origin main
+          git pull --rebase origin main || true
           git add -f workflow_status.json mobile_dashboard_v1/data/workflow_status.json
           git commit -m "workflow status final ${{ github.run_number }}" || echo "no final status change"
-
-          # v266.58 SAFE FINAL STATUS PUSH:
-          # final status 是附加狀態，不允許因 non-fast-forward 讓整個 workflow 變紅。
-          STASHED=0
-          if ! git diff --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
-            git stash push -u -m "ga-final-status-stash-${{ github.run_id }}-${{ github.run_attempt }}" || true
-            STASHED=1
-          fi
-
-          git fetch origin main || true
-          git pull --rebase origin main || true
-          git push origin HEAD:main || echo "final status push skipped"
-
-          if [ "$STASHED" = "1" ]; then
-            git stash list | grep "ga-final-status-stash-${{ github.run_id }}-${{ github.run_attempt }}" && git stash drop stash@{0} || true
-          fi
+          git push || echo "final status push skipped"
 
