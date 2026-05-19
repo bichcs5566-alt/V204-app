@@ -4258,4 +4258,337 @@ def apply_v333_dynamic_market_risk_engine():
     for name in ["priority_operation_pool.csv", "trade_plan.csv", "strategy_evolution.csv", "ignition_candidates.csv", "watchlist_monitor.csv", "blocklist.csv", "blocked_candidates.csv"]:
         df = _read_csv_safe(ROOT / name)
         if df.empty:
-            df = _read_csv_safe(DATA_DIR
+            df = _read_csv_safe(DATA_DIR / name)
+        if not df.empty:
+            df["_v333_file"] = name
+            frames.append(df)
+
+    all_df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+
+    score = 0
+    reasons = []
+
+    # A. 指數結構：有指數資料就用；沒有就不硬猜。
+    idx = _find_index_row()
+    idx_close = idx_ma5 = idx_ma20 = idx_ma60 = idx_chg = idx_vol_ratio = np.nan
+    if idx is not None:
+        idx_close = _first_num(idx, ["close", "收盤", "price", "last_price"])
+        idx_ma5 = _first_num(idx, ["ma5", "MA5", "ma_5"])
+        idx_ma20 = _first_num(idx, ["ma20", "MA20", "ma_20"])
+        idx_ma60 = _first_num(idx, ["ma60", "MA60", "ma_60"])
+        idx_chg = _first_num(idx, ["pct_chg", "change_pct", "漲跌幅", "return_1d"])
+        idx_vol_ratio = _first_num(idx, ["volume_ratio", "vol_ratio", "量比"])
+
+        if np.isfinite(idx_close) and np.isfinite(idx_ma20):
+            if idx_close >= idx_ma20:
+                score += 2
+                reasons.append("加權站上 MA20")
+            else:
+                score -= 3
+                reasons.append("加權跌破 MA20")
+
+        if np.isfinite(idx_close) and np.isfinite(idx_ma5):
+            if idx_close >= idx_ma5:
+                score += 1
+                reasons.append("加權站上 MA5")
+            else:
+                score -= 1
+                reasons.append("加權跌破 MA5")
+
+        if np.isfinite(idx_close) and np.isfinite(idx_ma60):
+            if idx_close >= idx_ma60:
+                score += 1
+                reasons.append("中期趨勢仍在 MA60 上")
+            else:
+                score -= 2
+                reasons.append("跌破 MA60，中期風險升級")
+
+        if np.isfinite(idx_chg):
+            if idx_chg <= -1.2:
+                score -= 2
+                reasons.append("加權單日跌幅偏大")
+            elif idx_chg >= 1.0:
+                score += 1
+                reasons.append("加權單日轉強")
+
+        if np.isfinite(idx_chg) and np.isfinite(idx_vol_ratio) and idx_chg < 0 and idx_vol_ratio >= 1.15:
+            score -= 2
+            reasons.append("量增下跌，風險扣分")
+
+    # B. 清單廣度：跟你目前五大清單 / A/B分流連動。
+    if final_n >= 6:
+        score += 2
+        reasons.append("最終操作擴散")
+    elif final_n >= 3:
+        score += 1
+        reasons.append("最終操作仍有名單")
+    elif final_n <= 1:
+        score -= 2
+        reasons.append("最終操作不足")
+
+    if evolution_n >= 8:
+        score += 1
+        reasons.append("EVOLUTION 養成池擴散")
+    if ignition_n >= 8:
+        score += 1
+        reasons.append("IGNITION 點火數增加")
+    if block_n >= max(8, final_n + ignition_n):
+        score -= 2
+        reasons.append("BLOCK / 禁止數偏多")
+    if watch_n >= 60 and final_n <= 2:
+        score -= 1
+        reasons.append("觀察多、可操作少")
+
+    if not all_df.empty:
+        joined = (
+            _txt_series(all_df, "action") + " " +
+            _txt_series(all_df, "final_action") + " " +
+            _txt_series(all_df, "strategy_type") + " " +
+            _txt_series(all_df, "strategy_layer") + " " +
+            _txt_series(all_df, "strategy_bucket") + " " +
+            _txt_series(all_df, "reason") + " " +
+            _txt_series(all_df, "system_note")
+        ).str.upper()
+
+        buy_like = int(joined.str.contains("BUY|買進|CORE|PRIORITY|EVOLUTION-A|🟣", regex=True, na=False).sum())
+        test_like = int(joined.str.contains("TEST|試單|IGNITION|起漲", regex=True, na=False).sum())
+        block_like = int(joined.str.contains("BLOCK|禁止|SELL|賣出", regex=True, na=False).sum())
+
+        if buy_like >= 8:
+            score += 1
+            reasons.append("主升 / 紫框訊號偏多")
+        if test_like >= 20:
+            score += 1
+            reasons.append("試單與點火訊號活躍")
+        if block_like >= buy_like and block_like >= 8:
+            score -= 2
+            reasons.append("風險 / 禁止訊號高於主升訊號")
+
+    score = int(max(-7, min(7, score)))
+
+    # C. 轉成前端可讀狀態與名額控制
+    if score >= 5:
+        market_state = "強勢"
+        risk_mode = "進攻"
+        macro_bias = "總經偏多"
+        macro_score = "6/7"
+        max_final = 8
+        test_pressure = "可放寬試單"
+        confidence = "中高"
+    elif score >= 3:
+        market_state = "盤整偏強"
+        risk_mode = "控風險進攻"
+        macro_bias = "總經偏多"
+        macro_score = "5/7"
+        max_final = 6
+        test_pressure = "試單可分批"
+        confidence = "中"
+    elif score >= 1:
+        market_state = "盤整"
+        risk_mode = "試單控倉"
+        macro_bias = "總經中性"
+        macro_score = "4/7"
+        max_final = 5
+        test_pressure = "試單不可重倉"
+        confidence = "中低"
+    elif score >= -2:
+        market_state = "盤整偏弱"
+        risk_mode = "防守試單"
+        macro_bias = "總經中性偏保守"
+        macro_score = "3/7"
+        max_final = 3
+        test_pressure = "只留最強試單"
+        confidence = "低"
+    else:
+        market_state = "弱勢"
+        risk_mode = "防守"
+        macro_bias = "總經偏空"
+        macro_score = "2/7"
+        max_final = 2
+        test_pressure = "暫停重倉"
+        confidence = "低"
+
+    market_note = "｜".join(reasons[:8]) if reasons else "清單廣度不足，維持保守評估"
+
+    # v333.3：meta 顯示語意拆層
+    # 市場層：只講盤勢與風險分
+    # 總經層：只講總經方向、分數、信心
+    # 風控層：只講操作限制，不再混入總經文字
+    market_display_v333 = f"{market_state}｜風險分 {score}"
+    macro_display_v333 = f"{macro_bias}｜分數 {macro_score}｜{confidence}"
+    risk_display_v333 = f"{test_pressure}｜信心{confidence}"
+
+    # risk_mode_v333 保持為純操作風控欄位，避免前端風險模式重複出現「總經中性｜分數4/7」
+    risk_mode_clean_v333 = str(test_pressure or risk_mode or "試單控倉")
+
+    # market_summary_v333 改成總覽說明，不再當 risk_mode 使用
+    summary = f"市場{market_state}｜{risk_mode_clean_v333}｜信心{confidence}"
+
+    # 寫入 meta，前端若讀 meta 就會更新；v328 也會讀 max_final_slots_v333。
+    payload = {
+        "source": "v333_dynamic_market_risk_engine",
+        "market_state_v333": market_state,
+        "market_status": market_state,
+        "market_display_v333": market_display_v333,
+
+        "macro_bias_v333": macro_bias,
+        "macro_score_v333": macro_score,
+        "macro_score": macro_score,
+        "macro_display_v333": macro_display_v333,
+
+        "risk_mode_v333": risk_mode_clean_v333,
+        "risk_mode": risk_mode_clean_v333,
+        "risk_display_v333": risk_display_v333,
+
+        "market_risk_score_v333": score,
+        "market_note_v333": market_note,
+        "market_summary_v333": summary,
+        "max_final_slots_v333": int(max_final),
+        "test_pressure_v333": test_pressure,
+        "confidence_v333": confidence,
+        "final_count_v333": int(final_n),
+        "ignition_count_v333": int(ignition_n),
+        "evolution_count_v333": int(evolution_n),
+        "watch_count_v333": int(watch_n),
+        "block_count_v333": int(block_n),
+        "updated_at_v333": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+    for base in [ROOT, DATA_DIR]:
+        base.mkdir(parents=True, exist_ok=True)
+        p = base / "meta.json"
+        data = {}
+        if p.exists():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8-sig"))
+            except Exception:
+                data = {}
+        data.update(payload)
+        p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+
+        # 額外輸出一份狀態檔，不影響舊前端；之後要接 UI 可直接讀。
+        pd.DataFrame([payload]).to_csv(base / "market_risk_status.csv", index=False, encoding="utf-8-sig")
+
+    print("v333 dynamic market risk:", market_state, macro_score, risk_mode, "score=", score, "max_final=", max_final, "reason=", market_note)
+
+# v48 lifecycle restore:
+# main tail restored to v38 clean lifecycle path.
+# v319/v320/v327/v328/v329/v333 chase/fallback/ranking override functions are kept in file but not executed.
+
+
+# ===== v53 STRICT FINAL FROM EVOLUTION ONLY =====
+# FINAL 嚴格只能由 EVOLUTION 升級，不允許 TEST / WATCH / IGNITION 直接跳 FINAL。
+def apply_v53_strict_final_from_evolution_only():
+    import pandas as pd
+    import numpy as np
+    from pathlib import Path
+
+    root = Path(".")
+    data = root / "mobile_dashboard_v1" / "data"
+    data.mkdir(parents=True, exist_ok=True)
+
+    def read_csv_any(name):
+        for p in [root / name, data / name]:
+            if p.exists() and p.stat().st_size > 0:
+                try:
+                    return pd.read_csv(p, dtype=str, encoding="utf-8-sig")
+                except Exception:
+                    try:
+                        return pd.read_csv(p, dtype=str)
+                    except Exception:
+                        pass
+        return pd.DataFrame()
+
+    def write_both(df, name):
+        for p in [root / name, data / name]:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            df.to_csv(p, index=False, encoding="utf-8-sig")
+
+    def to_num(df, col, default=0.0):
+        if col in df.columns:
+            return pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
+        return pd.Series(default, index=df.index, dtype="float64")
+
+    evo = read_csv_any("strategy_evolution.csv")
+
+    final_cols = [
+        "stock_id", "stock_name", "industry", "action", "final_action",
+        "strategy_type", "bucket", "strategy_name", "score", "entry_score",
+        "ref_price", "price", "reason", "system_note", "source"
+    ]
+
+    if evo.empty or "stock_id" not in evo.columns:
+        write_both(pd.DataFrame(columns=final_cols), "final_action_plan.csv")
+        print("v53 strict final: no EVOLUTION source, FINAL empty")
+        return
+
+    final = evo.copy()
+
+    # FINAL 是 EVOLUTION 後的確認，不是強度追高。
+    mom5 = to_num(final, "mom5", 0)
+    mom10 = to_num(final, "mom10", 0)
+    mom20 = to_num(final, "mom20", 0)
+    vol_ratio = to_num(final, "volume_ratio", 1)
+    close = to_num(final, "close", to_num(final, "ref_price", 0))
+    ma5 = to_num(final, "ma5", 0)
+    ma10 = to_num(final, "ma10", 0)
+    ma20 = to_num(final, "ma20", 0)
+    main_force = to_num(final, "main_force_score_v300", 0)
+    chip = to_num(final, "chip_score", 0)
+    obv = to_num(final, "obv_mom5", 0)
+
+    trend_confirm = (
+        (close >= ma5 * 0.995) &
+        (ma5 >= ma10 * 0.995) &
+        (ma10 >= ma20 * 0.985) &
+        (close >= ma20 * 1.000)
+    )
+
+    volume_confirm = vol_ratio.between(1.05, 2.80)
+    mainforce_confirm = (main_force >= 50) | (chip >= 50) | (obv > 0)
+    mild_push = mom5.between(0.00, 0.10) & mom10.between(0.02, 0.16) & mom20.between(0.03, 0.28)
+
+    ma20_safe = ma20.replace(0, np.nan)
+    dist_ma20 = (close / ma20_safe - 1).replace([np.inf, -np.inf], np.nan).fillna(0)
+    not_overheat = (dist_ma20 <= 0.12) & (mom5 <= 0.10) & (mom20 <= 0.28) & (vol_ratio <= 3.20)
+
+    mask = trend_confirm & volume_confirm & mainforce_confirm & mild_push & not_overheat
+    final = final.loc[mask].copy()
+
+    if final.empty:
+        write_both(pd.DataFrame(columns=final_cols), "final_action_plan.csv")
+        print("v53 strict final: no qualified EVOLUTION -> FINAL")
+        return
+
+    final = final.head(5).copy()
+    final["action"] = "FINAL"
+    final["final_action"] = "FINAL"
+    final["strategy_type"] = "FINAL"
+    final["bucket"] = "FINAL"
+    final["strategy_name"] = "FINAL 主力確認拉升"
+    final["reason"] = "FINAL 僅由 EVOLUTION 升級：主力確認拉升、量能溫和放大、均線展開、未過熱；禁止 TEST 直接跳 FINAL。"
+    final["system_note"] = "FINAL：主力確認要拉升，但不是追高；若條件不足則 FINAL 空白。"
+    final["source"] = "v53_strict_final_from_evolution_only"
+
+    for c in final_cols:
+        if c not in final.columns:
+            final[c] = ""
+
+    write_both(final[final_cols], "final_action_plan.csv")
+    print("v53 strict final rows =", len(final))
+
+
+if __name__ == "__main__":
+    main_v266577_structure_weight_continuation_patch()
+    apply_v311_csv_final_lock()
+    try:
+        apply_v315_ignition_evolution_outputs()
+    except Exception as e:
+        print("v315 panel output skipped:", repr(e))
+    write_v317_panel_files_hard_guarantee()
+    try:
+        apply_v53_strict_final_from_evolution_only()
+    except Exception as e:
+        print("v53 strict final skipped:", repr(e))
+
+# v52 EVOLUTION overheat downgrade patch: MA20 cost-zone, mild volume, no chase.
