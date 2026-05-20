@@ -1468,183 +1468,23 @@ function getPositionRiskRowV26630(stock) {
   return {};
 }
 
-
-// ===== v266.35 Position Lifecycle UI Helpers / 持倉生命週期前端映射 =====
-// 只給持倉卡片使用：優先讀 position_overlay.csv 新欄位。
-// 不改五大清單 renderScanRow、不改 Actions、不改策略。
-function pickPositionLifecycleV26635(overlay, riskRow, posRow, keys, fallback = "") {
-  const srcs = [overlay || {}, riskRow || {}, posRow || {}];
-  for (const obj of srcs) {
-    for (const k of keys) {
-      if (obj && Object.prototype.hasOwnProperty.call(obj, k) && validTextV26630H(obj[k])) return obj[k];
-    }
-  }
-  return fallback;
-}
-
-function normalizePositionStageV26635(v) {
-  const s = String(v || "").trim().toUpperCase();
-  if (s.includes("FINAL")) return "FINAL";
-  if (s.includes("EVOLUTION")) return "EVOLUTION";
-  if (s.includes("IGNITION")) return "IGNITION";
-  if (s.includes("TEST")) return "TEST";
-  if (s.includes("WATCH")) return "WATCH";
-  if (s.includes("BLOCK")) return "BLOCK";
-  if (s.includes("SELL") || s.includes("EXIT") || s.includes("出場")) return "EXIT";
-  if (s.includes("REDUCE") || s.includes("減碼")) return "REDUCE";
-  return "NONE";
-}
-
-function positionLifecycleUiV26635(stage, distributionStage, profitExitStatus) {
-  const st = normalizePositionStageV26635(stage);
-  const dist = String(distributionStage || "");
-  const profit = String(profitExitStatus || "");
-
-  if (/完整獲利出場|出場條件成立/.test(profit)) {
-    return { cls: "sell", pill: "✅ 完整獲利", title: "完整獲利出場", color: "exit" };
-  }
-  if (/派發後期|策略失效/.test(dist)) {
-    return { cls: "sell", pill: "🔴 派發後期", title: "出場風控", color: "exit" };
-  }
-  if (/派發中期/.test(dist)) {
-    return { cls: "reduce", pill: "🟠 派發中期", title: "分批停利", color: "reduce" };
-  }
-  if (/派發初期/.test(dist)) {
-    return { cls: "reduce", pill: "🟡 派發初期", title: "停利觀察", color: "reduce" };
-  }
-
-  if (st === "FINAL") return { cls: "final", pill: "🔥 FINAL", title: "主升確認", color: "final" };
-  if (st === "EVOLUTION") return { cls: "evolution", pill: "🧬 EVOLUTION", title: "主力慢推", color: "evolution" };
-  if (st === "IGNITION") return { cls: "ignition", pill: "🧪 IGNITION", title: "主力吸籌", color: "ignition" };
-  if (st === "TEST") return { cls: "test", pill: "🟡 TEST", title: "試單確認", color: "test" };
-  if (st === "WATCH") return { cls: "watch", pill: "⚪ WATCH", title: "觀察整理", color: "watch" };
-  if (st === "BLOCK") return { cls: "sell", pill: "⛔ BLOCK", title: "退出 / 禁止", color: "exit" };
-
-  return { cls: "hold", pill: "📦 持倉", title: "持倉提示", color: "hold" };
-}
-
-function injectPositionLifecycleStyleV26635() {
-  if (document.getElementById("position-lifecycle-style-v26635")) return;
-  const style = document.createElement("style");
-  style.id = "position-lifecycle-style-v26635";
-  style.textContent = `
-    .position-merged-v26630.final {
-      background: #fff7f7 !important;
-      border: 3px solid #fca5a5 !important;
-      border-radius: 24px !important;
-      padding: 18px !important;
-      margin-top: 14px !important;
-    }
-    .position-merged-v26630.evolution {
-      background: #f5f3ff !important;
-      border: 3px solid #c4b5fd !important;
-      border-radius: 24px !important;
-      padding: 18px !important;
-      margin-top: 14px !important;
-    }
-    .position-merged-v26630.ignition {
-      background: #fff7ed !important;
-      border: 3px solid #fdba74 !important;
-      border-radius: 24px !important;
-      padding: 18px !important;
-      margin-top: 14px !important;
-    }
-    .position-merged-v26630.test {
-      background: #fffdf4 !important;
-      border: 3px solid #fde047 !important;
-      border-radius: 24px !important;
-      padding: 18px !important;
-      margin-top: 14px !important;
-    }
-    .position-merged-v26630.watch {
-      background: #f9fafb !important;
-      border: 3px solid #d1d5db !important;
-      border-radius: 24px !important;
-      padding: 18px !important;
-      margin-top: 14px !important;
-    }
-    .position-merged-pill-v26630.final {
-      background: #fee2e2 !important;
-      color: #991b1b !important;
-      border: 1px solid #fca5a5 !important;
-    }
-    .position-merged-pill-v26630.evolution {
-      background: #ede9fe !important;
-      color: #5b21b6 !important;
-      border: 1px solid #c4b5fd !important;
-    }
-    .position-merged-pill-v26630.ignition {
-      background: #ffedd5 !important;
-      color: #9a3412 !important;
-      border: 1px solid #fdba74 !important;
-    }
-    .position-merged-pill-v26630.test {
-      background: #fef3c7 !important;
-      color: #92400e !important;
-      border: 1px solid #fcd34d !important;
-    }
-    .position-merged-pill-v26630.watch {
-      background: #f3f4f6 !important;
-      color: #4b5563 !important;
-      border: 1px solid #d1d5db !important;
-    }
-    .position-lifecycle-v26635 {
-      margin: 12px 0 14px;
-      padding: 14px 16px;
-      border-radius: 18px;
-      background: rgba(255,255,255,.72);
-      border: 1px solid rgba(148,163,184,.28);
-      font-weight: 850;
-      line-height: 1.55;
-    }
-    .position-lifecycle-v26635 b {
-      display: block;
-      margin-bottom: 6px;
-      font-size: 15px;
-      font-weight: 950;
-    }
-    .position-lifecycle-v26635 p {
-      margin: 0;
-      font-size: 13px;
-      font-weight: 850;
-      color: #374151;
-    }
-  `;
-  document.head.appendChild(style);
-}
-try { injectPositionLifecycleStyleV26635(); } catch(e) {}
-document.addEventListener("DOMContentLoaded", function() {
-  try { injectPositionLifecycleStyleV26635(); } catch(e) {}
-});
-
-function main_force_phase_from_frontend_fallback_v26635(stage) {
-  const s = normalizePositionStageV26635(stage);
-  if (s === "FINAL") return "🔥 主升拉升確認";
-  if (s === "EVOLUTION") return "🟣 主力控盤慢推";
-  if (s === "IGNITION") return "🟠 主力開始吸籌";
-  if (s === "TEST") return "🟡 試單確認中";
-  if (s === "WATCH") return "⚪ 觀察整理中";
-  if (s === "BLOCK") return "⛔ 策略失效 / 禁止";
-  return "⚪ 未進入五大清單";
-}
-
 function renderMergedPositionHintV26630(stock, posRow) {
-  try { injectPositionLifecycleStyleV26635(); } catch (e) {}
-
   const sid = sidV26630(stock);
   const overlay = { ...(window.__techMapV26637?.[sid] || {}), ...getPositionOverlayRowV26630(sid) };
   const riskRow = { ...(window.__techMapV26637?.[sid] || {}), ...getPositionRiskRowV26630(sid) };
   const actionRaw = overlay.position_action || riskRow.final_action || riskRow.action || "HOLD";
+  const actionInfo = zhPositionActionV26630(actionRaw);
 
   const avg = priceV26630(posRow.avg_price);
   const lots = lotsV26630(posRow.lots);
   const shares = sharesV26630(posRow.shares);
-
+  // v266.30E：close fallback 修補。
+  // position_overlay.csv 若沒有 close，至少用手動持倉均價避免 MA 判斷短路。
   const close = priceV26630(overlay.close || riskRow.close || riskRow.ref_price || posRow.close || posRow.avg_price);
   const cost = moneyV26630(nV26630(posRow.avg_price) && nV26630(posRow.shares) ? nV26630(posRow.avg_price) * nV26630(posRow.shares) : positionCost(posRow));
   const pnlRaw = overlay.pnl_pct || riskRow.pnl_pct;
   const pnl = cleanV26630(pnlRaw, (nV26630(close) && nV26630(posRow.avg_price)) ? pctV26630((nV26630(close) - nV26630(posRow.avg_price)) / nV26630(posRow.avg_price) * 100) : "--");
-
+  // v266.30H：MA 最終對接。先 normalize overlay/risk/pos，再抓標準欄位。
   const overlayH = normalizeRowV26630H(overlay);
   const riskH = normalizeRowV26630H(riskRow);
   const posH = normalizeRowV26630H(posRow);
@@ -1661,78 +1501,36 @@ function renderMergedPositionHintV26630(stock, posRow) {
   const ma20 = maStatusV26630("MA20", close, ma20RawH, ma20StatusH);
   const positionKbarTypeV26635 = pickFieldV26635({...riskRow, ...overlay}, ["kbar_type", "k_bar_type", "exit_kbar_type"], "依策略判斷");
   const positionKStructureV26635 = pickFieldV26635({...riskRow, ...overlay}, ["k_structure", "kline_structure"], "依策略判斷");
+  const riskZh = zhRiskV26630(overlay.risk_flag || riskRow.risk_flag || riskRow.risk_level || riskRow.exit_risk_level, actionRaw);
   const chip = chipTextV26630({ ...riskRow, ...overlay });
   const name = positionNameV26630(sid, posRow, overlay, riskRow);
 
-  const strategyStage = normalizePositionStageV26635(
-    pickPositionLifecycleV26635(overlay, riskRow, posRow, ["strategy_stage", "lifecycle_stage", "stage"], "")
-  );
-
-  const mainForcePhase = cleanV26630(
-    pickPositionLifecycleV26635(overlay, riskRow, posRow, ["main_force_phase", "主力階段"], ""),
-    main_force_phase_from_frontend_fallback_v26635(strategyStage)
-  );
-
-  const distributionStage = cleanV26630(
-    pickPositionLifecycleV26635(overlay, riskRow, posRow, ["distribution_stage", "派發階段", "distribution_phase"], ""),
-    "🟢 尚未進入明顯派發"
-  );
-
-  const profitExitStatus = cleanV26630(
-    pickPositionLifecycleV26635(overlay, riskRow, posRow, ["profit_exit_status", "獲利出場狀態"], ""),
-    "⚪ 尚未達完整獲利出場條件"
-  );
-
-  const lifecycleHoldAction = cleanV26630(
-    pickPositionLifecycleV26635(overlay, riskRow, posRow, ["lifecycle_hold_action", "生命週期建議", "hold_action"], ""),
-    ""
-  );
-
-  const lifecycleReason = cleanV26630(
-    pickPositionLifecycleV26635(overlay, riskRow, posRow, ["lifecycle_reason", "生命週期原因"], ""),
-    ""
-  );
-
-  const ui = positionLifecycleUiV26635(strategyStage, distributionStage, profitExitStatus);
-  const riskZh = zhRiskV26630(overlay.risk_flag || riskRow.risk_flag || riskRow.risk_level || riskRow.exit_risk_level, actionRaw);
-
   const reason = cleanV26630(
-    lifecycleReason || overlay.position_reason || riskRow.position_reason || riskRow.reason,
-    "持倉依五大清單生命週期重新評估；若未入清單，先依技術與風控觀察。"
+    overlay.position_reason || riskRow.position_reason || riskRow.reason,
+    actionInfo.key === "SELL" ? "觸發停損或趨勢防守，優先保護本金。" : "尚未出現明顯下跌或系統賣出訊號，趨勢未完全破壞。"
   );
-
   const kbar = cleanV26630(overlay.kbar_hint || riskRow.kbar_reason || riskRow.exit_kbar_reason, `${ma5}；${ma20}。`);
-  const takeProfit = cleanV26630(overlay.take_profit_hint || riskRow.take_profit_hint, profitExitStatus);
+  const takeProfit = cleanV26630(overlay.take_profit_hint || riskRow.take_profit_hint, actionInfo.key === "SELL" ? "目前不是停利情境，而是停損／風控優先。" : "尚未達明確停利條件，先依趨勢與籌碼續抱觀察。");
   const chipHint = cleanV26630(overlay.chip_hint || riskRow.chip_hint, "籌碼資料有限，需搭配技術面確認。");
   const chipReason = cleanV26630(overlay.chip_reason || riskRow.chip_reason, "籌碼資料有限");
-  const advice = cleanV26630(lifecycleHoldAction || overlay.position_hint || riskRow.position_hint || riskRow.system_note, "依生命週期與風控執行。");
-  const systemHint = cleanV26630(
-    overlay.system_hint || riskRow.system_hint || riskRow.system_note,
-    `${mainForcePhase}；${distributionStage}；${profitExitStatus}`
-  );
+  const advice = cleanV26630(overlay.position_hint || riskRow.position_hint || riskRow.system_note, actionInfo.key === "SELL" ? "優先處理出場，不建議拖延或凹單。" : "在還沒有明顯下跌、未觸發風控前，以續抱觀察為主。");
+  const systemHint = actionInfo.key === "SELL"
+    ? "持倉已有風險或停損訊號，先控制部位，不要情緒化加碼。"
+    : "尚未跌破關鍵防守時續抱；若跌破五日線、MA20 或籌碼轉弱，再分批停利或出場。";
 
   return `
-    <div class="position-merged-v26630 ${ui.cls}">
+    <div class="position-merged-v26630 ${actionInfo.cls}">
       <div class="position-merged-head-v26630">
-        <span class="position-merged-pill-v26630 ${ui.cls}">${ui.pill}</span>
-        <b>${ui.title}</b>
+        <span class="position-merged-pill-v26630 ${actionInfo.cls}">${actionInfo.pill}</span>
+        <b>持倉提示</b>
         <strong>${close}</strong>
       </div>
-
-      <div class="position-lifecycle-v26635">
-        <b>🧭 持倉生命週期</b>
-        <p>目前階段：${strategyStage === "NONE" ? "未進入五大清單" : strategyStage}｜${mainForcePhase}<br>派發狀態：${distributionStage}<br>獲利狀態：${profitExitStatus}</p>
-      </div>
-
       <div class="detail-grid position-merged-grid-v26630">
         ${positionDetailCellV26630("股票代號", sid)}
         ${positionDetailCellV26630("股票名稱", name)}
-        ${positionDetailCellV26630("持倉狀態", ui.title)}
-        ${positionDetailCellV26630("來源", "手動持倉 + 策略評估")}
-        ${positionDetailCellV26630("策略層", strategyStage === "NONE" ? "持倉管理" : strategyStage)}
-        ${positionDetailCellV26630("主力階段", mainForcePhase)}
-        ${positionDetailCellV26630("派發階段", distributionStage)}
-        ${positionDetailCellV26630("獲利出場", profitExitStatus)}
+        ${positionDetailCellV26630("持倉狀態", actionInfo.text)}
+        ${positionDetailCellV26630("來源", actionInfo.key === "SELL" ? "策略出場" : "手動持倉")}
+        ${positionDetailCellV26630("策略層", actionInfo.key === "SELL" ? "持倉風控" : "持倉管理")}
         ${positionDetailCellV26630("參考價", close)}
         ${positionDetailCellV26630("均價", avg)}
         ${positionDetailCellV26630("張數", lots)}
@@ -1749,9 +1547,9 @@ function renderMergedPositionHintV26630(stock, posRow) {
         ${positionDetailCellV26630("更新時間", cleanV26630(posRow.updated_at))}
         ${positionDetailCellV26630("備註", cleanV26630(posRow.note, "手動持倉"))}
       </div>
-      <div class="detail-text position-merged-text-v26630"><b>生命週期原因</b><p>${reason}</p></div>
+      <div class="detail-text position-merged-text-v26630"><b>原因</b><p>${reason}</p></div>
       <div class="detail-text position-merged-text-v26630"><b>K線／原因提示</b><p>${kbar}｜${positionKbarTypeV26635}｜${positionKStructureV26635}</p></div>
-      <div class="detail-text position-merged-text-v26630"><b>停利 / 出場提示</b><p>${takeProfit}</p></div>
+      <div class="detail-text position-merged-text-v26630"><b>停利提示</b><p>${takeProfit}</p></div>
       <div class="detail-text position-merged-text-v26630"><b>籌碼提示</b><p>${chipReason}｜${chipHint}</p></div>
       <div class="detail-text position-merged-text-v26630"><b>建議動作</b><p>${advice}</p></div>
       <div class="detail-text position-merged-text-v26630"><b>系統提示</b><p>${systemHint}</p></div>
@@ -6449,3 +6247,293 @@ document.addEventListener("DOMContentLoaded", function() {
    不影響持倉、清單、排序、Actions。
 */
 window.__META_SEMANTIC_LAYER_V3332__ = true;
+
+/* =========================================================
+   v266.70 CLEAN LIFECYCLE UI FIX
+   修正範圍：只修前端 UI 顯示
+   1) 移除前版全域判斷污染後，改用「清單容器 ID」判斷階段
+   2) 只有 #evolutionList 顯示 慢推 / 紫色
+   3) 只有 #ignitionList 顯示 吸籌 / 橘紅色
+   4) TEST / WATCH / BLOCK 恢復原本清單語意，不再被吸籌污染
+   5) FINAL 固定紅色主升區；有標的時使用原本完整卡片，沒標的時只顯示簡潔空狀態
+   6) 不改策略、不改 CSV、不改 pipeline、不改持倉、不改 fetch
+   ========================================================= */
+
+function injectCleanLifecycleStyleV26670() {
+  if (document.getElementById("clean-lifecycle-style-v26670")) return;
+
+  const style = document.createElement("style");
+  style.id = "clean-lifecycle-style-v26670";
+  style.textContent = `
+    /* FINAL：紅色主升確認區 */
+    .final-section-v26670 {
+      border: 2px solid rgba(239, 68, 68, .32) !important;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, .08) !important;
+      background: linear-gradient(180deg, #fff7f7, #ffffff) !important;
+    }
+    .final-section-v26670 h2,
+    .final-section-v26670 summary {
+      color: #b91c1c !important;
+      font-weight: 950 !important;
+    }
+    .final-section-v26670 .hint {
+      color: #991b1b !important;
+      background: #fef2f2 !important;
+      border: 1px solid #fecaca !important;
+      border-radius: 14px !important;
+      padding: 9px 12px !important;
+      font-weight: 850 !important;
+    }
+    #finalActionList .scan-item {
+      border-color: #ef4444 !important;
+      background: linear-gradient(90deg, #fff7f7, #ffffff) !important;
+    }
+    #finalActionList .scan-main,
+    #finalActionList .scan-main-live {
+      border-color: rgba(239, 68, 68, .52) !important;
+      background: linear-gradient(90deg, #fee2e2, #ffffff) !important;
+    }
+    #finalActionList .scan-action {
+      background: #fee2e2 !important;
+      color: #991b1b !important;
+      border: 1px solid #fca5a5 !important;
+      font-weight: 950 !important;
+    }
+    .final-empty-v26670 {
+      margin-top: 10px;
+      padding: 16px 18px;
+      border-radius: 18px;
+      border: 2px solid #fecaca;
+      background: #fef2f2;
+      color: #991b1b;
+      font-weight: 900;
+      line-height: 1.55;
+    }
+    .final-empty-v26670 b {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 16px;
+      font-weight: 950;
+    }
+    .final-empty-v26670 p {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    /* EVOLUTION：只限 evolutionList */
+    .evolution-card summary {
+      color: #6d28d9 !important;
+      font-weight: 950 !important;
+    }
+    .evolution-card .hint {
+      color: #5b21b6 !important;
+      background: rgba(245, 243, 255, .75) !important;
+      border-radius: 14px !important;
+      padding: 8px 10px !important;
+      font-weight: 850 !important;
+    }
+    #evolutionList .scan-item {
+      border-color: #8b5cf6 !important;
+      box-shadow: 0 0 0 2px rgba(139, 92, 246, .10) !important;
+      background: linear-gradient(90deg, #f5f3ff, #ffffff) !important;
+    }
+    #evolutionList .scan-main,
+    #evolutionList .scan-main-live {
+      border-color: rgba(139, 92, 246, .42) !important;
+      background: linear-gradient(90deg, #f5f3ff, #ffffff) !important;
+    }
+    #evolutionList .scan-action {
+      background: #ede9fe !important;
+      color: #5b21b6 !important;
+      border: 1px solid #c4b5fd !important;
+      font-weight: 950 !important;
+    }
+
+    /* IGNITION：只限 ignitionList */
+    .ignition-card summary {
+      color: #9a3412 !important;
+      font-weight: 950 !important;
+    }
+    .ignition-card .hint {
+      color: #9a3412 !important;
+      background: rgba(255, 247, 237, .75) !important;
+      border-radius: 14px !important;
+      padding: 8px 10px !important;
+      font-weight: 850 !important;
+    }
+    #ignitionList .scan-item {
+      border-color: #f59e0b !important;
+      box-shadow: 0 0 0 2px rgba(245, 158, 11, .10) !important;
+      background: linear-gradient(90deg, #fff7ed, #ffffff) !important;
+    }
+    #ignitionList .scan-main,
+    #ignitionList .scan-main-live {
+      border-color: rgba(245, 158, 11, .42) !important;
+      background: linear-gradient(90deg, #fff7ed, #ffffff) !important;
+    }
+    #ignitionList .scan-action {
+      background: #ffedd5 !important;
+      color: #9a3412 !important;
+      border: 1px solid #fdba74 !important;
+      font-weight: 950 !important;
+    }
+
+    /* TEST / WATCH / BLOCK：明確恢復，不吃吸籌樣式 */
+    #testList .scan-action {
+      background: #fef3c7 !important;
+      color: #92400e !important;
+      border: 1px solid #fcd34d !important;
+      font-weight: 950 !important;
+    }
+    #testList .scan-item {
+      border-color: #facc15 !important;
+      background: #fffdf4 !important;
+    }
+    #watchList .scan-action {
+      background: #f3f4f6 !important;
+      color: #4b5563 !important;
+      border: 1px solid #d1d5db !important;
+      font-weight: 950 !important;
+    }
+    #watchList .scan-item {
+      border-color: #d1d5db !important;
+      background: #f9fafb !important;
+    }
+    #blockList .scan-action {
+      background: #fee2e2 !important;
+      color: #991b1b !important;
+      border: 1px solid #fca5a5 !important;
+      font-weight: 950 !important;
+    }
+    #blockList .scan-item {
+      border-color: #e5e7eb !important;
+      background: #f9fafb !important;
+      opacity: .88;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function sectionByListIdV26670(listId) {
+  const list = document.getElementById(listId);
+  return list ? list.closest("section") : null;
+}
+
+function setScanActionLabelV26670(listId, labelText) {
+  const list = document.getElementById(listId);
+  if (!list) return;
+  list.querySelectorAll(".scan-action").forEach(el => {
+    el.textContent = labelText;
+  });
+}
+
+function applyLifecycleOrderV26670() {
+  const finalSection = sectionByListIdV26670("finalActionList");
+  const evolutionSection = sectionByListIdV26670("evolutionList");
+  const ignitionSection = sectionByListIdV26670("ignitionList");
+  const testSection = sectionByListIdV26670("testList");
+  const watchSection = sectionByListIdV26670("watchList");
+  const blockSection = sectionByListIdV26670("blockList");
+
+  if (!finalSection || !evolutionSection || !ignitionSection || !testSection || !watchSection || !blockSection) return;
+
+  const parent = finalSection.parentElement;
+  if (!parent) return;
+
+  // 目標排序：FINAL → EVOLUTION → IGNITION → TEST → WATCH → BLOCK
+  if (finalSection.nextElementSibling !== evolutionSection) {
+    parent.insertBefore(evolutionSection, finalSection.nextSibling);
+  }
+  if (evolutionSection.nextElementSibling !== ignitionSection) {
+    parent.insertBefore(ignitionSection, evolutionSection.nextSibling);
+  }
+  if (ignitionSection.nextElementSibling !== testSection) {
+    parent.insertBefore(testSection, ignitionSection.nextSibling);
+  }
+  if (testSection.nextElementSibling !== watchSection) {
+    parent.insertBefore(watchSection, testSection.nextSibling);
+  }
+  if (watchSection.nextElementSibling !== blockSection) {
+    parent.insertBefore(blockSection, watchSection.nextSibling);
+  }
+}
+
+function applyLifecycleTitlesV26670() {
+  const finalSection = sectionByListIdV26670("finalActionList");
+  if (finalSection) {
+    finalSection.classList.add("final-section-v26670");
+    const title = finalSection.querySelector("h2, summary");
+    if (title) title.textContent = "🔥 FINAL｜主升確認";
+    const hint = finalSection.querySelector(".hint");
+    if (hint) hint.textContent = "主升確認區：只顯示風險報酬仍漂亮、主力拉升確認、未過熱的正式操作標的。";
+  }
+
+  const evolutionSection = sectionByListIdV26670("evolutionList");
+  if (evolutionSection) {
+    const summary = evolutionSection.querySelector("summary");
+    if (summary) summary.textContent = "🧬 EVOLUTION 策略進化訊號｜主力慢推";
+    const hint = evolutionSection.querySelector(".hint");
+    if (hint) hint.textContent = "主力控盤慢推期：回檔有人接、均線慢慢打開、量能溫和，優先度高於 IGNITION。";
+  }
+
+  const ignitionSection = sectionByListIdV26670("ignitionList");
+  if (ignitionSection) {
+    const summary = ignitionSection.querySelector("summary");
+    if (summary) summary.textContent = "🧪 IGNITION 起漲訊號｜主力吸籌";
+    const hint = ignitionSection.querySelector(".hint");
+    if (hint) hint.textContent = "主力開始吸籌期：觀察承接、放量與假突破風險，尚未完全確認主升。";
+  }
+}
+
+function applyCleanLifecycleBadgesV26670() {
+  setScanActionLabelV26670("evolutionList", "🟣 慢推");
+  setScanActionLabelV26670("ignitionList", "🟠 吸籌");
+  setScanActionLabelV26670("testList", "🟡 試單");
+  setScanActionLabelV26670("watchList", "⚪ 觀察");
+  setScanActionLabelV26670("blockList", "⛔ 禁止");
+  setScanActionLabelV26670("finalActionList", "🔥 主升");
+}
+
+function applyFinalEmptyV26670() {
+  const finalList = document.getElementById("finalActionList");
+  if (!finalList) return;
+
+  const hasCard = finalList.querySelector(".scan-item, article, .position-row");
+  const text = String(finalList.textContent || "").trim();
+  const hasOriginalEmpty = finalList.querySelector(".empty");
+  const hasFinalEmpty = finalList.querySelector(".final-empty-v26670");
+
+  if (hasCard) return;
+  if (hasFinalEmpty) return;
+
+  if (hasOriginalEmpty || /沒有|無|空白/.test(text)) {
+    finalList.innerHTML = `
+      <div class="final-empty-v26670">
+        <b>🔥 本輪沒有 FINAL 主升確認標的</b>
+        <p>目前沒有同時符合「主力拉升確認、量價健康、未過熱、風險報酬漂亮」的標的；FINAL 寧可空白，不硬追。</p>
+      </div>
+    `;
+  }
+}
+
+function applyCleanLifecycleUiV26670() {
+  try { injectCleanLifecycleStyleV26670(); } catch (e) {}
+  try { applyLifecycleOrderV26670(); } catch (e) {}
+  try { applyLifecycleTitlesV26670(); } catch (e) {}
+  try { applyCleanLifecycleBadgesV26670(); } catch (e) {}
+  try { applyFinalEmptyV26670(); } catch (e) {}
+}
+
+try { applyCleanLifecycleUiV26670(); } catch (e) {}
+document.addEventListener("DOMContentLoaded", function() {
+  applyCleanLifecycleUiV26670();
+
+  // render 完成後會重畫清單，補跑幾次；只改 DOM 顯示，不碰資料。
+  let n = 0;
+  const timer = setInterval(function() {
+    applyCleanLifecycleUiV26670();
+    n += 1;
+    if (n >= 20) clearInterval(timer);
+  }, 700);
+});
