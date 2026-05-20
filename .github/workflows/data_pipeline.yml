@@ -1468,9 +1468,12 @@ jobs:
 
 
 
-      # v266.57：無同步持倉時，最終操作強制鎖空。
-      # 防止只刷新頁面就復活舊的 2409 / 2330 賣出標的。
-      - name: Force empty final actions when no synced positions
+      # v266.67.2：FINAL 候選安全鎖。
+      # 修正重點：
+      # 1. 沒有同步持倉時，不再清空 final_action_plan。
+      # 2. 只移除 SELL / REDUCE 這類需要持倉才成立的舊動作。
+      # 3. 保留本輪策略產生的 FINAL / BUY / TEST / WATCH 主升候選，讓 FINAL 可依策略邏輯進清單。
+      - name: Final action candidate-safe lock when no synced positions
         if: always()
         run: |
           python - <<'PY'
@@ -1527,42 +1530,78 @@ jobs:
                       ids.update(sid_series(valid))
               return ids
 
+          def is_sell_row(row):
+              txt = " ".join(str(row.get(c, "")) for c in [
+                  "final_action", "action", "status", "decision", "reason", "system_note"
+              ]).upper()
+              return any(x in txt for x in ["SELL", "REDUCE", "賣", "賣出", "出場", "停損", "減碼"])
+
           try:
               ids = active_position_ids()
           except Exception as e:
-              print("v266.57 active_position_ids warning:", e)
+              print("v266.67.2 active_position_ids warning:", e)
               ids = set()
 
-          final_cols = [
-              "stock_id","stock_name","final_action","action","ref_price",
-              "reason","system_note","updated_at","refresh_mode",
-              "behavior_hint","behavior_confidence","behavior_action_hint"
-          ]
+          final = read_csv_safe(ROOT / "final_action_plan.csv")
+          if final.empty:
+              final = read_csv_safe(DATA / "final_action_plan.csv")
 
-          if not ids:
-              final = pd.DataFrame(columns=final_cols)
-              for p in [ROOT/"final_action_plan.csv", DATA/"final_action_plan.csv"]:
-                  p.parent.mkdir(parents=True, exist_ok=True)
-                  final.to_csv(p, index=False, encoding="utf-8-sig")
-
-              summary = {
-                  "version": "v266.57",
-                  "source": "v266_57_source_safe_string",
-                  "refresh_mode": "no_position_final_empty",
-                  "final_action_rows": 0,
-                  "active_position_count": 0,
-                  "active_position_ids": [],
-                  "final_action_updated_at": now,
-                  "updated_at": now,
-                  "message": "無同步持倉，最終操作強制空白，防止舊標的復活。",
-                  "timezone": "Asia/Taipei"
-              }
-              for p in [ROOT/"final_action_summary.json", DATA/"final_action_summary.json"]:
-                  p.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8-sig")
-
-              print("v266.57 no active synced positions -> final_action_plan emptied")
+          if final.empty:
+              final = pd.DataFrame(columns=[
+                  "stock_id","stock_name","final_action","action","ref_price",
+                  "reason","system_note","updated_at","refresh_mode",
+                  "behavior_hint","behavior_confidence","behavior_action_hint"
+              ])
           else:
-              print("v266.57 active synced positions found -> keep final actions:", sorted(ids))
+              final = final.copy()
+              if "stock_id" in final.columns:
+                  sid = final["stock_id"].astype(str).str.extract(r"(\d{4})", expand=False)
+                  final["stock_id"] = sid.fillna(final["stock_id"].astype(str))
+
+              sell_mask = final.apply(is_sell_row, axis=1)
+
+              if ids and "stock_id" in final.columns:
+                  keep_sell = sell_mask & final["stock_id"].astype(str).isin(ids)
+              else:
+                  keep_sell = pd.Series([False] * len(final), index=final.index)
+
+              # 保留：非賣出候選 + 本輪真持倉內的賣出/減碼
+              final = pd.concat([
+                  final.loc[~sell_mask],
+                  final.loc[keep_sell],
+              ], ignore_index=True)
+
+          final["updated_at"] = now
+          final["refresh_mode"] = "candidate_safe_final_lock"
+          for p in [ROOT/"final_action_plan.csv", DATA/"final_action_plan.csv"]:
+              p.parent.mkdir(parents=True, exist_ok=True)
+              final.to_csv(p, index=False, encoding="utf-8-sig")
+
+          summary = {}
+          for p in [ROOT/"final_action_summary.json", DATA/"final_action_summary.json"]:
+              if p.exists():
+                  try:
+                      summary = json.loads(p.read_text(encoding="utf-8-sig"))
+                      break
+                  except Exception:
+                      pass
+
+          summary.update({
+              "version": "v266.67.2",
+              "source": "candidate_safe_final_lock",
+              "refresh_mode": "candidate_safe_final_lock",
+              "final_action_rows": int(len(final)),
+              "active_position_count": int(len(ids)),
+              "active_position_ids": sorted(ids),
+              "final_action_updated_at": now,
+              "updated_at": now,
+              "message": "無同步持倉時只移除 SELL/REDUCE 舊持倉動作，保留 FINAL 主升候選。",
+              "timezone": "Asia/Taipei"
+          })
+          for p in [ROOT/"final_action_summary.json", DATA/"final_action_summary.json"]:
+              p.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8-sig")
+
+          print("v266.67.2 candidate-safe final lock rows =", len(final), "active_ids =", sorted(ids))
           PY
 
 
@@ -1662,10 +1701,15 @@ jobs:
           else
             git commit -m "lock pipeline final decision outputs"
 
-            # v266.67.1: avoid push rejected when remote main has newer workflow commits
+            # v266.67.2: avoid push rejected / unstaged rebase conflict when remote main has newer workflow commits
             git fetch origin main
-            git pull --rebase origin main || true
-            git push
+            git pull --rebase --autostash origin main || true
+            git push origin main || (
+              echo "push rejected, retry with autostash rebase"
+              git fetch origin main
+              git pull --rebase --autostash origin main
+              git push origin main
+            )
           fi
 
       # v266.57 TRUE LIVE TIMER：
@@ -1734,8 +1778,8 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git fetch origin main
-          git pull --rebase origin main || true
+          git pull --rebase --autostash origin main || true
           git add -f workflow_status.json mobile_dashboard_v1/data/workflow_status.json
           git commit -m "workflow status final ${{ github.run_number }}" || echo "no final status change"
-          git push || echo "final status push skipped"
+          git push origin main || (git fetch origin main && git pull --rebase --autostash origin main && git push origin main) || echo "final status push skipped"
 
