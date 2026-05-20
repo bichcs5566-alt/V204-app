@@ -6249,408 +6249,34 @@ document.addEventListener("DOMContentLoaded", function() {
 window.__META_SEMANTIC_LAYER_V3332__ = true;
 
 /* =========================================================
-   v266.66 IGNITION / EVOLUTION UI STAGE COLOR PATCH
-   只修前端顯示：
-   - 不改資料讀取
-   - 不改策略邏輯
-   - 不改 Actions / GitHub / 持倉
-   - 不改 CSV 欄位
-   - 只讓 IGNITION / EVOLUTION 的卡片顏色與狀態字更清楚
+   v266.70 CLEAN LIFECYCLE UI FIX
+   修正範圍：只修前端 UI 顯示
+   1) 移除前版全域判斷污染後，改用「清單容器 ID」判斷階段
+   2) 只有 #evolutionList 顯示 慢推 / 紫色
+   3) 只有 #ignitionList 顯示 吸籌 / 橘紅色
+   4) TEST / WATCH / BLOCK 恢復原本清單語意，不再被吸籌污染
+   5) FINAL 固定紅色主升區；有標的時使用原本完整卡片，沒標的時只顯示簡潔空狀態
+   6) 不改策略、不改 CSV、不改 pipeline、不改持倉、不改 fetch
    ========================================================= */
 
-function detectLifecycleStageV26666(row) {
-  row = row || {};
-  const text = [
-    row.strategy_type,
-    row.bucket,
-    row.source,
-    row.strategy_name,
-    row.entry_type,
-    row.reason,
-    row.system_note
-  ].map(v => String(v ?? "")).join(" ").toUpperCase();
-
-  if (text.includes("IGNITION") || text.includes("起漲")) return "IGNITION";
-  if (text.includes("EVOLUTION") || text.includes("進化")) return "EVOLUTION";
-  return "";
-}
-
-function lifecycleStageActionHTMLV26666(stage) {
-  if (stage === "IGNITION") {
-    return `<div class="scan-action lifecycle-stage-action-v26666 ignition-stage-v26666">🟠 吸籌</div>`;
-  }
-  if (stage === "EVOLUTION") {
-    return `<div class="scan-action lifecycle-stage-action-v26666 evolution-stage-v26666">🟣 慢推</div>`;
-  }
-  return "";
-}
-
-function lifecycleStageHintHTMLV26666(stage) {
-  if (stage === "IGNITION") {
-    return `
-      <div class="lifecycle-stage-hint-v26666 ignition-stage-v26666">
-        <b>🟠 IGNITION｜主力開始吸籌</b>
-        <p>定位：起漲前觀察。重點看承接、量能是否溫和放大、假突破風險是否降低；不是追高進場訊號。</p>
-      </div>
-    `;
-  }
-  if (stage === "EVOLUTION") {
-    return `
-      <div class="lifecycle-stage-hint-v26666 evolution-stage-v26666">
-        <b>🟣 EVOLUTION｜主力控盤慢推</b>
-        <p>定位：主力慢推期。重點看回檔是否有人接、均線是否慢慢打開、量能是否健康；未過熱才有參考價值。</p>
-      </div>
-    `;
-  }
-  return "";
-}
-
-function injectLifecycleStageStyleV26666() {
-  if (document.getElementById("lifecycle-stage-style-v26666")) return;
+function injectCleanLifecycleStyleV26670() {
+  if (document.getElementById("clean-lifecycle-style-v26670")) return;
 
   const style = document.createElement("style");
-  style.id = "lifecycle-stage-style-v26666";
+  style.id = "clean-lifecycle-style-v26670";
   style.textContent = `
-    .scan-item.lifecycle-ignition-card-v26666 {
-      border-color: #f59e0b !important;
-      box-shadow: 0 0 0 2px rgba(245, 158, 11, .12) !important;
-    }
-    .scan-item.lifecycle-evolution-card-v26666 {
-      border-color: #8b5cf6 !important;
-      box-shadow: 0 0 0 2px rgba(139, 92, 246, .12) !important;
-    }
-    .scan-main.lifecycle-ignition-main-v26666,
-    .scan-main-live.lifecycle-ignition-main-v26666 {
-      background: linear-gradient(90deg, #fff7ed, #ffffff) !important;
-      border-color: rgba(245, 158, 11, .45) !important;
-    }
-    .scan-main.lifecycle-evolution-main-v26666,
-    .scan-main-live.lifecycle-evolution-main-v26666 {
-      background: linear-gradient(90deg, #f5f3ff, #ffffff) !important;
-      border-color: rgba(139, 92, 246, .45) !important;
-    }
-    .scan-action.lifecycle-stage-action-v26666 {
-      border-radius: 999px !important;
-      padding: 7px 12px !important;
-      font-weight: 950 !important;
-      white-space: nowrap !important;
-      letter-spacing: .02em !important;
-    }
-    .scan-action.lifecycle-stage-action-v26666.ignition-stage-v26666 {
-      background: #ffedd5 !important;
-      color: #9a3412 !important;
-      border: 1px solid #fdba74 !important;
-    }
-    .scan-action.lifecycle-stage-action-v26666.evolution-stage-v26666 {
-      background: #ede9fe !important;
-      color: #5b21b6 !important;
-      border: 1px solid #c4b5fd !important;
-    }
-    .lifecycle-stage-hint-v26666 {
-      margin: 12px 0 10px;
-      padding: 14px 16px;
-      border-radius: 18px;
-      border: 2px solid #e5e7eb;
-      font-weight: 800;
-      line-height: 1.55;
-    }
-    .lifecycle-stage-hint-v26666 b {
-      display: block;
-      margin-bottom: 6px;
-      font-size: 15px;
-      font-weight: 950;
-    }
-    .lifecycle-stage-hint-v26666 p {
-      margin: 0;
-      font-size: 13px;
-      font-weight: 800;
-    }
-    .lifecycle-stage-hint-v26666.ignition-stage-v26666 {
-      background: #fff7ed;
-      color: #9a3412;
-      border-color: #fdba74;
-    }
-    .lifecycle-stage-hint-v26666.evolution-stage-v26666 {
-      background: #f5f3ff;
-      color: #5b21b6;
-      border-color: #c4b5fd;
-    }
-    .ignition-card summary {
-      color: #9a3412 !important;
-    }
-    .evolution-card summary {
-      color: #5b21b6 !important;
-    }
-    .ignition-card .hint {
-      color: #9a3412 !important;
-      background: rgba(255, 247, 237, .75) !important;
-      border-radius: 14px !important;
-      padding: 8px 10px !important;
-    }
-    .evolution-card .hint {
-      color: #5b21b6 !important;
-      background: rgba(245, 243, 255, .75) !important;
-      border-radius: 14px !important;
-      padding: 8px 10px !important;
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-const __oldRenderScanRowV26666 = typeof renderScanRow === "function" ? renderScanRow : null;
-
-renderScanRow = function(row, key) {
-  try { injectLifecycleStageStyleV26666(); } catch (e) {}
-
-  const html = __oldRenderScanRowV26666 ? __oldRenderScanRowV26666(row, key) : "";
-  if (!html) return html;
-
-  const stage = detectLifecycleStageV26666(row);
-  if (!stage) return html;
-
-  const stageAction = lifecycleStageActionHTMLV26666(stage);
-  const stageHint = lifecycleStageHintHTMLV26666(stage);
-  let out = html;
-
-  if (stage === "IGNITION") {
-    out = out.replace('<article class="scan-item ', '<article class="scan-item lifecycle-ignition-card-v26666 ');
-    out = out.replace('<div class="scan-main scan-main-live', '<div class="scan-main scan-main-live lifecycle-ignition-main-v26666');
-  }
-
-  if (stage === "EVOLUTION") {
-    out = out.replace('<article class="scan-item ', '<article class="scan-item lifecycle-evolution-card-v26666 ');
-    out = out.replace('<div class="scan-main scan-main-live', '<div class="scan-main scan-main-live lifecycle-evolution-main-v26666');
-  }
-
-  if (stageAction) {
-    out = out.replace(/<div class="scan-action [^"]*">[\s\S]*?<\/div>/, stageAction);
-  }
-
-  if (stageHint && out.includes('<div class="detail-grid">')) {
-    out = out.replace(
-      /(<div class="detail-grid">[\s\S]*?<\/div>\s*)/,
-      `$1${stageHint}`
-    );
-  }
-
-  return out;
-};
-
-try { injectLifecycleStageStyleV26666(); } catch (e) {}
-document.addEventListener("DOMContentLoaded", function() {
-  try { injectLifecycleStageStyleV26666(); } catch (e) {}
-});
-
-/* =========================================================
-   v266.67 FINAL CARD + SECTION ORDER UI PATCH
-   只修前端顯示：
-   - FINAL 改紅色主升操作視覺
-   - EVOLUTION 與 IGNITION 區塊對調：FINAL → EVOLUTION → IGNITION → TEST → WATCH → BLOCK
-   - 不改資料讀取、不改策略、不改 CSV、不改 Actions、不改持倉
-   ========================================================= */
-
-function injectFinalAndOrderStyleV26667() {
-  if (document.getElementById("final-order-style-v26667")) return;
-
-  const style = document.createElement("style");
-  style.id = "final-order-style-v26667";
-  style.textContent = `
-    /* FINAL 主升操作區：紅色強化 */
-    section:has(#finalActionList) {
-      border-color: rgba(239, 68, 68, .35) !important;
-      box-shadow: 0 0 0 2px rgba(239, 68, 68, .08) !important;
-    }
-
-    section:has(#finalActionList) .section-head h2,
-    section:has(#finalActionList) h2 {
-      color: #b91c1c !important;
-    }
-
-    #finalActionList .scan-item,
-    #finalActionList .position-row,
-    #finalActionList article {
-      border-color: #ef4444 !important;
-      box-shadow: 0 0 0 2px rgba(239, 68, 68, .12) !important;
-      background: linear-gradient(90deg, #fef2f2, #ffffff) !important;
-    }
-
-    #finalActionList .scan-main,
-    #finalActionList .scan-main-live {
-      background: linear-gradient(90deg, #fee2e2, #ffffff) !important;
-      border-color: rgba(239, 68, 68, .55) !important;
-    }
-
-    #finalActionList .scan-action,
-    #finalActionList .action-pill,
-    #finalActionList .badge {
-      background: #fee2e2 !important;
-      color: #991b1b !important;
-      border: 1px solid #fca5a5 !important;
-      font-weight: 950 !important;
-    }
-
-    .final-main-rise-note-v26667 {
-      margin: 12px 0 10px;
-      padding: 14px 16px;
-      border-radius: 18px;
-      border: 2px solid #fca5a5;
-      background: #fef2f2;
-      color: #991b1b;
-      font-weight: 900;
-      line-height: 1.55;
-    }
-
-    .final-main-rise-note-v26667 b {
-      display: block;
-      margin-bottom: 6px;
-      font-size: 15px;
-      font-weight: 950;
-    }
-
-    .final-main-rise-note-v26667 p {
-      margin: 0;
-      font-size: 13px;
-      font-weight: 850;
-    }
-
-    .final-section-title-v26667 {
-      color: #b91c1c !important;
-    }
-  `;
-  document.head.appendChild(style);
-}
-
-function reorderLifecycleSectionsV26667() {
-  const finalList = document.getElementById("finalActionList");
-  const ignitionList = document.getElementById("ignitionList");
-  const evolutionList = document.getElementById("evolutionList");
-  const testList = document.getElementById("testList");
-
-  if (!finalList || !ignitionList || !evolutionList || !testList) return;
-
-  const finalSection = finalList.closest("section");
-  const ignitionSection = ignitionList.closest("section");
-  const evolutionSection = evolutionList.closest("section");
-  const testSection = testList.closest("section");
-
-  if (!finalSection || !ignitionSection || !evolutionSection || !testSection) return;
-
-  // 目標排序：FINAL → EVOLUTION → IGNITION → TEST
-  const parent = finalSection.parentElement;
-  if (!parent) return;
-
-  if (finalSection.nextElementSibling !== evolutionSection) {
-    parent.insertBefore(evolutionSection, finalSection.nextSibling);
-  }
-  if (evolutionSection.nextElementSibling !== ignitionSection) {
-    parent.insertBefore(ignitionSection, evolutionSection.nextSibling);
-  }
-  if (ignitionSection.nextElementSibling !== testSection) {
-    parent.insertBefore(testSection, ignitionSection.nextSibling);
-  }
-
-  // 更新標題/提示，不動資料。
-  const finalTitle = finalSection.querySelector("h2");
-  if (finalTitle) {
-    finalTitle.textContent = "🔥 最終操作｜主升確認";
-    finalTitle.classList.add("final-section-title-v26667");
-  }
-
-  const finalHint = finalSection.querySelector(".hint");
-  if (finalHint) {
-    finalHint.textContent = "主升確認區：只看風險報酬仍漂亮、未過熱、可正式操作的標的。";
-  }
-
-  const evolutionSummary = evolutionSection.querySelector("summary");
-  if (evolutionSummary) {
-    evolutionSummary.textContent = "🧬 EVOLUTION 策略進化訊號｜主力慢推";
-  }
-  const evolutionHint = evolutionSection.querySelector(".hint");
-  if (evolutionHint) {
-    evolutionHint.textContent = "主力控盤慢推期：回檔有人接、均線慢慢打開、量能溫和，優先度高於 IGNITION。";
-  }
-
-  const ignitionSummary = ignitionSection.querySelector("summary");
-  if (ignitionSummary) {
-    ignitionSummary.textContent = "🧪 IGNITION 起漲訊號｜主力吸籌";
-  }
-  const ignitionHint = ignitionSection.querySelector(".hint");
-  if (ignitionHint) {
-    ignitionHint.textContent = "主力開始吸籌期：觀察承接、放量與假突破風險，尚未完全確認主升。";
-  }
-}
-
-function injectFinalMainRiseNoteV26667() {
-  const finalList = document.getElementById("finalActionList");
-  if (!finalList) return;
-
-  const rows = finalList.querySelectorAll(".scan-item, article, .position-row");
-  rows.forEach(row => {
-    if (row.querySelector(".final-main-rise-note-v26667")) return;
-
-    const note = document.createElement("div");
-    note.className = "final-main-rise-note-v26667";
-    note.innerHTML = `
-      <b>🔥 FINAL｜主升確認</b>
-      <p>定位：正式操作區。重點確認主力拉升、量價健康、仍未過熱；若乖離過大或爆量失控，不追價。</p>
-    `;
-
-    const detail = row.querySelector(".detail-grid");
-    if (detail && detail.parentElement) {
-      detail.parentElement.insertBefore(note, detail.nextSibling);
-    } else {
-      row.appendChild(note);
-    }
-  });
-}
-
-function applyFinalAndOrderPatchV26667() {
-  try { injectFinalAndOrderStyleV26667(); } catch (e) {}
-  try { reorderLifecycleSectionsV26667(); } catch (e) {}
-  try { injectFinalMainRiseNoteV26667(); } catch (e) {}
-}
-
-try { applyFinalAndOrderPatchV26667(); } catch (e) {}
-document.addEventListener("DOMContentLoaded", function() {
-  applyFinalAndOrderPatchV26667();
-
-  // 前端資料載入後可能會重新 render，保守補跑幾次，只改 DOM 顯示。
-  let count = 0;
-  const timer = setInterval(function() {
-    applyFinalAndOrderPatchV26667();
-    count += 1;
-    if (count >= 12) clearInterval(timer);
-  }, 800);
-});
-
-/* =========================================================
-   v266.68 FINAL SECTION DIRECT STYLE FIX
-   只修 FINAL 前端顯示：
-   - 不靠 :has()
-   - 直接替 finalActionList 所在 section 加 class
-   - 清單空白也會顯示紅色 FINAL 主升確認區
-   - 不改策略、不改 CSV、不改 pipeline
-   ========================================================= */
-
-function injectFinalDirectStyleV26668() {
-  if (document.getElementById("final-direct-style-v26668")) return;
-
-  const style = document.createElement("style");
-  style.id = "final-direct-style-v26668";
-  style.textContent = `
-    .final-section-v26668 {
-      border: 2px solid rgba(239, 68, 68, .30) !important;
+    /* FINAL：紅色主升確認區 */
+    .final-section-v26670 {
+      border: 2px solid rgba(239, 68, 68, .32) !important;
       box-shadow: 0 0 0 2px rgba(239, 68, 68, .08) !important;
       background: linear-gradient(180deg, #fff7f7, #ffffff) !important;
     }
-
-    .final-section-v26668 h2,
-    .final-section-v26668 summary {
+    .final-section-v26670 h2,
+    .final-section-v26670 summary {
       color: #b91c1c !important;
       font-weight: 950 !important;
     }
-
-    .final-section-v26668 .hint {
+    .final-section-v26670 .hint {
       color: #991b1b !important;
       background: #fef2f2 !important;
       border: 1px solid #fecaca !important;
@@ -6658,8 +6284,22 @@ function injectFinalDirectStyleV26668() {
       padding: 9px 12px !important;
       font-weight: 850 !important;
     }
-
-    .final-empty-mainrise-v26668 {
+    #finalActionList .scan-item {
+      border-color: #ef4444 !important;
+      background: linear-gradient(90deg, #fff7f7, #ffffff) !important;
+    }
+    #finalActionList .scan-main,
+    #finalActionList .scan-main-live {
+      border-color: rgba(239, 68, 68, .52) !important;
+      background: linear-gradient(90deg, #fee2e2, #ffffff) !important;
+    }
+    #finalActionList .scan-action {
+      background: #fee2e2 !important;
+      color: #991b1b !important;
+      border: 1px solid #fca5a5 !important;
+      font-weight: 950 !important;
+    }
+    .final-empty-v26670 {
       margin-top: 10px;
       padding: 16px 18px;
       border-radius: 18px;
@@ -6669,89 +6309,231 @@ function injectFinalDirectStyleV26668() {
       font-weight: 900;
       line-height: 1.55;
     }
-
-    .final-empty-mainrise-v26668 b {
+    .final-empty-v26670 b {
       display: block;
       margin-bottom: 8px;
       font-size: 16px;
       font-weight: 950;
     }
-
-    .final-empty-mainrise-v26668 p {
+    .final-empty-v26670 p {
       margin: 0;
       font-size: 13px;
       font-weight: 850;
     }
 
-    .final-section-v26668 #finalActionList .scan-item,
-    .final-section-v26668 #finalActionList article,
-    .final-section-v26668 #finalActionList .position-row {
-      border-color: #ef4444 !important;
-      background: linear-gradient(90deg, #fef2f2, #ffffff) !important;
-      box-shadow: 0 0 0 2px rgba(239, 68, 68, .12) !important;
+    /* EVOLUTION：只限 evolutionList */
+    .evolution-card summary {
+      color: #6d28d9 !important;
+      font-weight: 950 !important;
+    }
+    .evolution-card .hint {
+      color: #5b21b6 !important;
+      background: rgba(245, 243, 255, .75) !important;
+      border-radius: 14px !important;
+      padding: 8px 10px !important;
+      font-weight: 850 !important;
+    }
+    #evolutionList .scan-item {
+      border-color: #8b5cf6 !important;
+      box-shadow: 0 0 0 2px rgba(139, 92, 246, .10) !important;
+      background: linear-gradient(90deg, #f5f3ff, #ffffff) !important;
+    }
+    #evolutionList .scan-main,
+    #evolutionList .scan-main-live {
+      border-color: rgba(139, 92, 246, .42) !important;
+      background: linear-gradient(90deg, #f5f3ff, #ffffff) !important;
+    }
+    #evolutionList .scan-action {
+      background: #ede9fe !important;
+      color: #5b21b6 !important;
+      border: 1px solid #c4b5fd !important;
+      font-weight: 950 !important;
     }
 
-    .final-section-v26668 #finalActionList .scan-action,
-    .final-section-v26668 #finalActionList .action-pill,
-    .final-section-v26668 #finalActionList .badge {
+    /* IGNITION：只限 ignitionList */
+    .ignition-card summary {
+      color: #9a3412 !important;
+      font-weight: 950 !important;
+    }
+    .ignition-card .hint {
+      color: #9a3412 !important;
+      background: rgba(255, 247, 237, .75) !important;
+      border-radius: 14px !important;
+      padding: 8px 10px !important;
+      font-weight: 850 !important;
+    }
+    #ignitionList .scan-item {
+      border-color: #f59e0b !important;
+      box-shadow: 0 0 0 2px rgba(245, 158, 11, .10) !important;
+      background: linear-gradient(90deg, #fff7ed, #ffffff) !important;
+    }
+    #ignitionList .scan-main,
+    #ignitionList .scan-main-live {
+      border-color: rgba(245, 158, 11, .42) !important;
+      background: linear-gradient(90deg, #fff7ed, #ffffff) !important;
+    }
+    #ignitionList .scan-action {
+      background: #ffedd5 !important;
+      color: #9a3412 !important;
+      border: 1px solid #fdba74 !important;
+      font-weight: 950 !important;
+    }
+
+    /* TEST / WATCH / BLOCK：明確恢復，不吃吸籌樣式 */
+    #testList .scan-action {
+      background: #fef3c7 !important;
+      color: #92400e !important;
+      border: 1px solid #fcd34d !important;
+      font-weight: 950 !important;
+    }
+    #testList .scan-item {
+      border-color: #facc15 !important;
+      background: #fffdf4 !important;
+    }
+    #watchList .scan-action {
+      background: #f3f4f6 !important;
+      color: #4b5563 !important;
+      border: 1px solid #d1d5db !important;
+      font-weight: 950 !important;
+    }
+    #watchList .scan-item {
+      border-color: #d1d5db !important;
+      background: #f9fafb !important;
+    }
+    #blockList .scan-action {
       background: #fee2e2 !important;
       color: #991b1b !important;
       border: 1px solid #fca5a5 !important;
       font-weight: 950 !important;
     }
+    #blockList .scan-item {
+      border-color: #e5e7eb !important;
+      background: #f9fafb !important;
+      opacity: .88;
+    }
   `;
   document.head.appendChild(style);
 }
 
-function applyFinalDirectStyleV26668() {
-  try { injectFinalDirectStyleV26668(); } catch (e) {}
+function sectionByListIdV26670(listId) {
+  const list = document.getElementById(listId);
+  return list ? list.closest("section") : null;
+}
 
+function setScanActionLabelV26670(listId, labelText) {
+  const list = document.getElementById(listId);
+  if (!list) return;
+  list.querySelectorAll(".scan-action").forEach(el => {
+    el.textContent = labelText;
+  });
+}
+
+function applyLifecycleOrderV26670() {
+  const finalSection = sectionByListIdV26670("finalActionList");
+  const evolutionSection = sectionByListIdV26670("evolutionList");
+  const ignitionSection = sectionByListIdV26670("ignitionList");
+  const testSection = sectionByListIdV26670("testList");
+  const watchSection = sectionByListIdV26670("watchList");
+  const blockSection = sectionByListIdV26670("blockList");
+
+  if (!finalSection || !evolutionSection || !ignitionSection || !testSection || !watchSection || !blockSection) return;
+
+  const parent = finalSection.parentElement;
+  if (!parent) return;
+
+  // 目標排序：FINAL → EVOLUTION → IGNITION → TEST → WATCH → BLOCK
+  if (finalSection.nextElementSibling !== evolutionSection) {
+    parent.insertBefore(evolutionSection, finalSection.nextSibling);
+  }
+  if (evolutionSection.nextElementSibling !== ignitionSection) {
+    parent.insertBefore(ignitionSection, evolutionSection.nextSibling);
+  }
+  if (ignitionSection.nextElementSibling !== testSection) {
+    parent.insertBefore(testSection, ignitionSection.nextSibling);
+  }
+  if (testSection.nextElementSibling !== watchSection) {
+    parent.insertBefore(watchSection, testSection.nextSibling);
+  }
+  if (watchSection.nextElementSibling !== blockSection) {
+    parent.insertBefore(blockSection, watchSection.nextSibling);
+  }
+}
+
+function applyLifecycleTitlesV26670() {
+  const finalSection = sectionByListIdV26670("finalActionList");
+  if (finalSection) {
+    finalSection.classList.add("final-section-v26670");
+    const title = finalSection.querySelector("h2, summary");
+    if (title) title.textContent = "🔥 FINAL｜主升確認";
+    const hint = finalSection.querySelector(".hint");
+    if (hint) hint.textContent = "主升確認區：只顯示風險報酬仍漂亮、主力拉升確認、未過熱的正式操作標的。";
+  }
+
+  const evolutionSection = sectionByListIdV26670("evolutionList");
+  if (evolutionSection) {
+    const summary = evolutionSection.querySelector("summary");
+    if (summary) summary.textContent = "🧬 EVOLUTION 策略進化訊號｜主力慢推";
+    const hint = evolutionSection.querySelector(".hint");
+    if (hint) hint.textContent = "主力控盤慢推期：回檔有人接、均線慢慢打開、量能溫和，優先度高於 IGNITION。";
+  }
+
+  const ignitionSection = sectionByListIdV26670("ignitionList");
+  if (ignitionSection) {
+    const summary = ignitionSection.querySelector("summary");
+    if (summary) summary.textContent = "🧪 IGNITION 起漲訊號｜主力吸籌";
+    const hint = ignitionSection.querySelector(".hint");
+    if (hint) hint.textContent = "主力開始吸籌期：觀察承接、放量與假突破風險，尚未完全確認主升。";
+  }
+}
+
+function applyCleanLifecycleBadgesV26670() {
+  setScanActionLabelV26670("evolutionList", "🟣 慢推");
+  setScanActionLabelV26670("ignitionList", "🟠 吸籌");
+  setScanActionLabelV26670("testList", "🟡 試單");
+  setScanActionLabelV26670("watchList", "⚪ 觀察");
+  setScanActionLabelV26670("blockList", "⛔ 禁止");
+  setScanActionLabelV26670("finalActionList", "🔥 主升");
+}
+
+function applyFinalEmptyV26670() {
   const finalList = document.getElementById("finalActionList");
   if (!finalList) return;
 
-  const finalSection = finalList.closest("section");
-  if (!finalSection) return;
+  const hasCard = finalList.querySelector(".scan-item, article, .position-row");
+  const text = String(finalList.textContent || "").trim();
+  const hasOriginalEmpty = finalList.querySelector(".empty");
+  const hasFinalEmpty = finalList.querySelector(".final-empty-v26670");
 
-  finalSection.classList.add("final-section-v26668");
+  if (hasCard) return;
+  if (hasFinalEmpty) return;
 
-  const title = finalSection.querySelector("h2, summary");
-  if (title) {
-    title.textContent = "🔥 FINAL｜主升確認";
-  }
-
-  const hint = finalSection.querySelector(".hint");
-  if (hint) {
-    hint.textContent = "主升確認區：只顯示風險報酬仍漂亮、主力拉升確認、未過熱的正式操作標的。";
-  }
-
-  const txt = String(finalList.textContent || "").trim();
-  const hasRealCard = finalList.querySelector(".scan-item, article, .position-row");
-  const hasEmptyNote = finalList.querySelector(".final-empty-mainrise-v26668");
-
-  if (!hasRealCard && !hasEmptyNote) {
-    const note = document.createElement("div");
-    note.className = "final-empty-mainrise-v26668";
-    note.innerHTML = `
-      <b>🔥 本輪沒有 FINAL 主升確認標的</b>
-      <p>代表目前沒有同時符合「主力拉升確認、量價健康、未過熱、風險報酬漂亮」的標的；寧可空白，不硬追。</p>
+  if (hasOriginalEmpty || /沒有|無|空白/.test(text)) {
+    finalList.innerHTML = `
+      <div class="final-empty-v26670">
+        <b>🔥 本輪沒有 FINAL 主升確認標的</b>
+        <p>目前沒有同時符合「主力拉升確認、量價健康、未過熱、風險報酬漂亮」的標的；FINAL 寧可空白，不硬追。</p>
+      </div>
     `;
-    finalList.innerHTML = "";
-    finalList.appendChild(note);
   }
 }
 
-function applyFinalDirectStyleLoopV26668() {
-  applyFinalDirectStyleV26668();
+function applyCleanLifecycleUiV26670() {
+  try { injectCleanLifecycleStyleV26670(); } catch (e) {}
+  try { applyLifecycleOrderV26670(); } catch (e) {}
+  try { applyLifecycleTitlesV26670(); } catch (e) {}
+  try { applyCleanLifecycleBadgesV26670(); } catch (e) {}
+  try { applyFinalEmptyV26670(); } catch (e) {}
+}
 
+try { applyCleanLifecycleUiV26670(); } catch (e) {}
+document.addEventListener("DOMContentLoaded", function() {
+  applyCleanLifecycleUiV26670();
+
+  // render 完成後會重畫清單，補跑幾次；只改 DOM 顯示，不碰資料。
   let n = 0;
   const timer = setInterval(function() {
-    applyFinalDirectStyleV26668();
+    applyCleanLifecycleUiV26670();
     n += 1;
     if (n >= 20) clearInterval(timer);
   }, 700);
-}
-
-try { applyFinalDirectStyleLoopV26668(); } catch (e) {}
-document.addEventListener("DOMContentLoaded", function() {
-  try { applyFinalDirectStyleLoopV26668(); } catch (e) {}
 });
