@@ -1,4 +1,4 @@
-{
+﻿{
   "version": "v266.57",
   "status": "running",
   "job_status": "running",
@@ -9,7 +9,9 @@
   "start_time": "2026-05-20T23:32:51.602730+08:00",
   "started_at": "2026-05-20T23:32:51.602730+08:00",
   "start_epoch": 1779291171,
-  "updated_at": "2026-05-20T23:32:51.602730+08:00",
+  "updated_at": "2026-05-20 23:53:24",
   "timezone": "Asia/Taipei",
-  "source": "github_actions_live_timer"
+  "source": "github_actions_live_timer",
+  "last_update": "2026-05-20 23:53:24",
+  "time_source": "github_actions_taipei"
 }
