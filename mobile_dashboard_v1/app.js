@@ -7080,3 +7080,179 @@ try { applyFinalFullCardLoopV26670(); } catch (e) {}
 document.addEventListener("DOMContentLoaded", function() {
   try { applyFinalFullCardLoopV26670(); } catch (e) {}
 });
+
+/* =========================================================
+   v266.71 FINAL UI DEMO TEST PATCH
+   測試用途：
+   - 強制在 FINAL 區塊顯示 2330 台積電假資料
+   - 只測前端卡片視覺，不代表真實策略訊號
+   - 不改策略、不改 CSV、不改 pipeline
+   ========================================================= */
+
+function injectFinalDemoStyleV26671() {
+  if (document.getElementById("final-demo-style-v26671")) return;
+
+  const style = document.createElement("style");
+  style.id = "final-demo-style-v26671";
+  style.textContent = `
+    .final-demo-warning-v26671 {
+      margin: 10px 0 14px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 2px dashed #f97316;
+      background: #fff7ed;
+      color: #9a3412;
+      font-weight: 950;
+      line-height: 1.45;
+    }
+
+    .final-demo-warning-v26671 small {
+      display: block;
+      margin-top: 4px;
+      font-size: 12px;
+      font-weight: 850;
+      color: #c2410c;
+    }
+
+    .final-demo-row-v26671 {
+      border: 2px solid #ef4444 !important;
+      border-radius: 22px !important;
+      background: linear-gradient(180deg, #fff1f2, #ffffff) !important;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, .14) !important;
+      overflow: hidden !important;
+    }
+
+    .final-demo-main-v26671 {
+      display: grid;
+      grid-template-columns: auto 1fr auto auto;
+      gap: 12px;
+      align-items: center;
+      padding: 16px 14px;
+      border-bottom: 1px solid #fecaca;
+      background: linear-gradient(90deg, #fee2e2, #ffffff);
+    }
+
+    .final-demo-action-v26671 {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fca5a5;
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .final-demo-symbol-v26671 {
+      font-size: 30px;
+      font-weight: 950;
+      color: #111827;
+      letter-spacing: .02em;
+    }
+
+    .final-demo-price-v26671 {
+      font-size: 22px;
+      font-weight: 950;
+      color: #111827;
+      white-space: nowrap;
+    }
+
+    .final-demo-tag-v26671 {
+      background: #dcfce7;
+      color: #047857;
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 520px) {
+      .final-demo-main-v26671 {
+        grid-template-columns: auto 1fr auto;
+      }
+      .final-demo-tag-v26671 {
+        grid-column: 1 / -1;
+        justify-self: start;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function applyFinalDemo2330V26671() {
+  try { injectFinalDemoStyleV26671(); } catch (e) {}
+
+  const finalList = document.getElementById("finalActionList");
+  if (!finalList) return;
+
+  const finalSection = finalList.closest("section");
+  if (finalSection) {
+    finalSection.classList.add("final-section-v26670", "final-section-v26668");
+    const title = finalSection.querySelector("h2, summary");
+    if (title) title.textContent = "🔥 FINAL｜主升確認";
+    const hint = finalSection.querySelector(".hint");
+    if (hint) hint.textContent = "主升確認區：此版本為 2330 FINAL 卡片視覺測試。";
+  }
+
+  if (finalList.querySelector(".final-demo-row-v26671")) return;
+
+  const demoRow = {
+    stock_id: "2330",
+    stock_name: "台積電",
+    ref_price: "982.00",
+    close: "982.00",
+    score: "92",
+    entry_score: "92",
+    liquidity_level: "高流動性",
+    chip_score: "88（🔥 高集中）",
+    main_force_score_v300: "91",
+    ma5_status: "MA5：主升續強",
+    ma10_status: "MA10：主升支撐",
+    kbar_type: "主升續強K",
+    reason: "FINAL：主力慢推後確認主升，量價健康，未進入過熱；此筆為 UI 測試資料。"
+  };
+
+  const panel = (typeof finalCardPanelV26670 === "function")
+    ? finalCardPanelV26670(demoRow)
+    : `
+      <div class="final-full-card-v26670">
+        <div class="final-card-title-v26670">🔥 FINAL｜主升確認卡</div>
+        <div class="final-card-section-v26670">
+          <b>🚀 主升成立原因</b>
+          <p>FINAL：主力慢推後確認主升，量價健康，未進入過熱；此筆為 UI 測試資料。</p>
+        </div>
+      </div>
+    `;
+
+  finalList.innerHTML = `
+    <div class="final-demo-warning-v26671">
+      ⚠️ FINAL UI 測試模式：以下 2330 不是正式策略訊號
+      <small>測完視覺後，請換回非測試版 app.js。</small>
+    </div>
+
+    <article class="scan-item final-row-card-v26670 final-demo-row-v26671">
+      <div class="final-demo-main-v26671">
+        <div class="final-demo-action-v26671">🔥 主升</div>
+        <div class="final-demo-symbol-v26671">2330</div>
+        <div class="final-demo-price-v26671">982.00</div>
+        <div class="final-demo-tag-v26671">高流動性</div>
+      </div>
+      ${panel}
+    </article>
+  `;
+}
+
+function applyFinalDemoLoopV26671() {
+  applyFinalDemo2330V26671();
+
+  let n = 0;
+  const timer = setInterval(function() {
+    applyFinalDemo2330V26671();
+    n += 1;
+    if (n >= 20) clearInterval(timer);
+  }, 700);
+}
+
+try { applyFinalDemoLoopV26671(); } catch (e) {}
+document.addEventListener("DOMContentLoaded", function() {
+  try { applyFinalDemoLoopV26671(); } catch (e) {}
+});
