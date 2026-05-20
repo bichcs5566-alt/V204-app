@@ -6247,3 +6247,205 @@ document.addEventListener("DOMContentLoaded", function() {
    不影響持倉、清單、排序、Actions。
 */
 window.__META_SEMANTIC_LAYER_V3332__ = true;
+
+
+
+/* =========================================================
+   v266.66 Stage UI Badge Patch / IGNITION・EVOLUTION 顏色與提示
+   只改前端顯示：
+   - IGNITION：吸籌
+   - EVOLUTION：慢推
+   不改策略、不改 CSV、不改 Actions、不改持倉。
+   ========================================================= */
+
+function stageTypeV26666(row) {
+  const s = [
+    row?.strategy_type,
+    row?.bucket,
+    row?.source,
+    row?.strategy_name,
+    row?.reason,
+    row?.system_note
+  ].map(v => String(v ?? "")).join(" ").toUpperCase();
+
+  if (s.includes("IGNITION")) return "IGNITION";
+  if (s.includes("EVOLUTION")) return "EVOLUTION";
+  return "";
+}
+
+function stageBadgeTextV26666(stage) {
+  if (stage === "IGNITION") return "🟠 吸籌";
+  if (stage === "EVOLUTION") return "🟣 慢推";
+  return "";
+}
+
+function stageMainHintV26666(stage) {
+  if (stage === "IGNITION") {
+    return "主力開始吸｜觀察承接｜尚未主升";
+  }
+  if (stage === "EVOLUTION") {
+    return "主力控盤慢推｜回檔有人接｜未過熱";
+  }
+  return "";
+}
+
+function stageDetailBlockV26666(row) {
+  const stage = stageTypeV26666(row);
+  if (stage === "IGNITION") {
+    return `
+      <div class="stage-hint-box-v26666 ignition">
+        <div class="stage-hint-title-v26666">🟠 IGNITION｜主力吸籌階段</div>
+        <p>定位：主力開始吸貨、承接開始出現，但還不是主升確認。</p>
+        <p>操作：以觀察 / 小量試單為主，不追高、不重倉；等承接、量能、均線再確認。</p>
+      </div>
+    `;
+  }
+  if (stage === "EVOLUTION") {
+    return `
+      <div class="stage-hint-box-v26666 evolution">
+        <div class="stage-hint-title-v26666">🟣 EVOLUTION｜主力控盤慢推</div>
+        <p>定位：主力已開始控節奏，回檔有人接，均線慢慢打開，尚未全面追價。</p>
+        <p>操作：可列為優先觀察 / 試單升級名單；仍需確認未過熱，不把它當追強榜。</p>
+      </div>
+    `;
+  }
+  return "";
+}
+
+function injectStageStyleV26666() {
+  if (document.getElementById("stage-style-v26666")) return;
+  const style = document.createElement("style");
+  style.id = "stage-style-v26666";
+  style.textContent = `
+    .scan-item.stage-ignition-v26666 {
+      border-color: #f59e0b !important;
+      box-shadow: 0 0 0 2px rgba(245,158,11,.14) !important;
+      background: linear-gradient(180deg, rgba(255,251,235,.98), rgba(255,255,255,.98)) !important;
+    }
+    .scan-item.stage-evolution-v26666 {
+      border-color: #8b5cf6 !important;
+      box-shadow: 0 0 0 2px rgba(139,92,246,.14) !important;
+      background: linear-gradient(180deg, rgba(250,245,255,.98), rgba(255,255,255,.98)) !important;
+    }
+    .scan-main-live.stage-ignition-main-v26666 {
+      border-color: rgba(245,158,11,.55) !important;
+      background: linear-gradient(90deg, rgba(255,251,235,.98), rgba(255,255,255,.98)) !important;
+    }
+    .scan-main-live.stage-evolution-main-v26666 {
+      border-color: rgba(139,92,246,.58) !important;
+      background: linear-gradient(90deg, rgba(250,245,255,.98), rgba(255,255,255,.98)) !important;
+    }
+    .scan-action.stage-ignition-badge-v26666 {
+      background: #fef3c7 !important;
+      color: #92400e !important;
+      border: 1px solid #f59e0b !important;
+      font-weight: 950 !important;
+    }
+    .scan-action.stage-evolution-badge-v26666 {
+      background: #ede9fe !important;
+      color: #5b21b6 !important;
+      border: 1px solid #8b5cf6 !important;
+      font-weight: 950 !important;
+    }
+    .stage-mini-hint-v26666 {
+      display: block;
+      margin-top: 5px;
+      font-size: 12px;
+      line-height: 1.25;
+      font-weight: 850;
+      opacity: .88;
+      white-space: normal;
+    }
+    .stage-mini-hint-v26666.ignition {
+      color: #92400e;
+    }
+    .stage-mini-hint-v26666.evolution {
+      color: #5b21b6;
+    }
+    .stage-hint-box-v26666 {
+      margin: 12px 0 14px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 2px solid #e5e7eb;
+      font-weight: 800;
+      line-height: 1.55;
+    }
+    .stage-hint-box-v26666 p {
+      margin: 7px 0 0;
+      color: #4b5563;
+      font-weight: 760;
+    }
+    .stage-hint-box-v26666.ignition {
+      background: #fffbeb;
+      border-color: #f59e0b;
+      color: #92400e;
+    }
+    .stage-hint-box-v26666.evolution {
+      background: #faf5ff;
+      border-color: #8b5cf6;
+      color: #5b21b6;
+    }
+    .stage-hint-title-v26666 {
+      font-size: 15px;
+      font-weight: 950;
+      margin-bottom: 4px;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+const __oldRenderScanRowV26666 = typeof renderScanRow === "function" ? renderScanRow : null;
+
+renderScanRow = function(row, key) {
+  injectStageStyleV26666();
+
+  let html = __oldRenderScanRowV26666 ? __oldRenderScanRowV26666(row, key) : "";
+  if (!html) return html;
+
+  const stage = stageTypeV26666(row);
+  if (!stage) return html;
+
+  const isIgnition = stage === "IGNITION";
+  const itemCls = isIgnition ? "stage-ignition-v26666" : "stage-evolution-v26666";
+  const mainCls = isIgnition ? "stage-ignition-main-v26666" : "stage-evolution-main-v26666";
+  const badgeCls = isIgnition ? "stage-ignition-badge-v26666" : "stage-evolution-badge-v26666";
+  const hintCls = isIgnition ? "ignition" : "evolution";
+  const badgeText = stageBadgeTextV26666(stage);
+  const hintText = stageMainHintV26666(stage);
+  const detailBlock = stageDetailBlockV26666(row);
+
+  html = html.replace(
+    '<article class="scan-item ',
+    `<article class="scan-item ${itemCls} `
+  );
+
+  html = html.replace(
+    'class="scan-main scan-main-live',
+    `class="scan-main scan-main-live ${mainCls}`
+  );
+
+  html = html.replace(
+    /<div class="scan-action ([^"]*)">[\s\S]*?<\/div>/,
+    `<div class="scan-action $1 ${badgeCls}">${badgeText}</div>`
+  );
+
+  html = html.replace(
+    /<div class="scan-entry">([\s\S]*?)<\/div>/,
+    `<div class="scan-entry">$1<span class="stage-mini-hint-v26666 ${hintCls}">${hintText}</span></div>`
+  );
+
+  if (detailBlock && html.includes('<div class="detail-grid">')) {
+    html = html.replace(
+      /(<div class="detail-grid">[\s\S]*?<\/div>\s*)/,
+      `$1${detailBlock}`
+    );
+  }
+
+  return html;
+};
+
+try { injectStageStyleV26666(); } catch(e) {}
+document.addEventListener("DOMContentLoaded", function() {
+  try { injectStageStyleV26666(); } catch(e) {}
+});
+
