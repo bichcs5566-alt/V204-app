@@ -6248,61 +6248,195 @@ document.addEventListener("DOMContentLoaded", function() {
 */
 window.__META_SEMANTIC_LAYER_V3332__ = true;
 
+/* =========================================================
+   v266.66 IGNITION / EVOLUTION UI STAGE COLOR PATCH
+   只修前端顯示：
+   - 不改資料讀取
+   - 不改策略邏輯
+   - 不改 Actions / GitHub / 持倉
+   - 不改 CSV 欄位
+   - 只讓 IGNITION / EVOLUTION 的卡片顏色與狀態字更清楚
+   ========================================================= */
 
+function detectLifecycleStageV26666(row) {
+  row = row || {};
+  const text = [
+    row.strategy_type,
+    row.bucket,
+    row.source,
+    row.strategy_name,
+    row.entry_type,
+    row.reason,
+    row.system_note
+  ].map(v => String(v ?? "")).join(" ").toUpperCase();
 
-/* ===== v266.67 MINIMAL STAGE COLOR PATCH =====
-   只處理：
-   1. EVOLUTION 卡片紫色
-   2. IGNITION 保持原橘色
-   不碰其他區塊
-================================================ */
-
-function applyStageCardColorV26667() {
-
-  const cards = document.querySelectorAll(".scan-item");
-
-  cards.forEach(card => {
-
-    const txt = (card.innerText || "").toUpperCase();
-
-    card.classList.remove("stage-evolution-v26667");
-
-    if (txt.includes("EVOLUTION") || txt.includes("慢推")) {
-      card.classList.add("stage-evolution-v26667");
-    }
-
-  });
-
+  if (text.includes("IGNITION") || text.includes("起漲")) return "IGNITION";
+  if (text.includes("EVOLUTION") || text.includes("進化")) return "EVOLUTION";
+  return "";
 }
 
-(function injectStageStyleV26667(){
+function lifecycleStageActionHTMLV26666(stage) {
+  if (stage === "IGNITION") {
+    return `<div class="scan-action lifecycle-stage-action-v26666 ignition-stage-v26666">🟠 吸籌</div>`;
+  }
+  if (stage === "EVOLUTION") {
+    return `<div class="scan-action lifecycle-stage-action-v26666 evolution-stage-v26666">🟣 慢推</div>`;
+  }
+  return "";
+}
 
-  if (document.getElementById("stage-style-v26667")) return;
+function lifecycleStageHintHTMLV26666(stage) {
+  if (stage === "IGNITION") {
+    return `
+      <div class="lifecycle-stage-hint-v26666 ignition-stage-v26666">
+        <b>🟠 IGNITION｜主力開始吸籌</b>
+        <p>定位：起漲前觀察。重點看承接、量能是否溫和放大、假突破風險是否降低；不是追高進場訊號。</p>
+      </div>
+    `;
+  }
+  if (stage === "EVOLUTION") {
+    return `
+      <div class="lifecycle-stage-hint-v26666 evolution-stage-v26666">
+        <b>🟣 EVOLUTION｜主力控盤慢推</b>
+        <p>定位：主力慢推期。重點看回檔是否有人接、均線是否慢慢打開、量能是否健康；未過熱才有參考價值。</p>
+      </div>
+    `;
+  }
+  return "";
+}
+
+function injectLifecycleStageStyleV26666() {
+  if (document.getElementById("lifecycle-stage-style-v26666")) return;
 
   const style = document.createElement("style");
-
-  style.id = "stage-style-v26667";
-
+  style.id = "lifecycle-stage-style-v26666";
   style.textContent = `
-
-    .scan-item.stage-evolution-v26667{
-      border-color:#8b5cf6 !important;
-      box-shadow:0 0 0 2px rgba(139,92,246,.16) !important;
-      background:linear-gradient(
-        180deg,
-        rgba(250,245,255,.98),
-        rgba(255,255,255,.98)
-      ) !important;
+    .scan-item.lifecycle-ignition-card-v26666 {
+      border-color: #f59e0b !important;
+      box-shadow: 0 0 0 2px rgba(245, 158, 11, .12) !important;
     }
-
+    .scan-item.lifecycle-evolution-card-v26666 {
+      border-color: #8b5cf6 !important;
+      box-shadow: 0 0 0 2px rgba(139, 92, 246, .12) !important;
+    }
+    .scan-main.lifecycle-ignition-main-v26666,
+    .scan-main-live.lifecycle-ignition-main-v26666 {
+      background: linear-gradient(90deg, #fff7ed, #ffffff) !important;
+      border-color: rgba(245, 158, 11, .45) !important;
+    }
+    .scan-main.lifecycle-evolution-main-v26666,
+    .scan-main-live.lifecycle-evolution-main-v26666 {
+      background: linear-gradient(90deg, #f5f3ff, #ffffff) !important;
+      border-color: rgba(139, 92, 246, .45) !important;
+    }
+    .scan-action.lifecycle-stage-action-v26666 {
+      border-radius: 999px !important;
+      padding: 7px 12px !important;
+      font-weight: 950 !important;
+      white-space: nowrap !important;
+      letter-spacing: .02em !important;
+    }
+    .scan-action.lifecycle-stage-action-v26666.ignition-stage-v26666 {
+      background: #ffedd5 !important;
+      color: #9a3412 !important;
+      border: 1px solid #fdba74 !important;
+    }
+    .scan-action.lifecycle-stage-action-v26666.evolution-stage-v26666 {
+      background: #ede9fe !important;
+      color: #5b21b6 !important;
+      border: 1px solid #c4b5fd !important;
+    }
+    .lifecycle-stage-hint-v26666 {
+      margin: 12px 0 10px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 2px solid #e5e7eb;
+      font-weight: 800;
+      line-height: 1.55;
+    }
+    .lifecycle-stage-hint-v26666 b {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 15px;
+      font-weight: 950;
+    }
+    .lifecycle-stage-hint-v26666 p {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .lifecycle-stage-hint-v26666.ignition-stage-v26666 {
+      background: #fff7ed;
+      color: #9a3412;
+      border-color: #fdba74;
+    }
+    .lifecycle-stage-hint-v26666.evolution-stage-v26666 {
+      background: #f5f3ff;
+      color: #5b21b6;
+      border-color: #c4b5fd;
+    }
+    .ignition-card summary {
+      color: #9a3412 !important;
+    }
+    .evolution-card summary {
+      color: #5b21b6 !important;
+    }
+    .ignition-card .hint {
+      color: #9a3412 !important;
+      background: rgba(255, 247, 237, .75) !important;
+      border-radius: 14px !important;
+      padding: 8px 10px !important;
+    }
+    .evolution-card .hint {
+      color: #5b21b6 !important;
+      background: rgba(245, 243, 255, .75) !important;
+      border-radius: 14px !important;
+      padding: 8px 10px !important;
+    }
   `;
-
   document.head.appendChild(style);
+}
 
-})();
+const __oldRenderScanRowV26666 = typeof renderScanRow === "function" ? renderScanRow : null;
 
-document.addEventListener("DOMContentLoaded", () => {
+renderScanRow = function(row, key) {
+  try { injectLifecycleStageStyleV26666(); } catch (e) {}
 
-  setTimeout(applyStageCardColorV26667, 300);
+  const html = __oldRenderScanRowV26666 ? __oldRenderScanRowV26666(row, key) : "";
+  if (!html) return html;
 
+  const stage = detectLifecycleStageV26666(row);
+  if (!stage) return html;
+
+  const stageAction = lifecycleStageActionHTMLV26666(stage);
+  const stageHint = lifecycleStageHintHTMLV26666(stage);
+  let out = html;
+
+  if (stage === "IGNITION") {
+    out = out.replace('<article class="scan-item ', '<article class="scan-item lifecycle-ignition-card-v26666 ');
+    out = out.replace('<div class="scan-main scan-main-live', '<div class="scan-main scan-main-live lifecycle-ignition-main-v26666');
+  }
+
+  if (stage === "EVOLUTION") {
+    out = out.replace('<article class="scan-item ', '<article class="scan-item lifecycle-evolution-card-v26666 ');
+    out = out.replace('<div class="scan-main scan-main-live', '<div class="scan-main scan-main-live lifecycle-evolution-main-v26666');
+  }
+
+  if (stageAction) {
+    out = out.replace(/<div class="scan-action [^"]*">[\s\S]*?<\/div>/, stageAction);
+  }
+
+  if (stageHint && out.includes('<div class="detail-grid">')) {
+    out = out.replace(
+      /(<div class="detail-grid">[\s\S]*?<\/div>\s*)/,
+      `$1${stageHint}`
+    );
+  }
+
+  return out;
+};
+
+try { injectLifecycleStageStyleV26666(); } catch (e) {}
+document.addEventListener("DOMContentLoaded", function() {
+  try { injectLifecycleStageStyleV26666(); } catch (e) {}
 });
