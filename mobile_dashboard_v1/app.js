@@ -1,4 +1,4 @@
-// ===== v266.36.2.2 Blank Screen Guard / 空白頁防護 =====
+    // ===== v266.36.2.2 Blank Screen Guard / 空白頁防護 =====
 window.__APP_BOOT_ERROR__ = "";
 window.addEventListener("error", function(e) {
   window.__APP_BOOT_ERROR__ = e && e.message ? e.message : String(e || "");
@@ -6439,4 +6439,186 @@ renderScanRow = function(row, key) {
 try { injectLifecycleStageStyleV26666(); } catch (e) {}
 document.addEventListener("DOMContentLoaded", function() {
   try { injectLifecycleStageStyleV26666(); } catch (e) {}
+});
+
+/* =========================================================
+   v266.67 FINAL CARD + SECTION ORDER UI PATCH
+   只修前端顯示：
+   - FINAL 改紅色主升操作視覺
+   - EVOLUTION 與 IGNITION 區塊對調：FINAL → EVOLUTION → IGNITION → TEST → WATCH → BLOCK
+   - 不改資料讀取、不改策略、不改 CSV、不改 Actions、不改持倉
+   ========================================================= */
+
+function injectFinalAndOrderStyleV26667() {
+  if (document.getElementById("final-order-style-v26667")) return;
+
+  const style = document.createElement("style");
+  style.id = "final-order-style-v26667";
+  style.textContent = `
+    /* FINAL 主升操作區：紅色強化 */
+    section:has(#finalActionList) {
+      border-color: rgba(239, 68, 68, .35) !important;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, .08) !important;
+    }
+
+    section:has(#finalActionList) .section-head h2,
+    section:has(#finalActionList) h2 {
+      color: #b91c1c !important;
+    }
+
+    #finalActionList .scan-item,
+    #finalActionList .position-row,
+    #finalActionList article {
+      border-color: #ef4444 !important;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, .12) !important;
+      background: linear-gradient(90deg, #fef2f2, #ffffff) !important;
+    }
+
+    #finalActionList .scan-main,
+    #finalActionList .scan-main-live {
+      background: linear-gradient(90deg, #fee2e2, #ffffff) !important;
+      border-color: rgba(239, 68, 68, .55) !important;
+    }
+
+    #finalActionList .scan-action,
+    #finalActionList .action-pill,
+    #finalActionList .badge {
+      background: #fee2e2 !important;
+      color: #991b1b !important;
+      border: 1px solid #fca5a5 !important;
+      font-weight: 950 !important;
+    }
+
+    .final-main-rise-note-v26667 {
+      margin: 12px 0 10px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 2px solid #fca5a5;
+      background: #fef2f2;
+      color: #991b1b;
+      font-weight: 900;
+      line-height: 1.55;
+    }
+
+    .final-main-rise-note-v26667 b {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 15px;
+      font-weight: 950;
+    }
+
+    .final-main-rise-note-v26667 p {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .final-section-title-v26667 {
+      color: #b91c1c !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function reorderLifecycleSectionsV26667() {
+  const finalList = document.getElementById("finalActionList");
+  const ignitionList = document.getElementById("ignitionList");
+  const evolutionList = document.getElementById("evolutionList");
+  const testList = document.getElementById("testList");
+
+  if (!finalList || !ignitionList || !evolutionList || !testList) return;
+
+  const finalSection = finalList.closest("section");
+  const ignitionSection = ignitionList.closest("section");
+  const evolutionSection = evolutionList.closest("section");
+  const testSection = testList.closest("section");
+
+  if (!finalSection || !ignitionSection || !evolutionSection || !testSection) return;
+
+  // 目標排序：FINAL → EVOLUTION → IGNITION → TEST
+  const parent = finalSection.parentElement;
+  if (!parent) return;
+
+  if (finalSection.nextElementSibling !== evolutionSection) {
+    parent.insertBefore(evolutionSection, finalSection.nextSibling);
+  }
+  if (evolutionSection.nextElementSibling !== ignitionSection) {
+    parent.insertBefore(ignitionSection, evolutionSection.nextSibling);
+  }
+  if (ignitionSection.nextElementSibling !== testSection) {
+    parent.insertBefore(testSection, ignitionSection.nextSibling);
+  }
+
+  // 更新標題/提示，不動資料。
+  const finalTitle = finalSection.querySelector("h2");
+  if (finalTitle) {
+    finalTitle.textContent = "🔥 最終操作｜主升確認";
+    finalTitle.classList.add("final-section-title-v26667");
+  }
+
+  const finalHint = finalSection.querySelector(".hint");
+  if (finalHint) {
+    finalHint.textContent = "主升確認區：只看風險報酬仍漂亮、未過熱、可正式操作的標的。";
+  }
+
+  const evolutionSummary = evolutionSection.querySelector("summary");
+  if (evolutionSummary) {
+    evolutionSummary.textContent = "🧬 EVOLUTION 策略進化訊號｜主力慢推";
+  }
+  const evolutionHint = evolutionSection.querySelector(".hint");
+  if (evolutionHint) {
+    evolutionHint.textContent = "主力控盤慢推期：回檔有人接、均線慢慢打開、量能溫和，優先度高於 IGNITION。";
+  }
+
+  const ignitionSummary = ignitionSection.querySelector("summary");
+  if (ignitionSummary) {
+    ignitionSummary.textContent = "🧪 IGNITION 起漲訊號｜主力吸籌";
+  }
+  const ignitionHint = ignitionSection.querySelector(".hint");
+  if (ignitionHint) {
+    ignitionHint.textContent = "主力開始吸籌期：觀察承接、放量與假突破風險，尚未完全確認主升。";
+  }
+}
+
+function injectFinalMainRiseNoteV26667() {
+  const finalList = document.getElementById("finalActionList");
+  if (!finalList) return;
+
+  const rows = finalList.querySelectorAll(".scan-item, article, .position-row");
+  rows.forEach(row => {
+    if (row.querySelector(".final-main-rise-note-v26667")) return;
+
+    const note = document.createElement("div");
+    note.className = "final-main-rise-note-v26667";
+    note.innerHTML = `
+      <b>🔥 FINAL｜主升確認</b>
+      <p>定位：正式操作區。重點確認主力拉升、量價健康、仍未過熱；若乖離過大或爆量失控，不追價。</p>
+    `;
+
+    const detail = row.querySelector(".detail-grid");
+    if (detail && detail.parentElement) {
+      detail.parentElement.insertBefore(note, detail.nextSibling);
+    } else {
+      row.appendChild(note);
+    }
+  });
+}
+
+function applyFinalAndOrderPatchV26667() {
+  try { injectFinalAndOrderStyleV26667(); } catch (e) {}
+  try { reorderLifecycleSectionsV26667(); } catch (e) {}
+  try { injectFinalMainRiseNoteV26667(); } catch (e) {}
+}
+
+try { applyFinalAndOrderPatchV26667(); } catch (e) {}
+document.addEventListener("DOMContentLoaded", function() {
+  applyFinalAndOrderPatchV26667();
+
+  // 前端資料載入後可能會重新 render，保守補跑幾次，只改 DOM 顯示。
+  let count = 0;
+  const timer = setInterval(function() {
+    applyFinalAndOrderPatchV26667();
+    count += 1;
+    if (count >= 12) clearInterval(timer);
+  }, 800);
 });
