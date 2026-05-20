@@ -6442,183 +6442,641 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 
 /* =========================================================
-   v266.76 FINAL NATIVE RENDER 2330 TEST PATCH
-   修正重點：
-   - 不手刻 FINAL 卡片
-   - 直接使用原本 renderScanRow(row, key) 產生卡片
-   - 所以卡片大小、欄位排列、展開/收合邏輯跟前面四大清單一致
-   - 只塞 2330 測試資料到 FINAL
-   - 不改策略、不改 CSV、不改 pipeline
+   v266.67 FINAL CARD + SECTION ORDER UI PATCH
+   只修前端顯示：
+   - FINAL 改紅色主升操作視覺
+   - EVOLUTION 與 IGNITION 區塊對調：FINAL → EVOLUTION → IGNITION → TEST → WATCH → BLOCK
+   - 不改資料讀取、不改策略、不改 CSV、不改 Actions、不改持倉
    ========================================================= */
 
-function injectFinalNativeDemoStyleV26676() {
-  if (document.getElementById("final-native-demo-style-v26676")) return;
+function injectFinalAndOrderStyleV26667() {
+  if (document.getElementById("final-order-style-v26667")) return;
 
   const style = document.createElement("style");
-  style.id = "final-native-demo-style-v26676";
+  style.id = "final-order-style-v26667";
   style.textContent = `
-    .final-native-test-warning-v26676 {
-      margin: 10px 0 14px;
-      padding: 12px 14px;
-      border-radius: 16px;
-      border: 2px dashed #f97316;
-      background: #fff7ed;
-      color: #9a3412;
-      font-weight: 950;
-      line-height: 1.45;
+    /* FINAL 主升操作區：紅色強化 */
+    section:has(#finalActionList) {
+      border-color: rgba(239, 68, 68, .35) !important;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, .08) !important;
     }
 
-    .final-native-test-warning-v26676 small {
-      display: block;
-      margin-top: 4px;
-      font-size: 12px;
-      font-weight: 850;
-      color: #c2410c;
-    }
-
-    .final-section-native-v26676 {
-      border: 2px solid rgba(239, 68, 68, .30) !important;
-      background: linear-gradient(180deg, #fff7f7, #ffffff) !important;
-      box-shadow: 0 0 0 2px rgba(239, 68, 68, .07) !important;
-    }
-
-    .final-section-native-v26676 h2,
-    .final-section-native-v26676 summary {
+    section:has(#finalActionList) .section-head h2,
+    section:has(#finalActionList) h2 {
       color: #b91c1c !important;
-      font-weight: 950 !important;
     }
 
-    .final-native-card-v26676.scan-item {
+    #finalActionList .scan-item,
+    #finalActionList .position-row,
+    #finalActionList article {
       border-color: #ef4444 !important;
-      box-shadow: 0 0 0 2px rgba(239, 68, 68, .10) !important;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, .12) !important;
+      background: linear-gradient(90deg, #fef2f2, #ffffff) !important;
     }
 
-    .final-native-card-v26676 .scan-main-live,
-    .final-native-card-v26676 .scan-main {
-      background: linear-gradient(90deg, #fff1f2, #ffffff) !important;
-      border-color: rgba(239, 68, 68, .45) !important;
+    #finalActionList .scan-main,
+    #finalActionList .scan-main-live {
+      background: linear-gradient(90deg, #fee2e2, #ffffff) !important;
+      border-color: rgba(239, 68, 68, .55) !important;
     }
 
-    .final-native-card-v26676 .scan-action {
+    #finalActionList .scan-action,
+    #finalActionList .action-pill,
+    #finalActionList .badge {
       background: #fee2e2 !important;
       color: #991b1b !important;
       border: 1px solid #fca5a5 !important;
       font-weight: 950 !important;
     }
 
-    .final-native-card-v26676 .scan-action::after {
-      content: "";
+    .final-main-rise-note-v26667 {
+      margin: 12px 0 10px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 2px solid #fca5a5;
+      background: #fef2f2;
+      color: #991b1b;
+      font-weight: 900;
+      line-height: 1.55;
     }
 
-    .final-native-card-v26676 .hint,
-    .final-native-card-v26676 .system-note {
-      color: #991b1b !important;
-      background: #fef2f2 !important;
-      border-radius: 14px !important;
-      padding: 8px 10px !important;
+    .final-main-rise-note-v26667 b {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 15px;
+      font-weight: 950;
+    }
+
+    .final-main-rise-note-v26667 p {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .final-section-title-v26667 {
+      color: #b91c1c !important;
     }
   `;
   document.head.appendChild(style);
 }
 
-function buildFinalDemoRow2330V26676() {
-  return {
-    stock_id: "2330",
-    stock_name: "台積電",
-    industry: "半導體",
-    action: "FINAL",
-    final_action: "FINAL",
-    strategy_type: "FINAL",
-    bucket: "FINAL",
-    strategy_name: "FINAL 主升確認",
-    source: "manual_final_ui_test_native_render",
-    ref_price: "982.00",
-    price: "982.00",
-    close: "982.00",
-    score: "92",
-    entry_score: "92",
-    suggested_amount: "0",
-    target_weight: "0.00%",
-    liquidity_level: "高流動性",
-    liquidity_tag: "高流動性",
-    liquidity_score: "95",
-    volume: "100,000張",
-    amount: "982.00億",
-    main_force_score_v300: "91",
-    chip_score: "88（🔥 高集中）",
-    ma5_status: "MA5：站上｜↑ 強勢",
-    ma10_status: "MA10：站上｜↑ 強勢",
-    ma20_status: "MA20：站上｜↑ 強勢",
-    kbar_type: "主升續強K",
-    kline_structure: "多頭排列",
-    progress_state: "主升確認",
-    behavior_state: "主升趨勢延續",
-    risk_level: "未過熱",
-    reason: "FINAL：主力慢推後確認主升，量價健康，未進入過熱；此筆為 UI 測試資料。",
-    system_note: "FINAL 測試：主升確認卡片。可觀察卡片大小是否與其他清單一致。",
-    decision_hint: "可列入正式操作區；若已有持倉，優先評估續抱或分批加碼。若短線乖離過大、爆量急拉，不追價。",
-    chinese_decision_hint: "正式操作區：主力拉升確認、量價健康、未過熱。"
-  };
-}
-
-function applyFinalNativeDemo2330V26676() {
-  try { injectFinalNativeDemoStyleV26676(); } catch (e) {}
-
+function reorderLifecycleSectionsV26667() {
   const finalList = document.getElementById("finalActionList");
-  if (!finalList || typeof renderScanRow !== "function") return;
+  const ignitionList = document.getElementById("ignitionList");
+  const evolutionList = document.getElementById("evolutionList");
+  const testList = document.getElementById("testList");
+
+  if (!finalList || !ignitionList || !evolutionList || !testList) return;
 
   const finalSection = finalList.closest("section");
-  if (finalSection) {
-    finalSection.classList.add("final-section-native-v26676");
-    const title = finalSection.querySelector("h2, summary");
-    if (title) title.textContent = "🔥 FINAL｜主升確認";
-    const hint = finalSection.querySelector(".hint");
-    if (hint) hint.textContent = "主升確認區：此版本用原生卡片模板顯示 2330 測試資料。";
+  const ignitionSection = ignitionList.closest("section");
+  const evolutionSection = evolutionList.closest("section");
+  const testSection = testList.closest("section");
+
+  if (!finalSection || !ignitionSection || !evolutionSection || !testSection) return;
+
+  // 目標排序：FINAL → EVOLUTION → IGNITION → TEST
+  const parent = finalSection.parentElement;
+  if (!parent) return;
+
+  if (finalSection.nextElementSibling !== evolutionSection) {
+    parent.insertBefore(evolutionSection, finalSection.nextSibling);
+  }
+  if (evolutionSection.nextElementSibling !== ignitionSection) {
+    parent.insertBefore(ignitionSection, evolutionSection.nextSibling);
+  }
+  if (ignitionSection.nextElementSibling !== testSection) {
+    parent.insertBefore(testSection, ignitionSection.nextSibling);
   }
 
-  const row = buildFinalDemoRow2330V26676();
-  let html = "";
-
-  try {
-    html = renderScanRow(row, "FINAL");
-  } catch (e) {
-    html = "";
+  // 更新標題/提示，不動資料。
+  const finalTitle = finalSection.querySelector("h2");
+  if (finalTitle) {
+    finalTitle.textContent = "🔥 最終操作｜主升確認";
+    finalTitle.classList.add("final-section-title-v26667");
   }
 
-  if (!html) {
-    finalList.innerHTML = `
-      <div class="final-native-test-warning-v26676">
-        ⚠️ FINAL UI 測試模式：renderScanRow 尚未可用
-        <small>請重新整理或確認 app.js 載入順序。</small>
-      </div>
-    `;
-    return;
+  const finalHint = finalSection.querySelector(".hint");
+  if (finalHint) {
+    finalHint.textContent = "主升確認區：只看風險報酬仍漂亮、未過熱、可正式操作的標的。";
   }
 
-  html = html.replace('<article class="scan-item ', '<article class="scan-item final-native-card-v26676 ');
-  html = html.replace(/<div class="scan-action [^"]*">[\s\S]*?<\/div>/, '<div class="scan-action">🔥 主升</div>');
+  const evolutionSummary = evolutionSection.querySelector("summary");
+  if (evolutionSummary) {
+    evolutionSummary.textContent = "🧬 EVOLUTION 策略進化訊號｜主力慢推";
+  }
+  const evolutionHint = evolutionSection.querySelector(".hint");
+  if (evolutionHint) {
+    evolutionHint.textContent = "主力控盤慢推期：回檔有人接、均線慢慢打開、量能溫和，優先度高於 IGNITION。";
+  }
 
-  finalList.innerHTML = `
-    <div class="final-native-test-warning-v26676">
-      ⚠️ FINAL UI 測試模式：以下 2330 不是正式策略訊號
-      <small>這張卡片使用原本 renderScanRow 產生，大小應與四大清單一致。</small>
-    </div>
-    ${html}
-  `;
+  const ignitionSummary = ignitionSection.querySelector("summary");
+  if (ignitionSummary) {
+    ignitionSummary.textContent = "🧪 IGNITION 起漲訊號｜主力吸籌";
+  }
+  const ignitionHint = ignitionSection.querySelector(".hint");
+  if (ignitionHint) {
+    ignitionHint.textContent = "主力開始吸籌期：觀察承接、放量與假突破風險，尚未完全確認主升。";
+  }
 }
 
-function applyFinalNativeDemoLoopV26676() {
-  applyFinalNativeDemo2330V26676();
+function injectFinalMainRiseNoteV26667() {
+  const finalList = document.getElementById("finalActionList");
+  if (!finalList) return;
+
+  const rows = finalList.querySelectorAll(".scan-item, article, .position-row");
+  rows.forEach(row => {
+    if (row.querySelector(".final-main-rise-note-v26667")) return;
+
+    const note = document.createElement("div");
+    note.className = "final-main-rise-note-v26667";
+    note.innerHTML = `
+      <b>🔥 FINAL｜主升確認</b>
+      <p>定位：正式操作區。重點確認主力拉升、量價健康、仍未過熱；若乖離過大或爆量失控，不追價。</p>
+    `;
+
+    const detail = row.querySelector(".detail-grid");
+    if (detail && detail.parentElement) {
+      detail.parentElement.insertBefore(note, detail.nextSibling);
+    } else {
+      row.appendChild(note);
+    }
+  });
+}
+
+function applyFinalAndOrderPatchV26667() {
+  try { injectFinalAndOrderStyleV26667(); } catch (e) {}
+  try { reorderLifecycleSectionsV26667(); } catch (e) {}
+  try { injectFinalMainRiseNoteV26667(); } catch (e) {}
+}
+
+try { applyFinalAndOrderPatchV26667(); } catch (e) {}
+document.addEventListener("DOMContentLoaded", function() {
+  applyFinalAndOrderPatchV26667();
+
+  // 前端資料載入後可能會重新 render，保守補跑幾次，只改 DOM 顯示。
+  let count = 0;
+  const timer = setInterval(function() {
+    applyFinalAndOrderPatchV26667();
+    count += 1;
+    if (count >= 12) clearInterval(timer);
+  }, 800);
+});
+
+/* =========================================================
+   v266.68 FINAL SECTION DIRECT STYLE FIX
+   只修 FINAL 前端顯示：
+   - 不靠 :has()
+   - 直接替 finalActionList 所在 section 加 class
+   - 清單空白也會顯示紅色 FINAL 主升確認區
+   - 不改策略、不改 CSV、不改 pipeline
+   ========================================================= */
+
+function injectFinalDirectStyleV26668() {
+  if (document.getElementById("final-direct-style-v26668")) return;
+
+  const style = document.createElement("style");
+  style.id = "final-direct-style-v26668";
+  style.textContent = `
+    .final-section-v26668 {
+      border: 2px solid rgba(239, 68, 68, .30) !important;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, .08) !important;
+      background: linear-gradient(180deg, #fff7f7, #ffffff) !important;
+    }
+
+    .final-section-v26668 h2,
+    .final-section-v26668 summary {
+      color: #b91c1c !important;
+      font-weight: 950 !important;
+    }
+
+    .final-section-v26668 .hint {
+      color: #991b1b !important;
+      background: #fef2f2 !important;
+      border: 1px solid #fecaca !important;
+      border-radius: 14px !important;
+      padding: 9px 12px !important;
+      font-weight: 850 !important;
+    }
+
+    .final-empty-mainrise-v26668 {
+      margin-top: 10px;
+      padding: 16px 18px;
+      border-radius: 18px;
+      border: 2px solid #fecaca;
+      background: #fef2f2;
+      color: #991b1b;
+      font-weight: 900;
+      line-height: 1.55;
+    }
+
+    .final-empty-mainrise-v26668 b {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 16px;
+      font-weight: 950;
+    }
+
+    .final-empty-mainrise-v26668 p {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .final-section-v26668 #finalActionList .scan-item,
+    .final-section-v26668 #finalActionList article,
+    .final-section-v26668 #finalActionList .position-row {
+      border-color: #ef4444 !important;
+      background: linear-gradient(90deg, #fef2f2, #ffffff) !important;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, .12) !important;
+    }
+
+    .final-section-v26668 #finalActionList .scan-action,
+    .final-section-v26668 #finalActionList .action-pill,
+    .final-section-v26668 #finalActionList .badge {
+      background: #fee2e2 !important;
+      color: #991b1b !important;
+      border: 1px solid #fca5a5 !important;
+      font-weight: 950 !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function applyFinalDirectStyleV26668() {
+  try { injectFinalDirectStyleV26668(); } catch (e) {}
+
+  const finalList = document.getElementById("finalActionList");
+  if (!finalList) return;
+
+  const finalSection = finalList.closest("section");
+  if (!finalSection) return;
+
+  finalSection.classList.add("final-section-v26668");
+
+  const title = finalSection.querySelector("h2, summary");
+  if (title) {
+    title.textContent = "🔥 FINAL｜主升確認";
+  }
+
+  const hint = finalSection.querySelector(".hint");
+  if (hint) {
+    hint.textContent = "主升確認區：只顯示風險報酬仍漂亮、主力拉升確認、未過熱的正式操作標的。";
+  }
+
+  const txt = String(finalList.textContent || "").trim();
+  const hasRealCard = finalList.querySelector(".scan-item, article, .position-row");
+  const hasEmptyNote = finalList.querySelector(".final-empty-mainrise-v26668");
+
+  if (!hasRealCard && !hasEmptyNote) {
+    const note = document.createElement("div");
+    note.className = "final-empty-mainrise-v26668";
+    note.innerHTML = `
+      <b>🔥 本輪沒有 FINAL 主升確認標的</b>
+      <p>代表目前沒有同時符合「主力拉升確認、量價健康、未過熱、風險報酬漂亮」的標的；寧可空白，不硬追。</p>
+    `;
+    finalList.innerHTML = "";
+    finalList.appendChild(note);
+  }
+}
+
+function applyFinalDirectStyleLoopV26668() {
+  applyFinalDirectStyleV26668();
 
   let n = 0;
   const timer = setInterval(function() {
-    applyFinalNativeDemo2330V26676();
+    applyFinalDirectStyleV26668();
     n += 1;
     if (n >= 20) clearInterval(timer);
   }, 700);
 }
 
-try { applyFinalNativeDemoLoopV26676(); } catch (e) {}
+try { applyFinalDirectStyleLoopV26668(); } catch (e) {}
 document.addEventListener("DOMContentLoaded", function() {
-  try { applyFinalNativeDemoLoopV26676(); } catch (e) {}
+  try { applyFinalDirectStyleLoopV26668(); } catch (e) {}
+});
+
+/* =========================================================
+   v266.70 FINAL FULL CARD UI PATCH
+   只修前端顯示：
+   - FINAL 有標的時，卡片改成「主升確認卡」
+   - FINAL 卡片加入主升原因 / 操作建議 / 風控提示
+   - FINAL 空白時只保留簡短空狀態
+   - 不改策略、不改資料、不改 CSV、不改 pipeline
+   ========================================================= */
+
+function detectFinalRowV26670(row) {
+  row = row || {};
+  const joined = [
+    row.strategy_type,
+    row.bucket,
+    row.strategy_name,
+    row.source,
+    row.final_action,
+    row.action,
+    row.reason,
+    row.system_note
+  ].map(v => String(v ?? "")).join(" ").toUpperCase();
+
+  return (
+    joined.includes("FINAL") ||
+    joined.includes("主升確認") ||
+    String(row.final_action || row.action || "").toUpperCase() === "FINAL" ||
+    String(row.bucket || row.strategy_type || "").toUpperCase() === "FINAL"
+  );
+}
+
+function numV26670(v, fallback = "--") {
+  const n = Number(String(v ?? "").replace(/,/g, ""));
+  if (!Number.isFinite(n)) return fallback;
+  return String(Math.round(n * 100) / 100);
+}
+
+function textV26670(v, fallback = "--") {
+  const s = String(v ?? "").trim();
+  if (!s || ["nan", "NaN", "None", "null", "undefined"].includes(s)) return fallback;
+  return s;
+}
+
+function finalStrengthLabelV26670(row) {
+  const score = Number(row.score || row.entry_score || row.final_score || row.opportunity_score || 0);
+  if (score >= 90) return "🔥 極強主升";
+  if (score >= 75) return "🟥 主升確認";
+  if (score >= 60) return "🟧 主升初段";
+  return "🟥 主升觀察";
+}
+
+function finalRiskLabelV26670(row) {
+  const txt = [
+    row.risk_level, row.risk_tag, row.fake_risk_tag, row.system_note, row.reason
+  ].map(v => String(v ?? "")).join(" ");
+  if (/過熱|爆量|追高|風險高|高風險/.test(txt)) return "🔴 過熱警戒";
+  if (/低信心|資料有限|普通/.test(txt)) return "🟡 需確認";
+  return "🟢 未過熱";
+}
+
+function finalCardPanelV26670(row) {
+  const price = textV26670(row.ref_price || row.close || row.price, "--");
+  const score = textV26670(row.score || row.entry_score || row.final_score, "--");
+  const liq = textV26670(row.liquidity_level || row.liquidity_tag || row.liquidity, "--");
+  const chip = textV26670(row.chip_score || row.chip_concentration || row.chip_score_v26621, "--");
+  const mainForce = textV26670(row.main_force_score_v300 || row.main_force_score || row.main_force, "--");
+  const ma5 = textV26670(row.ma5_status || row.ma5_signal || row.ma5_hint, "MA5 續強觀察");
+  const ma10 = textV26670(row.ma10_status || row.ma10_signal || row.ma10_hint, "MA10 支撐觀察");
+  const kbar = textV26670(row.kbar_type || row.k_structure || row.kline_structure, "主升K觀察");
+  const reason = textV26670(row.reason || row.system_note, "FINAL：主升確認，量價健康，未過熱。");
+
+  return `
+    <div class="final-full-card-v26670">
+      <div class="final-card-title-v26670">🔥 FINAL｜主升確認卡</div>
+
+      <div class="final-card-grid-v26670">
+        <div><span>主升狀態</span><b>${finalStrengthLabelV26670(row)}</b></div>
+        <div><span>參考價</span><b>${price}</b></div>
+        <div><span>信心分數</span><b>${score}</b></div>
+        <div><span>風險狀態</span><b>${finalRiskLabelV26670(row)}</b></div>
+        <div><span>主力強度</span><b>${mainForce}</b></div>
+        <div><span>籌碼集中</span><b>${chip}</b></div>
+        <div><span>流動性</span><b>${liq}</b></div>
+        <div><span>K棒</span><b>${kbar}</b></div>
+      </div>
+
+      <div class="final-card-section-v26670">
+        <b>📈 趨勢結構</b>
+        <p>${ma5}｜${ma10}｜主升結構以 MA5 / MA10 延續為核心。</p>
+      </div>
+
+      <div class="final-card-section-v26670">
+        <b>🚀 主升成立原因</b>
+        <p>${reason}</p>
+      </div>
+
+      <div class="final-card-section-v26670 final-card-operation-v26670">
+        <b>🧠 操作建議</b>
+        <p>可列入正式操作區；若已有持倉，優先評估續抱或分批加碼。若短線乖離過大、爆量急拉，不追價。</p>
+      </div>
+
+      <div class="final-card-section-v26670 final-card-risk-v26670">
+        <b>⚠️ 風控提示</b>
+        <p>跌破 MA10 轉弱需減碼觀察；跌破 MA20 或爆量長黑，視為主升結束警戒。</p>
+      </div>
+    </div>
+  `;
+}
+
+function injectFinalFullCardStyleV26670() {
+  if (document.getElementById("final-full-card-style-v26670")) return;
+
+  const style = document.createElement("style");
+  style.id = "final-full-card-style-v26670";
+  style.textContent = `
+    .final-section-v26668,
+    .final-section-v26670 {
+      border: 2px solid rgba(239, 68, 68, .34) !important;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, .08) !important;
+      background: linear-gradient(180deg, #fff7f7, #ffffff) !important;
+    }
+
+    #finalActionList .scan-item,
+    #finalActionList article,
+    #finalActionList .position-row,
+    .final-row-card-v26670 {
+      border-color: #ef4444 !important;
+      background: linear-gradient(90deg, #fff1f2, #ffffff) !important;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, .13) !important;
+    }
+
+    #finalActionList .scan-main,
+    #finalActionList .scan-main-live {
+      background: linear-gradient(90deg, #fee2e2, #ffffff) !important;
+      border-color: rgba(239, 68, 68, .55) !important;
+    }
+
+    #finalActionList .scan-action,
+    #finalActionList .action-pill,
+    #finalActionList .badge {
+      background: #fee2e2 !important;
+      color: #991b1b !important;
+      border: 1px solid #fca5a5 !important;
+      font-weight: 950 !important;
+    }
+
+    .final-full-card-v26670 {
+      margin: 14px 0 10px;
+      padding: 16px;
+      border-radius: 20px;
+      border: 2px solid #fca5a5;
+      background: #fff7f7;
+      color: #7f1d1d;
+      font-weight: 850;
+      line-height: 1.55;
+    }
+
+    .final-card-title-v26670 {
+      font-size: 18px;
+      font-weight: 950;
+      color: #991b1b;
+      margin-bottom: 12px;
+    }
+
+    .final-card-grid-v26670 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .final-card-grid-v26670 > div {
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: #ffffff;
+      border: 1px solid #fecaca;
+    }
+
+    .final-card-grid-v26670 span {
+      display: block;
+      font-size: 12px;
+      color: #b91c1c;
+      font-weight: 850;
+      margin-bottom: 4px;
+    }
+
+    .final-card-grid-v26670 b {
+      display: block;
+      font-size: 15px;
+      color: #111827;
+      font-weight: 950;
+      word-break: break-word;
+    }
+
+    .final-card-section-v26670 {
+      margin-top: 10px;
+      padding: 12px 13px;
+      border-radius: 15px;
+      background: #ffffff;
+      border: 1px solid #fecaca;
+    }
+
+    .final-card-section-v26670 b {
+      display: block;
+      color: #991b1b;
+      font-size: 14px;
+      font-weight: 950;
+      margin-bottom: 6px;
+    }
+
+    .final-card-section-v26670 p {
+      margin: 0;
+      color: #374151;
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .final-card-operation-v26670 {
+      background: #fff7ed;
+      border-color: #fdba74;
+    }
+
+    .final-card-risk-v26670 {
+      background: #fef2f2;
+      border-color: #fca5a5;
+    }
+
+    .final-empty-mainrise-v26668 {
+      display: none !important;
+    }
+
+    .final-empty-mainrise-compact-v26670 {
+      margin-top: 10px;
+      padding: 16px 18px;
+      border-radius: 18px;
+      border: 2px solid #fecaca;
+      background: #fef2f2;
+      color: #991b1b;
+      font-weight: 900;
+      line-height: 1.55;
+    }
+
+    .final-empty-mainrise-compact-v26670 b {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 16px;
+      font-weight: 950;
+    }
+
+    .final-empty-mainrise-compact-v26670 p {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 850;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+const __oldRenderScanRowV26670 = typeof renderScanRow === "function" ? renderScanRow : null;
+
+renderScanRow = function(row, key) {
+  try { injectFinalFullCardStyleV26670(); } catch (e) {}
+
+  const html = __oldRenderScanRowV26670 ? __oldRenderScanRowV26670(row, key) : "";
+  if (!html) return html;
+
+  if (!detectFinalRowV26670(row)) return html;
+
+  let out = html;
+  out = out.replace('<article class="scan-item ', '<article class="scan-item final-row-card-v26670 ');
+  out = out.replace(/<div class="scan-action [^"]*">[\s\S]*?<\/div>/, `<div class="scan-action final-action-v26670">🔥 主升</div>`);
+
+  const finalPanel = finalCardPanelV26670(row);
+  if (out.includes('<div class="detail-grid">')) {
+    out = out.replace(/(<div class="detail-grid">[\s\S]*?<\/div>\s*)/, `$1${finalPanel}`);
+  } else {
+    out = out.replace(/<\/article>\s*$/, `${finalPanel}</article>`);
+  }
+
+  return out;
+};
+
+function applyFinalFullCardUIV26670() {
+  try { injectFinalFullCardStyleV26670(); } catch (e) {}
+
+  const finalList = document.getElementById("finalActionList");
+  if (!finalList) return;
+
+  const finalSection = finalList.closest("section");
+  if (finalSection) {
+    finalSection.classList.add("final-section-v26670");
+    const title = finalSection.querySelector("h2, summary");
+    if (title) title.textContent = "🔥 FINAL｜主升確認";
+    const hint = finalSection.querySelector(".hint");
+    if (hint) hint.textContent = "主升確認區：只顯示風險報酬仍漂亮、主力拉升確認、未過熱的正式操作標的。";
+  }
+
+  const hasRealCard = finalList.querySelector(".scan-item, article, .position-row");
+  const hasCompactEmpty = finalList.querySelector(".final-empty-mainrise-compact-v26670");
+
+  if (!hasRealCard && !hasCompactEmpty) {
+    finalList.innerHTML = `
+      <div class="final-empty-mainrise-compact-v26670">
+        <b>🔥 本輪沒有 FINAL 主升確認標的</b>
+        <p>代表目前沒有同時符合「主力拉升確認、量價健康、未過熱、風險報酬漂亮」的標的；寧可空白，不硬追。</p>
+      </div>
+    `;
+  }
+}
+
+function applyFinalFullCardLoopV26670() {
+  applyFinalFullCardUIV26670();
+
+  let n = 0;
+  const timer = setInterval(function() {
+    applyFinalFullCardUIV26670();
+    n += 1;
+    if (n >= 20) clearInterval(timer);
+  }, 700);
+}
+
+try { applyFinalFullCardLoopV26670(); } catch (e) {}
+document.addEventListener("DOMContentLoaded", function() {
+  try { applyFinalFullCardLoopV26670(); } catch (e) {}
 });
