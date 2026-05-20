@@ -4589,27 +4589,27 @@ def apply_v53_condition_bucket_boundary_lock():
     # TEST：微量增溫 / MA5 翻平 / 市場還沒注意
     # 條件重點：剛開始有生命跡象，但不允許強突破、不允許爆量。
     ma5_flat_or_turn = (
-        (ma5 >= ma10 * 0.940) &
-        (ma5 <= ma10 * 1.070)
+        (ma5 >= ma10 * 0.955) &
+        (ma5 <= ma10 * 1.045)
     )
     micro_warm = (
-        mom5.between(-0.045, 0.095) &
-        mom10.between(-0.060, 0.130) &
-        vol_ratio.between(0.45, 2.45)
+        mom5.between(-0.025, 0.075) &
+        mom10.between(-0.035, 0.105) &
+        vol_ratio.between(0.55, 2.05)
     )
     test_cond = (
-        (close >= ma20 * 0.930) &
-        (dist_ma20.between(-0.095, 0.125)) &
+        (close >= ma20 * 0.955) &
+        (dist_ma20.between(-0.065, 0.095)) &
         ma5_flat_or_turn &
         micro_warm &
-        (range20 <= 0.46)
+        (range20 <= 0.38)
     )
 
     # IGNITION：主力開始吸 / 開始做圖
     # 條件重點：承接、OBV/籌碼/主力痕跡初現，還不是市場一致追價。
     absorption_trace = (
-        (main_force >= 32) |
-        (chip >= 32) |
+        (main_force >= 38) |
+        (chip >= 38) |
         ((obv > 0) & (low_hold >= 1))
     )
     support_trace = (
@@ -4618,12 +4618,12 @@ def apply_v53_condition_bucket_boundary_lock():
         (close_to_high20.between(0.80, 1.03))
     )
     ignition_cond = (
-        (close >= ma20 * 0.960) &
-        (ma5 >= ma10 * 0.950) &
-        (dist_ma20.between(-0.065, 0.125)) &
-        (mom5.between(-0.030, 0.105)) &
-        (mom10.between(-0.030, 0.155)) &
-        (vol_ratio.between(0.60, 2.65)) &
+        (close >= ma20 * 0.980) &
+        (ma5 >= ma10 * 0.965) &
+        (dist_ma20.between(-0.035, 0.105)) &
+        (mom5.between(-0.015, 0.090)) &
+        (mom10.between(-0.010, 0.135)) &
+        (vol_ratio.between(0.75, 2.45)) &
         absorption_trace &
         support_trace &
         not_overheat
@@ -4633,25 +4633,25 @@ def apply_v53_condition_bucket_boundary_lock():
     # 條件重點：主力已經開始控節奏、回檔有人接、量能穩定回升、均線慢慢打開；
     # 但市場還沒全面追價，不能變成追強。
     mainforce_trace = (
-        (main_force >= 38) |
-        (chip >= 38) |
+        (main_force >= 42) |
+        (chip >= 42) |
         ((obv > 0) & (low_hold >= 1))
     )
     mainforce_slow_control = (
-        (close >= ma20 * 0.980) &
-        (ma5 >= ma10 * 0.965) &
-        (ma10 >= ma20 * 0.945) &
-        (dist_ma20.between(-0.040, 0.130)) &
-        (mom5.between(-0.030, 0.105)) &
-        (mom10.between(-0.020, 0.165)) &
-        (mom20.between(-0.010, 0.280)) &
-        (vol_ratio.between(0.70, 2.95)) &
-        (range20 <= 0.44)
+        (close >= ma20 * 0.990) &
+        (ma5 >= ma10 * 0.972) &
+        (ma10 >= ma20 * 0.960) &
+        (dist_ma20.between(-0.025, 0.105)) &
+        (mom5.between(-0.020, 0.085)) &
+        (mom10.between(-0.005, 0.145)) &
+        (mom20.between(0.000, 0.245)) &
+        (vol_ratio.between(0.82, 2.65)) &
+        (range20 <= 0.385)
     )
     pullback_absorbed = (
         (low_hold >= 1) |
-        (close >= ma10 * 0.970) |
-        (close_to_high20.between(0.78, 1.035))
+        (close >= ma10 * 0.980) |
+        (close_to_high20.between(0.82, 1.025))
     )
     evolution_cond = (
         mainforce_slow_control &
@@ -4663,14 +4663,14 @@ def apply_v53_condition_bucket_boundary_lock():
     # FINAL：主力慢推後，主升確認但未過熱
     # 條件重點：只能從 EVOLUTION 條件上再確認；不是 TEST 直接跳 FINAL。
     final_confirm = (
-        (close >= ma5 * 0.990) &
-        (ma5 >= ma10 * 0.985) &
-        (ma10 >= ma20 * 0.975) &
-        (vol_ratio.between(1.00, 2.80)) &
-        (mom5.between(0.000, 0.100)) &
-        (mom10.between(0.010, 0.165)) &
+        (close >= ma5 * 0.995) &
+        (ma5 >= ma10 * 0.990) &
+        (ma10 >= ma20 * 0.985) &
+        (vol_ratio.between(1.05, 2.70)) &
+        (mom5.between(0.000, 0.095)) &
+        (mom10.between(0.020, 0.155)) &
         (mom20.between(0.030, 0.270)) &
-        ((main_force >= 50) | (chip >= 50) | ((obv > 0) & (low_hold >= 2))) &
+        ((main_force >= 55) | (chip >= 55) | ((obv > 0) & (low_hold >= 3))) &
         not_overheat
     )
     final_cond = evolution_cond & final_confirm
@@ -4718,10 +4718,10 @@ def apply_v53_condition_bucket_boundary_lock():
         out["source"] = "v53_condition_bucket_boundary_lock"
         return out
 
-    test = _shape(pool.loc[stage == "TEST"], "TEST", "TEST", "TEST：開始有生命跡象，微量增溫、MA5 翻平，還不是主升。", 12)
-    ignition = _shape(pool.loc[stage == "IGNITION"], "IGNITION", "TEST", "IGNITION：主力開始吸，承接/籌碼/OBV 開始出現，但未全面追價。", 10)
-    evolution = _shape(pool.loc[stage == "EVOLUTION"], "EVOLUTION", "TEST", "EVOLUTION：主力控盤慢推，回檔有人接、均線慢慢打開，未過熱。", 10)
-    final = _shape(pool.loc[stage == "FINAL"], "FINAL", "FINAL", "FINAL：僅由 EVOLUTION 條件升級，主升確認但未過熱。", 5)
+    test = _shape(pool.loc[stage == "TEST"], "TEST", "TEST", "TEST：微量增溫、MA5 翻平、市場還沒注意；不得直接跳 FINAL。", 12)
+    ignition = _shape(pool.loc[stage == "IGNITION"], "IGNITION", "TEST", "IGNITION：主力開始吸、承接出現、尚未市場一致追價。", 10)
+    evolution = _shape(pool.loc[stage == "EVOLUTION"], "EVOLUTION", "TEST", "EVOLUTION：主力控盤慢推、回檔有人接、均線慢慢打開，市場尚未全面追價。", 10)
+    final = _shape(pool.loc[stage == "FINAL"], "FINAL", "FINAL", "FINAL：僅由 EVOLUTION 條件升級，主力慢推後主升確認但未過熱。", 5)
 
     _write_both(test, "trade_plan.csv")
     _write_both(ignition, "ignition_candidates.csv")
