@@ -4660,42 +4660,20 @@ def apply_v53_condition_bucket_boundary_lock():
         not_overheat
     )
 
-    # FINAL：符合「主升確認、未過熱」邏輯就進 FINAL
-    # 修正重點：
-    # - 不再硬性要求一定要先出現在今日 EVOLUTION，避免 EVOLUTION 每日刷新造成 FINAL 永遠空白。
-    # - 但 FINAL 本身條件仍維持最嚴格，不能變成追強榜。
-    final_structure = (
-        (close >= ma20 * 1.000) &
+    # FINAL：主力慢推後，主升確認但未過熱
+    # 條件重點：只能從 EVOLUTION 條件上再確認；不是 TEST 直接跳 FINAL。
+    final_confirm = (
         (close >= ma5 * 0.995) &
         (ma5 >= ma10 * 0.990) &
         (ma10 >= ma20 * 0.985) &
-        (dist_ma20.between(-0.005, 0.115)) &
-        (range20 <= 0.385)
-    )
-    final_momentum_health = (
         (vol_ratio.between(1.05, 2.70)) &
         (mom5.between(0.000, 0.095)) &
         (mom10.between(0.020, 0.155)) &
-        (mom20.between(0.030, 0.270))
-    )
-    final_mainforce_confirm = (
-        (main_force >= 55) |
-        (chip >= 55) |
-        ((obv > 0) & (low_hold >= 3))
-    )
-    final_pullback_safe = (
-        (low_hold >= 2) |
-        (close >= ma10 * 0.995) |
-        (close_to_high20.between(0.86, 1.025))
-    )
-    final_confirm = (
-        final_structure &
-        final_momentum_health &
-        final_mainforce_confirm &
-        final_pullback_safe &
+        (mom20.between(0.030, 0.270)) &
+        ((main_force >= 55) | (chip >= 55) | ((obv > 0) & (low_hold >= 3))) &
         not_overheat
     )
-    final_cond = final_confirm
+    final_cond = evolution_cond & final_confirm
 
     stage = pd.Series("WATCH", index=pool.index, dtype="object")
     stage.loc[test_cond] = "TEST"
@@ -4743,7 +4721,7 @@ def apply_v53_condition_bucket_boundary_lock():
     test = _shape(pool.loc[stage == "TEST"], "TEST", "TEST", "TEST：微量增溫、MA5 翻平、市場還沒注意；不得直接跳 FINAL。", 12)
     ignition = _shape(pool.loc[stage == "IGNITION"], "IGNITION", "TEST", "IGNITION：主力開始吸、承接出現、尚未市場一致追價。", 10)
     evolution = _shape(pool.loc[stage == "EVOLUTION"], "EVOLUTION", "TEST", "EVOLUTION：主力控盤慢推、回檔有人接、均線慢慢打開，市場尚未全面追價。", 10)
-    final = _shape(pool.loc[stage == "FINAL"], "FINAL", "FINAL", "FINAL：符合主升確認、量價健康、主力/籌碼確認且未過熱；不再硬綁今日 EVOLUTION。", 5)
+    final = _shape(pool.loc[stage == "FINAL"], "FINAL", "FINAL", "FINAL：僅由 EVOLUTION 條件升級，主力慢推後主升確認但未過熱。", 5)
 
     _write_both(test, "trade_plan.csv")
     _write_both(ignition, "ignition_candidates.csv")
@@ -4780,5 +4758,3 @@ if __name__ == "__main__":
 # v53 lifecycle definition patch: WATCH consolidation, TEST micro-warm, IGNITION absorption, EVOLUTION mainforce-slow-control, FINAL confirmed-uptrend.
 
 # v53 evolution correction: EVOLUTION = mainforce slow-control phase, not market-noticing chase.
-
-# v266.55 FINAL independent condition fix: FINAL enters by its own strict main-uptrend confirmation logic, not forced from today's EVOLUTION.
