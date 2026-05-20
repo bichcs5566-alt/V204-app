@@ -4589,27 +4589,27 @@ def apply_v53_condition_bucket_boundary_lock():
     # TEST：微量增溫 / MA5 翻平 / 市場還沒注意
     # 條件重點：剛開始有生命跡象，但不允許強突破、不允許爆量。
     ma5_flat_or_turn = (
-        (ma5 >= ma10 * 0.955) &
-        (ma5 <= ma10 * 1.045)
+        (ma5 >= ma10 * 0.940) &
+        (ma5 <= ma10 * 1.070)
     )
     micro_warm = (
-        mom5.between(-0.025, 0.075) &
-        mom10.between(-0.035, 0.105) &
-        vol_ratio.between(0.55, 2.05)
+        mom5.between(-0.045, 0.095) &
+        mom10.between(-0.060, 0.130) &
+        vol_ratio.between(0.45, 2.45)
     )
     test_cond = (
-        (close >= ma20 * 0.955) &
-        (dist_ma20.between(-0.065, 0.095)) &
+        (close >= ma20 * 0.930) &
+        (dist_ma20.between(-0.095, 0.125)) &
         ma5_flat_or_turn &
         micro_warm &
-        (range20 <= 0.38)
+        (range20 <= 0.46)
     )
 
     # IGNITION：主力開始吸 / 開始做圖
     # 條件重點：承接、OBV/籌碼/主力痕跡初現，還不是市場一致追價。
     absorption_trace = (
-        (main_force >= 38) |
-        (chip >= 38) |
+        (main_force >= 32) |
+        (chip >= 32) |
         ((obv > 0) & (low_hold >= 1))
     )
     support_trace = (
@@ -4618,12 +4618,12 @@ def apply_v53_condition_bucket_boundary_lock():
         (close_to_high20.between(0.80, 1.03))
     )
     ignition_cond = (
-        (close >= ma20 * 0.980) &
-        (ma5 >= ma10 * 0.965) &
-        (dist_ma20.between(-0.035, 0.105)) &
-        (mom5.between(-0.015, 0.090)) &
-        (mom10.between(-0.010, 0.135)) &
-        (vol_ratio.between(0.75, 2.45)) &
+        (close >= ma20 * 0.960) &
+        (ma5 >= ma10 * 0.950) &
+        (dist_ma20.between(-0.065, 0.125)) &
+        (mom5.between(-0.030, 0.105)) &
+        (mom10.between(-0.030, 0.155)) &
+        (vol_ratio.between(0.60, 2.65)) &
         absorption_trace &
         support_trace &
         not_overheat
@@ -4633,25 +4633,25 @@ def apply_v53_condition_bucket_boundary_lock():
     # 條件重點：主力已經開始控節奏、回檔有人接、量能穩定回升、均線慢慢打開；
     # 但市場還沒全面追價，不能變成追強。
     mainforce_trace = (
-        (main_force >= 42) |
-        (chip >= 42) |
+        (main_force >= 38) |
+        (chip >= 38) |
         ((obv > 0) & (low_hold >= 1))
     )
     mainforce_slow_control = (
-        (close >= ma20 * 0.990) &
-        (ma5 >= ma10 * 0.972) &
-        (ma10 >= ma20 * 0.960) &
-        (dist_ma20.between(-0.025, 0.105)) &
-        (mom5.between(-0.020, 0.085)) &
-        (mom10.between(-0.005, 0.145)) &
-        (mom20.between(0.000, 0.245)) &
-        (vol_ratio.between(0.82, 2.65)) &
-        (range20 <= 0.385)
+        (close >= ma20 * 0.980) &
+        (ma5 >= ma10 * 0.965) &
+        (ma10 >= ma20 * 0.945) &
+        (dist_ma20.between(-0.040, 0.130)) &
+        (mom5.between(-0.030, 0.105)) &
+        (mom10.between(-0.020, 0.165)) &
+        (mom20.between(-0.010, 0.280)) &
+        (vol_ratio.between(0.70, 2.95)) &
+        (range20 <= 0.44)
     )
     pullback_absorbed = (
         (low_hold >= 1) |
-        (close >= ma10 * 0.980) |
-        (close_to_high20.between(0.82, 1.025))
+        (close >= ma10 * 0.970) |
+        (close_to_high20.between(0.78, 1.035))
     )
     evolution_cond = (
         mainforce_slow_control &
@@ -4663,14 +4663,14 @@ def apply_v53_condition_bucket_boundary_lock():
     # FINAL：主力慢推後，主升確認但未過熱
     # 條件重點：只能從 EVOLUTION 條件上再確認；不是 TEST 直接跳 FINAL。
     final_confirm = (
-        (close >= ma5 * 0.995) &
-        (ma5 >= ma10 * 0.990) &
-        (ma10 >= ma20 * 0.985) &
-        (vol_ratio.between(1.05, 2.70)) &
-        (mom5.between(0.000, 0.095)) &
-        (mom10.between(0.020, 0.155)) &
+        (close >= ma5 * 0.990) &
+        (ma5 >= ma10 * 0.985) &
+        (ma10 >= ma20 * 0.975) &
+        (vol_ratio.between(1.00, 2.80)) &
+        (mom5.between(0.000, 0.100)) &
+        (mom10.between(0.010, 0.165)) &
         (mom20.between(0.030, 0.270)) &
-        ((main_force >= 55) | (chip >= 55) | ((obv > 0) & (low_hold >= 3))) &
+        ((main_force >= 50) | (chip >= 50) | ((obv > 0) & (low_hold >= 2))) &
         not_overheat
     )
     final_cond = evolution_cond & final_confirm
@@ -4718,10 +4718,10 @@ def apply_v53_condition_bucket_boundary_lock():
         out["source"] = "v53_condition_bucket_boundary_lock"
         return out
 
-    test = _shape(pool.loc[stage == "TEST"], "TEST", "TEST", "TEST：微量增溫、MA5 翻平、市場還沒注意；不得直接跳 FINAL。", 12)
-    ignition = _shape(pool.loc[stage == "IGNITION"], "IGNITION", "TEST", "IGNITION：主力開始吸、承接出現、尚未市場一致追價。", 10)
-    evolution = _shape(pool.loc[stage == "EVOLUTION"], "EVOLUTION", "TEST", "EVOLUTION：主力控盤慢推、回檔有人接、均線慢慢打開，市場尚未全面追價。", 10)
-    final = _shape(pool.loc[stage == "FINAL"], "FINAL", "FINAL", "FINAL：僅由 EVOLUTION 條件升級，主力慢推後主升確認但未過熱。", 5)
+    test = _shape(pool.loc[stage == "TEST"], "TEST", "TEST", "TEST：開始有生命跡象，微量增溫、MA5 翻平，還不是主升。", 12)
+    ignition = _shape(pool.loc[stage == "IGNITION"], "IGNITION", "TEST", "IGNITION：主力開始吸，承接/籌碼/OBV 開始出現，但未全面追價。", 10)
+    evolution = _shape(pool.loc[stage == "EVOLUTION"], "EVOLUTION", "TEST", "EVOLUTION：主力控盤慢推，回檔有人接、均線慢慢打開，未過熱。", 10)
+    final = _shape(pool.loc[stage == "FINAL"], "FINAL", "FINAL", "FINAL：僅由 EVOLUTION 條件升級，主升確認但未過熱。", 5)
 
     _write_both(test, "trade_plan.csv")
     _write_both(ignition, "ignition_candidates.csv")
@@ -4738,188 +4738,6 @@ def apply_v53_condition_bucket_boundary_lock():
     )
 
 
-
-# ===== v54 LIFECYCLE THRESHOLD RECOVERY PATCH =====
-def apply_v54_lifecycle_threshold_recovery_patch():
-    import pandas as pd
-    import numpy as np
-    from pathlib import Path
-    import re
-
-    ROOT_LOCAL = Path(".")
-    DATA_LOCAL = ROOT_LOCAL / "mobile_dashboard_v1" / "data"
-    DATA_LOCAL.mkdir(parents=True, exist_ok=True)
-
-    def _read_csv_any(name):
-        for p in [ROOT_LOCAL / name, DATA_LOCAL / name]:
-            if p.exists() and p.stat().st_size > 0:
-                try:
-                    return pd.read_csv(p, dtype=str, encoding="utf-8-sig")
-                except Exception:
-                    try:
-                        return pd.read_csv(p, dtype=str)
-                    except Exception:
-                        pass
-        return pd.DataFrame()
-
-    def _write_both(df, name):
-        for p in [ROOT_LOCAL / name, DATA_LOCAL / name]:
-            p.parent.mkdir(parents=True, exist_ok=True)
-            df.to_csv(p, index=False, encoding="utf-8-sig")
-
-    def _sid(v):
-        s = str(v or "").strip()
-        m = re.search(r"\d{4}", s)
-        return m.group(0) if m else s
-
-    def _num(df, col, default=0.0):
-        if col in df.columns:
-            return pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
-        return pd.Series(default, index=df.index, dtype="float64")
-
-    frames = []
-    for name in ["candidates.csv","core_candidates.csv","alpha_candidates.csv","pre_move_candidates.csv","top_opportunities.csv","trade_plan.csv","ignition_candidates.csv","strategy_evolution.csv","selection_debug.csv"]:
-        df = _read_csv_any(name)
-        if not df.empty and "stock_id" in df.columns:
-            df = df.copy()
-            df["stock_id"] = df["stock_id"].map(_sid)
-            frames.append(df)
-
-    if not frames:
-        print("v54 recovery skipped: no candidate source")
-        return
-
-    pool = pd.concat(frames, ignore_index=True).drop_duplicates("stock_id", keep="first").copy()
-
-    close = _num(pool, "close", _num(pool, "ref_price", _num(pool, "price", 0)))
-    ma5 = _num(pool, "ma5", 0)
-    ma10 = _num(pool, "ma10", 0)
-    ma20 = _num(pool, "ma20", 0)
-    high20 = _num(pool, "high_20", close)
-    low20 = _num(pool, "low_20", close)
-
-    mom5 = _num(pool, "mom5", 0)
-    mom10 = _num(pool, "mom10", 0)
-    mom20 = _num(pool, "mom20", 0)
-    vol_ratio = _num(pool, "volume_ratio", 1)
-
-    main_force = _num(pool, "main_force_score_v300", 0)
-    chip = _num(pool, "chip_score", 0)
-    obv = _num(pool, "obv_mom5", 0)
-    low_hold = _num(pool, "low_non_down_count_5", 0)
-
-    ma20_safe = ma20.replace(0, np.nan)
-    high20_safe = high20.replace(0, np.nan)
-    low20_safe = low20.replace(0, np.nan)
-
-    dist_ma20 = (close / ma20_safe - 1).replace([np.inf, -np.inf], np.nan).fillna(0)
-    close_to_high20 = (close / high20_safe).replace([np.inf, -np.inf], np.nan).fillna(0)
-    range20 = ((high20 - low20) / low20_safe).replace([np.inf, -np.inf], np.nan).fillna(0)
-
-    not_overheat = (dist_ma20 <= 0.14) & (mom5 <= 0.12) & (mom20 <= 0.32) & (vol_ratio <= 3.50)
-
-    test_cond = (
-        (close >= ma20 * 0.93) &
-        (dist_ma20.between(-0.095, 0.125)) &
-        (ma5 >= ma10 * 0.94) &
-        (ma5 <= ma10 * 1.07) &
-        (mom5.between(-0.045, 0.095)) &
-        (mom10.between(-0.060, 0.130)) &
-        (vol_ratio.between(0.45, 2.45)) &
-        (range20 <= 0.46)
-    )
-
-    absorption_trace = (main_force >= 32) | (chip >= 32) | ((obv > 0) & (low_hold >= 1)) | (close >= ma10 * 0.97)
-    ignition_cond = (
-        (close >= ma20 * 0.96) &
-        (ma5 >= ma10 * 0.95) &
-        (dist_ma20.between(-0.065, 0.125)) &
-        (mom5.between(-0.030, 0.105)) &
-        (mom10.between(-0.030, 0.155)) &
-        (vol_ratio.between(0.60, 2.65)) &
-        absorption_trace &
-        not_overheat
-    )
-
-    mainforce_trace = (main_force >= 38) | (chip >= 38) | ((obv > 0) & (low_hold >= 1))
-    pullback_absorbed = (low_hold >= 1) | (close >= ma10 * 0.97) | (close_to_high20.between(0.78, 1.035))
-    evolution_cond = (
-        (close >= ma20 * 0.98) &
-        (ma5 >= ma10 * 0.965) &
-        (ma10 >= ma20 * 0.945) &
-        (dist_ma20.between(-0.040, 0.130)) &
-        (mom5.between(-0.030, 0.105)) &
-        (mom10.between(-0.020, 0.165)) &
-        (mom20.between(-0.010, 0.280)) &
-        (vol_ratio.between(0.70, 2.95)) &
-        (range20 <= 0.44) &
-        mainforce_trace &
-        pullback_absorbed &
-        not_overheat
-    )
-
-    final_cond = (
-        evolution_cond &
-        (close >= ma5 * 0.99) &
-        (ma5 >= ma10 * 0.985) &
-        (ma10 >= ma20 * 0.975) &
-        (vol_ratio.between(1.00, 2.80)) &
-        (mom5.between(0.000, 0.100)) &
-        (mom10.between(0.010, 0.165)) &
-        ((main_force >= 50) | (chip >= 50) | ((obv > 0) & (low_hold >= 2)))
-    )
-
-    score = test_cond.astype(int)*20 + ignition_cond.astype(int)*30 + evolution_cond.astype(int)*42 + final_cond.astype(int)*55 + mainforce_trace.astype(int)*12 + not_overheat.astype(int)*10
-    pool["_v54_lifecycle_score"] = score.round(2)
-
-    def _shape(df, stage_name, action_label, reason, max_rows):
-        out = df.copy()
-        if out.empty:
-            return out
-        out = out.sort_values(["_v54_lifecycle_score","stock_id"], ascending=[False, True]).head(max_rows).copy()
-        out["action"] = action_label
-        out["final_action"] = action_label
-        out["strategy_type"] = stage_name
-        out["bucket"] = stage_name
-        out["strategy_name"] = stage_name
-        out["score"] = out["_v54_lifecycle_score"].round(2)
-        out["entry_score"] = out["_v54_lifecycle_score"].round(2)
-        if "ref_price" not in out.columns:
-            out["ref_price"] = close.loc[out.index].round(2)
-        out["reason"] = reason
-        out["system_note"] = reason
-        out["source"] = "v54_lifecycle_threshold_recovery_patch"
-        return out
-
-    test = _shape(pool.loc[test_cond], "TEST", "TEST", "TEST：開始有生命跡象，微量增溫、MA5 翻平，還不是主升。", 12)
-    ignition = _shape(pool.loc[ignition_cond], "IGNITION", "TEST", "IGNITION：主力開始吸，承接/籌碼/OBV 開始出現，但未全面追價。", 10)
-    evolution = _shape(pool.loc[evolution_cond], "EVOLUTION", "TEST", "EVOLUTION：市場開始看到，主力控盤慢推，量能溫和，未過熱。", 10)
-    final = _shape(pool.loc[final_cond], "FINAL", "FINAL", "FINAL：僅由 EVOLUTION 條件升級，主升確認但未過熱。", 5)
-
-    # 避免洗空：若某層本輪條件為空，保留原本產出。
-    old_test = _read_csv_any("trade_plan.csv")
-    old_ign = _read_csv_any("ignition_candidates.csv")
-    old_evo = _read_csv_any("strategy_evolution.csv")
-
-    if test.empty and not old_test.empty:
-        test = old_test.copy()
-        test["v54_threshold_recovery_note"] = "TEST 條件本輪為空，保留原清單避免洗空。"
-    if ignition.empty and not old_ign.empty:
-        ignition = old_ign.copy()
-        ignition["v54_threshold_recovery_note"] = "IGNITION 條件本輪為空，保留原清單避免洗空。"
-    if evolution.empty and not old_evo.empty:
-        evolution = old_evo.copy()
-        evolution["v54_threshold_recovery_note"] = "EVOLUTION 條件本輪為空，保留原清單避免洗空。"
-
-    _write_both(test, "trade_plan.csv")
-    _write_both(ignition, "ignition_candidates.csv")
-    _write_both(evolution, "strategy_evolution.csv")
-    _write_both(final, "final_action_plan.csv")
-    _write_both(pool, "selection_debug.csv")
-
-    print("v54 lifecycle threshold recovery rows:", "test=", len(test), "ignition=", len(ignition), "evolution=", len(evolution), "final=", len(final))
-
-
 if __name__ == "__main__":
     main_v266577_structure_weight_continuation_patch()
     apply_v311_csv_final_lock()
@@ -4928,10 +4746,6 @@ if __name__ == "__main__":
     except Exception as e:
         print("v315 panel output skipped:", repr(e))
     write_v317_panel_files_hard_guarantee()
-    try:
-        apply_v54_lifecycle_threshold_recovery_patch()
-    except Exception as e:
-        print("v54 lifecycle threshold recovery patch skipped:", repr(e))
     try:
         apply_v53_condition_bucket_boundary_lock()
     except Exception as e:
