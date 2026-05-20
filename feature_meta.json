@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-05-19 16:07:19",
+  "generated_at": "2026-05-20 00:22:45",
   "source": "v266_build_features",
-  "rows": 4822729,
+  "rows": 4823599,
   "stock_count": 1971,
   "start_date": "2015-01-02",
-  "end_date": "2026-05-19",
-  "latest_rows": 1944,
-  "latest_has_60d_count": 1931
+  "end_date": "2026-05-20",
+  "latest_rows": 868,
+  "latest_has_60d_count": 864
 }
