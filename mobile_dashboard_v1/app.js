@@ -7082,21 +7082,23 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 
 /* =========================================================
-   v266.74 CLEAN FINAL COMPACT 2330 UI TEST PATCH
-   乾淨測試版：
-   - 強制 FINAL 顯示 2330 測試卡
-   - 收合狀態 = 一列清單卡片大小
-   - 展開後才顯示完整資訊
+   v266.75 FINAL SAME-SIZE ROW 2330 UI TEST PATCH
+   修正重點：
+   - FINAL 收合卡片完全對齊前面四大清單的一列卡片大小
+   - 使用同樣的 scan-item / scan-main-live 結構
+   - 收合時只顯示：主升 / 2330 / 982.00 / 高流動性
+   - 詳細資訊全部放在展開區
+   - 只測 UI，不代表真實策略訊號
    - 不改策略、不改 CSV、不改 pipeline
    ========================================================= */
 
-function injectFinalCleanDemoStyleV26674() {
-  if (document.getElementById("final-clean-demo-style-v26674")) return;
+function injectFinalSameSizeStyleV26675() {
+  if (document.getElementById("final-same-size-style-v26675")) return;
 
   const style = document.createElement("style");
-  style.id = "final-clean-demo-style-v26674";
+  style.id = "final-same-size-style-v26675";
   style.textContent = `
-    .final-test-warning-v26674 {
+    .final-test-warning-v26675 {
       margin: 10px 0 14px;
       padding: 12px 14px;
       border-radius: 16px;
@@ -7107,7 +7109,7 @@ function injectFinalCleanDemoStyleV26674() {
       line-height: 1.45;
     }
 
-    .final-test-warning-v26674 small {
+    .final-test-warning-v26675 small {
       display: block;
       margin-top: 4px;
       font-size: 12px;
@@ -7115,92 +7117,72 @@ function injectFinalCleanDemoStyleV26674() {
       color: #c2410c;
     }
 
-    .final-clean-card-v26674 {
+    .final-same-details-v26675 {
       display: block;
       margin: 0 0 14px 0;
       padding: 0;
-      border: none;
+      border: 0;
       background: transparent;
     }
 
-    .final-clean-card-v26674 summary {
+    .final-same-details-v26675 summary {
       list-style: none;
       cursor: pointer;
-      padding: 0;
       margin: 0;
+      padding: 0;
     }
 
-    .final-clean-card-v26674 summary::-webkit-details-marker {
+    .final-same-details-v26675 summary::-webkit-details-marker {
       display: none;
     }
 
-    .final-clean-row-v26674 {
-      display: grid;
-      grid-template-columns: auto 1fr auto auto;
-      align-items: center;
-      gap: 12px;
-      min-height: 78px;
-      padding: 14px 16px;
-      border: 3px solid #ef4444;
-      border-radius: 22px;
-      background: linear-gradient(90deg, #fff1f2, #ffffff);
-      box-shadow: 0 0 0 2px rgba(239, 68, 68, .10);
+    /* 關鍵：收合列直接套原本四大清單卡片結構，不自訂高度 */
+    .final-same-row-v26675.scan-item {
+      border-color: #ef4444 !important;
+      background: #fff !important;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, .08) !important;
+      margin-bottom: 0 !important;
     }
 
-    .final-clean-action-v26674 {
-      background: #fee2e2;
-      color: #991b1b;
-      border: 1px solid #fca5a5;
-      border-radius: 999px;
-      padding: 7px 12px;
-      font-weight: 950;
-      white-space: nowrap;
-      font-size: 15px;
+    .final-same-row-v26675 .scan-main-live,
+    .final-same-row-v26675 .scan-main {
+      background: linear-gradient(90deg, #fff1f2, #ffffff) !important;
+      border-color: rgba(239, 68, 68, .45) !important;
     }
 
-    .final-clean-symbol-v26674 {
-      font-size: 30px;
-      font-weight: 950;
-      color: #111827;
-      line-height: 1;
+    .final-same-row-v26675 .scan-action {
+      background: #fee2e2 !important;
+      color: #991b1b !important;
+      border: 1px solid #fca5a5 !important;
+      font-weight: 950 !important;
     }
 
-    .final-clean-price-v26674 {
-      font-size: 24px;
-      font-weight: 950;
-      color: #111827;
-      white-space: nowrap;
-      text-align: right;
+    .final-same-row-v26675 .scan-tag,
+    .final-same-row-v26675 .liquidity-high {
+      background: #dcfce7 !important;
+      color: #047857 !important;
+      border-radius: 999px !important;
+      font-weight: 950 !important;
+      white-space: nowrap !important;
     }
 
-    .final-clean-liq-v26674 {
-      background: #dcfce7;
-      color: #047857;
-      border-radius: 999px;
-      padding: 8px 14px;
-      font-weight: 950;
-      white-space: nowrap;
-      font-size: 14px;
-    }
-
-    .final-clean-expand-v26674 {
-      grid-column: 1 / -1;
+    .final-same-open-hint-v26675 {
       text-align: right;
       color: #991b1b;
       font-size: 13px;
       font-weight: 950;
-      margin-top: -4px;
+      padding: 6px 4px 0;
     }
 
-    .final-clean-card-v26674:not([open]) .final-clean-expand-v26674::after {
+    .final-same-details-v26675:not([open]) .final-same-open-hint-v26675::after {
       content: "展開完整分析 ▼";
     }
 
-    .final-clean-card-v26674[open] .final-clean-expand-v26674::after {
+    .final-same-details-v26675[open] .final-same-open-hint-v26675::after {
       content: "收合完整分析 ▲";
     }
 
-    .final-clean-detail-v26674 {
+    .final-same-panel-v26675 {
       margin-top: 10px;
       padding: 16px;
       border: 2px solid #fca5a5;
@@ -7210,21 +7192,21 @@ function injectFinalCleanDemoStyleV26674() {
       box-shadow: 0 0 0 2px rgba(239, 68, 68, .08);
     }
 
-    .final-clean-title-v26674 {
+    .final-same-title-v26675 {
       font-size: 18px;
       font-weight: 950;
       color: #991b1b;
       margin-bottom: 12px;
     }
 
-    .final-clean-chips-v26674 {
+    .final-same-chips-v26675 {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
       margin-bottom: 12px;
     }
 
-    .final-clean-chip-v26674 {
+    .final-same-chip-v26675 {
       border-radius: 999px;
       padding: 7px 11px;
       font-size: 13px;
@@ -7234,33 +7216,33 @@ function injectFinalCleanDemoStyleV26674() {
       color: #991b1b;
     }
 
-    .final-clean-chip-green-v26674 {
+    .final-same-chip-green-v26675 {
       background: #dcfce7;
       color: #047857;
       border-color: #86efac;
     }
 
-    .final-clean-chip-red-v26674 {
+    .final-same-chip-red-v26675 {
       background: #fee2e2;
       color: #991b1b;
       border-color: #fca5a5;
     }
 
-    .final-clean-grid-v26674 {
+    .final-same-grid-v26675 {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
       margin-bottom: 12px;
     }
 
-    .final-clean-grid-v26674 > div {
+    .final-same-grid-v26675 > div {
       padding: 10px 12px;
       border-radius: 14px;
       background: #ffffff;
       border: 1px solid #fecaca;
     }
 
-    .final-clean-grid-v26674 span {
+    .final-same-grid-v26675 span {
       display: block;
       font-size: 12px;
       color: #b91c1c;
@@ -7268,7 +7250,7 @@ function injectFinalCleanDemoStyleV26674() {
       margin-bottom: 4px;
     }
 
-    .final-clean-grid-v26674 b {
+    .final-same-grid-v26675 b {
       display: block;
       font-size: 15px;
       color: #111827;
@@ -7276,7 +7258,7 @@ function injectFinalCleanDemoStyleV26674() {
       word-break: break-word;
     }
 
-    .final-clean-section-v26674 {
+    .final-same-section-v26675 {
       margin-top: 10px;
       padding: 12px 13px;
       border-radius: 15px;
@@ -7285,7 +7267,7 @@ function injectFinalCleanDemoStyleV26674() {
       line-height: 1.55;
     }
 
-    .final-clean-section-v26674 b {
+    .final-same-section-v26675 b {
       display: block;
       color: #991b1b;
       font-size: 14px;
@@ -7293,80 +7275,57 @@ function injectFinalCleanDemoStyleV26674() {
       margin-bottom: 6px;
     }
 
-    .final-clean-section-v26674 p {
+    .final-same-section-v26675 p {
       margin: 0;
       color: #374151;
       font-size: 13px;
       font-weight: 850;
     }
 
-    .final-clean-operation-v26674 {
+    .final-same-operation-v26675 {
       background: #fff7ed;
       border-color: #fdba74;
     }
 
-    .final-clean-risk-v26674 {
+    .final-same-risk-v26675 {
       background: #fef2f2;
       border-color: #fca5a5;
-    }
-
-    @media (max-width: 520px) {
-      .final-clean-row-v26674 {
-        grid-template-columns: auto minmax(72px, 1fr) auto;
-        gap: 10px;
-        padding: 14px;
-      }
-
-      .final-clean-symbol-v26674 {
-        font-size: 29px;
-      }
-
-      .final-clean-price-v26674 {
-        font-size: 22px;
-      }
-
-      .final-clean-liq-v26674 {
-        grid-column: 1 / -1;
-        justify-self: end;
-      }
-
-      .final-clean-grid-v26674 {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
     }
   `;
   document.head.appendChild(style);
 }
 
-function finalCleanDemoHTMLV26674() {
+function finalSameSizeCardHTMLV26675() {
   return `
-    <div class="final-test-warning-v26674">
+    <div class="final-test-warning-v26675">
       ⚠️ FINAL UI 測試模式：以下 2330 不是正式策略訊號
       <small>測完視覺後，請換回正式版 app.js。</small>
     </div>
 
-    <details class="final-clean-card-v26674">
+    <details class="final-same-details-v26675">
       <summary>
-        <div class="final-clean-row-v26674">
-          <div class="final-clean-action-v26674">🔥 主升</div>
-          <div class="final-clean-symbol-v26674">2330</div>
-          <div class="final-clean-price-v26674">982.00</div>
-          <div class="final-clean-liq-v26674">高流動性</div>
-          <div class="final-clean-expand-v26674"></div>
-        </div>
+        <article class="scan-item final-same-row-v26675">
+          <div class="scan-main-live">
+            <div class="scan-action">🔥 主升</div>
+            <div class="scan-symbol">2330</div>
+            <div class="scan-price">982.00</div>
+            <div class="scan-tag liquidity-high">高流動性</div>
+          </div>
+        </article>
+        <div class="final-same-open-hint-v26675"></div>
       </summary>
 
-      <div class="final-clean-detail-v26674">
-        <div class="final-clean-title-v26674">🔥 FINAL｜主升確認卡</div>
+      <div class="final-same-panel-v26675">
+        <div class="final-same-title-v26675">🔥 FINAL｜主升確認卡</div>
 
-        <div class="final-clean-chips-v26674">
-          <span class="final-clean-chip-v26674 final-clean-chip-green-v26674">🟢 可切入</span>
-          <span class="final-clean-chip-v26674 final-clean-chip-red-v26674">🔥 主升延續</span>
-          <span class="final-clean-chip-v26674">信心 92</span>
-          <span class="final-clean-chip-v26674 final-clean-chip-green-v26674">未過熱</span>
+        <div class="final-same-chips-v26675">
+          <span class="final-same-chip-v26675 final-same-chip-green-v26675">🟢 可切入</span>
+          <span class="final-same-chip-v26675 final-same-chip-red-v26675">🔥 主升延續</span>
+          <span class="final-same-chip-v26675">信心 92</span>
+          <span class="final-same-chip-v26675 final-same-chip-green-v26675">未過熱</span>
         </div>
 
-        <div class="final-clean-grid-v26674">
+        <div class="final-same-grid-v26675">
           <div><span>股票名稱</span><b>台積電</b></div>
           <div><span>參考價</span><b>982.00</b></div>
           <div><span>進場節奏</span><b>🟢 可切入</b></div>
@@ -7379,22 +7338,22 @@ function finalCleanDemoHTMLV26674() {
           <div><span>K棒</span><b>主升續強K</b></div>
         </div>
 
-        <div class="final-clean-section-v26674">
+        <div class="final-same-section-v26675">
           <b>📈 趨勢結構</b>
           <p>MA5：主升續強｜MA10：主升支撐｜MA20：主升防守。結構以 MA5 / MA10 延續為核心。</p>
         </div>
 
-        <div class="final-clean-section-v26674">
+        <div class="final-same-section-v26675">
           <b>🚀 主升成立原因</b>
           <p>FINAL：主力慢推後確認主升，量價健康，未進入過熱；此筆為 UI 測試資料。</p>
         </div>
 
-        <div class="final-clean-section-v26674 final-clean-operation-v26674">
+        <div class="final-same-section-v26675 final-same-operation-v26675">
           <b>🧠 操作建議</b>
           <p>可列入正式操作區；若已有持倉，優先評估續抱或分批加碼。若短線乖離過大、爆量急拉，不追價。</p>
         </div>
 
-        <div class="final-clean-section-v26674 final-clean-risk-v26674">
+        <div class="final-same-section-v26675 final-same-risk-v26675">
           <b>⚠️ 風控提示</b>
           <p>跌破 MA10 轉弱需減碼觀察；跌破 MA20 或爆量長黑，視為主升結束警戒。</p>
         </div>
@@ -7403,8 +7362,8 @@ function finalCleanDemoHTMLV26674() {
   `;
 }
 
-function applyFinalCleanDemoV26674() {
-  try { injectFinalCleanDemoStyleV26674(); } catch (e) {}
+function applyFinalSameSizeDemoV26675() {
+  try { injectFinalSameSizeStyleV26675(); } catch (e) {}
 
   const finalList = document.getElementById("finalActionList");
   if (!finalList) return;
@@ -7418,21 +7377,21 @@ function applyFinalCleanDemoV26674() {
     if (hint) hint.textContent = "主升確認區：此版本為 2330 收合式 FINAL 卡片視覺測試。";
   }
 
-  finalList.innerHTML = finalCleanDemoHTMLV26674();
+  finalList.innerHTML = finalSameSizeCardHTMLV26675();
 }
 
-function applyFinalCleanDemoLoopV26674() {
-  applyFinalCleanDemoV26674();
+function applyFinalSameSizeLoopV26675() {
+  applyFinalSameSizeDemoV26675();
 
   let n = 0;
   const timer = setInterval(function() {
-    applyFinalCleanDemoV26674();
+    applyFinalSameSizeDemoV26675();
     n += 1;
     if (n >= 20) clearInterval(timer);
   }, 700);
 }
 
-try { applyFinalCleanDemoLoopV26674(); } catch (e) {}
+try { applyFinalSameSizeLoopV26675(); } catch (e) {}
 document.addEventListener("DOMContentLoaded", function() {
-  try { applyFinalCleanDemoLoopV26674(); } catch (e) {}
+  try { applyFinalSameSizeLoopV26675(); } catch (e) {}
 });
