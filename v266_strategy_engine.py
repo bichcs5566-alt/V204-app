@@ -4629,43 +4629,59 @@ def apply_v53_condition_bucket_boundary_lock():
         not_overheat
     )
 
-    # EVOLUTION：市場開始看到 / 趨勢開始成立
-    # 條件重點：市場開始注意到、均線逐步打開、量能穩定，但還沒有主升失控。
+    # EVOLUTION：主力控盤慢推期
+    # 條件重點：主力已經開始控節奏、回檔有人接、量能穩定回升、均線慢慢打開；
+    # 但市場還沒全面追價，不能變成追強。
     mainforce_trace = (
         (main_force >= 42) |
         (chip >= 42) |
         ((obv > 0) & (low_hold >= 1))
     )
-    market_noticing = (
-        (close >= ma20 * 1.000) &
-        (ma5 >= ma10 * 0.980) &
-        (ma10 >= ma20 * 0.970) &
-        (dist_ma20.between(-0.015, 0.115)) &
-        (mom5.between(-0.010, 0.095)) &
-        (mom10.between(0.000, 0.155)) &
-        (mom20.between(0.000, 0.265)) &
-        (vol_ratio.between(0.85, 2.85)) &
-        (range20 <= 0.40)
+    mainforce_slow_control = (
+        (close >= ma20 * 0.990) &
+        (ma5 >= ma10 * 0.972) &
+        (ma10 >= ma20 * 0.960) &
+        (dist_ma20.between(-0.025, 0.105)) &
+        (mom5.between(-0.020, 0.085)) &
+        (mom10.between(-0.005, 0.145)) &
+        (mom20.between(0.000, 0.245)) &
+        (vol_ratio.between(0.82, 2.65)) &
+        (range20 <= 0.385)
+    )
+    pullback_absorbed = (
+        (low_hold >= 1) |
+        (close >= ma10 * 0.980) |
+        (close_to_high20.between(0.82, 1.025))
     )
     evolution_cond = (
-        market_noticing &
+        mainforce_slow_control &
         mainforce_trace &
-        support_trace &
+        pullback_absorbed &
         not_overheat
     )
 
     # FINAL：主力慢推後，主升確認但未過熱
-    # 條件清單制：
-    # 每天重新掃描市場；只要符合該清單的策略邏輯，就進該清單。
-    # 不用「最高階段」洗掉其他清單，避免真正符合 TEST / IGNITION / EVOLUTION 的標的被覆蓋。
-    # FINAL 仍維持最嚴格：只能由 EVOLUTION 條件 + FINAL 確認條件成立。
-    pool["_v53_watch_match"] = watch_cond
-    pool["_v53_test_match"] = test_cond
-    pool["_v53_ignition_match"] = ignition_cond
-    pool["_v53_evolution_match"] = evolution_cond
-    pool["_v53_final_match"] = final_cond
+    # 條件重點：只能從 EVOLUTION 條件上再確認；不是 TEST 直接跳 FINAL。
+    final_confirm = (
+        (close >= ma5 * 0.995) &
+        (ma5 >= ma10 * 0.990) &
+        (ma10 >= ma20 * 0.985) &
+        (vol_ratio.between(1.05, 2.70)) &
+        (mom5.between(0.000, 0.095)) &
+        (mom10.between(0.020, 0.155)) &
+        (mom20.between(0.030, 0.270)) &
+        ((main_force >= 55) | (chip >= 55) | ((obv > 0) & (low_hold >= 3))) &
+        not_overheat
+    )
+    final_cond = evolution_cond & final_confirm
 
-    # 分數只用於排序，不允許用分數跳級。
+    stage = pd.Series("WATCH", index=pool.index, dtype="object")
+    stage.loc[test_cond] = "TEST"
+    stage.loc[ignition_cond] = "IGNITION"
+    stage.loc[evolution_cond] = "EVOLUTION"
+    stage.loc[final_cond] = "FINAL"
+    pool["_v53_stage_lock"] = stage
+
     stage_score = (
         watch_cond.astype(int) * 10 +
         test_cond.astype(int) * 20 +
@@ -4687,11 +4703,11 @@ def apply_v53_condition_bucket_boundary_lock():
         out["strategy_type"] = stage_name
         out["bucket"] = stage_name
         out["strategy_name"] = {
-            "WATCH": "WATCH 長時間整理",
-            "TEST": "TEST 微量增溫",
-            "IGNITION": "IGNITION 主力開始吸",
-            "EVOLUTION": "EVOLUTION 主力控盤慢推",
-            "FINAL": "FINAL 主升確認",
+            "WATCH": "WATCH 觀察整理",
+            "TEST": "TEST 試單",
+            "IGNITION": "IGNITION 起漲點火",
+            "EVOLUTION": "EVOLUTION 主力推進",
+            "FINAL": "FINAL 主力確認拉升",
         }.get(stage_name, stage_name)
         out["score"] = out["_v53_stage_score"].round(2)
         out["entry_score"] = out["_v53_stage_score"].round(2)
@@ -4699,16 +4715,14 @@ def apply_v53_condition_bucket_boundary_lock():
             out["ref_price"] = close.loc[out.index].round(2)
         out["reason"] = reason
         out["system_note"] = reason
-        out["source"] = "v53_condition_logic_list_lock"
+        out["source"] = "v53_condition_bucket_boundary_lock"
         return out
 
-    watch = _shape(pool.loc[watch_cond], "WATCH", "WATCH", "WATCH：長時間整理、波動收斂、尚未發動。", 12)
-    test = _shape(pool.loc[test_cond], "TEST", "TEST", "TEST：微量增溫、MA5 翻平、市場還沒注意；符合試單邏輯才進。", 12)
-    ignition = _shape(pool.loc[ignition_cond], "IGNITION", "TEST", "IGNITION：主力開始吸、承接出現、尚未市場一致追價。", 10)
-    evolution = _shape(pool.loc[evolution_cond], "EVOLUTION", "TEST", "EVOLUTION：主力控盤慢推、回檔有人接、均線慢慢打開，市場尚未全面追價。", 10)
-    final = _shape(pool.loc[final_cond], "FINAL", "FINAL", "FINAL：僅由 EVOLUTION 條件升級，主力慢推後主升確認但未過熱。", 5)
+    test = _shape(pool.loc[stage == "TEST"], "TEST", "TEST", "TEST：微量增溫、MA5 翻平、市場還沒注意；不得直接跳 FINAL。", 12)
+    ignition = _shape(pool.loc[stage == "IGNITION"], "IGNITION", "TEST", "IGNITION：主力開始吸、承接出現、尚未市場一致追價。", 10)
+    evolution = _shape(pool.loc[stage == "EVOLUTION"], "EVOLUTION", "TEST", "EVOLUTION：主力控盤慢推、回檔有人接、均線慢慢打開，市場尚未全面追價。", 10)
+    final = _shape(pool.loc[stage == "FINAL"], "FINAL", "FINAL", "FINAL：僅由 EVOLUTION 條件升級，主力慢推後主升確認但未過熱。", 5)
 
-    # 寫回前端實際讀取檔案
     _write_both(test, "trade_plan.csv")
     _write_both(ignition, "ignition_candidates.csv")
     _write_both(evolution, "strategy_evolution.csv")
@@ -4716,13 +4730,214 @@ def apply_v53_condition_bucket_boundary_lock():
     _write_both(pool, "selection_debug.csv")
 
     print(
-        "v53 condition logic list rows:",
-        "watch=", len(watch),
+        "v53 bucket boundary lock rows:",
         "test=", len(test),
         "ignition=", len(ignition),
         "evolution=", len(evolution),
         "final=", len(final),
     )
+
+
+
+
+# ===== v54 CONSERVATIVE EVOLUTION / FINAL BOUNDARY PATCH =====
+# 保守修正：不改主輸出架構、不改 WATCH/TEST/IGNITION。
+# 只把 EVOLUTION 改成「主力控盤慢推期」，FINAL 只能從 EVOLUTION 中再確認。
+def apply_v54_evolution_final_boundary_patch():
+    import pandas as pd
+    import numpy as np
+    from pathlib import Path
+
+    ROOT_LOCAL = Path(".")
+    DATA_LOCAL = ROOT_LOCAL / "mobile_dashboard_v1" / "data"
+    DATA_LOCAL.mkdir(parents=True, exist_ok=True)
+
+    def _read_csv_any(name):
+        for p in [ROOT_LOCAL / name, DATA_LOCAL / name]:
+            if p.exists() and p.stat().st_size > 0:
+                try:
+                    return pd.read_csv(p, dtype=str, encoding="utf-8-sig")
+                except Exception:
+                    try:
+                        return pd.read_csv(p, dtype=str)
+                    except Exception:
+                        pass
+        return pd.DataFrame()
+
+    def _write_both(df, name):
+        for p in [ROOT_LOCAL / name, DATA_LOCAL / name]:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            df.to_csv(p, index=False, encoding="utf-8-sig")
+
+    def _sid(v):
+        import re
+        s = str(v or "").strip()
+        m = re.search(r"\d{4}", s)
+        return m.group(0) if m else s
+
+    def _num(df, col, default=0.0):
+        if col in df.columns:
+            return pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(default)
+        return pd.Series(default, index=df.index, dtype="float64")
+
+    evo = _read_csv_any("strategy_evolution.csv")
+    if evo.empty or "stock_id" not in evo.columns:
+        print("v54 evolution/final patch skipped: no evolution source")
+        return
+
+    evo = evo.copy()
+    evo["stock_id"] = evo["stock_id"].map(_sid)
+
+    # 補欄位：從候選來源拿技術/籌碼欄位補進 EVOLUTION，但不改原本輸出架構。
+    sources = []
+    for name in ["candidates.csv", "core_candidates.csv", "alpha_candidates.csv", "trade_plan.csv", "selection_debug.csv"]:
+        df = _read_csv_any(name)
+        if not df.empty and "stock_id" in df.columns:
+            df = df.copy()
+            df["stock_id"] = df["stock_id"].map(_sid)
+            sources.append(df)
+
+    if sources:
+        src_all = pd.concat(sources, ignore_index=True).drop_duplicates("stock_id", keep="first")
+        d = evo.merge(src_all, on="stock_id", how="left", suffixes=("", "_src"))
+        for c in list(d.columns):
+            if c.endswith("_src"):
+                base = c[:-4]
+                if base not in d.columns:
+                    d[base] = d[c]
+                else:
+                    left = d[base].fillna("").astype(str).str.strip()
+                    right = d[c].fillna("").astype(str)
+                    d[base] = np.where(left.eq(""), right, d[base])
+                d.drop(columns=[c], inplace=True)
+    else:
+        d = evo.copy()
+
+    close = _num(d, "close", _num(d, "ref_price", _num(d, "price", 0)))
+    ma5 = _num(d, "ma5", 0)
+    ma10 = _num(d, "ma10", 0)
+    ma20 = _num(d, "ma20", 0)
+    high20 = _num(d, "high_20", close)
+    low20 = _num(d, "low_20", close)
+
+    mom5 = _num(d, "mom5", 0)
+    mom10 = _num(d, "mom10", 0)
+    mom20 = _num(d, "mom20", 0)
+    vol_ratio = _num(d, "volume_ratio", 1)
+
+    main_force = _num(d, "main_force_score_v300", 0)
+    chip = _num(d, "chip_score", 0)
+    obv = _num(d, "obv_mom5", 0)
+    low_hold = _num(d, "low_non_down_count_5", 0)
+
+    ma20_safe = ma20.replace(0, np.nan)
+    high20_safe = high20.replace(0, np.nan)
+    low20_safe = low20.replace(0, np.nan)
+
+    dist_ma20 = (close / ma20_safe - 1).replace([np.inf, -np.inf], np.nan).fillna(0)
+    close_to_high20 = (close / high20_safe).replace([np.inf, -np.inf], np.nan).fillna(0)
+    range20 = ((high20 - low20) / low20_safe).replace([np.inf, -np.inf], np.nan).fillna(0)
+
+    # EVOLUTION：主力控盤慢推期
+    # 不要求市場已經全面看到；要求回檔有人接、均線慢慢打開、量能溫和、未過熱。
+    not_overheat = (
+        (dist_ma20 <= 0.12) &
+        (mom5 <= 0.10) &
+        (mom20 <= 0.28) &
+        (vol_ratio <= 3.20)
+    )
+    mainforce_trace = (
+        (main_force >= 42) |
+        (chip >= 42) |
+        ((obv > 0) & (low_hold >= 1))
+    )
+    mainforce_slow_control = (
+        (close >= ma20 * 0.990) &
+        (ma5 >= ma10 * 0.972) &
+        (ma10 >= ma20 * 0.960) &
+        (dist_ma20.between(-0.025, 0.105)) &
+        (mom5.between(-0.020, 0.085)) &
+        (mom10.between(-0.005, 0.145)) &
+        (mom20.between(0.000, 0.245)) &
+        (vol_ratio.between(0.82, 2.65)) &
+        (range20 <= 0.385)
+    )
+    pullback_absorbed = (
+        (low_hold >= 1) |
+        (close >= ma10 * 0.980) |
+        (close_to_high20.between(0.82, 1.025))
+    )
+
+    evo_mask = mainforce_slow_control & mainforce_trace & pullback_absorbed & not_overheat
+    refined_evo = d.loc[evo_mask].copy()
+
+    # 不硬補。若過濾後空白，保留原 EVOLUTION，不洗空清單，但加上提示欄位讓你知道條件不足。
+    if refined_evo.empty:
+        evo["v54_evolution_filter_note"] = "本輪 EVOLUTION 未通過主力控盤慢推過濾；保留原清單避免清單洗空，請觀察品質。"
+        _write_both(evo, "strategy_evolution.csv")
+        print("v54 evolution filter found 0 rows; kept original evolution to avoid blank list")
+        return
+
+    refined_evo = refined_evo.drop_duplicates("stock_id", keep="first").head(10).copy()
+    refined_evo["strategy_type"] = "EVOLUTION"
+    refined_evo["bucket"] = "EVOLUTION"
+    refined_evo["strategy_name"] = "EVOLUTION 主力控盤慢推"
+    refined_evo["reason"] = "EVOLUTION：主力控盤慢推、回檔有人接、均線慢慢打開，市場尚未全面追價。"
+    refined_evo["system_note"] = "EVOLUTION：不是追強；重點是主力在、量能溫和、未過熱。"
+    refined_evo["source"] = "v54_evolution_final_boundary_patch"
+
+    _write_both(refined_evo, "strategy_evolution.csv")
+
+    # FINAL：只能從 refined EVOLUTION 內再確認；沒有就空白。
+    close2 = close.loc[refined_evo.index]
+    ma5_2 = ma5.loc[refined_evo.index]
+    ma10_2 = ma10.loc[refined_evo.index]
+    ma20_2 = ma20.loc[refined_evo.index]
+    mom5_2 = mom5.loc[refined_evo.index]
+    mom10_2 = mom10.loc[refined_evo.index]
+    mom20_2 = mom20.loc[refined_evo.index]
+    vol_2 = vol_ratio.loc[refined_evo.index]
+    mf_2 = main_force.loc[refined_evo.index]
+    chip_2 = chip.loc[refined_evo.index]
+    obv_2 = obv.loc[refined_evo.index]
+    low_2 = low_hold.loc[refined_evo.index]
+    dist_2 = dist_ma20.loc[refined_evo.index]
+
+    final_mask = (
+        (close2 >= ma5_2 * 0.995) &
+        (ma5_2 >= ma10_2 * 0.990) &
+        (ma10_2 >= ma20_2 * 0.985) &
+        (vol_2.between(1.05, 2.70)) &
+        (mom5_2.between(0.000, 0.095)) &
+        (mom10_2.between(0.020, 0.155)) &
+        (mom20_2.between(0.030, 0.270)) &
+        ((mf_2 >= 55) | (chip_2 >= 55) | ((obv_2 > 0) & (low_2 >= 3))) &
+        (dist_2 <= 0.12) &
+        (vol_2 <= 3.20)
+    )
+
+    final = refined_evo.loc[final_mask].copy().head(5)
+
+    if final.empty:
+        final_cols = [
+            "stock_id","stock_name","industry","action","final_action","strategy_type","bucket",
+            "strategy_name","score","entry_score","ref_price","price","reason","system_note","source"
+        ]
+        _write_both(pd.DataFrame(columns=final_cols), "final_action_plan.csv")
+        print("v54 final: no refined evolution passed final confirmation")
+        return
+
+    final["action"] = "FINAL"
+    final["final_action"] = "FINAL"
+    final["strategy_type"] = "FINAL"
+    final["bucket"] = "FINAL"
+    final["strategy_name"] = "FINAL 主升確認"
+    final["reason"] = "FINAL：僅由 EVOLUTION 條件升級，主力慢推後主升確認但未過熱。"
+    final["system_note"] = "FINAL：不是追高；必須主力確認拉升、量價健康、仍未過熱。"
+    final["source"] = "v54_evolution_final_boundary_patch"
+
+    _write_both(final, "final_action_plan.csv")
+    print("v54 evolution/final patch rows:", "evolution=", len(refined_evo), "final=", len(final))
 
 
 if __name__ == "__main__":
@@ -4734,6 +4949,10 @@ if __name__ == "__main__":
         print("v315 panel output skipped:", repr(e))
     write_v317_panel_files_hard_guarantee()
     try:
+        apply_v54_evolution_final_boundary_patch()
+    except Exception as e:
+        print("v54 evolution/final boundary patch skipped:", repr(e))
+    try:
         apply_v53_condition_bucket_boundary_lock()
     except Exception as e:
         print("v53 bucket boundary lock skipped:", repr(e))
@@ -4742,6 +4961,6 @@ if __name__ == "__main__":
 
 # v53 slow-push evolution model: condition bucket lock retained, no TEST to FINAL shortcut.
 
-# v53 lifecycle definition patch: WATCH consolidation, TEST micro-warm, IGNITION absorption, EVOLUTION market-noticing, FINAL confirmed-uptrend.
+# v53 lifecycle definition patch: WATCH consolidation, TEST micro-warm, IGNITION absorption, EVOLUTION mainforce-slow-control, FINAL confirmed-uptrend.
 
-# v53 condition-logic list model: each list uses its own strategy condition; FINAL still requires EVOLUTION + confirmation.
+# v53 evolution correction: EVOLUTION = mainforce slow-control phase, not market-noticing chase.
