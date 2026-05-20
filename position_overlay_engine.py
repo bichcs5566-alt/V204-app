@@ -50,7 +50,7 @@ import pandas as pd
 DATA_DIR = Path("mobile_dashboard_v1/data")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-VERSION = "v266.33C_ma_merge_coalesce"
+VERSION = "v266.34_position_lifecycle_overlay"
 
 OUT_COLS = [
     "stock_id",
@@ -73,6 +73,12 @@ OUT_COLS = [
     "chip_score",
     "chip_label",
     "chip_reason",
+    "strategy_stage",
+    "main_force_phase",
+    "distribution_stage",
+    "profit_exit_status",
+    "lifecycle_hold_action",
+    "lifecycle_reason",
     "price_source",
     "chip_source",
     "position_source",
@@ -706,6 +712,168 @@ def coalesce_after_merge(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+
+# ===== v266.34 POSITION LIFECYCLE OVERLAY PATCH =====
+# 只補持倉判讀欄位：
+# - 持倉套用五大清單生命週期：FINAL / EVOLUTION / IGNITION / TEST / WATCH / BLOCK
+# - 補主力階段：吸籌 / 慢推 / 拉升 / 派發
+# - 補是否進入獲利出場狀態
+# 不改原本價格、MA、損益、籌碼讀取流程。
+def _read_any_lifecycle_csv(name: str) -> pd.DataFrame:
+    for p in [Path(name), DATA_DIR / name]:
+        df = read_csv_safe(p)
+        if not df.empty and "stock_id" in df.columns:
+            d = df.copy()
+            d["stock_id"] = normalize_sid_series(d["stock_id"])
+            return d
+    return pd.DataFrame()
+
+
+def load_lifecycle_stage_map() -> dict[str, dict]:
+    """
+    依照目前五大清單建立持倉生命週期對照。
+    優先序：FINAL > EVOLUTION > IGNITION > TEST > WATCH > BLOCK
+    只用於持倉顯示，不改策略本體。
+    """
+    stage_files = [
+        ("FINAL", ["final_action_plan.csv"]),
+        ("EVOLUTION", ["strategy_evolution.csv"]),
+        ("IGNITION", ["ignition_candidates.csv"]),
+        ("TEST", ["trade_plan.csv"]),
+        ("WATCH", ["watchlist_monitor.csv", "watch_candidates.csv", "watchlist_candidates.csv"]),
+        ("BLOCK", ["block_candidates.csv", "blocked_candidates.csv", "ban_list.csv"]),
+    ]
+
+    out: dict[str, dict] = {}
+
+    for stage, files in stage_files:
+        for name in files:
+            df = _read_any_lifecycle_csv(name)
+            if df.empty:
+                continue
+
+            for _, r in df.iterrows():
+                sid = normalize_sid_value(r.get("stock_id"))
+                if not sid:
+                    continue
+                if sid in out:
+                    continue
+
+                reason = ""
+                for col in ["reason", "system_note", "position_hint", "note", "strategy_name"]:
+                    val = r.get(col, "")
+                    if isinstance(val, str) and val.strip() and val.strip().lower() != "nan":
+                        reason = val.strip()
+                        break
+
+                out[sid] = {
+                    "strategy_stage": stage,
+                    "lifecycle_reason": reason,
+                    "lifecycle_source": name,
+                }
+    return out
+
+
+def main_force_phase_from_stage(stage: str) -> str:
+    s = str(stage or "").upper()
+    if s == "FINAL":
+        return "🔥 主升拉升確認"
+    if s == "EVOLUTION":
+        return "🟣 主力控盤慢推"
+    if s == "IGNITION":
+        return "🟠 主力開始吸籌"
+    if s == "TEST":
+        return "🟡 試單確認中"
+    if s == "WATCH":
+        return "⚪ 觀察整理中"
+    if s == "BLOCK":
+        return "⛔ 策略失效 / 禁止"
+    return "⚪ 未進入五大清單"
+
+
+def distribution_stage_from_row(row: dict, pnl: float | None, risk_flag: str, stage: str) -> str:
+    close = to_num(row.get("close"))
+    ma5 = to_num(row.get("ma5"))
+    ma20 = to_num(row.get("ma20"))
+    chip_score = to_num(row.get("chip_score", 50), 50)
+
+    if str(stage).upper() == "BLOCK" or risk_flag in {"STOP_LOSS"}:
+        return "🔴 派發後期 / 策略失效"
+
+    if pnl is not None and pnl >= 20 and ma5 > 0 and close < ma5 and chip_score < 50:
+        return "🟠 派發中期：高獲利區跌破 MA5，先分批收"
+
+    if pnl is not None and pnl >= 15 and ((ma5 > 0 and close < ma5) or chip_score < 45):
+        return "🟡 派發初期：漲不動或籌碼轉弱"
+
+    if ma20 > 0 and close < ma20:
+        return "🔴 派發後期：跌破 MA20，趨勢轉弱"
+
+    if ma5 > 0 and close < ma5 and chip_score < 40:
+        return "🟠 派發中期：跌破 MA5 且籌碼偏弱"
+
+    return "🟢 尚未進入明顯派發"
+
+
+def profit_exit_status_from_row(row: dict, pnl: float | None, distribution_stage: str, risk_flag: str) -> str:
+    if pnl is None:
+        return "資料不足，尚無法判斷是否完整獲利出場"
+
+    if pnl <= -8 or risk_flag == "STOP_LOSS":
+        return "非獲利出場：已觸發風控停損"
+
+    if pnl >= 20 and ("派發中期" in distribution_stage or "派發後期" in distribution_stage):
+        return "✅ 完整獲利出場條件成立：高獲利區轉弱，應優先收完或大幅降倉"
+
+    if pnl >= 15 and ("派發初期" in distribution_stage or "派發中期" in distribution_stage):
+        return "🟠 部分獲利出場：建議先分批收，保留小部位觀察"
+
+    if pnl >= 10:
+        return "🟡 已進入獲利保護區：尚未完整出場，改用移動停利"
+
+    if pnl > 0:
+        return "🟢 小幅獲利中：尚未達完整獲利出場條件"
+
+    return "⚪ 尚未獲利出場"
+
+
+def lifecycle_hold_action_from_stage(stage: str, distribution_stage: str, pnl: float | None) -> str:
+    s = str(stage or "").upper()
+
+    if "派發後期" in distribution_stage:
+        return "🔴 出場 / 不加碼"
+    if "派發中期" in distribution_stage:
+        return "🟠 分批停利 / 降倉"
+    if "派發初期" in distribution_stage:
+        return "🟡 停利觀察 / 不追價"
+
+    if s == "FINAL":
+        return "🔥 主升續抱 / 可評估分批加碼"
+    if s == "EVOLUTION":
+        return "🟣 續抱 / 小幅加碼觀察"
+    if s == "IGNITION":
+        return "🟠 小倉續抱 / 等確認"
+    if s == "TEST":
+        return "🟡 試單持有 / 嚴控風險"
+    if s == "WATCH":
+        return "⚪ 降級觀察 / 不加碼"
+    if s == "BLOCK":
+        return "⛔ 退出 / 禁止加碼"
+
+    if pnl is not None and pnl >= 10:
+        return "🟡 獲利保護 / 移動停利"
+    return "⚪ 依原持倉風控觀察"
+
+
+def default_lifecycle_reason(stage: str, distribution_stage: str, profit_exit_status: str) -> str:
+    return (
+        f"持倉生命週期：{stage or '未入清單'}；"
+        f"主力/派發判讀：{distribution_stage}；"
+        f"獲利出場狀態：{profit_exit_status}。"
+    )
+
+
+
 def decide_position(row: dict) -> tuple[str, str, str, str, str, float | None]:
     avg = to_num(row.get("avg_price"))
     close = to_num(row.get("close"))
@@ -851,6 +1019,7 @@ def build_overlay() -> pd.DataFrame:
 
     price, price_source = load_price()
     chip, chip_source = load_chip()
+    lifecycle_map = load_lifecycle_stage_map()
 
     df = positions.merge(price, on="stock_id", how="left")
     df = df.merge(chip, on="stock_id", how="left")
@@ -892,6 +1061,17 @@ def build_overlay() -> pd.DataFrame:
 
         action, risk, reason, hint, take_profit, pnl = decide_position({**row, "chip_score": chip_score})
 
+        sid_key = normalize_sid_value(row.get("stock_id"))
+        lifecycle_info = lifecycle_map.get(sid_key, {})
+        strategy_stage = lifecycle_info.get("strategy_stage", "NONE")
+        lifecycle_reason = lifecycle_info.get("lifecycle_reason", "")
+        main_force_phase = main_force_phase_from_stage(strategy_stage)
+        distribution_stage = distribution_stage_from_row({**row, "chip_score": chip_score}, pnl, risk, strategy_stage)
+        profit_exit_status = profit_exit_status_from_row({**row, "chip_score": chip_score}, pnl, distribution_stage, risk)
+        lifecycle_hold_action = lifecycle_hold_action_from_stage(strategy_stage, distribution_stage, pnl)
+        if not lifecycle_reason:
+            lifecycle_reason = default_lifecycle_reason(strategy_stage, distribution_stage, profit_exit_status)
+
         rows.append({
             "stock_id": str(row.get("stock_id", "")),
             "stock_name": str(row.get("stock_name", "")),
@@ -913,6 +1093,12 @@ def build_overlay() -> pd.DataFrame:
             "chip_score": round(chip_score, 2),
             "chip_label": c_label,
             "chip_reason": c_reason,
+            "strategy_stage": strategy_stage,
+            "main_force_phase": main_force_phase,
+            "distribution_stage": distribution_stage,
+            "profit_exit_status": profit_exit_status,
+            "lifecycle_hold_action": lifecycle_hold_action,
+            "lifecycle_reason": lifecycle_reason,
             "price_source": price_source,
             "chip_source": chip_source,
             "position_source": pos_source,
