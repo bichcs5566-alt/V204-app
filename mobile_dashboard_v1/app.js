@@ -1,4 +1,4 @@
-    // ===== v266.36.2.2 Blank Screen Guard / 空白頁防護 =====
+// ===== v266.36.2.2 Blank Screen Guard / 空白頁防護 =====
 window.__APP_BOOT_ERROR__ = "";
 window.addEventListener("error", function(e) {
   window.__APP_BOOT_ERROR__ = e && e.message ? e.message : String(e || "");
@@ -6621,4 +6621,137 @@ document.addEventListener("DOMContentLoaded", function() {
     count += 1;
     if (count >= 12) clearInterval(timer);
   }, 800);
+});
+
+/* =========================================================
+   v266.68 FINAL SECTION DIRECT STYLE FIX
+   只修 FINAL 前端顯示：
+   - 不靠 :has()
+   - 直接替 finalActionList 所在 section 加 class
+   - 清單空白也會顯示紅色 FINAL 主升確認區
+   - 不改策略、不改 CSV、不改 pipeline
+   ========================================================= */
+
+function injectFinalDirectStyleV26668() {
+  if (document.getElementById("final-direct-style-v26668")) return;
+
+  const style = document.createElement("style");
+  style.id = "final-direct-style-v26668";
+  style.textContent = `
+    .final-section-v26668 {
+      border: 2px solid rgba(239, 68, 68, .30) !important;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, .08) !important;
+      background: linear-gradient(180deg, #fff7f7, #ffffff) !important;
+    }
+
+    .final-section-v26668 h2,
+    .final-section-v26668 summary {
+      color: #b91c1c !important;
+      font-weight: 950 !important;
+    }
+
+    .final-section-v26668 .hint {
+      color: #991b1b !important;
+      background: #fef2f2 !important;
+      border: 1px solid #fecaca !important;
+      border-radius: 14px !important;
+      padding: 9px 12px !important;
+      font-weight: 850 !important;
+    }
+
+    .final-empty-mainrise-v26668 {
+      margin-top: 10px;
+      padding: 16px 18px;
+      border-radius: 18px;
+      border: 2px solid #fecaca;
+      background: #fef2f2;
+      color: #991b1b;
+      font-weight: 900;
+      line-height: 1.55;
+    }
+
+    .final-empty-mainrise-v26668 b {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 16px;
+      font-weight: 950;
+    }
+
+    .final-empty-mainrise-v26668 p {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .final-section-v26668 #finalActionList .scan-item,
+    .final-section-v26668 #finalActionList article,
+    .final-section-v26668 #finalActionList .position-row {
+      border-color: #ef4444 !important;
+      background: linear-gradient(90deg, #fef2f2, #ffffff) !important;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, .12) !important;
+    }
+
+    .final-section-v26668 #finalActionList .scan-action,
+    .final-section-v26668 #finalActionList .action-pill,
+    .final-section-v26668 #finalActionList .badge {
+      background: #fee2e2 !important;
+      color: #991b1b !important;
+      border: 1px solid #fca5a5 !important;
+      font-weight: 950 !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function applyFinalDirectStyleV26668() {
+  try { injectFinalDirectStyleV26668(); } catch (e) {}
+
+  const finalList = document.getElementById("finalActionList");
+  if (!finalList) return;
+
+  const finalSection = finalList.closest("section");
+  if (!finalSection) return;
+
+  finalSection.classList.add("final-section-v26668");
+
+  const title = finalSection.querySelector("h2, summary");
+  if (title) {
+    title.textContent = "🔥 FINAL｜主升確認";
+  }
+
+  const hint = finalSection.querySelector(".hint");
+  if (hint) {
+    hint.textContent = "主升確認區：只顯示風險報酬仍漂亮、主力拉升確認、未過熱的正式操作標的。";
+  }
+
+  const txt = String(finalList.textContent || "").trim();
+  const hasRealCard = finalList.querySelector(".scan-item, article, .position-row");
+  const hasEmptyNote = finalList.querySelector(".final-empty-mainrise-v26668");
+
+  if (!hasRealCard && !hasEmptyNote) {
+    const note = document.createElement("div");
+    note.className = "final-empty-mainrise-v26668";
+    note.innerHTML = `
+      <b>🔥 本輪沒有 FINAL 主升確認標的</b>
+      <p>代表目前沒有同時符合「主力拉升確認、量價健康、未過熱、風險報酬漂亮」的標的；寧可空白，不硬追。</p>
+    `;
+    finalList.innerHTML = "";
+    finalList.appendChild(note);
+  }
+}
+
+function applyFinalDirectStyleLoopV26668() {
+  applyFinalDirectStyleV26668();
+
+  let n = 0;
+  const timer = setInterval(function() {
+    applyFinalDirectStyleV26668();
+    n += 1;
+    if (n >= 20) clearInterval(timer);
+  }, 700);
+}
+
+try { applyFinalDirectStyleLoopV26668(); } catch (e) {}
+document.addEventListener("DOMContentLoaded", function() {
+  try { applyFinalDirectStyleLoopV26668(); } catch (e) {}
 });
