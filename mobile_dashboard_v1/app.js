@@ -7082,23 +7082,23 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 
 /* =========================================================
-   v266.72 FINAL COLLAPSIBLE 2330 UI TEST PATCH
+   v266.73 FINAL COMPACT COLLAPSIBLE 2330 UI TEST PATCH
    測試用途：
-   - 強制在 FINAL 區塊顯示 2330 台積電測試卡
-   - FINAL 卡片預設收合，點擊可展開完整主升分析
-   - 加入進場節奏：可切入 / 等回踩 / 過熱不追
-   - 加入主升續航：主升初段 / 主升延續 / 主升末段
+   - FINAL 外層卡片大小對齊一般清單卡片
+   - 收合狀態只顯示：主升 / 2330 / 價格 / 高流動性
+   - 所有 FINAL 詳細資訊只放在展開區
+   - 點擊卡片可展開/收合
    - 只測 UI，不代表真實策略訊號
    - 不改策略、不改 CSV、不改 pipeline
    ========================================================= */
 
-function injectFinalCollapseDemoStyleV26672() {
-  if (document.getElementById("final-collapse-demo-style-v26672")) return;
+function injectFinalCompactDemoStyleV26673() {
+  if (document.getElementById("final-compact-demo-style-v26673")) return;
 
   const style = document.createElement("style");
-  style.id = "final-collapse-demo-style-v26672";
+  style.id = "final-compact-demo-style-v26673";
   style.textContent = `
-    .final-demo-warning-v26672 {
+    .final-demo-warning-v26673 {
       margin: 10px 0 14px;
       padding: 12px 14px;
       border-radius: 16px;
@@ -7109,7 +7109,7 @@ function injectFinalCollapseDemoStyleV26672() {
       line-height: 1.45;
     }
 
-    .final-demo-warning-v26672 small {
+    .final-demo-warning-v26673 small {
       display: block;
       margin-top: 4px;
       font-size: 12px;
@@ -7117,36 +7117,38 @@ function injectFinalCollapseDemoStyleV26672() {
       color: #c2410c;
     }
 
-    .final-collapse-card-v26672 {
-      border: 2px solid #ef4444 !important;
-      border-radius: 24px !important;
-      background: linear-gradient(180deg, #fff1f2, #ffffff) !important;
-      box-shadow: 0 0 0 2px rgba(239, 68, 68, .14) !important;
-      overflow: hidden !important;
-      margin-bottom: 14px;
+    .final-compact-card-v26673 {
+      margin: 0 0 14px 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
+      background: transparent !important;
     }
 
-    .final-collapse-summary-v26672 {
+    .final-compact-card-v26673 summary {
       list-style: none;
       cursor: pointer;
       padding: 0;
     }
 
-    .final-collapse-summary-v26672::-webkit-details-marker {
+    .final-compact-card-v26673 summary::-webkit-details-marker {
       display: none;
     }
 
-    .final-top-v26672 {
+    /* 收合主列：尺寸跟一般 scan-item 一樣 */
+    .final-compact-row-v26673 {
       display: grid;
-      grid-template-columns: auto 1fr auto;
+      grid-template-columns: auto 1fr auto auto;
       gap: 12px;
       align-items: center;
-      padding: 16px 14px;
-      background: linear-gradient(90deg, #fee2e2, #ffffff);
-      border-bottom: 1px solid #fecaca;
+      min-height: 76px;
+      padding: 14px 16px;
+      border: 3px solid #ef4444;
+      border-radius: 22px;
+      background: linear-gradient(90deg, #fff1f2, #ffffff);
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, .10);
     }
 
-    .final-action-v26672 {
+    .final-compact-action-v26673 {
       background: #fee2e2;
       color: #991b1b;
       border: 1px solid #fca5a5;
@@ -7154,51 +7156,80 @@ function injectFinalCollapseDemoStyleV26672() {
       padding: 7px 12px;
       font-weight: 950;
       white-space: nowrap;
+      font-size: 15px;
     }
 
-    .final-symbol-box-v26672 {
-      min-width: 0;
-    }
-
-    .final-symbol-v26672 {
+    .final-compact-symbol-v26673 {
       font-size: 30px;
       font-weight: 950;
       color: #111827;
-      line-height: 1.05;
+      line-height: 1;
       letter-spacing: .02em;
+      min-width: 0;
     }
 
-    .final-name-v26672 {
-      margin-top: 4px;
-      font-size: 14px;
-      font-weight: 900;
-      color: #6b7280;
-    }
-
-    .final-price-v26672 {
-      font-size: 22px;
+    .final-compact-price-v26673 {
+      font-size: 24px;
       font-weight: 950;
       color: #111827;
       white-space: nowrap;
       text-align: right;
     }
 
-    .final-compact-v26672 {
-      padding: 14px;
-      display: grid;
-      gap: 10px;
-      background: #fff7f7;
-      border-bottom: 1px solid #fecaca;
+    .final-compact-liq-v26673 {
+      background: #dcfce7;
+      color: #047857;
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-weight: 950;
+      white-space: nowrap;
+      font-size: 14px;
     }
 
-    .final-chip-row-v26672 {
+    .final-compact-expand-v26673 {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: flex-end;
+      margin-top: -2px;
+      color: #991b1b;
+      font-size: 13px;
+      font-weight: 950;
+    }
+
+    .final-compact-card-v26673[open] .final-compact-expand-v26673::after {
+      content: "收合完整分析 ▲";
+    }
+
+    .final-compact-card-v26673:not([open]) .final-compact-expand-v26673::after {
+      content: "展開完整分析 ▼";
+    }
+
+    /* 展開區：資訊全部放這裡 */
+    .final-detail-panel-v26673 {
+      margin-top: 10px;
+      padding: 16px;
+      border: 2px solid #fca5a5;
+      border-radius: 22px;
+      background: #fff7f7;
+      color: #7f1d1d;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, .08);
+    }
+
+    .final-title-v26673 {
+      font-size: 18px;
+      font-weight: 950;
+      color: #991b1b;
+      margin-bottom: 12px;
+    }
+
+    .final-chip-row-v26673 {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      align-items: center;
+      margin-bottom: 12px;
     }
 
-    .final-chip-v26672 {
+    .final-chip-v26673 {
       border-radius: 999px;
       padding: 7px 11px;
       font-size: 13px;
@@ -7208,74 +7239,33 @@ function injectFinalCollapseDemoStyleV26672() {
       color: #991b1b;
     }
 
-    .final-chip-green-v26672 {
+    .final-chip-green-v26673 {
       background: #dcfce7;
       color: #047857;
       border-color: #86efac;
     }
 
-    .final-chip-yellow-v26672 {
-      background: #fef9c3;
-      color: #854d0e;
-      border-color: #fde68a;
-    }
-
-    .final-chip-red-v26672 {
+    .final-chip-red-v26673 {
       background: #fee2e2;
       color: #991b1b;
       border-color: #fca5a5;
     }
 
-    .final-one-line-v26672 {
-      color: #374151;
-      font-size: 14px;
-      font-weight: 900;
-      line-height: 1.55;
-    }
-
-    .final-expand-label-v26672 {
-      margin-top: 2px;
-      color: #991b1b;
-      font-size: 13px;
-      font-weight: 950;
-      text-align: right;
-    }
-
-    .final-collapse-card-v26672[open] .final-expand-label-v26672::after {
-      content: "收合完整分析 ▲";
-    }
-
-    .final-collapse-card-v26672:not([open]) .final-expand-label-v26672::after {
-      content: "展開完整分析 ▼";
-    }
-
-    .final-detail-v26672 {
-      padding: 16px;
-      background: #ffffff;
-    }
-
-    .final-card-title-v26672 {
-      font-size: 18px;
-      font-weight: 950;
-      color: #991b1b;
-      margin-bottom: 12px;
-    }
-
-    .final-card-grid-v26672 {
+    .final-grid-v26673 {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
       margin-bottom: 12px;
     }
 
-    .final-card-grid-v26672 > div {
+    .final-grid-v26673 > div {
       padding: 10px 12px;
       border-radius: 14px;
-      background: #fff7f7;
+      background: #ffffff;
       border: 1px solid #fecaca;
     }
 
-    .final-card-grid-v26672 span {
+    .final-grid-v26673 span {
       display: block;
       font-size: 12px;
       color: #b91c1c;
@@ -7283,7 +7273,7 @@ function injectFinalCollapseDemoStyleV26672() {
       margin-bottom: 4px;
     }
 
-    .final-card-grid-v26672 b {
+    .final-grid-v26673 b {
       display: block;
       font-size: 15px;
       color: #111827;
@@ -7291,16 +7281,16 @@ function injectFinalCollapseDemoStyleV26672() {
       word-break: break-word;
     }
 
-    .final-card-section-v26672 {
+    .final-section-v26673 {
       margin-top: 10px;
       padding: 12px 13px;
       border-radius: 15px;
-      background: #fff7f7;
+      background: #ffffff;
       border: 1px solid #fecaca;
       line-height: 1.55;
     }
 
-    .final-card-section-v26672 b {
+    .final-section-v26673 b {
       display: block;
       color: #991b1b;
       font-size: 14px;
@@ -7308,35 +7298,45 @@ function injectFinalCollapseDemoStyleV26672() {
       margin-bottom: 6px;
     }
 
-    .final-card-section-v26672 p {
+    .final-section-v26673 p {
       margin: 0;
       color: #374151;
       font-size: 13px;
       font-weight: 850;
     }
 
-    .final-operation-v26672 {
+    .final-operation-v26673 {
       background: #fff7ed;
       border-color: #fdba74;
     }
 
-    .final-risk-v26672 {
+    .final-risk-v26673 {
       background: #fef2f2;
       border-color: #fca5a5;
     }
 
     @media (max-width: 520px) {
-      .final-top-v26672 {
-        grid-template-columns: auto 1fr auto;
+      .final-compact-row-v26673 {
+        grid-template-columns: auto minmax(72px, 1fr) auto;
         gap: 10px;
+        padding: 14px 14px;
       }
-      .final-symbol-v26672 {
-        font-size: 28px;
+
+      .final-compact-symbol-v26673 {
+        font-size: 29px;
       }
-      .final-price-v26672 {
-        font-size: 20px;
+
+      .final-compact-price-v26673 {
+        font-size: 22px;
       }
-      .final-card-grid-v26672 {
+
+      .final-compact-liq-v26673 {
+        grid-column: 1 / -1;
+        justify-self: end;
+        margin-top: -2px;
+      }
+
+      .final-grid-v26673 {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
     }
@@ -7344,47 +7344,40 @@ function injectFinalCollapseDemoStyleV26672() {
   document.head.appendChild(style);
 }
 
-function finalCollapseDemoCardHTMLV26672() {
+function finalCompactDemoCardHTMLV26673() {
   return `
-    <div class="final-demo-warning-v26672">
+    <div class="final-demo-warning-v26673">
       ⚠️ FINAL UI 測試模式：以下 2330 不是正式策略訊號
       <small>測完視覺後，請換回正式版 app.js。</small>
     </div>
 
-    <details class="final-collapse-card-v26672" open>
-      <summary class="final-collapse-summary-v26672">
-        <div class="final-top-v26672">
-          <div class="final-action-v26672">🔥 主升</div>
-          <div class="final-symbol-box-v26672">
-            <div class="final-symbol-v26672">2330</div>
-            <div class="final-name-v26672">台積電</div>
-          </div>
-          <div class="final-price-v26672">982.00</div>
-        </div>
-
-        <div class="final-compact-v26672">
-          <div class="final-chip-row-v26672">
-            <span class="final-chip-v26672 final-chip-green-v26672">🟢 可切入</span>
-            <span class="final-chip-v26672 final-chip-red-v26672">🔥 主升延續</span>
-            <span class="final-chip-v26672">信心 92</span>
-            <span class="final-chip-v26672 final-chip-green-v26672">未過熱</span>
-          </div>
-          <div class="final-one-line-v26672">
-            主力慢推確認、量價健康、MA5 / MA10 延續，正式操作區。
-          </div>
-          <div class="final-expand-label-v26672"></div>
+    <details class="final-compact-card-v26673">
+      <summary>
+        <div class="final-compact-row-v26673">
+          <div class="final-compact-action-v26673">🔥 主升</div>
+          <div class="final-compact-symbol-v26673">2330</div>
+          <div class="final-compact-price-v26673">982.00</div>
+          <div class="final-compact-liq-v26673">高流動性</div>
+          <div class="final-compact-expand-v26673"></div>
         </div>
       </summary>
 
-      <div class="final-detail-v26672">
-        <div class="final-card-title-v26672">🔥 FINAL｜主升確認卡</div>
+      <div class="final-detail-panel-v26673">
+        <div class="final-title-v26673">🔥 FINAL｜主升確認卡</div>
 
-        <div class="final-card-grid-v26672">
+        <div class="final-chip-row-v26673">
+          <span class="final-chip-v26673 final-chip-green-v26673">🟢 可切入</span>
+          <span class="final-chip-v26673 final-chip-red-v26673">🔥 主升延續</span>
+          <span class="final-chip-v26673">信心 92</span>
+          <span class="final-chip-v26673 final-chip-green-v26673">未過熱</span>
+        </div>
+
+        <div class="final-grid-v26673">
+          <div><span>股票名稱</span><b>台積電</b></div>
+          <div><span>參考價</span><b>982.00</b></div>
           <div><span>進場節奏</span><b>🟢 可切入</b></div>
           <div><span>主升續航</span><b>🔥 主升延續</b></div>
           <div><span>主升狀態</span><b>🔥 極強主升</b></div>
-          <div><span>參考價</span><b>982.00</b></div>
-          <div><span>信心分數</span><b>92</b></div>
           <div><span>風險狀態</span><b>🟢 未過熱</b></div>
           <div><span>主力強度</span><b>91</b></div>
           <div><span>籌碼集中</span><b>88（🔥 高集中）</b></div>
@@ -7392,22 +7385,22 @@ function finalCollapseDemoCardHTMLV26672() {
           <div><span>K棒</span><b>主升續強K</b></div>
         </div>
 
-        <div class="final-card-section-v26672">
+        <div class="final-section-v26673">
           <b>📈 趨勢結構</b>
           <p>MA5：主升續強｜MA10：主升支撐｜MA20：主升防守。結構以 MA5 / MA10 延續為核心。</p>
         </div>
 
-        <div class="final-card-section-v26672">
+        <div class="final-section-v26673">
           <b>🚀 主升成立原因</b>
           <p>FINAL：主力慢推後確認主升，量價健康，未進入過熱；此筆為 UI 測試資料。</p>
         </div>
 
-        <div class="final-card-section-v26672 final-operation-v26672">
+        <div class="final-section-v26673 final-operation-v26673">
           <b>🧠 操作建議</b>
           <p>可列入正式操作區；若已有持倉，優先評估續抱或分批加碼。若短線乖離過大、爆量急拉，不追價。</p>
         </div>
 
-        <div class="final-card-section-v26672 final-risk-v26672">
+        <div class="final-section-v26673 final-risk-v26673">
           <b>⚠️ 風控提示</b>
           <p>跌破 MA10 轉弱需減碼觀察；跌破 MA20 或爆量長黑，視為主升結束警戒。</p>
         </div>
@@ -7416,8 +7409,8 @@ function finalCollapseDemoCardHTMLV26672() {
   `;
 }
 
-function applyFinalCollapseDemo2330V26672() {
-  try { injectFinalCollapseDemoStyleV26672(); } catch (e) {}
+function applyFinalCompactDemo2330V26673() {
+  try { injectFinalCompactDemoStyleV26673(); } catch (e) {}
 
   const finalList = document.getElementById("finalActionList");
   if (!finalList) return;
@@ -7431,22 +7424,21 @@ function applyFinalCollapseDemo2330V26672() {
     if (hint) hint.textContent = "主升確認區：此版本為 2330 收合式 FINAL 卡片視覺測試。";
   }
 
-  if (finalList.querySelector(".final-collapse-card-v26672")) return;
-  finalList.innerHTML = finalCollapseDemoCardHTMLV26672();
+  if (finalList.querySelector(".final-compact-card-v26673")) return;
+  finalList.innerHTML = finalCompactDemoCardHTMLV26673();
 }
 
-function applyFinalCollapseDemoLoopV26672() {
-  applyFinalCollapseDemo2330V26672();
+function applyFinalCompactDemoLoopV26673() {
+  applyFinalCompactDemo2330V26673();
 
   let n = 0;
   const timer = setInterval(function() {
-    applyFinalCollapseDemo2330V26672();
+    applyFinalCompactDemo2330V26673();
     n += 1;
     if (n >= 20) clearInterval(timer);
   }, 700);
 }
 
-try { applyFinalCollapseDemoLoopV26672(); } catch (e) {}
+try { applyFinalCompactDemoLoopV26673(); } catch (e) {}
 document.addEventListener("DOMContentLoaded", function() {
-  try { applyFinalCollapseDemoLoopV26672(); } catch (e) {}
-});
+  try { applyFinalCompactDemoLoopV26673(); } catch (e) {}
