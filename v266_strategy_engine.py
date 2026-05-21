@@ -4478,7 +4478,7 @@ def apply_v333_dynamic_market_risk_engine():
 
 # ===== v53 CONDITION BUCKET BOUNDARY LOCK =====
 # 每日重新掃描市場，但五大清單必須遵守條件狀態分層。
-# FINAL 改為獨立主升確認條件；每日重新掃描，只要符合 FINAL 策略邏輯即可進清單。
+# FINAL 僅允許由 EVOLUTION 條件升級，不允許 TEST / WATCH / IGNITION 直接跳 FINAL。
 def apply_v53_condition_bucket_boundary_lock():
     import pandas as pd
     import numpy as np
@@ -4660,18 +4660,32 @@ def apply_v53_condition_bucket_boundary_lock():
         not_overheat
     )
 
-    # FINAL：獨立主升確認條件，不再依賴 EVOLUTION 升級鏈。
-    # 條件重點：今天只要符合「主力拉升確認、量價健康、未過熱」即可進 FINAL。
-    final_confirm = (
-        (close >= ma5 * 0.990) &
-        (ma5 >= ma10 * 0.980) &
+    # FINAL：當日獨立主升確認條件，不再依賴 EVOLUTION 升級鏈。
+    # 邏輯：具有 EVOLUTION DNA（均線慢開、回檔承接）+ 主力/籌碼確認 + 量價健康 + 未過熱。
+    # 目的：每日重新掃描時，只要今天符合 FINAL 策略邏輯即可進 FINAL，不因升級鏈斷掉而長期空白。
+    final_evolution_dna = (
+        (close >= ma20 * 0.970) &
+        (ma5 >= ma10 * 0.975) &
         (ma10 >= ma20 * 0.960) &
+        (dist_ma20.between(-0.030, 0.145)) &
+        (range20 <= 0.460)
+    )
+    final_mainforce_confirm = (
+        (main_force >= 45) |
+        (chip >= 45) |
+        ((obv > 0) & (low_hold >= 1))
+    )
+    final_price_volume_confirm = (
+        (close >= ma5 * 0.985) &
         (vol_ratio.between(0.90, 2.90)) &
-        (mom5.between(-0.005, 0.110)) &
+        (mom5.between(-0.010, 0.110)) &
         (mom10.between(0.000, 0.180)) &
-        (mom20.between(0.000, 0.300)) &
-        (dist_ma20 <= 0.150) &
-        ((main_force >= 45) | (chip >= 45) | ((obv > 0) & (low_hold >= 1))) &
+        (mom20.between(0.000, 0.300))
+    )
+    final_confirm = (
+        final_evolution_dna &
+        final_mainforce_confirm &
+        final_price_volume_confirm &
         not_overheat
     )
     final_cond = final_confirm
@@ -4722,7 +4736,7 @@ def apply_v53_condition_bucket_boundary_lock():
     test = _shape(pool.loc[stage == "TEST"], "TEST", "TEST", "TEST：微量增溫、MA5 翻平、市場還沒注意；不得直接跳 FINAL。", 12)
     ignition = _shape(pool.loc[stage == "IGNITION"], "IGNITION", "TEST", "IGNITION：主力開始吸、承接出現、尚未市場一致追價。", 10)
     evolution = _shape(pool.loc[stage == "EVOLUTION"], "EVOLUTION", "TEST", "EVOLUTION：主力控盤慢推、回檔有人接、均線慢慢打開，市場尚未全面追價。", 10)
-    final = _shape(pool.loc[stage == "FINAL"], "FINAL", "FINAL", "FINAL：獨立主升確認測試版，主力拉升確認、量價健康、未過熱；不再依賴 EVOLUTION 升級。", 5)
+    final = _shape(pool.loc[stage == "FINAL"], "FINAL", "FINAL", "FINAL：當日獨立主升確認，具備主力慢推 DNA、量價健康且未過熱。", 5)
 
     _write_both(test, "trade_plan.csv")
     _write_both(ignition, "ignition_candidates.csv")
