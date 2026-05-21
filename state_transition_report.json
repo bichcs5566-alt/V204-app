@@ -4,16 +4,16 @@
   "changed_strategy_logic": false,
   "changed_action": false,
   "changed_position": false,
-  "updated_at": "2026-05-21 18:23:06",
+  "updated_at": "2026-05-21 19:19:09",
   "files": {
     "trade_plan.csv": {
       "trade_plan.csv": {
         "status": "updated",
-        "rows": 9
+        "rows": 12
       },
       "mobile_dashboard_v1/data/trade_plan.csv": {
         "status": "updated",
-        "rows": 9
+        "rows": 12
       }
     },
     "watchlist_monitor.csv": {
@@ -29,11 +29,11 @@
     "final_action_plan.csv": {
       "final_action_plan.csv": {
         "status": "updated",
-        "rows": 662
+        "rows": 557
       },
       "mobile_dashboard_v1/data/final_action_plan.csv": {
         "status": "updated",
-        "rows": 662
+        "rows": 557
       }
     },
     "candidates.csv": {
@@ -69,43 +69,43 @@
     "pre_move_candidates.csv": {
       "pre_move_candidates.csv": {
         "status": "updated",
-        "rows": 412
+        "rows": 304
       },
       "mobile_dashboard_v1/data/pre_move_candidates.csv": {
         "status": "updated",
-        "rows": 412
+        "rows": 304
       }
     },
     "top_opportunities.csv": {
       "top_opportunities.csv": {
         "status": "updated",
-        "rows": 7
+        "rows": 5
       },
       "mobile_dashboard_v1/data/top_opportunities.csv": {
         "status": "updated",
-        "rows": 7
+        "rows": 5
       }
     }
   },
-  "memory_rows": 662,
+  "memory_rows": 557,
   "states": {
-    "突破中": 297,
-    "觀察": 285,
-    "出貨疑慮": 46,
-    "吸籌中": 23,
-    "試盤中": 10,
+    "突破中": 261,
+    "觀察": 202,
+    "出貨疑慮": 55,
+    "吸籌中": 30,
+    "試盤中": 8,
     "發動中": 1
   },
   "transition_labels": {
-    "持續觀察": 308,
-    "準IGNITION": 298,
-    "降級風險": 46,
-    "升級觀察": 10
+    "準IGNITION": 262,
+    "持續觀察": 232,
+    "降級風險": 55,
+    "升級觀察": 8
   },
   "ignition_flags": {
-    "NO": 308,
-    "READY": 298,
-    "RISK": 46,
-    "WATCH_UP": 10
+    "READY": 262,
+    "NO": 232,
+    "RISK": 55,
+    "WATCH_UP": 8
   }
 }

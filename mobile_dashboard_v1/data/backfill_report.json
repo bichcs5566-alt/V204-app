@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-05-21 10:05:46",
+  "generated_at": "2026-05-21 11:02:11",
   "source": "backfill_missing_days",
   "before_last_date": "2026-04-24",
   "after_last_date": "2026-05-21",
-  "rows": 4823758,
+  "rows": 4825876,
   "stock_count": 1972,
   "unique_dates": 2825,
   "filled_days": [
@@ -14,13 +14,13 @@
     },
     {
       "date": "2026-04-28",
-      "rows": 877,
-      "symbols": 877
+      "rows": 1949,
+      "symbols": 1949
     },
     {
       "date": "2026-04-29",
-      "rows": 1951,
-      "symbols": 1951
+      "rows": 1940,
+      "symbols": 1940
     },
     {
       "date": "2026-04-30",
@@ -49,8 +49,8 @@
     },
     {
       "date": "2026-05-08",
-      "rows": 1952,
-      "symbols": 1952
+      "rows": 1949,
+      "symbols": 1949
     },
     {
       "date": "2026-05-11",
@@ -64,13 +64,13 @@
     },
     {
       "date": "2026-05-13",
-      "rows": 1951,
-      "symbols": 1951
+      "rows": 1940,
+      "symbols": 1940
     },
     {
       "date": "2026-05-14",
-      "rows": 877,
-      "symbols": 877
+      "rows": 1953,
+      "symbols": 1953
     },
     {
       "date": "2026-05-15",
@@ -79,8 +79,8 @@
     },
     {
       "date": "2026-05-18",
-      "rows": 1954,
-      "symbols": 1954
+      "rows": 1949,
+      "symbols": 1949
     },
     {
       "date": "2026-05-19",
