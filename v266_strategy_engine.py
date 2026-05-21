@@ -4661,26 +4661,27 @@ def apply_v53_condition_bucket_boundary_lock():
     )
 
     # FINAL：當日獨立主升確認條件，不再依賴 EVOLUTION 升級鏈。
-    # 邏輯：具有 EVOLUTION DNA（均線慢開、回檔承接）+ 主力/籌碼確認 + 量價健康 + 未過熱。
-    # 目的：每日重新掃描時，只要今天符合 FINAL 策略邏輯即可進 FINAL，不因升級鏈斷掉而長期空白。
+    # 主條件：主力拉升確認、量價健康、未過熱。
+    # 備援條件：若主條件完全沒有標的，從具備 EVOLUTION DNA 的候選裡挑最接近 FINAL 的前段名單。
     final_evolution_dna = (
-        (close >= ma20 * 0.970) &
-        (ma5 >= ma10 * 0.975) &
-        (ma10 >= ma20 * 0.960) &
-        (dist_ma20.between(-0.030, 0.145)) &
-        (range20 <= 0.460)
+        (close >= ma20 * 0.950) &
+        (ma5 >= ma10 * 0.955) &
+        (ma10 >= ma20 * 0.935) &
+        (dist_ma20.between(-0.060, 0.165)) &
+        (range20 <= 0.520)
     )
     final_mainforce_confirm = (
-        (main_force >= 45) |
-        (chip >= 45) |
-        ((obv > 0) & (low_hold >= 1))
+        (main_force >= 38) |
+        (chip >= 38) |
+        ((obv > 0) & (low_hold >= 1)) |
+        (close >= ma10 * 0.970)
     )
     final_price_volume_confirm = (
-        (close >= ma5 * 0.985) &
-        (vol_ratio.between(0.90, 2.90)) &
-        (mom5.between(-0.010, 0.110)) &
-        (mom10.between(0.000, 0.180)) &
-        (mom20.between(0.000, 0.300))
+        (close >= ma5 * 0.970) &
+        (vol_ratio.between(0.65, 3.20)) &
+        (mom5.between(-0.035, 0.130)) &
+        (mom10.between(-0.020, 0.210)) &
+        (mom20.between(-0.020, 0.340))
     )
     final_confirm = (
         final_evolution_dna &
@@ -4688,7 +4689,34 @@ def apply_v53_condition_bucket_boundary_lock():
         final_price_volume_confirm &
         not_overheat
     )
-    final_cond = final_confirm
+
+    # 主條件若有標的，就只用主條件。
+    # 若完全沒有，才啟用備援：避免 FINAL 長期空白，但仍只允許有 EVOLUTION DNA 的候選進入。
+    final_base_score = (
+        final_evolution_dna.astype(int) * 36 +
+        final_mainforce_confirm.astype(int) * 28 +
+        final_price_volume_confirm.astype(int) * 24 +
+        not_overheat.astype(int) * 12 +
+        mainforce_trace.astype(int) * 10 -
+        (dist_ma20.clip(lower=0) * 80)
+    )
+    final_fallback_pool = (
+        final_evolution_dna &
+        final_price_volume_confirm &
+        not_overheat
+    )
+
+    final_cond = final_confirm.copy()
+    if int(final_cond.sum()) == 0:
+        final_pick_idx = (
+            pool.loc[final_fallback_pool]
+            .assign(_final_base_score_v56=final_base_score.loc[final_fallback_pool])
+            .sort_values(["_final_base_score_v56", "stock_id"], ascending=[False, True])
+            .head(5)
+            .index
+        )
+        final_cond.loc[final_pick_idx] = True
+        pool.loc[final_pick_idx, "_v56_final_fallback"] = "FINAL_FALLBACK_EVOLUTION_DNA"
 
     stage = pd.Series("WATCH", index=pool.index, dtype="object")
     stage.loc[test_cond] = "TEST"
@@ -4736,7 +4764,7 @@ def apply_v53_condition_bucket_boundary_lock():
     test = _shape(pool.loc[stage == "TEST"], "TEST", "TEST", "TEST：微量增溫、MA5 翻平、市場還沒注意；不得直接跳 FINAL。", 12)
     ignition = _shape(pool.loc[stage == "IGNITION"], "IGNITION", "TEST", "IGNITION：主力開始吸、承接出現、尚未市場一致追價。", 10)
     evolution = _shape(pool.loc[stage == "EVOLUTION"], "EVOLUTION", "TEST", "EVOLUTION：主力控盤慢推、回檔有人接、均線慢慢打開，市場尚未全面追價。", 10)
-    final = _shape(pool.loc[stage == "FINAL"], "FINAL", "FINAL", "FINAL：當日獨立主升確認，具備主力慢推 DNA、量價健康且未過熱。", 5)
+    final = _shape(pool.loc[stage == "FINAL"], "FINAL", "FINAL", "FINAL：當日獨立主升確認；若主條件無標的，從具備 EVOLUTION DNA 且未過熱的候選中補入最接近 FINAL 的標的。", 5)
 
     _write_both(test, "trade_plan.csv")
     _write_both(ignition, "ignition_candidates.csv")
