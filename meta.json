@@ -1,21 +1,21 @@
 ﻿{
-  "generated_at": "2026-05-22 21:54:50",
+  "generated_at": "2026-05-25 21:01:56",
   "source": "v266_57_source_safe_string",
-  "signal_date": "2026-05-22",
-  "trade_date": "2026-05-25",
+  "signal_date": "2026-05-25",
+  "trade_date": "2026-05-26",
   "data_state": "fresh",
-  "market_regime": "RANGE",
+  "market_regime": "TREND",
   "regime_info": {
-    "pct_above_ma20": 0.5915,
-    "pct_above_ma60": 0.5123,
-    "pct_mom20_pos": 0.4815,
-    "pct_strong": 0.2153,
-    "median_mom20": -0.0033,
-    "regime_score": 3
+    "pct_above_ma20": 0.625,
+    "pct_above_ma60": 0.519,
+    "pct_mom20_pos": 0.5489,
+    "pct_strong": 0.2479,
+    "median_mom20": 0.0105,
+    "regime_score": 4
   },
-  "trade_plan_count": 73,
+  "trade_plan_count": 76,
   "buy_count": 0,
-  "test_count": 73,
+  "test_count": 76,
   "watch_count": 0,
   "dual_strategy": {
     "CORE": "早期卡位 / 1000張以上小倉",
@@ -26,11 +26,11 @@
   "ignition_evolution_note": "v315 已由後端產出 ignition_candidates.csv / strategy_evolution.csv",
   "panel_logic": "IGNITION=起漲前夕；EVOLUTION=趨勢確認升級；兩者不再同條件複製",
   "version": "v266.57",
-  "latest_date": "2026-05-22",
-  "updated_at": "2026-05-22 21:57:39",
+  "latest_date": "2026-05-25",
+  "updated_at": "2026-05-25 21:04:30",
   "date_lock_source": "feature_panel_daily.csv",
   "date_state": "locked_from_latest_feature",
-  "last_update": "2026-05-22 21:56:23",
+  "last_update": "2026-05-25 21:03:23",
   "timezone": "Asia/Taipei",
   "time_source": "github_actions_taipei"
 }
