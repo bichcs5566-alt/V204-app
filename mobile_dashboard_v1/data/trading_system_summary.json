@@ -1,44 +1,44 @@
 {
-  "generated_at": "2026-06-03 16:10:44",
+  "generated_at": "2026-06-04 14:33:23",
   "source": "final_trading_system_allocator",
   "capital_assumption": 1000000,
-  "regime": "BULL",
-  "label": "多頭",
-  "gross_exposure": 0.6,
+  "regime": "RANGE",
+  "label": "盤整",
+  "gross_exposure": 0.35,
   "budget": {
-    "PRE": 0.1,
-    "CORE": 0.38,
-    "ALPHA": 0.12
+    "PRE": 0.08,
+    "CORE": 0.22,
+    "ALPHA": 0.05
   },
   "slot_rule": {
     "CORE": {
-      "top": 5,
-      "watch": 8
-    },
-    "PRE": {
       "top": 3,
       "watch": 6
     },
-    "ALPHA": {
+    "PRE": {
       "top": 2,
       "watch": 6
+    },
+    "ALPHA": {
+      "top": 1,
+      "watch": 5
     }
   },
-  "total_rows": 883,
-  "top_rows": 7,
-  "watch_rows": 10,
-  "block_rows": 866,
-  "allowed_rows": 7,
+  "total_rows": 651,
+  "top_rows": 4,
+  "watch_rows": 12,
+  "block_rows": 635,
+  "allowed_rows": 3,
   "entry_counts": {
-    "WAIT": 856,
-    "PULLBACK": 22,
-    "BREAK": 5
+    "WAIT": 629,
+    "PULLBACK": 13,
+    "BREAK": 9
   },
   "bucket_counts": {
-    "PRE": 634,
+    "PRE": 399,
     "ALPHA": 240,
-    "CORE": 9
+    "CORE": 12
   },
-  "allowed_amount": 120000,
+  "allowed_amount": 50000,
   "rule": "市場狀態 + 策略分流 + TOP標註 + entry timing + 總曝險。只做 allowed=True。"
 }
