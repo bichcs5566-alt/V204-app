@@ -1,2 +1,2 @@
-generated_at,price_source,signal_date,market_regime,regime_score,pct_above_ma20,pct_above_ma60,pct_mom20_pos,pct_strong,median_mom20,total_input_rows,latest_stock_count,core_buy_count,core_test_count,core_watch_count,alpha_buy_count,alpha_test_count,alpha_watch_count,trade_buy_count,trade_test_count,trade_watch_count,core_count,alpha_count,trade_plan_count,core_max_score,alpha_max_score,note
-2026-06-12 13:57:17,price_panel_daily.csv,2026-06-12,TREND,5,0.595,0.6163,0.7303,0.203,0.039,24820,1079,30,0,0,4,26,0,8,3,0,30,30,11,89.0,84.0,v265.3 dual engine
+﻿generated_at,price_source,signal_date,total_input_rows,latest_stock_count,scored_count,buy_count,test_count,watch_count,skip_count,core_count,alpha_count,trade_plan_count,trade_buy_count,trade_test_count,trade_watch_count,note
+2026-06-12 14:07:45,price_panel_daily.csv,2026-06-12,24820,1079,1079,151,152,384,392,25,6,30,8,8,14,v265 clean strategy core
