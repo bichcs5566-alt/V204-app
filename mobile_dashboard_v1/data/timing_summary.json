@@ -1,15 +1,15 @@
 {
-  "generated_at": "2026-06-22 16:20:08",
+  "generated_at": "2026-06-23 14:10:45",
   "source": "feature_timing_engine",
-  "rows": 563,
+  "rows": 435,
   "entry_counts": {
-    "WAIT": 543,
-    "PULLBACK": 19,
-    "BREAK": 1
+    "WAIT": 399,
+    "PULLBACK": 34,
+    "BREAK": 2
   },
   "lane_counts": {
-    "PRE": 356,
-    "ALPHA": 195,
+    "PRE": 248,
+    "ALPHA": 175,
     "CORE": 12
   },
   "rule": "BREAK 突破；PULLBACK 回檔；REVERSAL 反轉；WAIT 等待。"
