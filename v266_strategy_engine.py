@@ -4673,7 +4673,7 @@ def apply_v53_condition_bucket_boundary_lock():
         ((main_force >= 48) | (chip >= 48) | ((obv > 0) & (low_hold >= 2))) &
         not_overheat
     )
-    final_cond = evolution_cond & final_confirm
+    final_cond = final_confirm
 
     stage = pd.Series("WATCH", index=pool.index, dtype="object")
     stage.loc[test_cond] = "TEST"
