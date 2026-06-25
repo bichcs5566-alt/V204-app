@@ -4666,11 +4666,11 @@ def apply_v53_condition_bucket_boundary_lock():
         (close >= ma5 * 0.995) &
         (ma5 >= ma10 * 0.990) &
         (ma10 >= ma20 * 0.985) &
-        (vol_ratio.between(1.05, 2.70)) &
+        (vol_ratio.between(0.90, 3.00)) &
         (mom5.between(0.000, 0.095)) &
-        (mom10.between(0.020, 0.155)) &
-        (mom20.between(0.030, 0.270)) &
-        ((main_force >= 55) | (chip >= 55) | ((obv > 0) & (low_hold >= 3))) &
+        (mom10.between(0.010, 0.180)) &
+        (mom20.between(0.010, 0.300)) &
+        ((main_force >= 48) | (chip >= 48) | ((obv > 0) & (low_hold >= 2))) &
         not_overheat
     )
     final_cond = evolution_cond & final_confirm
