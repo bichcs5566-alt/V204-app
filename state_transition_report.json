@@ -4,16 +4,16 @@
   "changed_strategy_logic": false,
   "changed_action": false,
   "changed_position": false,
-  "updated_at": "2026-07-03 21:28:28",
+  "updated_at": "2026-07-06 22:57:12",
   "files": {
     "trade_plan.csv": {
       "trade_plan.csv": {
         "status": "updated",
-        "rows": 11
+        "rows": 12
       },
       "mobile_dashboard_v1/data/trade_plan.csv": {
         "status": "updated",
-        "rows": 11
+        "rows": 12
       }
     },
     "watchlist_monitor.csv": {
@@ -29,11 +29,11 @@
     "final_action_plan.csv": {
       "final_action_plan.csv": {
         "status": "updated",
-        "rows": 1049
+        "rows": 1176
       },
       "mobile_dashboard_v1/data/final_action_plan.csv": {
         "status": "updated",
-        "rows": 1049
+        "rows": 1176
       }
     },
     "candidates.csv": {
@@ -69,42 +69,43 @@
     "pre_move_candidates.csv": {
       "pre_move_candidates.csv": {
         "status": "updated",
-        "rows": 796
+        "rows": 922
       },
       "mobile_dashboard_v1/data/pre_move_candidates.csv": {
         "status": "updated",
-        "rows": 796
+        "rows": 922
       }
     },
     "top_opportunities.csv": {
       "top_opportunities.csv": {
         "status": "updated",
-        "rows": 6
+        "rows": 5
       },
       "mobile_dashboard_v1/data/top_opportunities.csv": {
         "status": "updated",
-        "rows": 6
+        "rows": 5
       }
     }
   },
-  "memory_rows": 1049,
+  "memory_rows": 1176,
   "states": {
-    "突破中": 541,
-    "觀察": 382,
-    "吸籌中": 81,
-    "試盤中": 28,
-    "出貨疑慮": 17
+    "觀察": 818,
+    "突破中": 234,
+    "吸籌中": 83,
+    "試盤中": 24,
+    "出貨疑慮": 16,
+    "發動中": 1
   },
   "transition_labels": {
-    "準IGNITION": 541,
-    "持續觀察": 463,
-    "升級觀察": 28,
-    "降級風險": 17
+    "持續觀察": 901,
+    "準IGNITION": 235,
+    "升級觀察": 24,
+    "降級風險": 16
   },
   "ignition_flags": {
-    "READY": 541,
-    "NO": 463,
-    "WATCH_UP": 28,
-    "RISK": 17
+    "NO": 901,
+    "READY": 235,
+    "WATCH_UP": 24,
+    "RISK": 16
   }
 }
