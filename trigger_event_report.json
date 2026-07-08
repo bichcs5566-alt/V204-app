@@ -4,16 +4,16 @@
   "changed_strategy_logic": false,
   "changed_action": false,
   "changed_position": false,
-  "updated_at": "2026-07-07 21:51:52",
+  "updated_at": "2026-07-08 20:51:10",
   "files": {
     "timing_candidates.csv": {
       "timing_candidates.csv": {
         "status": "updated",
-        "rows": 707
+        "rows": 729
       },
       "mobile_dashboard_v1/data/timing_candidates.csv": {
         "status": "updated",
-        "rows": 707
+        "rows": 729
       }
     },
     "trade_plan.csv": {
@@ -29,11 +29,11 @@
     "final_action_plan.csv": {
       "final_action_plan.csv": {
         "status": "updated",
-        "rows": 866
+        "rows": 818
       },
       "mobile_dashboard_v1/data/final_action_plan.csv": {
         "status": "updated",
-        "rows": 866
+        "rows": 818
       }
     },
     "candidates.csv": {
@@ -69,11 +69,11 @@
     "pre_move_candidates.csv": {
       "pre_move_candidates.csv": {
         "status": "updated",
-        "rows": 613
+        "rows": 565
       },
       "mobile_dashboard_v1/data/pre_move_candidates.csv": {
         "status": "updated",
-        "rows": 613
+        "rows": 565
       }
     },
     "top_opportunities.csv": {
@@ -88,10 +88,9 @@
     }
   },
   "trigger_labels": {
-    "強點火事件": 444,
-    "無事件": 191,
-    "早期轉強事件": 174,
-    "準點火事件": 55,
-    "過熱/風險事件": 2
+    "強點火事件": 391,
+    "無事件": 224,
+    "早期轉強事件": 165,
+    "準點火事件": 38
   }
 }
