@@ -1,13 +1,36 @@
-{
-  "generated_at": "2026-07-13 13:17:07",
-  "source": "v265_clean_strategy_core",
-  "price_source": "price_panel_daily.csv",
+﻿{
+  "generated_at": "2026-07-13 21:59:26",
+  "source": "v266_57_source_safe_string",
   "signal_date": "2026-07-13",
   "trade_date": "2026-07-14",
   "data_state": "fresh",
-  "trade_plan_count": 30,
-  "buy_count": 8,
-  "test_count": 8,
-  "watch_count": 14,
-  "execution_rule": "T日產生訊號，下一交易日人工下單"
+  "market_regime": "RANGE",
+  "regime_info": {
+    "pct_above_ma20": 0.456,
+    "pct_above_ma60": 0.4824,
+    "pct_mom20_pos": 0.4276,
+    "pct_strong": 0.1272,
+    "median_mom20": -0.0098,
+    "regime_score": 1
+  },
+  "trade_plan_count": 74,
+  "buy_count": 0,
+  "test_count": 74,
+  "watch_count": 0,
+  "dual_strategy": {
+    "CORE": "早期卡位 / 1000張以上小倉",
+    "ALPHA": "高流動性強勢延續 / 3000張以上主力倉位"
+  },
+  "ignition_count": 15,
+  "evolution_count": 10,
+  "ignition_evolution_note": "v315 已由後端產出 ignition_candidates.csv / strategy_evolution.csv",
+  "panel_logic": "IGNITION=起漲前夕；EVOLUTION=趨勢確認升級；兩者不再同條件複製",
+  "version": "v266.57",
+  "latest_date": "2026-07-13",
+  "updated_at": "2026-07-13 22:02:08",
+  "date_lock_source": "feature_panel_daily.csv",
+  "date_state": "locked_from_latest_feature",
+  "last_update": "2026-07-13 22:00:57",
+  "timezone": "Asia/Taipei",
+  "time_source": "github_actions_taipei"
 }
