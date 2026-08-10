@@ -1,17 +1,20 @@
-﻿{
+{
   "version": "v266.57",
-  "status": "running",
-  "job_status": "running",
+  "status": "success",
+  "job_status": "success",
   "run_id": "31385435367",
   "run_number": "392",
   "workflow": "data_pipeline",
   "branch": "main",
-  "start_time": "2026-08-10T19:53:09.623013+08:00",
-  "started_at": "2026-08-10T19:53:09.623013+08:00",
+  "start_time": "2026-08-10T19:53:09+08:00",
+  "started_at": "2026-08-10T19:53:09+08:00",
   "start_epoch": 1786362789,
-  "updated_at": "2026-08-10 20:27:35",
+  "end_time": "2026-08-10T20:29:05.997363+08:00",
+  "completed_at": "2026-08-10T20:29:05.997363+08:00",
+  "end_epoch": 1786364945,
+  "elapsed_seconds": 2156,
+  "duration_text": "35分56秒",
+  "updated_at": "2026-08-10T20:29:05.997363+08:00",
   "timezone": "Asia/Taipei",
-  "source": "github_actions_live_timer",
-  "last_update": "2026-08-10 20:27:35",
-  "time_source": "github_actions_taipei"
+  "source": "github_actions_live_timer"
 }
