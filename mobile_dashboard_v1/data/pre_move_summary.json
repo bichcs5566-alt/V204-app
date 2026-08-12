@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-08-11 12:12:42",
+  "generated_at": "2026-08-12 12:16:44",
   "source": "pre_move_engine",
   "input_file": "feature_panel_daily.csv",
-  "total_candidates": 397,
+  "total_candidates": 747,
   "ui_candidates": 30,
-  "buy_count": 20,
-  "test_count": 31,
-  "watch_count": 346,
-  "latest_date": "2026-08-11",
+  "buy_count": 17,
+  "test_count": 39,
+  "watch_count": 691,
+  "latest_date": "2026-08-12",
   "note": "PRE 是主力佈局預判，只適合小倉試單，不等於正式重倉買進。"
 }
