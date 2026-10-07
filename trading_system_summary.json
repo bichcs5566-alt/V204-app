@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-06 17:43:24",
+  "generated_at": "2026-10-07 18:19:17",
   "source": "final_trading_system_allocator",
   "capital_assumption": 1000000,
   "regime": "BEAR",
@@ -24,20 +24,20 @@
       "watch": 4
     }
   },
-  "total_rows": 1395,
+  "total_rows": 1451,
   "top_rows": 2,
   "watch_rows": 10,
-  "block_rows": 1383,
-  "allowed_rows": 2,
+  "block_rows": 1439,
+  "allowed_rows": 1,
   "entry_counts": {
-    "WAIT": 1377,
-    "PULLBACK": 18
+    "WAIT": 1429,
+    "PULLBACK": 22
   },
   "bucket_counts": {
-    "PRE": 1143,
+    "PRE": 1199,
     "ALPHA": 240,
     "CORE": 12
   },
-  "allowed_amount": 40000,
+  "allowed_amount": 20000,
   "rule": "市場狀態 + 策略分流 + TOP標註 + entry timing + 總曝險。只做 allowed=True。"
 }
