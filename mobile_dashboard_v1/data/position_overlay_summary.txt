@@ -1,6 +1,6 @@
 {
   "version": "v266.34_position_lifecycle_overlay",
-  "updated_at": "2026-11-18 19:52:50",
+  "updated_at": "2026-11-19 20:04:26",
   "rows": 5,
   "stocks": [
     "2317",
